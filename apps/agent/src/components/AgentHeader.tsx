@@ -9,6 +9,7 @@ import { AgentBrand } from "@/components/AgentBrand";
 const navItems = [
     { label: "Workspace", href: "/workspace" },
     { label: "Campaigns", href: "/campaigns" },
+    { label: "Pulse", href: "/pulse" },
     {
         label: "Build",
         href: "/agents",
@@ -61,7 +62,7 @@ export function AgentHeader() {
     };
 
     const handleCommunity = () => {
-        router.push("/community");
+        router.push("/pulse");
     };
 
     const handleMarketplace = () => {

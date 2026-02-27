@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { randomBytes } from "crypto";
 import { requireAuth } from "@/lib/authz";
 import { prisma } from "@repo/database";
 import { deployPlaybook } from "@repo/agentc2";
+import { encryptString } from "@/lib/credential-crypto";
 
 type Params = { params: Promise<{ slug: string }> };
 
@@ -81,6 +83,75 @@ export async function POST(request: NextRequest, { params }: Params) {
             userId,
             purchaseId: purchase?.id
         });
+
+        // Auto-create default webhook trigger for SDLC playbook workflows
+        if (playbook.slug === "sdlc-flywheel" && installation.createdWorkflowIds.length > 0) {
+            try {
+                const sdlcStandard = await prisma.workflow.findFirst({
+                    where: {
+                        id: { in: installation.createdWorkflowIds },
+                        slug: { contains: "sdlc-standard" }
+                    },
+                    select: { id: true, slug: true }
+                });
+
+                if (sdlcStandard) {
+                    const webhookPath = `trigger_${randomBytes(16).toString("hex")}`;
+                    const webhookSecretPlain = randomBytes(32).toString("hex");
+                    const webhookSecret = encryptString(webhookSecretPlain);
+
+                    const sdlcBugfix = await prisma.workflow.findFirst({
+                        where: {
+                            id: { in: installation.createdWorkflowIds },
+                            slug: { contains: "sdlc-bugfix" }
+                        },
+                        select: { slug: true }
+                    });
+                    const sdlcFeature = await prisma.workflow.findFirst({
+                        where: {
+                            id: { in: installation.createdWorkflowIds },
+                            slug: { contains: "sdlc-feature" }
+                        },
+                        select: { slug: true }
+                    });
+
+                    await prisma.agentTrigger.create({
+                        data: {
+                            entityType: "workflow",
+                            workflowId: sdlcStandard.id,
+                            workspaceId,
+                            name: "SDLC GitHub Webhook",
+                            description: "Triggers SDLC workflows when a GitHub Issue is labeled.",
+                            triggerType: "webhook",
+                            webhookPath,
+                            webhookSecret,
+                            filterJson: {
+                                triggerLabel: "agentc2-sdlc",
+                                githubEvents: ["issues"],
+                                githubActions: ["labeled"]
+                            },
+                            inputMapping: {
+                                _config: {
+                                    workflowRouting: {
+                                        bug: sdlcBugfix?.slug ?? "sdlc-bugfix",
+                                        feature: sdlcFeature?.slug ?? "sdlc-feature",
+                                        default: sdlcStandard.slug
+                                    },
+                                    fieldMapping: {
+                                        title: "issue.title",
+                                        description: "issue.body",
+                                        repository: "repository.full_name"
+                                    }
+                                }
+                            },
+                            isActive: true
+                        }
+                    });
+                }
+            } catch (triggerError) {
+                console.warn("[playbooks] Failed to create SDLC webhook trigger:", triggerError);
+            }
+        }
 
         return NextResponse.json({ installation }, { status: 201 });
     } catch (error) {

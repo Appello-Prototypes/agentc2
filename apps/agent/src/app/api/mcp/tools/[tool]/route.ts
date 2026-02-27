@@ -470,7 +470,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                 requires_approval: agent.requiresApproval,
                 max_steps: agent.maxSteps,
                 memory_enabled: agent.memoryEnabled,
-                scorers: agent.scorers,
                 workspace: agent.workspace?.slug,
                 environment: agent.workspace?.environment,
                 organization: agent.workspace?.organization?.slug,

@@ -76,7 +76,6 @@ interface Agent {
     } | null;
     modelConfig?: ModelConfig | null;
     routingConfig?: RoutingConfig | null;
-    scorers: string[];
     isActive: boolean;
     visibility: "PRIVATE" | "ORGANIZATION" | "PUBLIC";
     publicToken: string | null;
@@ -151,12 +150,6 @@ interface ToolGroup {
     isFederation?: boolean;
 }
 
-interface ScorerInfo {
-    id: string;
-    name: string;
-    description: string;
-}
-
 function formatPricing(pricing?: { inputPer1M: number; outputPer1M: number }): string | null {
     if (!pricing) return null;
     const fmt = (v: number) => (v < 1 ? `$${v}` : `$${v}`);
@@ -177,7 +170,7 @@ export default function ConfigurePage() {
     const [availableTools, setAvailableTools] = useState<ToolInfo[]>([]);
     const [availableModels, setAvailableModels] = useState<ModelInfo[]>([]);
     const [modelsLoading, setModelsLoading] = useState(true);
-    const [availableScorers, setAvailableScorers] = useState<ScorerInfo[]>([]);
+
     const [toolsLoading, setToolsLoading] = useState(true);
     const [toolCategoryOrder, setToolCategoryOrder] = useState<string[]>([]);
     const [serverErrors, setServerErrors] = useState<Record<string, string>>({});
@@ -361,7 +354,7 @@ export default function ConfigurePage() {
             const data = await res.json();
             if (data.success) {
                 setAvailableTools(data.tools || []);
-                setAvailableScorers(data.scorers || []);
+
                 setToolCategoryOrder(data.toolCategoryOrder || []);
                 setServerErrors(data.serverErrors ?? {});
             }
@@ -644,7 +637,6 @@ export default function ConfigurePage() {
                 memoryConfig: agentData.memoryConfig,
                 modelConfig: agentData.modelConfig,
                 routingConfig: agentData.routingConfig ?? null,
-                scorers: agentData.scorers || [],
                 isActive: agentData.isActive ?? true,
                 visibility: agentData.visibility ?? "PRIVATE",
                 publicToken: agentData.publicToken ?? null,
@@ -922,7 +914,6 @@ export default function ConfigurePage() {
                 memoryConfig: agentData.memoryConfig,
                 modelConfig: agentData.modelConfig,
                 routingConfig: agentData.routingConfig ?? null,
-                scorers: agentData.scorers || [],
                 isActive: agentData.isActive ?? true,
                 visibility: agentData.visibility ?? "PRIVATE",
                 publicToken: agentData.publicToken ?? null,
@@ -977,14 +968,6 @@ export default function ConfigurePage() {
             ? workflows.filter((w) => w !== workflowId)
             : [...workflows, workflowId];
         handleChange("workflows", newWorkflows);
-    };
-
-    const toggleScorer = (scorerId: string) => {
-        const scorers = formData.scorers || [];
-        const newScorers = scorers.includes(scorerId)
-            ? scorers.filter((s) => s !== scorerId)
-            : [...scorers, scorerId];
-        handleChange("scorers", newScorers);
     };
 
     if (loading) {
@@ -1087,7 +1070,6 @@ export default function ConfigurePage() {
                     <TabsTrigger value="skills">Skills ({attachedSkills.length})</TabsTrigger>
                     <TabsTrigger value="orchestration">Orchestration</TabsTrigger>
                     <TabsTrigger value="memory">Memory</TabsTrigger>
-                    <TabsTrigger value="evaluation">Evaluation</TabsTrigger>
                     <TabsTrigger value="scorecard">Scorecard</TabsTrigger>
                 </TabsList>
 
@@ -3328,74 +3310,6 @@ export default function ConfigurePage() {
                                         </p>
                                     </div>
                                 </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-                </TabsContent>
-
-                {/* Evaluation Tab */}
-                <TabsContent value="evaluation">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Evaluation & Scorers</CardTitle>
-                            <CardDescription>
-                                Automated quality measurement ({formData.scorers?.length || 0}{" "}
-                                selected)
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            {toolsLoading ? (
-                                <div className="space-y-2">
-                                    <Skeleton className="h-16 w-full" />
-                                    <Skeleton className="h-16 w-full" />
-                                </div>
-                            ) : availableScorers.length > 0 ? (
-                                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                                    {availableScorers.map((scorer) => (
-                                        <label
-                                            key={scorer.id}
-                                            className={`flex cursor-pointer items-start gap-3 rounded-lg border p-4 transition-colors ${
-                                                formData.scorers?.includes(scorer.id)
-                                                    ? "border-primary bg-primary/5"
-                                                    : "hover:bg-muted/50"
-                                            }`}
-                                        >
-                                            <input
-                                                type="checkbox"
-                                                checked={
-                                                    formData.scorers?.includes(scorer.id) || false
-                                                }
-                                                onChange={() => toggleScorer(scorer.id)}
-                                                className="mt-1"
-                                            />
-                                            <div>
-                                                <p className="font-medium">{scorer.name}</p>
-                                                <p className="text-muted-foreground text-sm">
-                                                    {scorer.description}
-                                                </p>
-                                            </div>
-                                        </label>
-                                    ))}
-                                </div>
-                            ) : (
-                                <div className="text-muted-foreground py-4 text-center text-sm">
-                                    No scorers available
-                                </div>
-                            )}
-
-                            <div className="bg-muted rounded-lg p-4">
-                                <p className="mb-2 text-sm font-medium">Sampling Rate</p>
-                                <p className="text-muted-foreground mb-2 text-xs">
-                                    Percentage of runs to evaluate (higher = more accurate but
-                                    higher cost)
-                                </p>
-                                <input
-                                    type="range"
-                                    min="10"
-                                    max="100"
-                                    defaultValue="100"
-                                    className="w-full"
-                                />
                             </div>
                         </CardContent>
                     </Card>

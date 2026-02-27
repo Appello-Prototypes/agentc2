@@ -174,7 +174,6 @@ export async function POST(request: NextRequest) {
 </user_profile>`
                     }
                 },
-                scorers: ["relevancy", "completeness"],
                 isOnboardingAgent: true,
                 isActive: true,
                 type: "USER",

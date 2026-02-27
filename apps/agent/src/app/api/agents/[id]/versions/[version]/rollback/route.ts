@@ -86,7 +86,6 @@ export async function POST(
                     ? (snapshot.memoryConfig as Prisma.InputJsonValue)
                     : Prisma.JsonNull,
                 maxSteps: (snapshot.maxSteps as number) ?? agent.maxSteps,
-                scorers: (snapshot.scorers as string[]) || [],
                 visibility: ((snapshot.visibility as string) ?? agent.visibility) as
                     | "PRIVATE"
                     | "ORGANIZATION"

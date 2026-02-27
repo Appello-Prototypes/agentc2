@@ -24,7 +24,6 @@ interface AgentSnapshot {
     memoryEnabled: boolean;
     memoryConfig: unknown;
     maxSteps: number | null;
-    scorers: string[];
     tools: Array<{ toolId: string; config: unknown }>;
     skills: string[];
     metadata: unknown;
@@ -153,24 +152,6 @@ export function AgentProfileCard({ snapshot, isEntryPoint }: AgentProfileCardPro
                     </div>
                 )}
 
-                {snapshot.scorers.length > 0 && (
-                    <div>
-                        <div className="text-muted-foreground mb-2 text-xs font-medium tracking-wide uppercase">
-                            Evaluation Scorers
-                        </div>
-                        <div className="flex flex-wrap gap-1">
-                            {snapshot.scorers.map((scorer) => (
-                                <Badge
-                                    key={scorer}
-                                    variant="outline"
-                                    className="text-xs capitalize"
-                                >
-                                    {scorer}
-                                </Badge>
-                            ))}
-                        </div>
-                    </div>
-                )}
 
                 <div>
                     <button

@@ -88,7 +88,6 @@ interface ManifestData {
         memoryEnabled: boolean;
         memoryConfig: unknown;
         maxSteps: number | null;
-        scorers: string[];
         tools: Array<{ toolId: string; config: unknown }>;
         skills: string[];
         metadata: unknown;

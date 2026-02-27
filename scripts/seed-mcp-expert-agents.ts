@@ -51,7 +51,6 @@ function buildExpertSpecs() {
         },
         memoryEnabled: false,
         memoryConfig: null,
-        scorers: [] as string[],
         metadata: {
             category: "mcp-expert",
             mcpServerId: config.id
@@ -109,7 +108,6 @@ async function seedMcpExpertAgents() {
                 memoryEnabled: spec.memoryEnabled,
                 memoryConfig: spec.memoryConfig,
                 maxSteps: spec.maxSteps,
-                scorers: spec.scorers,
                 type: AgentType.USER,
                 visibility: "PUBLIC",
                 isActive: true,
@@ -129,7 +127,6 @@ async function seedMcpExpertAgents() {
                 memoryEnabled: spec.memoryEnabled,
                 memoryConfig: spec.memoryConfig,
                 maxSteps: spec.maxSteps,
-                scorers: spec.scorers,
                 type: AgentType.USER,
                 visibility: "PUBLIC",
                 isActive: true,

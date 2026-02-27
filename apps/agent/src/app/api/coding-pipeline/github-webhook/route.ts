@@ -12,7 +12,18 @@ function verifyGitHubSignature(body: string, signature: string | null, secret: s
     return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(digest));
 }
 
+/**
+ * @deprecated Use the generic trigger system at /api/webhooks/[path] instead.
+ * Create a workflow trigger via the Automation tab and point your GitHub webhook there.
+ * This route is kept for backward compatibility only.
+ */
 export async function POST(request: NextRequest) {
+    console.warn(
+        "[DEPRECATED] /api/coding-pipeline/github-webhook is deprecated. " +
+            "Use the generic trigger system at /api/webhooks/[path] instead. " +
+            "Configure a workflow trigger via the Automation tab."
+    );
+
     try {
         const rawBody = await request.text();
         const event = request.headers.get("x-github-event");

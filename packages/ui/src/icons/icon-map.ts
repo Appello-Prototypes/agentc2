@@ -52,7 +52,8 @@ import {
     UserGroupIcon,
     UserIcon,
     Share01Icon,
-    CodeIcon
+    CodeIcon,
+    FlashIcon
 } from "@hugeicons/core-free-icons";
 
 import type { IconComponent, IconName } from "./types";
@@ -109,5 +110,6 @@ export const iconMap: Record<IconName, IconComponent> = {
     "help-circle": HelpCircleIcon,
     store: Store01Icon,
     share: Share01Icon,
-    code: CodeIcon
+    code: CodeIcon,
+    zap: FlashIcon
 };

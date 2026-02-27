@@ -10,7 +10,7 @@ import { Agent } from "@mastra/core/agent";
 import { Memory } from "@mastra/memory";
 import { storage } from "../storage";
 import { getToolsByNames, getToolsByNamesAsync } from "../tools/registry";
-import { getScorersByNames } from "../scorers/registry";
+
 import { resolveModelForOrg } from "./model-provider";
 import {
     resolveModelAlias,
@@ -75,7 +75,6 @@ export interface StoredAgentConfig {
     memory?: boolean; // Legacy field for backwards compatibility
     memoryConfig?: MemoryConfig | null;
     maxSteps?: number | null;
-    scorers?: string[];
     metadata?: Record<string, unknown> | null;
     isActive: boolean;
 }
@@ -226,9 +225,6 @@ export function createAgentFromConfig(
     // Get tools from registry
     const tools = getToolsByNames(config.tools);
 
-    // Get scorers from registry
-    const scorers = config.scorers ? getScorersByNames(config.scorers) : {};
-
     // Determine if memory is enabled (support both new and legacy fields)
     const memoryEnabled = config.memoryEnabled ?? config.memory ?? false;
 
@@ -251,11 +247,6 @@ export function createAgentFromConfig(
     // Add memory if enabled
     if (memoryEnabled) {
         agentConfig.memory = buildMemory(config.memoryConfig);
-    }
-
-    // Add scorers if any were resolved
-    if (Object.keys(scorers).length > 0) {
-        agentConfig.scorers = scorers;
     }
 
     if (defaultOptions) {
@@ -301,9 +292,6 @@ export async function createAgentFromConfigAsync(
     // Get tools from registry AND MCP (async)
     const tools = await getToolsByNamesAsync(config.tools, organizationId);
 
-    // Get scorers from registry
-    const scorers = config.scorers ? getScorersByNames(config.scorers) : {};
-
     // Determine if memory is enabled (support both new and legacy fields)
     const memoryEnabled = config.memoryEnabled ?? config.memory ?? false;
 
@@ -326,11 +314,6 @@ export async function createAgentFromConfigAsync(
     // Add memory if enabled
     if (memoryEnabled) {
         agentConfig.memory = buildMemory(config.memoryConfig);
-    }
-
-    // Add scorers if any were resolved
-    if (Object.keys(scorers).length > 0) {
-        agentConfig.scorers = scorers;
     }
 
     if (defaultOptions) {

@@ -146,7 +146,7 @@ async function processDropboxChanges(connection: {
         }
     });
 
-    if (!trigger) return 0;
+    if (!trigger || !trigger.agent) return 0;
 
     // Send one trigger event per batch of changes (not per file)
     const payload = {

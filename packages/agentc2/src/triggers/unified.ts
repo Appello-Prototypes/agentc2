@@ -22,6 +22,8 @@ export type TriggerInputDefaults = {
 export type TriggerMappingConfig = {
     environment?: string | null;
     defaults?: TriggerInputDefaults;
+    fieldMapping?: Record<string, string>;
+    workflowRouting?: Record<string, string>;
 };
 
 export type TriggerInputMapping = {

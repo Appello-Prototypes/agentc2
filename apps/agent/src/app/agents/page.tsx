@@ -419,11 +419,6 @@ function AgentCardView({ agent, onClick }: { agent: Agent; onClick: () => void }
                             Memory
                         </Badge>
                     )}
-                    {agent.scorers && agent.scorers.length > 0 && (
-                        <Badge variant="outline" className="text-xs">
-                            {agent.scorers.length} scorers
-                        </Badge>
-                    )}
                 </div>
             </CardContent>
         </Card>

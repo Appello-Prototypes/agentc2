@@ -116,7 +116,7 @@ export function VersionDetailSheet({
                                 </Badge>
                             )}
                         </TabsTrigger>
-                        <TabsTrigger value="scorers">Scorers + Skills</TabsTrigger>
+                        <TabsTrigger value="skills">Skills</TabsTrigger>
                         <TabsTrigger value="changes">Changes</TabsTrigger>
                         <TabsTrigger value="raw">Raw JSON</TabsTrigger>
                     </TabsList>
@@ -308,22 +308,8 @@ export function VersionDetailSheet({
                         )}
                     </TabsContent>
 
-                    {/* Scorers + Skills Tab */}
-                    <TabsContent value="scorers" className="mt-4 space-y-4">
-                        <div>
-                            <h4 className="mb-2 text-sm font-medium">Scorers</h4>
-                            {version.snapshot?.scorers && version.snapshot.scorers.length > 0 ? (
-                                <div className="flex flex-wrap gap-2">
-                                    {version.snapshot.scorers.map((scorer, i) => (
-                                        <Badge key={i} variant="outline">
-                                            {scorer}
-                                        </Badge>
-                                    ))}
-                                </div>
-                            ) : (
-                                <p className="text-muted-foreground text-sm">No scorers</p>
-                            )}
-                        </div>
+                    {/* Skills Tab */}
+                    <TabsContent value="skills" className="mt-4 space-y-4">
                         <div>
                             <h4 className="mb-2 text-sm font-medium">Skills</h4>
                             {version.snapshot?.skills && version.snapshot.skills.length > 0 ? (

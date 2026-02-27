@@ -357,6 +357,16 @@ export const inngest = new Inngest({
                 childCampaignId: string;
             };
         };
+        // Workflow Trigger Events
+        "workflow/trigger.fire": {
+            data: {
+                triggerId: string;
+                workflowId: string;
+                workflowSlug: string;
+                triggerEventId?: string;
+                payload: Record<string, unknown>;
+            };
+        };
         // Workflow Async Execution Events
         "workflow/execute.async": {
             data: {

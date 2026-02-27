@@ -12,7 +12,7 @@ import {
     resolveModelOverride,
     type RoutingDecision
 } from "@repo/agentc2/agents";
-import { getScorersByNames } from "@repo/agentc2/scorers/registry";
+
 import { prisma } from "@repo/database";
 import { NextRequest, NextResponse } from "next/server";
 import {
@@ -47,13 +47,6 @@ function formatToolResultPreview(result: unknown, maxLength = 500): string {
         return String(result).slice(0, maxLength);
     }
 }
-
-type ScorerRunner = {
-    run?: (options: {
-        input: { inputMessages: Array<{ role: string; content: string }> };
-        output: Array<{ role: string; content: string }>;
-    }) => Promise<{ score?: number; reason?: string }>;
-};
 
 type StreamChunk = {
     type?: string;
@@ -92,97 +85,6 @@ const normalizeChunk = (chunk: unknown): StreamChunk => {
     }
     return {};
 };
-
-/**
- * Run evaluations asynchronously after chat completes
- * This doesn't block the response to the user
- *
- * Mastra scorers expect:
- * - input: { inputMessages: [{ role: "user", content: string }] }
- * - output: [{ role: "assistant", content: string }]
- */
-async function runEvaluationsAsync(
-    runId: string,
-    agentId: string,
-    scorerNames: string[],
-    inputText: string,
-    outputText: string
-): Promise<void> {
-    try {
-        if (scorerNames.length === 0) {
-            console.log(`[Agent Chat] No scorers configured for run ${runId}`);
-            return;
-        }
-
-        console.log(`[Agent Chat] Running ${scorerNames.length} evaluations for run ${runId}`);
-
-        const scorers = getScorersByNames(scorerNames);
-        const scores: Record<string, number> = {};
-
-        // Format input/output for Mastra's getTextContentFromMastraDBMessage()
-        // which reads message.content.content or message.content.parts[].text.
-        // The TS types say content: string, but the runtime expects the nested form.
-        const input = {
-            inputMessages: [
-                {
-                    role: "user" as const,
-                    content: {
-                        content: inputText,
-                        parts: [{ type: "text" as const, text: inputText }]
-                    }
-                }
-            ]
-        } as unknown as { inputMessages: { role: string; content: string }[] };
-        const output = [
-            {
-                role: "assistant" as const,
-                content: {
-                    content: outputText,
-                    parts: [{ type: "text" as const, text: outputText }]
-                }
-            }
-        ] as unknown as { role: string; content: string }[];
-
-        // Run each scorer - Mastra scorers use .run() method
-        for (const [name, config] of Object.entries(scorers)) {
-            try {
-                const scorer = config.scorer as unknown as ScorerRunner;
-
-                // Mastra scorers have a .run() method
-                if (scorer && typeof scorer.run === "function") {
-                    const result = await scorer.run({ input, output });
-                    scores[name] = result.score ?? 0;
-                    console.log(
-                        `[Agent Chat] Scorer ${name}: ${scores[name].toFixed(2)} - ${result.reason?.slice(0, 100) || ""}`
-                    );
-                }
-            } catch (scorerError) {
-                console.error(`[Agent Chat] Scorer ${name} failed:`, scorerError);
-            }
-        }
-
-        // Only upsert if we have valid scores
-        if (Object.keys(scores).length > 0) {
-            await prisma.agentEvaluation.upsert({
-                where: { runId },
-                create: {
-                    runId,
-                    agentId,
-                    scoresJson: scores
-                },
-                update: {
-                    scoresJson: scores
-                }
-            });
-
-            console.log(`[Agent Chat] Evaluations complete for run ${runId}:`, scores);
-        } else {
-            console.log(`[Agent Chat] No valid evaluation scores for run ${runId}`);
-        }
-    } catch (error) {
-        console.error(`[Agent Chat] Evaluation failed for run ${runId}:`, error);
-    }
-}
 
 /**
  * POST /api/agents/[id]/chat
@@ -968,20 +870,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                                     });
 
                                     console.log(`[Agent Chat] Completed run ${capturedRun.runId}`);
-                                }
-                            }
-
-                            // Run evaluations
-                            if (capturedRun && agentId) {
-                                const scorerNames = record?.scorers || [];
-                                if (scorerNames.length > 0) {
-                                    runEvaluationsAsync(
-                                        capturedRun.runId,
-                                        agentId,
-                                        scorerNames,
-                                        lastUserMessage,
-                                        capturedFullOutput
-                                    ).catch(console.error);
                                 }
                             }
                         } catch (postStreamError) {

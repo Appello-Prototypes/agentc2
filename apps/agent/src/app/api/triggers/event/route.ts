@@ -68,8 +68,12 @@ export async function POST(request: NextRequest) {
             }
         });
 
-        const activeTriggers = triggers.filter((trigger) => trigger.agent.isActive);
-        const inactiveTriggers = triggers.filter((trigger) => !trigger.agent.isActive);
+        const triggersWithAgent = triggers.filter(
+            (trigger): trigger is typeof trigger & { agent: NonNullable<typeof trigger.agent> } =>
+                trigger.agent != null
+        );
+        const activeTriggers = triggersWithAgent.filter((trigger) => trigger.agent.isActive);
+        const inactiveTriggers = triggersWithAgent.filter((trigger) => !trigger.agent.isActive);
         const { normalizedPayload } = buildTriggerPayloadSnapshot(payload);
 
         if (inactiveTriggers.length > 0) {

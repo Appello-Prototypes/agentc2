@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { mastra } from "@repo/agentc2/core";
-import { evaluateHelpfulness, evaluateCodeQuality } from "@repo/agentc2/scorers";
+import { evaluateHelpfulness, evaluateCodeQuality } from "@repo/agentc2";
 import { getDemoSession } from "@/lib/standalone-auth";
 
 export async function POST(req: NextRequest) {
@@ -16,16 +16,16 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "Input is required" }, { status: 400 });
         }
 
-        // Use the evaluated agent for generation
-        const agent = mastra.getAgent("evaluated");
+        // Use the assistant agent for generation
+        const agent = mastra.getAgent("assistant");
         if (!agent) {
-            return NextResponse.json({ error: "Evaluated agent not found" }, { status: 500 });
+            return NextResponse.json({ error: "Assistant agent not found" }, { status: 500 });
         }
 
         const response = await agent.generate(input);
         const output = response.text || "";
 
-        // Run custom evaluators
+        // Run heuristic evaluators
         const helpfulness = evaluateHelpfulness(input, output);
         const codeQuality = evaluateCodeQuality(output);
 

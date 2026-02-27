@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { Badge, Card, CardContent, CardDescription, CardHeader, CardTitle } from "@repo/ui";
+import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle } from "@repo/ui";
 import { getApiBase } from "@/lib/utils";
 
 interface WorkflowDetail {
@@ -38,13 +38,35 @@ export default function WorkflowOverviewPage() {
     const workflowSlug = params.workflowSlug as string;
     const [workflow, setWorkflow] = useState<WorkflowDetail | null>(null);
     const [metrics, setMetrics] = useState<WorkflowMetric[]>([]);
+    const [toggling, setToggling] = useState(false);
+
+    const fetchWorkflow = async () => {
+        const res = await fetch(`${getApiBase()}/api/workflows/${workflowSlug}`);
+        const data = await res.json();
+        setWorkflow(data.workflow || null);
+    };
+
+    const togglePublish = async () => {
+        if (!workflow || toggling) return;
+        setToggling(true);
+        try {
+            const res = await fetch(`${getApiBase()}/api/workflows/${workflowSlug}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ isPublished: !workflow.isPublished })
+            });
+            const data = await res.json();
+            if (data.success) {
+                setWorkflow((prev) => (prev ? { ...prev, isPublished: !prev.isPublished } : prev));
+            }
+        } catch (err) {
+            console.error("Failed to toggle publish:", err);
+        } finally {
+            setToggling(false);
+        }
+    };
 
     useEffect(() => {
-        const fetchWorkflow = async () => {
-            const res = await fetch(`${getApiBase()}/api/workflows/${workflowSlug}`);
-            const data = await res.json();
-            setWorkflow(data.workflow || null);
-        };
         fetchWorkflow();
 
         const fetchMetrics = async () => {
@@ -94,13 +116,18 @@ export default function WorkflowOverviewPage() {
                     <h1 className="text-2xl font-semibold">{workflow.name}</h1>
                     <p className="text-muted-foreground text-sm">{workflow.description}</p>
                 </div>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                     <Badge variant={workflow.isActive ? "default" : "secondary"}>
                         {workflow.isActive ? "Active" : "Inactive"}
                     </Badge>
-                    <Badge variant={workflow.isPublished ? "default" : "secondary"}>
-                        {workflow.isPublished ? "Published" : "Draft"}
-                    </Badge>
+                    <Button
+                        variant={workflow.isPublished ? "default" : "outline"}
+                        size="sm"
+                        onClick={togglePublish}
+                        disabled={toggling}
+                    >
+                        {toggling ? "Updating..." : workflow.isPublished ? "Published" : "Publish"}
+                    </Button>
                 </div>
             </div>
 

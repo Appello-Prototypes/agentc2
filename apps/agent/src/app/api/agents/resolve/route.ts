@@ -44,7 +44,6 @@ export async function POST(request: NextRequest) {
                       modelProvider: record.modelProvider,
                       modelName: record.modelName,
                       memoryEnabled: record.memoryEnabled,
-                      scorers: record.scorers,
                       toolCount: record.tools.length
                   }
                 : null

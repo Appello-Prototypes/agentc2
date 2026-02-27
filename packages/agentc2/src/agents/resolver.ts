@@ -14,7 +14,7 @@ import { storage } from "../storage";
 import { vector } from "../vector";
 import { getToolsByNamesAsync, getAllMcpTools, toolRegistry } from "../tools/registry";
 import { TOOL_OAUTH_REQUIREMENTS } from "../tools/oauth-requirements";
-import { getScorersByNames } from "../scorers/registry";
+
 import { getThreadSkillState } from "../skills/thread-state";
 import { recordActivity } from "../activity/service";
 import { budgetEnforcement } from "../budget";
@@ -756,9 +756,6 @@ export class AgentResolver {
             }
         }
 
-        // Get scorers from registry (synchronous)
-        const scorers = getScorersByNames(record.scorers);
-
         // Resolve model — prefer org-scoped API key, fall back to string-based model router
         // When modelOverride is provided (from model routing), use that instead of the record's model
         const modelOverride = this.currentResolveOptions?.modelOverride;
@@ -801,10 +798,6 @@ export class AgentResolver {
 
         if (memory) {
             agentConfig.memory = memory;
-        }
-
-        if (Object.keys(scorers).length > 0) {
-            agentConfig.scorers = scorers;
         }
 
         if (defaultOptions) {

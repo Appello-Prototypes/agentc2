@@ -95,8 +95,7 @@ import {
     agentGuardrailsUpdateTool,
     agentGuardrailsEventsTool,
     agentTestCasesListTool,
-    agentTestCasesCreateTool,
-    agentScorersListTool
+    agentTestCasesCreateTool
 } from "./agent-quality-tools";
 import {
     playbookSearchTool,
@@ -1163,8 +1162,6 @@ export const toolRegistry: Record<string, any> = {
     "agent-guardrails-events": agentGuardrailsEventsTool,
     "agent-test-cases-list": agentTestCasesListTool,
     "agent-test-cases-create": agentTestCasesCreateTool,
-    "agent-scorers-list": agentScorersListTool,
-
     // Run management
     "agent-run-cancel": agentRunCancelTool,
     "agent-run-rerun": agentRunRerunTool,

@@ -13,7 +13,6 @@ import {
     structuredAgent,
     visionAgent,
     researchAgent,
-    evaluatedAgent,
     mcpAgent,
     openaiVoiceAgent,
     elevenlabsVoiceAgent,
@@ -87,7 +86,7 @@ function buildAgents(): Record<string, Agent> {
         structured: structuredAgent,
         vision: visionAgent,
         research: researchAgent,
-        evaluated: evaluatedAgent,
+
         "mcp-agent": mcpAgent
     };
 

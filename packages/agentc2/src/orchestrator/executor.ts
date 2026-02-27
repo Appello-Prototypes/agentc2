@@ -1,6 +1,39 @@
 import { getOrchestratorAgent } from "./agent";
 import { goalStore, Goal, GoalScore } from "./store";
-import { evaluateHelpfulness } from "../scorers";
+function evaluateHelpfulness(
+    input: string,
+    output: string
+): { score: number; reasoning: string } {
+    let score = 0.5;
+    const reasoning: string[] = [];
+    const actionWords = ["here's how", "follow these steps", "you can", "try this", "to do this"];
+    if (actionWords.some((word) => output.toLowerCase().includes(word))) {
+        score += 0.2;
+        reasoning.push("Contains actionable guidance");
+    }
+    if (
+        output.includes("example") ||
+        output.includes("for instance") ||
+        output.includes("```")
+    ) {
+        score += 0.15;
+        reasoning.push("Includes examples or code");
+    }
+    if (output.includes("1.") || output.includes("- ") || output.includes("##")) {
+        score += 0.1;
+        reasoning.push("Well-structured response");
+    }
+    if (output.length > 200) {
+        score += 0.05;
+        reasoning.push("Sufficient detail");
+    }
+    score = Math.min(score, 1.0);
+    return {
+        score,
+        reasoning:
+            reasoning.length > 0 ? reasoning.join("; ") : "Basic response without special features"
+    };
+}
 
 export interface ExecutionResult {
     text: string;

@@ -144,7 +144,6 @@ export const agentCreateInputSchema: JsonSchema = {
         maxSteps: { type: "number" },
         subAgents: { type: "array", items: { type: "string" } },
         workflows: { type: "array", items: { type: "string" } },
-        scorers: { type: "array", items: { type: "string" } },
         toolIds: { type: "array", items: { type: "string" } },
         tools: { type: "array", items: agentToolBindingSchema },
         type: { type: "string", enum: ["USER", "SYSTEM"] },

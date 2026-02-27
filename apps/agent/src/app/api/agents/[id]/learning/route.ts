@@ -200,7 +200,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 tenantId: agent.tenantId,
                 status: "COLLECTING",
                 baselineVersion: agent.version,
-                scorerConfig: { scorers: agent.scorers },
+                scorerConfig: { scorers: [] },
                 metadata: { triggerReason, triggerType: "manual" }
             }
         });

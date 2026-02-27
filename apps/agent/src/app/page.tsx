@@ -3,6 +3,8 @@ import WelcomeEmbed from "@/components/WelcomeEmbed";
 import type { EmbedConfig } from "@/components/WelcomeEmbed";
 import { HomeNavMenu } from "@/components/HomeNavMenu";
 
+export const dynamic = "force-dynamic";
+
 /**
  * Default embed configuration — same defaults used by the /api/agents/[id]/embed route.
  */

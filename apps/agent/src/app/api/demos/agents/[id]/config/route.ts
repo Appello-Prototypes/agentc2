@@ -44,7 +44,6 @@ When a user asks a question:
                         name: t.name,
                         description: t.description || ""
                     })),
-                    scorers: null,
                     isDynamic: true
                 }
             });
@@ -86,7 +85,6 @@ When a user asks a question:
                       description: (tool as any).description || ""
                   }))
                 : [],
-            scorers: agentAny.scorers ? Object.keys(agentAny.scorers) : null,
             hasVoice: !!agentAny.voice
         };
 

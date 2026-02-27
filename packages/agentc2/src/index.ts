@@ -16,7 +16,6 @@ export {
     visionAnalysisSchema,
     researchAgent,
     researchTools,
-    evaluatedAgent,
     mcpAgent,
     createMcpAgent,
     // Agent factory for stored agents
@@ -83,17 +82,11 @@ export {
     type McpConfigImpactServer
 } from "./mcp";
 
-// Scorers
+// Scorers (Mastra-native scorer factory)
 export {
-    relevancyScorer,
-    toxicityScorer,
-    completenessScorer,
-    toneScorer,
-    scorers,
     evaluateHelpfulness,
     evaluateCodeQuality,
-    evaluators,
-    // New scorecard system
+    // Scorecard system
     DEFAULT_SCORECARD_CRITERIA,
     validateCriteriaWeights,
     computeWeightedScore,
@@ -103,7 +96,14 @@ export {
     shouldRunTier2,
     normalizeTier1ToScorecard,
     generateScorecard,
-    SCORECARD_TEMPLATES
+    SCORECARD_TEMPLATES,
+    // Scorer factory (Mastra-native primitives)
+    buildBulkScorecardScorer,
+    buildHeuristicScorer,
+    getPrebuiltScorers,
+    runAllScorers,
+    generateAAR,
+    formatForAgentScorer
 } from "./scorers";
 export type {
     ScorecardCriterion,
@@ -114,18 +114,10 @@ export type {
     CriterionResult,
     SkillAttribution,
     TurnEvaluation,
-    ScorecardTemplateDefinition
+    AarOutput,
+    ScorecardTemplateDefinition,
+    ScorerResults
 } from "./scorers";
-
-// Scorer registry for database-driven agents
-export {
-    scorerRegistry,
-    listAvailableScorers,
-    getScorersByNames,
-    getScorerByName,
-    hasScorerInRegistry
-} from "./scorers/registry";
-export type { ScorerInfo } from "./scorers/registry";
 
 // Tools
 export {

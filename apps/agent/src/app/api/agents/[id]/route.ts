@@ -249,7 +249,6 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             if (body.memoryEnabled !== undefined) updateData.memoryEnabled = body.memoryEnabled;
             if (body.memoryConfig !== undefined) updateData.memoryConfig = body.memoryConfig;
             if (body.maxSteps !== undefined) updateData.maxSteps = body.maxSteps;
-            if (body.scorers !== undefined) updateData.scorers = body.scorers;
             if (body.visibility !== undefined) {
                 updateData.visibility = body.visibility;
                 if (body.visibility === "PUBLIC" && !existing.publicToken) {
@@ -336,13 +335,6 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
                     JSON.stringify(existingWorkflows.sort()) !== JSON.stringify(newWorkflows.sort())
                 ) {
                     changes.push(`Workflows: ${existingWorkflows.length} → ${newWorkflows.length}`);
-                }
-            }
-            if (body.scorers !== undefined) {
-                const existingScorers = existing.scorers || [];
-                const newScorers = body.scorers || [];
-                if (JSON.stringify(existingScorers.sort()) !== JSON.stringify(newScorers.sort())) {
-                    changes.push(`Scorers: ${existingScorers.length} → ${newScorers.length}`);
                 }
             }
             if (body.tools !== undefined && Array.isArray(body.tools)) {
@@ -483,7 +475,6 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
                     maxSteps: existing.maxSteps,
                     subAgents: existing.subAgents,
                     workflows: existing.workflows,
-                    scorers: existing.scorers,
                     tools: existing.tools.map((t) => ({ toolId: t.toolId, config: t.config })),
                     skills: existing.skills.map((s) => ({
                         skillId: s.skillId,
@@ -553,7 +544,6 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
                         existing.tools.map((t) => t.toolId),
                         body.tools
                     ),
-                    ...ac("scorers", existing.scorers || [], body.scorers),
                     ...ac("subAgents", existing.subAgents || [], body.subAgents),
                     ...ac("workflows", existing.workflows || [], body.workflows)
                 );

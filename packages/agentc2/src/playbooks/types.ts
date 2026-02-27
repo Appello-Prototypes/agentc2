@@ -16,7 +16,6 @@ export interface AgentSnapshot {
     memoryEnabled: boolean;
     memoryConfig: unknown;
     maxSteps: number | null;
-    scorers: string[];
     visibility: string;
     requiresApproval: boolean;
     maxSpendUsd: number | null;

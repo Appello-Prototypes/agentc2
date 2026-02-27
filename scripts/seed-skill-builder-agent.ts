@@ -72,7 +72,6 @@ If the request context includes an \`agentSlug\`, the user is building this skil
         semanticRecall: false,
         workingMemory: { enabled: true, template: "Skill building context for the user" }
     },
-    scorers: [] as string[],
     metadata: {
         category: "builder",
         slack: {
@@ -118,7 +117,6 @@ async function seedSkillBuilderAgent() {
                 modelConfig: spec.modelConfig,
                 memoryEnabled: spec.memoryEnabled,
                 memoryConfig: spec.memoryConfig,
-                scorers: spec.scorers,
                 metadata: spec.metadata
             }
         });
@@ -153,7 +151,6 @@ async function seedSkillBuilderAgent() {
                 modelConfig: spec.modelConfig,
                 memoryEnabled: spec.memoryEnabled,
                 memoryConfig: spec.memoryConfig,
-                scorers: spec.scorers,
                 metadata: spec.metadata,
                 type: AgentType.SYSTEM,
                 tools: {

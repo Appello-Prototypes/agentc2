@@ -759,9 +759,6 @@ model Agent {
     // Multi-step workflows
     maxSteps Int? @default(5)
 
-    // Evaluation configuration
-    scorers String[] @default([])
-
     // Permissions/tenancy
     type        AgentType       @default(USER)
     tenantId    String? // Multi-tenant isolation (legacy, use workspaceId)
@@ -945,11 +942,18 @@ model AgentSchedule {
     @@map("agent_schedule")
 }
 
-// Agent Trigger - Event-based invocation
+// Agent Trigger - Event-based invocation (supports agents, workflows, and networks)
 model AgentTrigger {
-    id                    String                  @id @default(cuid())
-    agentId               String
-    agent                 Agent                   @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    id         String @id @default(cuid())
+    entityType String @default("agent") // "agent", "workflow", "network"
+
+    agentId    String?
+    agent      Agent?    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    workflowId String?
+    workflow   Workflow? @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+    networkId  String?
+    network    Network?  @relation(fields: [networkId], references: [id], onDelete: Cascade)
+
     workspaceId           String?
     workspace             Workspace?              @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
     name                  String
@@ -974,7 +978,10 @@ model AgentTrigger {
 
     @@unique([webhookPath])
     @@index([agentId])
+    @@index([workflowId])
+    @@index([networkId])
     @@index([workspaceId])
+    @@index([entityType])
     @@index([triggerType])
     @@index([eventName])
     @@index([isArchived])
@@ -1188,7 +1195,6 @@ model MastraAgentVersion {
     inputProcessors  Json?
     outputProcessors Json?
     memory           Json?
-    scorers          Json?
     changedFields    Json?
     changeMessage    String?
     createdAt        DateTime  @db.Timestamp(6)
@@ -2502,6 +2508,7 @@ model Workflow {
     networkPrimitives NetworkPrimitive[]
     metrics           WorkflowMetricDaily[]
     triggerEvents     TriggerEvent[]
+    triggers          AgentTrigger[]
     budgetPolicy      BudgetPolicy?
     testCases         WorkflowTestCase[]
 
@@ -2689,6 +2696,7 @@ model Network {
     runs          NetworkRun[]
     metrics       NetworkMetricDaily[]
     triggerEvents TriggerEvent[]
+    triggers      AgentTrigger[]
     budgetPolicy  BudgetPolicy?
     testCases     NetworkTestCase[]
 

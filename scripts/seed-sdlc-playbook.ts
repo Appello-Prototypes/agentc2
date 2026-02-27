@@ -16,6 +16,7 @@
  */
 
 import { prisma } from "../packages/database/src/index";
+import { randomBytes } from "crypto";
 
 /* ─── Instructions ─────────────────────────────────────────────────── */
 
@@ -429,7 +430,6 @@ async function main() {
             maxSteps: 5,
             skills: ["ticket-triage"],
             tools: ["memory-recall", "ticket-to-github-issue"],
-            scorers: ["relevancy", "completeness"],
             scorecard: {
                 criteria: [
                     {
@@ -484,7 +484,6 @@ async function main() {
             maxSteps: 10,
             skills: ["code-analysis", "implementation-planning"],
             tools: ["memory-recall", "web-fetch"],
-            scorers: ["completeness", "relevancy"],
             scorecard: {
                 criteria: [
                     {
@@ -534,7 +533,6 @@ async function main() {
             maxSteps: 8,
             skills: ["audit-review", "code-analysis"],
             tools: ["memory-recall"],
-            scorers: ["completeness", "relevancy", "toxicity"],
             scorecard: {
                 criteria: [
                     {
@@ -584,7 +582,6 @@ async function main() {
             maxSteps: 8,
             skills: ["pr-review", "audit-review"],
             tools: ["memory-recall", "calculate-trust-score"],
-            scorers: ["completeness", "relevancy"],
             scorecard: {
                 criteria: [
                     {
@@ -649,7 +646,6 @@ async function main() {
                     maxSteps: agentDef.maxSteps,
                     memoryEnabled: true,
                     memoryConfig,
-                    scorers: agentDef.scorers,
                     visibility: "ORGANIZATION",
                     workspaceId: workspace.id
                 }
@@ -1265,6 +1261,65 @@ async function main() {
             console.log("Workflow exists:", existing.slug);
         }
         workflows[wfDef.slug] = { id: existing.id, slug: existing.slug };
+    }
+
+    // ─── 5b. Create Default Webhook Trigger for SDLC Workflows ────
+
+    const sdlcTriggerName = "SDLC GitHub Webhook";
+    const existingTrigger = await prisma.agentTrigger.findFirst({
+        where: {
+            workflowId: workflows["sdlc-standard"]!.id,
+            entityType: "workflow",
+            name: sdlcTriggerName
+        }
+    });
+
+    if (!existingTrigger) {
+        const { encryptString } = await import("../apps/agent/src/lib/credential-crypto");
+        const webhookPath = `trigger_${randomBytes(16).toString("hex")}`;
+        const webhookSecretPlain = randomBytes(32).toString("hex");
+        const webhookSecret = encryptString(webhookSecretPlain);
+
+        await prisma.agentTrigger.create({
+            data: {
+                entityType: "workflow",
+                workflowId: workflows["sdlc-standard"]!.id,
+                workspaceId: workspace.id,
+                name: sdlcTriggerName,
+                description:
+                    "Triggers SDLC workflows when a GitHub Issue is labeled. " +
+                    "Routes to sdlc-bugfix, sdlc-feature, or sdlc-standard based on issue labels.",
+                triggerType: "webhook",
+                webhookPath,
+                webhookSecret,
+                filterJson: {
+                    triggerLabel: "agentc2-sdlc",
+                    githubEvents: ["issues"],
+                    githubActions: ["labeled"]
+                },
+                inputMapping: {
+                    _config: {
+                        workflowRouting: {
+                            bug: "sdlc-bugfix",
+                            feature: "sdlc-feature",
+                            default: "sdlc-standard"
+                        },
+                        fieldMapping: {
+                            title: "issue.title",
+                            description: "issue.body",
+                            repository: "repository.full_name"
+                        }
+                    }
+                },
+                isActive: true
+            }
+        });
+        console.log("Created SDLC webhook trigger:", webhookPath);
+        console.log("  Webhook URL: /api/webhooks/" + webhookPath);
+        console.log("  Webhook secret:", webhookSecretPlain);
+        console.log("  ⚠️  Save this secret - it won't be shown again!");
+    } else {
+        console.log("SDLC webhook trigger already exists:", existingTrigger.webhookPath);
     }
 
     // ─── 6. Package as Playbook ─────────────────────────────────────

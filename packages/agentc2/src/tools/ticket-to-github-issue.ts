@@ -33,7 +33,18 @@ export const ticketToGithubIssueTool = createTool({
             .string()
             .optional()
             .describe("CodingPipelineRun ID to update with the GitHub issue URL"),
-        organizationId: z.string().optional().describe("Organization ID for MCP connection lookup")
+        organizationId: z.string().optional().describe("Organization ID for MCP connection lookup"),
+        existingIssueUrl: z
+            .string()
+            .optional()
+            .describe(
+                "If provided, skip issue creation and return this existing issue. " +
+                    "Use when the workflow was triggered from an existing GitHub Issue."
+            ),
+        existingIssueNumber: z
+            .number()
+            .optional()
+            .describe("Issue number of the existing issue (used with existingIssueUrl)")
     }),
     outputSchema: z.object({
         issueNumber: z.number(),
@@ -48,8 +59,21 @@ export const ticketToGithubIssueTool = createTool({
         labels,
         sourceTicketId,
         pipelineRunId,
-        organizationId
+        organizationId,
+        existingIssueUrl,
+        existingIssueNumber
     }) => {
+        if (existingIssueUrl) {
+            const issueNumber =
+                existingIssueNumber ?? (Number(existingIssueUrl.split("/").pop()) || 0);
+            return {
+                issueNumber,
+                issueUrl: existingIssueUrl,
+                repository,
+                linked: false
+            };
+        }
+
         const { getToolsByNamesAsync } = await import("./registry");
 
         const [owner, repo] = repository.split("/");

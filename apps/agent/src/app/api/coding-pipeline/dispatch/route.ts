@@ -3,6 +3,11 @@ import { prisma } from "@repo/database";
 import { authenticateRequest } from "@/lib/api-auth";
 import { inngest } from "@/lib/inngest";
 
+/**
+ * @deprecated The direct dispatch path (without via=github) is deprecated.
+ * Use via=github to create a GitHub Issue that triggers the SDLC workflow
+ * through the generic trigger system at /api/webhooks/[path].
+ */
 export async function POST(request: NextRequest) {
     try {
         const authResult = await authenticateRequest(request);
@@ -11,7 +16,17 @@ export async function POST(request: NextRequest) {
         }
 
         const body = await request.json();
-        const { sourceType, sourceId, repository, branch, variant } = body;
+        const {
+            sourceType,
+            sourceId,
+            repository,
+            branch,
+            variant,
+            via,
+            title,
+            description,
+            labels
+        } = body;
 
         if (!sourceType || !sourceId || !repository) {
             return NextResponse.json(
@@ -33,6 +48,66 @@ export async function POST(request: NextRequest) {
                 { status: 400 }
             );
         }
+
+        // GitHub Issue dispatch mode: create a GitHub Issue and let the webhook handle the rest
+        if (via === "github") {
+            const { ticketToGithubIssueTool } =
+                await import("@repo/agentc2/tools/ticket-to-github-issue");
+
+            const issueTitle = title || `[Ticket] ${sourceId}`;
+            const issueBody =
+                (description || "") +
+                `\n\n---\n_Source: ${sourceType} \`${sourceId}\` via AgentC2_`;
+
+            // Parse repository URL to owner/repo format
+            let repoPath = repository;
+            if (repoPath.startsWith("https://github.com/")) {
+                repoPath = repoPath.replace("https://github.com/", "").replace(/\.git$/, "");
+            }
+
+            const result = await ticketToGithubIssueTool.execute!(
+                {
+                    title: issueTitle,
+                    description: issueBody,
+                    repository: repoPath,
+                    labels: labels || ["agentc2-sdlc"],
+                    sourceTicketId: sourceId,
+                    organizationId: authResult.organizationId
+                },
+                {} as Parameters<NonNullable<typeof ticketToGithubIssueTool.execute>>[1]
+            );
+
+            if ("error" in result) {
+                return NextResponse.json(
+                    { success: false, error: "Failed to create GitHub issue" },
+                    { status: 500 }
+                );
+            }
+
+            if (sourceType === "support_ticket") {
+                await prisma.supportTicket
+                    .update({
+                        where: { id: sourceId },
+                        data: { status: "IN_PROGRESS" }
+                    })
+                    .catch(() => {});
+            }
+
+            return NextResponse.json({
+                success: true,
+                via: "github",
+                issueNumber: result.issueNumber,
+                issueUrl: result.issueUrl,
+                repository: result.repository,
+                message:
+                    "GitHub Issue created. The webhook will trigger the SDLC workflow automatically."
+            });
+        }
+
+        console.warn(
+            "[DEPRECATED] /api/coding-pipeline/dispatch called without via=github. " +
+                "Use via=github to route through the generic trigger system."
+        );
 
         const pipelineRun = await prisma.codingPipelineRun.create({
             data: {

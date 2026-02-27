@@ -1466,84 +1466,75 @@ export const runEvaluationFunction = inngest.createFunction(
             return { runId, skipped: true, existing: true };
         }
 
-        // Step 3: Run Tier 1 heuristic pre-screen
-        const tier1Result = await step.run("tier1-prescreen", async () => {
-            const { runTier1Prescreen } = await import("@repo/agentc2");
-            return runTier1Prescreen(context);
+        // Step 3: Run all scorers via scorer factory
+        const scorerResults = await step.run("run-scorers", async () => {
+            const { runAllScorers } = await import("@repo/agentc2");
+            return runAllScorers(context);
         });
 
-        // Step 4: Decide whether to run Tier 2
-        const runTier2 = await step.run("tier2-decision", async () => {
-            const { shouldRunTier2 } = await import("@repo/agentc2");
-            const samplingRate = context.agent.scorecard?.samplingRate ?? 1.0;
-            const hasGroundTruth = !!context.testRun?.testCase?.expectedOutput;
-            return shouldRunTier2(tier1Result, samplingRate, hasGroundTruth);
-        });
-
-        // Step 5: Run Tier 2 AI Auditor (if selected)
-        let tier2Result: import("@repo/agentc2").Tier2Result | null = null;
-        if (runTier2) {
+        // Step 4: Enrichment — generate AAR (if full evaluation ran)
+        let aarOutput: import("@repo/agentc2").AarOutput | null = null;
+        if (scorerResults.tier === "full") {
             try {
-                tier2Result = await step.run("tier2-auditor", async () => {
-                    const { runTier2Auditor } = await import("@repo/agentc2");
-                    return runTier2Auditor(context);
+                aarOutput = await step.run("generate-aar", async () => {
+                    const { generateAAR } = await import("@repo/agentc2");
+                    return generateAAR(scorerResults, context);
                 });
             } catch (err) {
-                console.error(
-                    `[Eval] Tier 2 auditor failed for run ${runId}, falling back to Tier 1:`,
-                    err
-                );
+                console.error(`[Eval] AAR generation failed for run ${runId}:`, err);
             }
         }
 
-        // Step 6: Store evaluation
+        // Step 5: Store evaluation
         const evaluation = await step.run("store-evaluation", async () => {
-            // Normalize Tier 1 scores to scorecard criteria keys so they
-            // contribute to the same trend lines as Tier 2 auditor scores
-            let normalizedTier1Scores = tier1Result.scores;
-            if (!tier2Result && context.agent.scorecard) {
+            const isFull = scorerResults.tier === "full" && scorerResults.scorecard;
+
+            let normalizedScores = scorerResults.heuristic.scores;
+            if (!isFull && context.agent.scorecard) {
                 const { normalizeTier1ToScorecard } = await import("@repo/agentc2");
-                normalizedTier1Scores = normalizeTier1ToScorecard(
-                    tier1Result.scores,
+                normalizedScores = normalizeTier1ToScorecard(
+                    scorerResults.heuristic.scores,
                     context.agent.scorecard.criteria
                 );
             }
 
-            const result = tier2Result ?? {
-                scoresJson: normalizedTier1Scores,
-                feedbackJson: null,
-                overallGrade: tier1Result.avgScore,
-                narrative: null,
-                confidenceScore: null,
-                skillAttributions: null,
-                turnEvaluations: null
-            };
+            const scoresJson = isFull ? scorerResults.scorecard!.scoresJson : normalizedScores;
+            const feedbackJson = isFull ? scorerResults.scorecard!.feedbackJson : null;
+            const overallGrade = isFull
+                ? scorerResults.scorecard!.score
+                : scorerResults.heuristic.score;
+            const narrative = isFull ? scorerResults.scorecard!.reason : null;
+
             return prisma.agentEvaluation.create({
                 data: {
                     runId,
                     agentId,
-                    scoresJson: result.scoresJson,
-                    rawScoresJson: !tier2Result
-                        ? (tier1Result.scores as unknown as Prisma.InputJsonValue)
+                    scoresJson,
+                    rawScoresJson: !isFull
+                        ? (scorerResults.heuristic.scores as unknown as Prisma.InputJsonValue)
                         : Prisma.JsonNull,
-                    feedbackJson: result.feedbackJson
-                        ? (result.feedbackJson as unknown as Prisma.InputJsonValue)
+                    feedbackJson: feedbackJson
+                        ? (feedbackJson as unknown as Prisma.InputJsonValue)
                         : Prisma.JsonNull,
-                    overallGrade: result.overallGrade,
-                    narrative: result.narrative,
-                    auditorModel: tier2Result
+                    overallGrade,
+                    narrative,
+                    auditorModel: isFull
                         ? (context.agent.scorecard?.auditorModel ?? "gpt-4o-mini")
                         : null,
                     scorecardVersion: context.agent.scorecard?.version ?? null,
-                    evaluationTier: tier2Result ? "tier2_auditor" : "tier1_heuristic",
-                    confidenceScore: result.confidenceScore,
+                    evaluationTier: isFull ? "tier2_auditor" : "tier1_heuristic",
+                    confidenceScore: isFull ? scorerResults.scorecard!.confidenceScore : null,
                     groundTruthUsed: !!context.testRun?.testCase?.expectedOutput,
-                    skillAttributions: result.skillAttributions
-                        ? (result.skillAttributions as unknown as Prisma.InputJsonValue)
-                        : Prisma.JsonNull,
-                    turnEvaluations: result.turnEvaluations
-                        ? (result.turnEvaluations as unknown as Prisma.InputJsonValue)
-                        : Prisma.JsonNull,
+                    skillAttributions:
+                        isFull && scorerResults.scorecard!.skillAttributions
+                            ? (scorerResults.scorecard!
+                                  .skillAttributions as unknown as Prisma.InputJsonValue)
+                            : Prisma.JsonNull,
+                    turnEvaluations:
+                        isFull && scorerResults.scorecard!.turnEvaluations
+                            ? (scorerResults.scorecard!
+                                  .turnEvaluations as unknown as Prisma.InputJsonValue)
+                            : Prisma.JsonNull,
                     traceContextJson: {
                         toolCallCount: context.toolCalls?.length ?? 0,
                         stepCount: context.trace?.steps?.length ?? 0,
@@ -1551,38 +1542,40 @@ export const runEvaluationFunction = inngest.createFunction(
                         durationMs: context.run.durationMs,
                         totalTokens: context.run.totalTokens,
                         activeSkills: context.skillsJson ?? [],
-                        tier1Flags: tier1Result.flags
+                        tier1Flags: scorerResults.heuristic.flags,
+                        prebuiltScores:
+                            Object.keys(scorerResults.prebuilt).length > 0
+                                ? scorerResults.prebuilt
+                                : undefined
                     },
-                    scorerVersion: "2.0.0"
+                    scorerVersion: "3.0.0"
                 }
             });
         });
 
-        const scores = (tier2Result?.scoresJson ?? tier1Result.scores) as Record<string, number>;
+        const scores = (scorerResults.scorecard?.scoresJson ??
+            scorerResults.heuristic.scores) as Record<string, number>;
 
-        // Step 6b: Store AAR and create recommendations (if Tier 2 with AAR)
-        if (tier2Result?.aar) {
+        // Step 5b: Store AAR and create recommendations (if AAR generated)
+        if (aarOutput) {
             await step.run("store-aar-recommendations", async () => {
-                // Store AAR in evaluation record
                 await prisma.agentEvaluation.update({
                     where: { id: evaluation.id },
                     data: {
-                        aarJson: tier2Result!.aar as unknown as Prisma.InputJsonValue
+                        aarJson: aarOutput as unknown as Prisma.InputJsonValue
                     }
                 });
 
-                const aar = tier2Result!.aar!;
                 const allRecs = [
-                    ...aar.sustain.map((s) => ({
+                    ...aarOutput!.sustain.map((s) => ({
                         ...s,
                         type: "sustain" as const,
                         recommendation: s.evidence
                     })),
-                    ...aar.improve.map((i) => ({ ...i, type: "improve" as const }))
+                    ...aarOutput!.improve.map((i) => ({ ...i, type: "improve" as const }))
                 ];
 
                 for (const rec of allRecs) {
-                    // Dedup: check for existing active recommendation with same category and similar title
                     const existing = await prisma.agentRecommendation.findFirst({
                         where: {
                             agentId,
@@ -1594,7 +1587,6 @@ export const runEvaluationFunction = inngest.createFunction(
                     });
 
                     if (existing) {
-                        // Increment frequency instead of creating duplicate
                         await prisma.agentRecommendation.update({
                             where: { id: existing.id },
                             data: {
@@ -1625,7 +1617,6 @@ export const runEvaluationFunction = inngest.createFunction(
                     }
                 }
 
-                // Emit learning signals for "improve" recommendations
                 for (const rec of allRecs.filter((r) => r.type === "improve")) {
                     await inngest.send({
                         name: "learning/signal.detected",
@@ -1643,11 +1634,10 @@ export const runEvaluationFunction = inngest.createFunction(
             });
         }
 
-        // Step 7: Extract themes from narrative (if Tier 2)
-        if (tier2Result?.narrative) {
+        // Step 6: Extract themes from narrative (if full evaluation ran)
+        if (scorerResults.scorecard?.reason) {
             await step.run("extract-themes", async () => {
-                // Simple keyword-based theme extraction (can be upgraded to LLM later)
-                const narrative = tier2Result!.narrative;
+                const narrative = scorerResults.scorecard!.reason;
                 const themePatterns = [
                     {
                         pattern: /tool failure|tool error|failed tool/i,
@@ -1717,7 +1707,7 @@ export const runEvaluationFunction = inngest.createFunction(
             });
         }
 
-        // Step 8: Emit evaluation/completed event for downstream processing
+        // Step 7: Emit evaluation/completed event for downstream processing
         await step.sendEvent("emit-evaluation-completed", {
             name: "evaluation/completed",
             data: {
@@ -1728,9 +1718,9 @@ export const runEvaluationFunction = inngest.createFunction(
             }
         });
 
-        // Step 9: Check for low scores and emit signal event
+        // Step 8: Check for low scores and emit signal event
         await step.run("check-signals", async () => {
-            const overallGrade = tier2Result?.overallGrade ?? tier1Result.avgScore;
+            const overallGrade = scorerResults.scorecard?.score ?? scorerResults.heuristic.score;
             if (overallGrade < 0.5) {
                 await inngest.send({
                     name: "learning/signal.detected",
@@ -1746,11 +1736,11 @@ export const runEvaluationFunction = inngest.createFunction(
         });
 
         console.log(
-            `[Inngest] Evaluation complete for run: ${runId} (${tier2Result ? "Tier 2" : "Tier 1"})`,
+            `[Inngest] Evaluation complete for run: ${runId} (${scorerResults.tier})`,
             scores
         );
 
-        return { runId, evaluationId: evaluation.id, tier: tier2Result ? 2 : 1, scores };
+        return { runId, evaluationId: evaluation.id, tier: scorerResults.tier, scores };
     }
 );
 
@@ -2039,7 +2029,6 @@ export const learningSessionStartFunction = inngest.createFunction(
                     id: true,
                     slug: true,
                     version: true,
-                    scorers: true,
                     tenantId: true
                 }
             });
@@ -2069,7 +2058,7 @@ export const learningSessionStartFunction = inngest.createFunction(
                     tenantId: agent.tenantId,
                     status: "COLLECTING",
                     baselineVersion: agent.version,
-                    scorerConfig: { scorers: agent.scorers },
+                    scorerConfig: {},
                     metadata: { triggerReason, triggerType }
                 }
             });
@@ -2756,7 +2745,6 @@ export const learningProposalGenerationFunction = inngest.createFunction(
                             instructions: true,
                             tools: true,
                             memoryConfig: true,
-                            scorers: true,
                             version: true
                         }
                     }
@@ -3039,8 +3027,7 @@ export const learningProposalGenerationFunction = inngest.createFunction(
                     },
                     snapshot: {
                         instructions: enhancedInstructions,
-                        tools: sessionData.agent.tools,
-                        scorers: sessionData.agent.scorers
+                        tools: sessionData.agent.tools
                     },
                     createdBy: "learning-system"
                 }
@@ -6724,7 +6711,7 @@ export const agentTriggerFireFunction = inngest.createFunction(
             });
         });
 
-        if (!trigger || !trigger.isActive || !trigger.agent.isActive) {
+        if (!trigger || !trigger.isActive || !trigger.agent?.isActive) {
             if (triggerEventId) {
                 await step.run("mark-trigger-skipped", async () => {
                     await updateTriggerEventRecord(triggerEventId, {
@@ -6735,6 +6722,8 @@ export const agentTriggerFireFunction = inngest.createFunction(
             }
             return { skipped: true };
         }
+
+        const triggerAgent = trigger.agent;
 
         const payloadObj =
             payload && typeof payload === "object" && !Array.isArray(payload)
@@ -6793,8 +6782,8 @@ export const agentTriggerFireFunction = inngest.createFunction(
                     : undefined;
 
             const handle = await startRun({
-                agentId: trigger.agent.id,
-                agentSlug: trigger.agent.slug,
+                agentId: triggerAgent.id,
+                agentSlug: triggerAgent.slug,
                 input,
                 source,
                 triggerType,
@@ -6837,8 +6826,8 @@ export const agentTriggerFireFunction = inngest.createFunction(
             name: "agent/invoke.async",
             data: {
                 runId: runResult.runId,
-                agentId: trigger.agent.id,
-                agentSlug: trigger.agent.slug,
+                agentId: triggerAgent.id,
+                agentSlug: triggerAgent.slug,
                 input,
                 context: {
                     ...contextDefaults,
@@ -6855,6 +6844,203 @@ export const agentTriggerFireFunction = inngest.createFunction(
         });
 
         return { runId: runResult.runId };
+    }
+);
+
+/**
+ * Workflow Trigger Event Handler
+ *
+ * Handles webhook and event triggers targeting workflows.
+ * Supports workflowRouting in inputMapping to route to different workflow slugs
+ * based on payload labels (e.g., bug -> sdlc-bugfix, feature -> sdlc-feature).
+ */
+export const workflowTriggerFireFunction = inngest.createFunction(
+    {
+        id: "workflow-trigger-fire",
+        retries: 2
+    },
+    { event: "workflow/trigger.fire" },
+    async ({ event, step }) => {
+        const { triggerId, payload, triggerEventId } = event.data as {
+            triggerId: string;
+            payload: unknown;
+            triggerEventId?: string;
+        };
+
+        const trigger = await step.run("load-trigger", async () => {
+            return prisma.agentTrigger.findUnique({
+                where: { id: triggerId },
+                include: {
+                    workflow: {
+                        select: {
+                            id: true,
+                            slug: true,
+                            isActive: true,
+                            isPublished: true
+                        }
+                    }
+                }
+            });
+        });
+
+        if (!trigger || !trigger.isActive || !trigger.workflow?.isActive) {
+            if (triggerEventId) {
+                await step.run("mark-trigger-skipped", async () => {
+                    await updateTriggerEventRecord(triggerEventId, {
+                        status: TriggerEventStatus.SKIPPED,
+                        errorMessage: "Trigger or workflow is disabled"
+                    });
+                });
+            }
+            return { skipped: true };
+        }
+
+        const payloadObj =
+            payload && typeof payload === "object" && !Array.isArray(payload)
+                ? payload
+                : { value: payload };
+
+        if (
+            !matchesTriggerFilter(
+                payloadObj as Record<string, unknown>,
+                trigger.filterJson as Record<string, unknown> | null
+            )
+        ) {
+            if (triggerEventId) {
+                await step.run("mark-trigger-filtered", async () => {
+                    await updateTriggerEventRecord(triggerEventId, {
+                        status: TriggerEventStatus.FILTERED,
+                        errorMessage: "Trigger filter did not match payload"
+                    });
+                });
+            }
+            return { matched: false };
+        }
+
+        const triggerInputMapping = extractTriggerInputMapping(trigger.inputMapping);
+        const triggerConfig = extractTriggerConfig(triggerInputMapping);
+
+        // Resolve which workflow to execute via workflowRouting
+        let targetWorkflowSlug = trigger.workflow.slug;
+        let targetWorkflowId = trigger.workflow.id;
+        const workflowRouting = triggerConfig?.workflowRouting as
+            | Record<string, string>
+            | undefined;
+
+        if (workflowRouting) {
+            const routedSlug = await step.run("resolve-workflow-routing", async () => {
+                // Check payload labels for routing (GitHub Issues pattern)
+                const labels = (payloadObj as Record<string, unknown>)?.issue as
+                    | Record<string, unknown>
+                    | undefined;
+                const issueLabels = (labels?.labels ?? []) as Array<{
+                    name?: string;
+                }>;
+                const labelNames = issueLabels
+                    .map((l) => l.name?.toLowerCase())
+                    .filter(Boolean) as string[];
+
+                // Find first matching route key in labels
+                for (const [key, slug] of Object.entries(workflowRouting)) {
+                    if (key === "default") continue;
+                    if (labelNames.includes(key.toLowerCase())) {
+                        return slug;
+                    }
+                }
+
+                return workflowRouting.default ?? null;
+            });
+
+            if (routedSlug && routedSlug !== targetWorkflowSlug) {
+                const routedWorkflow = await step.run("load-routed-workflow", async () => {
+                    return prisma.workflow.findUnique({
+                        where: { slug: routedSlug },
+                        select: { id: true, slug: true, isActive: true }
+                    });
+                });
+                if (routedWorkflow && routedWorkflow.isActive) {
+                    targetWorkflowSlug = routedWorkflow.slug;
+                    targetWorkflowId = routedWorkflow.id;
+                }
+            }
+        }
+
+        // Build mapped input from fieldMapping
+        const fieldMapping = triggerConfig?.fieldMapping as Record<string, string> | undefined;
+        const mappedInput: Record<string, unknown> = {};
+        if (fieldMapping) {
+            for (const [outputKey, payloadPath] of Object.entries(fieldMapping)) {
+                const parts = (payloadPath as string).split(".");
+                let value: unknown = payloadObj;
+                for (const part of parts) {
+                    if (value && typeof value === "object") {
+                        value = (value as Record<string, unknown>)[part];
+                    } else {
+                        value = undefined;
+                        break;
+                    }
+                }
+                if (value !== undefined) {
+                    mappedInput[outputKey] = value;
+                }
+            }
+        }
+
+        const runResult = await step.run("create-workflow-run", async () => {
+            const workflowRun = await prisma.workflowRun.create({
+                data: {
+                    workflowId: targetWorkflowId,
+                    status: "QUEUED",
+                    inputJson: {
+                        ...mappedInput,
+                        _trigger: {
+                            triggerId: trigger.id,
+                            triggerName: trigger.name,
+                            triggerType: trigger.triggerType,
+                            routedFrom: trigger.workflow!.slug,
+                            routedTo: targetWorkflowSlug
+                        }
+                    }
+                }
+            });
+
+            await prisma.agentTrigger.update({
+                where: { id: trigger.id },
+                data: {
+                    lastTriggeredAt: new Date(),
+                    triggerCount: { increment: 1 }
+                }
+            });
+
+            return { workflowRunId: workflowRun.id };
+        });
+
+        if (triggerEventId) {
+            await step.run("mark-trigger-queued", async () => {
+                await updateTriggerEventRecord(triggerEventId, {
+                    status: TriggerEventStatus.QUEUED,
+                    entityType: "workflow",
+                    workflow: { connect: { id: targetWorkflowId } },
+                    workflowRun: {
+                        connect: {
+                            id: runResult.workflowRunId
+                        }
+                    }
+                });
+            });
+        }
+
+        await step.sendEvent("execute-workflow", {
+            name: "workflow/execute.async",
+            data: {
+                workflowRunId: runResult.workflowRunId,
+                workflowId: targetWorkflowId,
+                workflowSlug: targetWorkflowSlug,
+                input: mappedInput
+            }
+        });
+
+        return { workflowRunId: runResult.workflowRunId, workflowSlug: targetWorkflowSlug };
     }
 );
 
@@ -9046,6 +9232,7 @@ export const inngestFunctions = [
     gmailMessageProcessFunction,
     gmailFollowUpFunction,
     agentTriggerFireFunction,
+    workflowTriggerFireFunction,
     // AI Insights generation
     generateInsightsFunction,
     // Closed-Loop Learning functions

@@ -39,8 +39,8 @@ function verifySignature(
 /**
  * POST /api/webhooks/[path]
  *
- * Webhook ingestion endpoint for agent triggers.
- * Validates signature and queues agent invocation.
+ * Webhook ingestion endpoint for triggers targeting agents, workflows, or networks.
+ * Validates signature and queues execution via Inngest.
  */
 export async function POST(
     request: NextRequest,
@@ -49,17 +49,17 @@ export async function POST(
     try {
         const { path } = await params;
 
-        // Find trigger by webhook path
         const trigger = await prisma.agentTrigger.findUnique({
             where: { webhookPath: path },
             include: {
                 agent: {
-                    select: {
-                        id: true,
-                        slug: true,
-                        name: true,
-                        isActive: true
-                    }
+                    select: { id: true, slug: true, name: true, isActive: true }
+                },
+                workflow: {
+                    select: { id: true, slug: true, name: true, isActive: true }
+                },
+                network: {
+                    select: { id: true, slug: true, name: true, isActive: true }
                 }
             }
         });
@@ -94,7 +94,6 @@ export async function POST(
         try {
             payload = JSON.parse(rawBody);
         } catch {
-            // If not JSON, use raw body as input
             payload = { raw: rawBody };
         }
 
@@ -148,6 +147,17 @@ export async function POST(
             );
         }
 
+        // ── Resolve entity type and target ──
+        const entityType = trigger.entityType ?? "agent";
+        const targetEntity = trigger.agent ?? trigger.workflow ?? trigger.network;
+
+        if (!targetEntity) {
+            return NextResponse.json(
+                { success: false, error: "Trigger has no target entity configured" },
+                { status: 500 }
+            );
+        }
+
         // ── Create trigger event AFTER signature verification ──
         let workspaceId = trigger.workspaceId;
         if (!workspaceId) {
@@ -160,12 +170,18 @@ export async function POST(
 
         const triggerEvent = await createTriggerEventRecord({
             triggerId: trigger.id,
-            agentId: trigger.agent.id,
+            ...(entityType === "agent" && trigger.agent ? { agentId: trigger.agent.id } : {}),
+            ...(entityType === "workflow" && trigger.workflow
+                ? { workflowId: trigger.workflow.id }
+                : {}),
+            ...(entityType === "network" && trigger.network
+                ? { networkId: trigger.network.id }
+                : {}),
             workspaceId,
             status: TriggerEventStatus.RECEIVED,
             sourceType: "webhook",
             triggerType: trigger.triggerType,
-            entityType: "agent",
+            entityType,
             webhookPath: trigger.webhookPath,
             payload: {
                 ...normalizedPayload,
@@ -184,34 +200,58 @@ export async function POST(
             );
         }
 
-        if (!trigger.agent.isActive) {
+        if (!targetEntity.isActive) {
             await updateTriggerEventRecord(triggerEvent.id, {
                 status: TriggerEventStatus.SKIPPED,
-                errorMessage: "Agent is disabled"
+                errorMessage: `${entityType} is disabled`
             });
             return NextResponse.json(
-                { success: false, error: "Agent is disabled" },
+                { success: false, error: `${entityType} is disabled` },
                 { status: 403 }
             );
         }
 
-        // Queue agent invocation via Inngest
-        await inngest.send({
-            name: "agent/trigger.fire",
-            data: {
-                triggerId: trigger.id,
-                agentId: trigger.agent.id,
-                triggerEventId: triggerEvent.id,
-                payload: {
-                    ...normalizedPayload,
-                    _trigger: {
-                        id: trigger.id,
-                        name: trigger.name,
-                        type: trigger.triggerType
-                    }
-                }
+        const enrichedPayload = {
+            ...normalizedPayload,
+            _trigger: {
+                id: trigger.id,
+                name: trigger.name,
+                type: trigger.triggerType
             }
-        });
+        };
+
+        // ── Dispatch to entity-specific Inngest event ──
+        if (entityType === "workflow" && trigger.workflow) {
+            await inngest.send({
+                name: "workflow/trigger.fire",
+                data: {
+                    triggerId: trigger.id,
+                    workflowId: trigger.workflow.id,
+                    workflowSlug: trigger.workflow.slug,
+                    triggerEventId: triggerEvent.id,
+                    payload: enrichedPayload
+                }
+            });
+        } else if (entityType === "agent" && trigger.agent) {
+            await inngest.send({
+                name: "agent/trigger.fire",
+                data: {
+                    triggerId: trigger.id,
+                    agentId: trigger.agent.id,
+                    triggerEventId: triggerEvent.id,
+                    payload: enrichedPayload
+                }
+            });
+        } else {
+            await updateTriggerEventRecord(triggerEvent.id, {
+                status: TriggerEventStatus.ERROR,
+                errorMessage: `Unsupported entity type: ${entityType}`
+            });
+            return NextResponse.json(
+                { success: false, error: `Unsupported entity type: ${entityType}` },
+                { status: 400 }
+            );
+        }
 
         return NextResponse.json({
             success: true,
@@ -220,9 +260,10 @@ export async function POST(
                 id: trigger.id,
                 name: trigger.name
             },
-            agent: {
-                id: trigger.agent.id,
-                slug: trigger.agent.slug
+            entityType,
+            target: {
+                id: targetEntity.id,
+                slug: targetEntity.slug
             }
         });
     } catch (error) {
@@ -251,7 +292,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             id: true,
             name: true,
             isActive: true,
+            entityType: true,
             agent: {
+                select: { slug: true, isActive: true }
+            },
+            workflow: {
+                select: { slug: true, isActive: true }
+            },
+            network: {
                 select: { slug: true, isActive: true }
             }
         }
@@ -261,14 +309,18 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         return NextResponse.json({ success: false, error: "Webhook not found" }, { status: 404 });
     }
 
+    const entityType = trigger.entityType ?? "agent";
+    const target = trigger.agent ?? trigger.workflow ?? trigger.network;
+
     return NextResponse.json({
         success: true,
         webhook: {
             id: trigger.id,
             name: trigger.name,
             isActive: trigger.isActive,
-            agent: trigger.agent.slug,
-            agentActive: trigger.agent.isActive
+            entityType,
+            targetSlug: target?.slug ?? null,
+            targetActive: target?.isActive ?? false
         }
     });
 }

@@ -62,7 +62,6 @@ Remember: Be helpful, accurate, and efficient. Pay attention to personal details
             semanticRecall: { topK: 10, messageRange: 100 },
             workingMemory: { enabled: true }
         },
-        scorers: ["relevancy", "completeness"],
         maxSteps: 5
     },
     {
@@ -363,7 +362,6 @@ You don't just wait to be asked. You are autonomous. You think, you act, you imp
             semanticRecall: { topK: 10, messageRange: 100 },
             workingMemory: { enabled: true }
         },
-        scorers: ["relevancy", "completeness"],
         maxSteps: 15,
         metadata: {
             mcpEnabled: true,
@@ -448,7 +446,6 @@ Always provide accurate, well-structured responses.`,
         tools: [] as string[],
         memoryEnabled: false,
         memoryConfig: null,
-        scorers: ["relevancy", "completeness"],
         maxSteps: 5
     },
     {
@@ -471,7 +468,6 @@ Be thorough but concise. Structure your analysis clearly.`,
         tools: [] as string[],
         memoryEnabled: false,
         memoryConfig: null,
-        scorers: ["relevancy", "completeness"],
         maxSteps: 5
     },
     {
@@ -495,7 +491,6 @@ After gathering information, provide a comprehensive answer.`,
         tools: ["web-search", "take-note"],
         memoryEnabled: false,
         memoryConfig: null,
-        scorers: ["relevancy", "completeness"],
         maxSteps: 10
     },
     {
@@ -516,7 +511,6 @@ Strive to provide excellent responses that score well on all metrics.`,
         tools: [] as string[],
         memoryEnabled: false,
         memoryConfig: null,
-        scorers: ["relevancy", "toxicity", "completeness", "tone"],
         maxSteps: 5
     },
     {
@@ -532,7 +526,6 @@ since they will be spoken aloud. Aim for 1-3 sentences unless more detail is req
         tools: [] as string[],
         memoryEnabled: false,
         memoryConfig: null,
-        scorers: ["relevancy", "completeness"],
         maxSteps: 5,
         metadata: {
             voiceProvider: "openai",
@@ -556,7 +549,6 @@ Keep responses conversational and engaging. Aim for 1-3 sentences.`,
         tools: [] as string[],
         memoryEnabled: false,
         memoryConfig: null,
-        scorers: ["relevancy", "completeness"],
         maxSteps: 5,
         metadata: {
             voiceProvider: "elevenlabs",
@@ -578,7 +570,6 @@ Keep responses natural and conversational.`,
         tools: [] as string[],
         memoryEnabled: false,
         memoryConfig: null,
-        scorers: ["relevancy", "completeness"],
         maxSteps: 5,
         metadata: {
             voiceProvider: "hybrid",
@@ -643,7 +634,6 @@ You have real-time access to these external tools. Use them to provide accurate,
         tools: [] as string[], // MCP tools are loaded dynamically based on available servers
         memoryEnabled: false,
         memoryConfig: null,
-        scorers: ["relevancy", "completeness"],
         maxSteps: 5,
         metadata: {
             purpose: "elevenlabs-voice-backend",
@@ -680,7 +670,6 @@ Format your responses clearly with headers and bullet points for easy reading.`,
         tools: [] as string[],
         memoryEnabled: false,
         memoryConfig: null,
-        scorers: ["relevancy", "completeness"],
         maxSteps: 5,
         metadata: {
             networkRole: "trip-planner-sub-agent",
@@ -722,7 +711,6 @@ Always provide multiple options when available, from budget to premium.`,
         tools: [] as string[],
         memoryEnabled: false,
         memoryConfig: null,
-        scorers: ["relevancy", "completeness"],
         maxSteps: 5,
         metadata: {
             networkRole: "trip-planner-sub-agent",
@@ -764,7 +752,6 @@ Provide 3-5 options across different price points when possible.`,
         tools: [] as string[],
         memoryEnabled: false,
         memoryConfig: null,
-        scorers: ["relevancy", "completeness"],
         maxSteps: 5,
         metadata: {
             networkRole: "trip-planner-sub-agent",
@@ -810,7 +797,6 @@ Match recommendations to the trip duration and pace preferences.`,
         tools: [] as string[],
         memoryEnabled: false,
         memoryConfig: null,
-        scorers: ["relevancy", "completeness"],
         maxSteps: 5,
         metadata: {
             networkRole: "trip-planner-sub-agent",
@@ -857,7 +843,6 @@ Always present costs in a clear, organized format with totals.`,
         tools: [] as string[],
         memoryEnabled: false,
         memoryConfig: null,
-        scorers: ["relevancy", "completeness"],
         maxSteps: 5,
         metadata: {
             networkRole: "trip-planner-sub-agent",
@@ -917,7 +902,6 @@ Include a summary with key booking requirements and packing suggestions.`,
         tools: [] as string[],
         memoryEnabled: false,
         memoryConfig: null,
-        scorers: ["relevancy", "completeness"],
         maxSteps: 5,
         metadata: {
             networkRole: "trip-planner-sub-agent",
@@ -971,7 +955,6 @@ Every user message includes a \`[System context: organizationId="..."]\` line. Y
             semanticRecall: false,
             workingMemory: { enabled: false }
         },
-        scorers: ["relevancy", "completeness"],
         maxSteps: 5,
         metadata: {
             purpose: "webhook-setup-wizard",
@@ -1030,7 +1013,6 @@ Rules:
             semanticRecall: false,
             workingMemory: { enabled: false }
         },
-        scorers: ["relevancy", "completeness"],
         maxSteps: 8,
         metadata: {
             purpose: "mcp-setup-agent",
@@ -1069,7 +1051,6 @@ Return ONLY the user message, no JSON or formatting. Just the raw message text.`
         tools: [] as string[],
         memoryEnabled: false,
         memoryConfig: null,
-        scorers: [] as string[],
         maxSteps: 1,
         metadata: {
             purpose: "simulation",
@@ -1147,7 +1128,6 @@ When the moment is right (after you've shown value, answered a question well, or
         tools: ["web-search", "web-scrape"],
         memoryEnabled: false,
         memoryConfig: null,
-        scorers: ["relevancy", "completeness"],
         maxSteps: 10,
         visibility: AgentVisibility.PUBLIC,
         metadata: {
@@ -1203,7 +1183,6 @@ You will receive the campaign ID. Read it, analyze it, write the decomposition. 
         tools: [] as string[],
         memoryEnabled: false,
         memoryConfig: null,
-        scorers: ["relevancy", "completeness"],
         maxSteps: 5,
         metadata: {
             purpose: "campaign-system",
@@ -1240,7 +1219,6 @@ You will receive the campaign ID. Read it, plan it, write the assignments. That 
         tools: [] as string[],
         memoryEnabled: false,
         memoryConfig: null,
-        scorers: ["relevancy", "completeness"],
         maxSteps: 8,
         metadata: {
             purpose: "campaign-system",
@@ -1289,7 +1267,6 @@ You will receive the campaign ID and gap details. Build what's needed. That is y
         tools: [] as string[],
         memoryEnabled: false,
         memoryConfig: null,
-        scorers: ["relevancy", "completeness"],
         maxSteps: 15,
         metadata: {
             purpose: "campaign-system",
@@ -1326,7 +1303,6 @@ You will receive the target type (mission or campaign), target ID, and context. 
         tools: [] as string[],
         memoryEnabled: false,
         memoryConfig: null,
-        scorers: ["relevancy", "completeness"],
         maxSteps: 8,
         metadata: {
             purpose: "campaign-system",
@@ -1394,7 +1370,6 @@ AgentC2 is NOT another chatbot. It's a platform where AI agents connect to your 
         tools: ["web-search", "web-scrape"],
         memoryEnabled: false,
         memoryConfig: null,
-        scorers: ["relevancy", "completeness"],
         maxSteps: 10,
         visibility: AgentVisibility.PUBLIC,
         metadata: {
@@ -1494,7 +1469,6 @@ For general questions about the platform:
             semanticRecall: { topK: 5, messageRange: 50 },
             workingMemory: { enabled: false }
         },
-        scorers: ["relevancy", "completeness"],
         maxSteps: 5,
         metadata: {
             category: "support",
@@ -1603,8 +1577,7 @@ async function validateSeed() {
                 name: "memoryEnabled",
                 actual: agent.memoryEnabled,
                 expected: expected.memoryEnabled
-            },
-            { name: "scorerCount", actual: agent.scorers.length, expected: expected.scorers.length }
+            }
         ];
 
         let agentValid = true;

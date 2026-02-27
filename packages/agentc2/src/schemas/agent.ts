@@ -80,7 +80,6 @@ export const agentCreateSchema = z.object({
     contextConfig: contextConfigSchema,
     visibility: z.enum(["PRIVATE", "INTERNAL", "PUBLIC"]).optional(),
     tools: z.array(z.string()).optional(),
-    scorers: z.array(z.string()).optional(),
     metadata: z.record(z.unknown()).nullable().optional()
 });
 

@@ -40,7 +40,6 @@ export async function GET() {
                         model: typeof agentAny.model === "string" ? agentAny.model : "unknown",
                         hasMemory: !!agentAny.memory,
                         toolCount: agentAny.tools ? Object.keys(agentAny.tools).length : 0,
-                        hasScorers: !!agentAny.scorers,
                         tools: agentAny.tools ? Object.keys(agentAny.tools) : [],
                         hasVoice: !!agentAny.voice
                     };

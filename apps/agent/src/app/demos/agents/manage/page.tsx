@@ -101,12 +101,6 @@ interface ModelInfo {
     displayName: string;
 }
 
-interface ScorerInfo {
-    id: string;
-    name: string;
-    description: string;
-}
-
 // Helper to get tool IDs from agent (when full tools array is available)
 function getToolIds(agent: StoredAgent): string[] {
     if (!agent.tools || agent.tools.length === 0) return [];
@@ -144,7 +138,6 @@ function AgentManagePageContent() {
     const [storedAgents, setStoredAgents] = useState<StoredAgent[]>([]);
     const [availableTools, setAvailableTools] = useState<ToolInfo[]>([]);
     const [availableModels, setAvailableModels] = useState<ModelInfo[]>([]);
-    const [availableScorers, setAvailableScorers] = useState<ScorerInfo[]>([]);
     const [toolCategoryOrder, setToolCategoryOrder] = useState<string[]>([]);
     const [collapsedToolGroups, setCollapsedToolGroups] = useState<Set<string>>(new Set());
 
@@ -172,7 +165,6 @@ function AgentManagePageContent() {
             semanticRecall: false as { topK?: number; messageRange?: number } | false,
             workingMemory: { enabled: false }
         },
-        scorers: [] as string[],
         isActive: true,
         visibility: "PRIVATE" as "PRIVATE" | "ORGANIZATION" | "PUBLIC",
         extendedThinking: false,
@@ -208,7 +200,6 @@ function AgentManagePageContent() {
             if (data.success) {
                 setAvailableTools(data.tools);
                 setAvailableModels(data.models);
-                setAvailableScorers(data.scorers || []);
                 setToolCategoryOrder(data.toolCategoryOrder || []);
             }
         } catch (error) {
@@ -358,7 +349,6 @@ function AgentManagePageContent() {
                 semanticRecall: false,
                 workingMemory: { enabled: false }
             },
-            scorers: [],
             isActive: true,
             visibility: "PRIVATE" as "PRIVATE" | "ORGANIZATION" | "PUBLIC",
             extendedThinking: false,
@@ -407,7 +397,6 @@ function AgentManagePageContent() {
                         enabled: (fullAgent.memoryConfig as any)?.workingMemory?.enabled ?? false
                     }
                 },
-                scorers: fullAgent.scorers || [],
                 isActive: fullAgent.isActive,
                 visibility: (fullAgent.visibility ?? "PRIVATE") as
                     | "PRIVATE"
@@ -528,16 +517,6 @@ function AgentManagePageContent() {
     // Check if all tools in a group are selected
     const areAllToolsSelectedForGroup = (group: ToolGroup) => {
         return group.tools.length > 0 && group.tools.every((t) => formData.tools.includes(t.id));
-    };
-
-    // Toggle scorer selection
-    const toggleScorer = (scorerId: string) => {
-        setFormData((prev) => ({
-            ...prev,
-            scorers: prev.scorers.includes(scorerId)
-                ? prev.scorers.filter((s) => s !== scorerId)
-                : [...prev.scorers, scorerId]
-        }));
     };
 
     // Initial fetch
@@ -886,24 +865,6 @@ function AgentManagePageContent() {
                 </div>
             </div>
 
-            {/* Scorers */}
-            <div className="space-y-2">
-                <Label>Scorers ({formData.scorers.length} selected)</Label>
-                <div className="bg-muted grid max-h-32 grid-cols-2 gap-2 overflow-auto rounded-lg p-3">
-                    {availableScorers.map((scorer) => (
-                        <label key={scorer.id} className="flex cursor-pointer items-center gap-2">
-                            <input
-                                type="checkbox"
-                                checked={formData.scorers.includes(scorer.id)}
-                                onChange={() => toggleScorer(scorer.id)}
-                            />
-                            <span className="text-sm" title={scorer.description}>
-                                {scorer.name}
-                            </span>
-                        </label>
-                    ))}
-                </div>
-            </div>
 
             {/* Memory Configuration */}
             <div className="space-y-4">
@@ -1142,14 +1103,6 @@ function AgentManagePageContent() {
                                                     <Badge variant="outline" className="text-xs">
                                                         {getToolCount(agent)} tools
                                                     </Badge>
-                                                    {(agent.scorers?.length ?? 0) > 0 && (
-                                                        <Badge
-                                                            variant="outline"
-                                                            className="text-xs"
-                                                        >
-                                                            {agent.scorers?.length} scorers
-                                                        </Badge>
-                                                    )}
                                                 </div>
                                             </div>
                                         ))}
@@ -1322,24 +1275,6 @@ function AgentManagePageContent() {
                                                                 .lastMessages || 10}{" "}
                                                             messages
                                                         </p>
-                                                    )}
-                                                </div>
-                                                <div className="bg-muted rounded-lg p-4">
-                                                    <h3 className="mb-2 font-medium">Scorers</h3>
-                                                    {(selectedAgent.scorers?.length ?? 0) > 0 ? (
-                                                        <div className="flex flex-wrap gap-1">
-                                                            {selectedAgent.scorers?.map((s) => (
-                                                                <Badge
-                                                                    key={s}
-                                                                    variant="outline"
-                                                                    className="text-xs"
-                                                                >
-                                                                    {s}
-                                                                </Badge>
-                                                            ))}
-                                                        </div>
-                                                    ) : (
-                                                        <Badge variant="outline">None</Badge>
                                                     )}
                                                 </div>
                                                 <div className="bg-muted rounded-lg p-4">

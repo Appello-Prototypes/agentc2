@@ -20,7 +20,6 @@ export const mockAgent = {
     memoryEnabled: false,
     memoryConfig: null,
     maxSteps: 5,
-    scorers: [],
     visibility: "PRIVATE",
     metadata: null,
     version: 1,
@@ -79,12 +78,3 @@ export const mockAgentWithTools = {
     ]
 };
 
-/**
- * Agent with scorers/evaluations
- */
-export const mockAgentWithScorers = {
-    ...mockAgent,
-    id: "evaluated-agent-uuid",
-    slug: "evaluated-agent",
-    scorers: ["relevancy", "toxicity", "helpfulness"]
-};

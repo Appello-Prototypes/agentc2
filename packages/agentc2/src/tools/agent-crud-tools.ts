@@ -45,7 +45,6 @@ const agentCreateSchema = z
         maxSteps: z.number().optional(),
         subAgents: z.array(z.string()).optional(),
         workflows: z.array(z.string()).optional(),
-        scorers: z.array(z.string()).optional(),
         toolIds: z.array(z.string()).optional(),
         tools: z.array(agentToolBindingSchema).optional(),
         type: z.enum(["USER", "SYSTEM"]).optional(),
@@ -192,7 +191,6 @@ const buildAgentSnapshot = (agent: {
     maxSteps: number | null;
     subAgents: string[];
     workflows: string[];
-    scorers: string[];
     tools: { toolId: string; config: unknown }[];
     visibility: string;
     isActive: boolean;
@@ -214,7 +212,6 @@ const buildAgentSnapshot = (agent: {
     maxSteps: agent.maxSteps,
     subAgents: agent.subAgents,
     workflows: agent.workflows,
-    scorers: agent.scorers,
     tools: agent.tools.map((tool) => ({ toolId: tool.toolId, config: tool.config })),
     visibility: agent.visibility,
     isActive: agent.isActive,
@@ -268,7 +265,6 @@ export const agentCreateTool = createTool({
                 maxSteps: input.maxSteps ?? 5,
                 subAgents: input.subAgents ?? [],
                 workflows: input.workflows ?? [],
-                scorers: input.scorers ?? [],
                 type: input.type ?? "USER",
                 tenantId: input.tenantId ?? null,
                 workspaceId: input.workspaceId ?? null,
@@ -448,7 +444,6 @@ export const agentUpdateTool = createTool({
             maxSteps: payload.maxSteps ?? existing.maxSteps,
             subAgents: payload.subAgents ?? existing.subAgents,
             workflows: payload.workflows ?? existing.workflows,
-            scorers: payload.scorers ?? existing.scorers,
             type: payload.type ?? existing.type,
             tenantId: payload.tenantId ?? existing.tenantId,
             workspaceId: payload.workspaceId ?? existing.workspaceId,

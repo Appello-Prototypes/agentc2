@@ -145,7 +145,6 @@ async function ensureAssistantAgent() {
             type: AgentType.USER,
             memoryEnabled: false,
             memoryConfig: null,
-            scorers: [],
             visibility: "PUBLIC",
             isActive: true
         }

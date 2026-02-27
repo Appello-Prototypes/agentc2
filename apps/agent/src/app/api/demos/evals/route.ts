@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { evaluateHelpfulness, evaluateCodeQuality } from "@repo/agentc2/scorers";
+import { evaluateHelpfulness, evaluateCodeQuality } from "@repo/agentc2";
 import { getDemoSession } from "@/lib/standalone-auth";
 
 export async function POST(req: NextRequest) {

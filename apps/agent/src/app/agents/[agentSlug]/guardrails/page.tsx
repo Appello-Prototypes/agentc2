@@ -86,6 +86,78 @@ const defaultConfig: GuardrailConfig = {
     }
 };
 
+function mergeWithDefaults(partial: Record<string, unknown>): GuardrailConfig {
+    const def = defaultConfig;
+    const p = partial || {};
+    const inp = (p.input as Record<string, unknown>) || {};
+    const out = (p.output as Record<string, unknown>) || {};
+    const exec = (p.execution as Record<string, unknown>) || {};
+    return {
+        input: {
+            topicFiltering: {
+                ...def.input.topicFiltering,
+                ...((inp.topicFiltering as Record<string, unknown>) || {})
+            } as GuardrailConfig["input"]["topicFiltering"],
+            piiDetection: {
+                ...def.input.piiDetection,
+                ...((inp.piiDetection as Record<string, unknown>) || {})
+            } as GuardrailConfig["input"]["piiDetection"],
+            jailbreakDetection: {
+                ...def.input.jailbreakDetection,
+                ...((inp.jailbreakDetection as Record<string, unknown>) || {})
+            },
+            promptInjection: {
+                ...def.input.promptInjection,
+                ...((inp.promptInjection as Record<string, unknown>) || {})
+            },
+            maxInputLength:
+                typeof inp.maxInputLength === "number"
+                    ? inp.maxInputLength
+                    : def.input.maxInputLength
+        },
+        output: {
+            toxicityFilter: {
+                ...def.output.toxicityFilter,
+                ...((out.toxicityFilter as Record<string, unknown>) || {})
+            } as GuardrailConfig["output"]["toxicityFilter"],
+            hallucinationDetection: {
+                ...def.output.hallucinationDetection,
+                ...((out.hallucinationDetection as Record<string, unknown>) || {})
+            },
+            piiLeakPrevention: {
+                ...def.output.piiLeakPrevention,
+                ...((out.piiLeakPrevention as Record<string, unknown>) || {})
+            },
+            factualAccuracy: {
+                ...def.output.factualAccuracy,
+                ...((out.factualAccuracy as Record<string, unknown>) || {})
+            },
+            brandSafety: {
+                ...def.output.brandSafety,
+                ...((out.brandSafety as Record<string, unknown>) || {})
+            } as GuardrailConfig["output"]["brandSafety"]
+        },
+        execution: {
+            maxDuration:
+                typeof exec.maxDuration === "number" ? exec.maxDuration : def.execution.maxDuration,
+            maxToolCalls:
+                typeof exec.maxToolCalls === "number"
+                    ? exec.maxToolCalls
+                    : def.execution.maxToolCalls,
+            maxTokens:
+                typeof exec.maxTokens === "number" ? exec.maxTokens : def.execution.maxTokens,
+            costPerRequest:
+                typeof exec.costPerRequest === "number"
+                    ? exec.costPerRequest
+                    : def.execution.costPerRequest,
+            rateLimiting: {
+                ...def.execution.rateLimiting,
+                ...((exec.rateLimiting as Record<string, unknown>) || {})
+            } as GuardrailConfig["execution"]["rateLimiting"]
+        }
+    };
+}
+
 export default function GuardrailsPage() {
     const params = useParams();
     const router = useRouter();
@@ -127,11 +199,9 @@ export default function GuardrailsPage() {
             // Handle guardrail config
             if (configResult.success) {
                 if (configResult.guardrailConfig?.configJson) {
-                    setConfig(configResult.guardrailConfig.configJson as GuardrailConfig);
-                    setBypassOrgGuardrails(
-                        !!(configResult.guardrailConfig.configJson as Record<string, unknown>)
-                            .bypassOrgGuardrails
-                    );
+                    const raw = configResult.guardrailConfig.configJson as Record<string, unknown>;
+                    setConfig(mergeWithDefaults(raw));
+                    setBypassOrgGuardrails(!!raw.bypassOrgGuardrails);
                 }
                 setCanOverrideGuardrails(!!configResult.canOverrideGuardrails);
             }

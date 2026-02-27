@@ -154,7 +154,7 @@ async function processNotification(notification: GraphNotification) {
 async function processMail(connectionId: string, messageId: string) {
     const eventName = "microsoft.mail.received";
     const trigger = await findTriggerForConnection(connectionId, eventName);
-    if (!trigger) return;
+    if (!trigger || !trigger.agent) return;
 
     try {
         const message = await getMessage(connectionId, messageId);
@@ -199,7 +199,7 @@ async function processCalendar(
             ? "microsoft.calendar.event.created"
             : "microsoft.calendar.event.updated";
     const trigger = await findTriggerForConnection(connectionId, eventName);
-    if (!trigger) return;
+    if (!trigger || !trigger.agent) return;
 
     try {
         const calEvent = await getEvent(connectionId, eventId);

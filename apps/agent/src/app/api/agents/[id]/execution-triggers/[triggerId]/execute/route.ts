@@ -191,6 +191,13 @@ export async function POST(
             );
         }
 
+        if (!trigger.agent) {
+            return NextResponse.json(
+                { success: false, error: "Trigger has no associated agent" },
+                { status: 400 }
+            );
+        }
+
         if (!trigger.agent.isActive) {
             return NextResponse.json(
                 { success: false, error: "Agent is disabled" },

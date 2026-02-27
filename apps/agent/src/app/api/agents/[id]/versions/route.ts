@@ -325,7 +325,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             memoryEnabled: agent.memoryEnabled,
             memoryConfig: agent.memoryConfig,
             maxSteps: agent.maxSteps,
-            scorers: agent.scorers,
             tools: agent.tools.map((t) => ({ toolId: t.toolId, config: t.config })),
             skills: agent.skills.map((s) => ({ skillId: s.skillId, pinned: s.pinned })),
             visibility: agent.visibility,

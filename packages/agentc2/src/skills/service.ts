@@ -417,7 +417,6 @@ async function createAgentVersionForSkillChange(agentId: string, changeDescripti
         maxSteps: agent.maxSteps,
         subAgents: agent.subAgents,
         workflows: agent.workflows,
-        scorers: agent.scorers,
         tools: agent.tools.map((t) => ({ toolId: t.toolId, config: t.config })),
         skills: agent.skills.map((s) => ({
             skillId: s.skillId,

@@ -197,7 +197,6 @@ export async function deployPlaybook(opts: DeployPlaybookOptions) {
                     memoryEnabled: agentSnapshot.memoryEnabled,
                     memoryConfig: jsonOrUndefined(agentSnapshot.memoryConfig),
                     maxSteps: agentSnapshot.maxSteps,
-                    scorers: agentSnapshot.scorers,
                     visibility: agentSnapshot.visibility as "PRIVATE" | "ORGANIZATION" | "PUBLIC",
                     requiresApproval: agentSnapshot.requiresApproval,
                     maxSpendUsd: agentSnapshot.maxSpendUsd,

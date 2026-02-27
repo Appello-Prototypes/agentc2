@@ -53,7 +53,8 @@ export type IconName =
     | "help-circle"
     | "store"
     | "share"
-    | "code";
+    | "code"
+    | "zap";
 
 /**
  * Icon component type - a reference to an icon component, not JSX.

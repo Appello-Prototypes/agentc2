@@ -1,12 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
-import {
-    relevancyScorer,
-    toxicityScorer,
-    completenessScorer,
-    toneScorer,
-    evaluateHelpfulness
-} from "@repo/agentc2/scorers";
+
 import { inngest } from "@/lib/inngest";
 
 /**
@@ -399,103 +393,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             }
 
             try {
-                // Run all scorers
-                const scores: Record<string, number> = {};
-
-                // Get configured scorers for agent, or use defaults
-                const scorerKeys =
-                    agent.scorers.length > 0 ? agent.scorers : ["relevancy", "completeness"];
-
-                // Normalize scorer names (common aliases)
-                const normalizeKey = (key: string): string => {
-                    const aliases: Record<string, string> = {
-                        relevance: "relevancy",
-                        concise: "conciseness"
-                    };
-                    return aliases[key] || key;
-                };
-
-                // Build scorer input — Mastra prebuilt scorers expect plain strings
-                const scorerInput = {
-                    input: run.inputText || "",
-                    output: run.outputText || ""
-                };
-
-                // Scorer registry map
-                const scorerMap: Record<
-                    string,
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    { run: (input: any) => Promise<{ score: number }> } | null
-                > = {
-                    relevancy: relevancyScorer,
-                    toxicity: toxicityScorer,
-                    completeness: completenessScorer,
-                    tone: toneScorer
-                };
-
-                for (const rawKey of scorerKeys) {
-                    const key = normalizeKey(rawKey);
-                    try {
-                        let score: number | undefined;
-
-                        if (key === "helpfulness") {
-                            const result = evaluateHelpfulness(run.inputText, run.outputText);
-                            score = result.score;
-                        } else if (key === "conciseness") {
-                            // Custom conciseness scorer: ratio of input length to output length
-                            // Shorter, more concise responses score higher
-                            const inputLen = (run.inputText || "").length;
-                            const outputLen = (run.outputText || "").length;
-                            if (outputLen > 0) {
-                                // Score 1.0 for responses shorter than input, decreasing as response gets longer
-                                const ratio = inputLen / outputLen;
-                                score = Math.min(1.0, Math.max(0.1, ratio));
-                            } else {
-                                score = 0;
-                            }
-                        } else if (scorerMap[key]) {
-                            const result = await (
-                                scorerMap[key] as {
-                                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                                    run: (input: any) => Promise<{ score: number }>;
-                                }
-                            ).run(scorerInput);
-                            score = result.score;
-                        }
-
-                        if (score !== undefined) {
-                            // Store with the original key name the user configured
-                            scores[rawKey] = score;
-                        }
-                    } catch (scorerError) {
-                        console.error(`[Evaluation] Scorer ${key} failed:`, scorerError);
-                    }
-                }
-
-                // Save evaluation to database
-                const evaluation = await prisma.agentEvaluation.create({
-                    data: {
-                        runId: run.id,
-                        agentId: agent.id,
-                        scoresJson: scores,
-                        scorerVersion: "1.0"
-                    }
-                });
-
-                // Emit evaluation/completed event for insight generation
+                // Trigger evaluation via Inngest (async, using scorer factory)
                 await inngest.send({
-                    name: "evaluation/completed",
-                    data: {
-                        evaluationId: evaluation.id,
-                        agentId: agent.id,
-                        runId: run.id,
-                        scores
-                    }
+                    name: "run/evaluate",
+                    data: { runId: run.id, agentId: agent.id }
                 });
 
                 results.push({
                     runId: run.id,
-                    scores,
+                    scores: {},
                     success: true
                 });
             } catch (evalError) {

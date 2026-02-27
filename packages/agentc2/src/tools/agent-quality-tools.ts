@@ -167,13 +167,3 @@ export const agentTestCasesCreateTool = createTool({
         });
     }
 });
-
-export const agentScorersListTool = createTool({
-    id: "agent-scorers-list",
-    description: "List available evaluation scorers.",
-    inputSchema: z.object({}),
-    outputSchema: baseOutputSchema,
-    execute: async () => {
-        return callInternalApi("/api/agents/scorers");
-    }
-});

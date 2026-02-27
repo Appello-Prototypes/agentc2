@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAvailableModelsAsync } from "@repo/agentc2/agents";
 import { listMcpToolDefinitions } from "@repo/agentc2/mcp";
 import { listAvailableTools, toolCategoryOrder } from "@repo/agentc2/tools";
-import { listAvailableScorers } from "@repo/agentc2/scorers/registry";
+
 import { authenticateRequest } from "@/lib/api-auth";
 
 /**
@@ -73,13 +73,11 @@ export async function GET(request: NextRequest) {
         const allTools = [...staticTools.map((t) => ({ ...t, source: "registry" })), ...mcpTools];
 
         const models = await getAvailableModelsAsync(authContext?.organizationId ?? null);
-        const scorers = listAvailableScorers();
 
         return NextResponse.json({
             success: true,
             tools: allTools,
             models,
-            scorers,
             mcpServerStatus,
             mcpError,
             serverErrors,

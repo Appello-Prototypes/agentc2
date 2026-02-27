@@ -347,7 +347,7 @@ export default function EvaluationsPage() {
     const [trendAnnotations, setTrendAnnotations] = useState<TrendAnnotation[]>([]);
     const [trendTimeRange, setTrendTimeRange] = useState<"7d" | "30d" | "90d">("30d");
     const [visibleScorers, setVisibleScorers] = useState<Set<string>>(new Set());
-    const [activeTab, setActiveTab] = useState("scorers");
+    const [activeTab, setActiveTab] = useState("criteria");
     const [runningEvals, setRunningEvals] = useState(false);
     const [exporting, setExporting] = useState(false);
     const [statusMessage, setStatusMessage] = useState<{
@@ -654,7 +654,7 @@ export default function EvaluationsPage() {
                 onValueChange={(v) => v && setActiveTab(v)}
             >
                 <TabsList>
-                    <TabsTrigger value="scorers">Scorer Results</TabsTrigger>
+                    <TabsTrigger value="criteria">Criteria Scores</TabsTrigger>
                     <TabsTrigger value="auditor">Auditor Reports</TabsTrigger>
                     <TabsTrigger value="aar">After Action Reviews</TabsTrigger>
                     <TabsTrigger value="memory">Institutional Memory</TabsTrigger>
@@ -663,8 +663,8 @@ export default function EvaluationsPage() {
                     <TabsTrigger value="history">Evaluation History</TabsTrigger>
                 </TabsList>
 
-                {/* Scorer Results Tab */}
-                <TabsContent value="scorers" className="space-y-6">
+                {/* Criteria Scores Tab */}
+                <TabsContent value="criteria" className="space-y-6">
                     <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
                         {/* Score Distribution */}
                         <Card>

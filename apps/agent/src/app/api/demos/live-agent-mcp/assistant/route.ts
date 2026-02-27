@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { agentResolver } from "@repo/agentc2/agents";
 import { listMcpToolDefinitions } from "@repo/agentc2/mcp";
-import { relevancyScorer, evaluateHelpfulness } from "@repo/agentc2/scorers";
+import { evaluateHelpfulness } from "@repo/agentc2";
 import {
     startRun,
     extractTokenUsage,
@@ -241,9 +241,6 @@ Please help the user with their request. Keep responses concise (2-4 sentences) 
         console.log(`[Trace] ◀ Complete (${steps.length} steps) - Run ID: ${run.runId}`);
         console.log(`${"═".repeat(70)}\n`);
 
-        // Run relevancy eval async (updates the run)
-        runRelevancyEvalAsync(run.runId, question, response.text || "");
-
         // Return response for ElevenLabs
         return NextResponse.json({
             success: true,
@@ -273,39 +270,3 @@ Please help the user with their request. Keep responses concise (2-4 sentences) 
     }
 }
 
-/**
- * Run relevancy eval asynchronously and update the run
- */
-async function runRelevancyEvalAsync(runId: string, input: string, output: string) {
-    try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const scorer = relevancyScorer as any;
-        const result = await scorer.score({
-            input,
-            output
-        });
-
-        const score = result?.score ?? 0;
-
-        // Update the evaluation record for this run
-        // Note: The score was already recorded in run.complete(), this adds relevancy
-        const { prisma } = await import("@repo/database");
-        await prisma.agentEvaluation.upsert({
-            where: { runId },
-            create: {
-                runId,
-                agentId: "", // Will be filled from the run
-                scoresJson: { relevancy: score }
-            },
-            update: {
-                scoresJson: {
-                    relevancy: score
-                }
-            }
-        });
-
-        console.log(`[Trace] Relevancy for ${runId}: ${(score * 100).toFixed(0)}%`);
-    } catch (error) {
-        console.error(`[Trace] Relevancy eval failed:`, error);
-    }
-}

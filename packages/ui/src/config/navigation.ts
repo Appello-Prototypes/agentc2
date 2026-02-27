@@ -36,6 +36,21 @@ export const navigationItems: NavigationItem[] = [
         app: "agent",
         keywords: ["campaigns", "missions", "autopilot", "autonomous", "long-running"]
     },
+    {
+        label: "Pulse",
+        icon: icons.activity,
+        href: "/pulse",
+        app: "agent",
+        keywords: [
+            "pulse",
+            "collective",
+            "community",
+            "evaluation",
+            "rewards",
+            "capacity",
+            "agents"
+        ]
+    },
     // Build group
     {
         label: "Agents",

@@ -43,7 +43,7 @@ export async function POST(
             }
         });
 
-        if (!trigger) {
+        if (!trigger || !trigger.agent) {
             return NextResponse.json(
                 { success: false, error: `Trigger '${triggerId}' not found` },
                 { status: 404 }

@@ -106,7 +106,6 @@ async function snapshotAgent(agentId: string): Promise<{
         memoryEnabled: record.memoryEnabled,
         memoryConfig: record.memoryConfig,
         maxSteps: record.maxSteps,
-        scorers: record.scorers,
         visibility: record.visibility,
         requiresApproval: record.requiresApproval,
         maxSpendUsd: record.maxSpendUsd,

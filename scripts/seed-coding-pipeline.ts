@@ -110,7 +110,6 @@ You can:
         "rag-query",
         "web-fetch"
     ],
-    scorers: ["content-similarity", "completeness"],
     metadata: {
         category: "developer",
         slack: {
@@ -138,7 +137,6 @@ async function seedAgent() {
         maxTokens: AGENTC2_DEVELOPER_AGENT.maxTokens,
         memoryEnabled: AGENTC2_DEVELOPER_AGENT.memoryEnabled,
         memoryConfig: AGENTC2_DEVELOPER_AGENT.memoryConfig as object,
-        scorers: AGENTC2_DEVELOPER_AGENT.scorers,
         metadata: AGENTC2_DEVELOPER_AGENT.metadata as object
     };
 

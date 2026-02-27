@@ -7,6 +7,9 @@ import { X, Plus } from "lucide-react";
 interface TriageTicket {
     id: string;
     ticketNumber: number;
+    title: string;
+    description: string;
+    type: string;
     status: string;
     priority: string;
     assignedToId: string | null;
@@ -135,6 +138,14 @@ export function TicketTriagePanel({
         try {
             const agentBaseUrl = process.env.NEXT_PUBLIC_AGENT_URL || "http://localhost:3001";
             const agentPath = agentBaseUrl.includes("localhost") ? "" : "/agent";
+
+            const typeLabel =
+                ticket.type === "BUG"
+                    ? "bug"
+                    : ticket.type === "FEATURE_REQUEST"
+                      ? "feature"
+                      : "task";
+
             const res = await fetch(`${agentBaseUrl}${agentPath}/api/coding-pipeline/dispatch`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -142,12 +153,16 @@ export function TicketTriagePanel({
                     sourceType: "support_ticket",
                     sourceId: ticket.id,
                     repository: selectedRepoUrl,
-                    variant: "standard"
+                    variant: "standard",
+                    via: "github",
+                    title: ticket.title,
+                    description: ticket.description,
+                    labels: ["agentc2-sdlc", typeLabel]
                 })
             });
             const data = await res.json();
-            if (data.success && data.pipelineRunId) {
-                setPipelineRunId(data.pipelineRunId);
+            if (data.success) {
+                setPipelineRunId(data.pipelineRunId || data.issueUrl || "dispatched");
                 setShowPipelineModal(false);
                 setManualPipelineRepo("");
                 setStatus("IN_PROGRESS");

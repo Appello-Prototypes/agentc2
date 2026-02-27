@@ -114,7 +114,6 @@ const agentSnapshotSchema = z.object({
     memoryEnabled: z.boolean(),
     memoryConfig: z.unknown().nullable(),
     maxSteps: z.number().nullable(),
-    scorers: z.array(z.string()),
     visibility: z.string(),
     requiresApproval: z.boolean(),
     maxSpendUsd: z.number().nullable(),

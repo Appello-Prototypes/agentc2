@@ -28,6 +28,7 @@ const navItems: { id: string; label: string; icon: IconName; path: string }[] = 
     { id: "test", label: "Test", icon: "test-tube", path: "/test" },
     { id: "runs", label: "Runs", icon: "play-circle", path: "/runs" },
     { id: "traces", label: "Traces", icon: "activity", path: "/traces" },
+    { id: "automation", label: "Automation", icon: "zap", path: "/automation" },
     { id: "versions", label: "Versions", icon: "git-branch", path: "/versions" },
     { id: "deploy", label: "Deploy", icon: "checkmark-circle", path: "/deploy" }
 ];

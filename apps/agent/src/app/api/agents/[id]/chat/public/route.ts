@@ -6,7 +6,7 @@ import {
     type UIMessageStreamWriter
 } from "ai";
 import { agentResolver } from "@repo/agentc2/agents";
-import { getScorersByNames } from "@repo/agentc2/scorers/registry";
+
 import { prisma } from "@repo/database";
 import { NextRequest, NextResponse } from "next/server";
 import {
@@ -60,13 +60,6 @@ function formatToolResultPreview(result: unknown, maxLength = 500): string {
     }
 }
 
-type ScorerRunner = {
-    run?: (options: {
-        input: { inputMessages: Array<{ role: string; content: string }> };
-        output: Array<{ role: string; content: string }>;
-    }) => Promise<{ score?: number; reason?: string }>;
-};
-
 type StreamChunk = {
     type?: string;
     payload?: Record<string, unknown>;
@@ -102,67 +95,6 @@ const normalizeChunk = (chunk: unknown): StreamChunk => {
     if (chunk && typeof chunk === "object") return chunk as StreamChunk;
     return {};
 };
-
-// ── Evaluations (fire-and-forget) ───────────────────────────────────────
-
-async function runEvaluationsAsync(
-    runId: string,
-    agentId: string,
-    scorerNames: string[],
-    inputText: string,
-    outputText: string
-): Promise<void> {
-    try {
-        if (scorerNames.length === 0) return;
-
-        const scorers = getScorersByNames(scorerNames);
-        const scores: Record<string, number> = {};
-
-        // Format for Mastra's getTextContentFromMastraDBMessage() (see chat/route.ts)
-        const input = {
-            inputMessages: [
-                {
-                    role: "user" as const,
-                    content: {
-                        content: inputText,
-                        parts: [{ type: "text" as const, text: inputText }]
-                    }
-                }
-            ]
-        } as unknown as { inputMessages: { role: string; content: string }[] };
-        const output = [
-            {
-                role: "assistant" as const,
-                content: {
-                    content: outputText,
-                    parts: [{ type: "text" as const, text: outputText }]
-                }
-            }
-        ] as unknown as { role: string; content: string }[];
-
-        for (const [name, config] of Object.entries(scorers)) {
-            try {
-                const scorer = config.scorer as unknown as ScorerRunner;
-                if (scorer && typeof scorer.run === "function") {
-                    const result = await scorer.run({ input, output });
-                    scores[name] = result.score ?? 0;
-                }
-            } catch (scorerError) {
-                console.error(`[Public Chat] Scorer ${name} failed:`, scorerError);
-            }
-        }
-
-        if (Object.keys(scores).length > 0) {
-            await prisma.agentEvaluation.upsert({
-                where: { runId },
-                create: { runId, agentId, scoresJson: scores },
-                update: { scoresJson: scores }
-            });
-        }
-    } catch (error) {
-        console.error(`[Public Chat] Evaluation failed for run ${runId}:`, error);
-    }
-}
 
 // ── POST /api/agents/[id]/chat/public ───────────────────────────────────
 
@@ -676,20 +608,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                             costUsd,
                             steps: executionSteps
                         });
-                    }
-
-                    // Fire-and-forget evaluations
-                    if (run && agentId) {
-                        const scorerNames = record?.scorers || [];
-                        if (scorerNames.length > 0) {
-                            runEvaluationsAsync(
-                                run.runId,
-                                agentId,
-                                scorerNames,
-                                lastUserMessage,
-                                fullOutput
-                            ).catch(console.error);
-                        }
                     }
                 } catch (streamError) {
                     console.error("[Public Chat] Stream error:", streamError);

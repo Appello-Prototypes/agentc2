@@ -169,6 +169,9 @@ export default async function TicketDetailPage({
                         ticket={{
                             id: ticket.id,
                             ticketNumber: ticket.ticketNumber,
+                            title: ticket.title,
+                            description: ticket.description ?? "",
+                            type: ticket.type,
                             status: ticket.status,
                             priority: ticket.priority,
                             assignedToId: ticket.assignedToId,
