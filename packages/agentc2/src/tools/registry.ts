@@ -700,7 +700,20 @@ export const toolCategoryMap: Record<string, string> = {
     "community-read-post": "Community",
     "community-comment": "Community",
     "community-vote": "Community",
-    "community-my-stats": "Community"
+    "community-my-stats": "Community",
+
+    // Pulse
+    "pulse-list": "Pulse",
+    "pulse-create": "Pulse",
+    "pulse-read": "Pulse",
+    "pulse-update": "Pulse",
+    "pulse-delete": "Pulse",
+    "pulse-add-member": "Pulse",
+    "pulse-remove-member": "Pulse",
+    "pulse-list-members": "Pulse",
+    "pulse-add-board": "Pulse",
+    "pulse-evaluate": "Pulse",
+    "pulse-evaluations": "Pulse"
 };
 
 /**
@@ -732,6 +745,206 @@ export const toolCategoryOrder: string[] = [
     "BIM",
     "Support"
 ];
+
+// ---------------------------------------------------------------------------
+// Tool Behavior Classification
+// ---------------------------------------------------------------------------
+
+export type ToolBehaviorType = "query" | "mutation";
+
+export interface ToolBehaviorMeta {
+    behavior: ToolBehaviorType;
+    outputContentPath?: string;
+}
+
+export const toolBehaviorMap: Record<string, ToolBehaviorMeta> = {
+    // Community
+    "community-create-board": { behavior: "mutation" },
+    "community-join-board": { behavior: "mutation" },
+    "community-create-post": { behavior: "mutation", outputContentPath: "post.content" },
+    "community-comment": { behavior: "mutation", outputContentPath: "comment.content" },
+    "community-vote": { behavior: "mutation" },
+
+    // Backlog
+    "backlog-add-task": { behavior: "mutation", outputContentPath: "task.title" },
+    "backlog-update-task": { behavior: "mutation" },
+    "backlog-complete-task": { behavior: "mutation" },
+
+    // Email & Calendar
+    "gmail-send-email": { behavior: "mutation" },
+    "gmail-archive-email": { behavior: "mutation" },
+    "gmail-draft-email": { behavior: "mutation" },
+    "outlook-mail-send-email": { behavior: "mutation" },
+    "outlook-mail-archive-email": { behavior: "mutation" },
+    "google-calendar-create-event": { behavior: "mutation" },
+    "google-calendar-update-event": { behavior: "mutation" },
+    "google-calendar-delete-event": { behavior: "mutation" },
+    "outlook-calendar-create-event": { behavior: "mutation" },
+    "outlook-calendar-update-event": { behavior: "mutation" },
+
+    // Communication
+    "teams-send-channel-message": { behavior: "mutation" },
+    "teams-send-chat-message": { behavior: "mutation" },
+
+    // Agent Management
+    "agent-create": { behavior: "mutation" },
+    "agent-update": { behavior: "mutation" },
+    "agent-delete": { behavior: "mutation" },
+    "agent-budget-update": { behavior: "mutation" },
+    "agent-invoke-dynamic": { behavior: "mutation" },
+    "agent-feedback-submit": { behavior: "mutation" },
+    "agent-guardrails-update": { behavior: "mutation" },
+    "agent-test-cases-create": { behavior: "mutation" },
+    "agent-run-cancel": { behavior: "mutation" },
+    "agent-run-rerun": { behavior: "mutation" },
+    "agent-evaluations-run": { behavior: "mutation" },
+
+    // Learning & Simulations
+    "agent-learning-start": { behavior: "mutation" },
+    "agent-learning-proposal-approve": { behavior: "mutation" },
+    "agent-learning-proposal-reject": { behavior: "mutation" },
+    "agent-learning-policy-update": { behavior: "mutation" },
+    "agent-simulations-start": { behavior: "mutation" },
+
+    // Workflows
+    "workflow-create": { behavior: "mutation" },
+    "workflow-update": { behavior: "mutation" },
+    "workflow-delete": { behavior: "mutation" },
+    "workflow-execute": { behavior: "mutation" },
+    "workflow-resume": { behavior: "mutation" },
+    "workflow-generate": { behavior: "mutation" },
+
+    // Networks
+    "network-create": { behavior: "mutation" },
+    "network-update": { behavior: "mutation" },
+    "network-delete": { behavior: "mutation" },
+    "network-execute": { behavior: "mutation" },
+    "network-generate": { behavior: "mutation" },
+
+    // Triggers
+    "trigger-unified-create": { behavior: "mutation" },
+    "trigger-unified-update": { behavior: "mutation" },
+    "trigger-unified-delete": { behavior: "mutation" },
+    "trigger-unified-enable": { behavior: "mutation" },
+    "trigger-unified-disable": { behavior: "mutation" },
+    "trigger-execute": { behavior: "mutation" },
+    "schedule-create": { behavior: "mutation" },
+    "schedule-update": { behavior: "mutation" },
+    "schedule-delete": { behavior: "mutation" },
+
+    // Sidekick
+    "sidekick-create-schedule": { behavior: "mutation" },
+    "sidekick-edit-schedule": { behavior: "mutation" },
+    "sidekick-toggle-schedule": { behavior: "mutation" },
+    "sidekick-delete-schedule": { behavior: "mutation" },
+
+    // RAG & Knowledge
+    "rag-ingest": { behavior: "mutation" },
+    "rag-document-delete": { behavior: "mutation" },
+
+    // Documents
+    "document-create": { behavior: "mutation" },
+    "document-update": { behavior: "mutation" },
+    "document-delete": { behavior: "mutation" },
+
+    // Skills
+    "skill-create": { behavior: "mutation" },
+    "skill-update": { behavior: "mutation" },
+    "skill-delete": { behavior: "mutation" },
+    "skill-attach-document": { behavior: "mutation" },
+    "skill-detach-document": { behavior: "mutation" },
+    "skill-attach-tool": { behavior: "mutation" },
+    "skill-detach-tool": { behavior: "mutation" },
+    "agent-attach-skill": { behavior: "mutation" },
+    "agent-detach-skill": { behavior: "mutation" },
+    "activate-skill": { behavior: "mutation" },
+
+    // Integrations
+    "integration-import-mcp-json": { behavior: "mutation" },
+    "integration-connection-create": { behavior: "mutation" },
+    "integration-connection-update": { behavior: "mutation" },
+    "integration-connection-delete": { behavior: "mutation" },
+    "webhook-create": { behavior: "mutation" },
+
+    // Organization
+    "org-member-add": { behavior: "mutation" },
+    "org-workspace-create": { behavior: "mutation" },
+    "goal-create": { behavior: "mutation" },
+    "goal-update": { behavior: "mutation" },
+    "goal-delete": { behavior: "mutation" },
+    "campaign-create": { behavior: "mutation" },
+    "campaign-update": { behavior: "mutation" },
+    "campaign-delete": { behavior: "mutation" },
+    "campaign-write-missions": { behavior: "mutation" },
+    "campaign-write-plan": { behavior: "mutation" },
+    "campaign-write-aar": { behavior: "mutation" },
+
+    // Commerce
+    "stripe-acs-create-session": { behavior: "mutation" },
+    "record-outcome": { behavior: "mutation" },
+
+    // Code Execution
+    "execute-code": { behavior: "mutation" },
+    "write-workspace-file": { behavior: "mutation" },
+
+    // Infrastructure
+    "track-resource": { behavior: "mutation" },
+    "destroy-resource": { behavior: "mutation" },
+
+    // Remote Compute
+    "provision-compute": { behavior: "mutation" },
+    "remote-execute": { behavior: "mutation" },
+    "remote-file-transfer": { behavior: "mutation" },
+    "teardown-compute": { behavior: "mutation" },
+
+    // Agent Sessions
+    "session-create": { behavior: "mutation" },
+    "session-invoke-peer": { behavior: "mutation" },
+    "session-write-scratchpad": { behavior: "mutation" },
+
+    // Coding Pipeline
+    "cursor-launch-agent": { behavior: "mutation" },
+    "cursor-add-followup": { behavior: "mutation" },
+    "dispatch-coding-pipeline": { behavior: "mutation" },
+    "update-pipeline-status": { behavior: "mutation" },
+    "merge-pull-request": { behavior: "mutation" },
+    "ticket-to-github-issue": { behavior: "mutation" },
+    "ingest-ticket": { behavior: "mutation" },
+
+    // Agent Instances
+    "instance-create": { behavior: "mutation" },
+    "instance-update": { behavior: "mutation" },
+    "instance-delete": { behavior: "mutation" },
+    "instance-bind-channel": { behavior: "mutation" },
+    "instance-unbind-channel": { behavior: "mutation" },
+
+    // Support
+    "submit-support-ticket": { behavior: "mutation" },
+    "comment-on-ticket": { behavior: "mutation" },
+
+    // Playbook Marketplace
+    "playbook-deploy": { behavior: "mutation" },
+
+    // YouTube
+    "youtube-ingest-to-knowledge": { behavior: "mutation" },
+
+    // File Storage
+    "google-drive-create-doc": { behavior: "mutation" },
+    "dropbox-upload-file": { behavior: "mutation" },
+
+    // BIM
+    "bim-takeoff": { behavior: "mutation" },
+    "bim-handover": { behavior: "mutation" },
+
+    // Pulse
+    "pulse-create": { behavior: "mutation" },
+    "pulse-update": { behavior: "mutation" },
+    "pulse-delete": { behavior: "mutation" },
+    "pulse-add-member": { behavior: "mutation" },
+    "pulse-remove-member": { behavior: "mutation" },
+    "pulse-add-board": { behavior: "mutation" },
+    "pulse-evaluate": { behavior: "mutation" }
+};
 
 /**
  * Tool Registry List tool — lets agents discover available tools and capabilities.

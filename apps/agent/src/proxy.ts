@@ -118,7 +118,9 @@ async function proxy(request: NextRequest) {
             if (embedConfig) {
                 const url = request.nextUrl.clone();
                 url.pathname = "/embed/session-expired";
-                return NextResponse.redirect(url);
+                const response = NextResponse.redirect(url);
+                response.cookies.delete("agentc2-embed");
+                return response;
             }
 
             // Normal users: redirect to login page

@@ -2,10 +2,19 @@
 
 import { useEffect } from "react";
 
+function deleteCookie(name: string) {
+    document.cookie = `${name}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=None; Secure`;
+}
+
 export default function EmbedSessionExpired() {
     useEffect(() => {
-        if (window.parent !== window) {
+        const isIframe = window.parent !== window;
+
+        if (isIframe) {
             window.parent.postMessage({ type: "agentc2:session-expired" }, "*");
+        } else {
+            deleteCookie("agentc2-embed");
+            window.location.replace("/login");
         }
     }, []);
 

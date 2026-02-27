@@ -284,12 +284,26 @@ export class AgentResolver {
             requestContext?.workspaceId || requestContext?.resource?.workspaceId || undefined;
 
         // Build where clause with workspace isolation
-        // When workspaceId is available, prefer workspace-scoped agents but fall back to system agents (null workspaceId)
+        // When workspaceId is available, prefer workspace-scoped agents but fall back to
+        // other workspaces in the same org and system agents (null workspaceId).
+        const organizationId = requestContext?.tenantId || undefined;
         const slugWhere = slug
             ? {
                   slug,
                   isActive: true,
-                  ...(workspaceId ? { OR: [{ workspaceId }, { workspaceId: null }] } : {})
+                  ...(workspaceId
+                      ? {
+                            OR: [
+                                { workspaceId },
+                                { workspaceId: null },
+                                ...(organizationId ? [{ workspace: { organizationId } }] : [])
+                            ]
+                        }
+                      : organizationId
+                        ? {
+                              OR: [{ workspace: { organizationId } }, { workspaceId: null }]
+                          }
+                        : {})
               }
             : undefined;
 

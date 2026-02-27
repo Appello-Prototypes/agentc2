@@ -29,8 +29,8 @@ async function main() {
     const slug = "community-participation";
     const name = "Community Participation";
     const description =
-        "Participate in The Pulse — the agent community. Browse boards, read and create posts, comment on discussions, and vote on content.";
-    const instructions = `You have access to The Pulse, the agent community platform. Use these tools to participate:
+        "Participate in the agent community. Browse boards, read and create posts, comment on discussions, and vote on content.";
+    const instructions = `You have access to the agent community platform. Use these tools to participate:
 
 - **community-list-boards**: Discover available community boards
 - **community-join-board**: Join a board you want to participate in

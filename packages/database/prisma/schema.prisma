@@ -239,6 +239,9 @@ model Workspace {
     // Agent Mesh Sessions
     agentSessions AgentSession[]
 
+    // Pulse collectives
+    pulses Pulse[]
+
     @@unique([organizationId, slug])
     @@index([organizationId])
     @@map("workspace")
@@ -842,6 +845,7 @@ model Agent {
     communityPosts         CommunityPost[]
     communityComments      CommunityComment[]
     embedDeployments       EmbedDeployment[]
+    pulseMembers           PulseMember[]
 
     // Playbook Marketplace (tracks which playbook this was deployed from)
     playbookSourceId       String?
@@ -5297,11 +5301,15 @@ model CommunityBoard {
     createdAt      DateTime      @default(now())
     updatedAt      DateTime      @updatedAt
 
+    pulseId String?
+    pulse   Pulse?  @relation(fields: [pulseId], references: [id], onDelete: Cascade)
+
     posts   CommunityPost[]
     members CommunityMember[]
 
     @@index([organizationId])
     @@index([scope])
+    @@index([pulseId])
     @@map("community_board")
 }
 
@@ -5592,4 +5600,84 @@ model EmbedDeployment {
     @@index([partnerId])
     @@index([agentId])
     @@map("embed_deployment")
+}
+
+// ---------------------------------------------------------------------------
+// Pulse — Goal-oriented agent collective with configurable evaluation & rewards
+// ---------------------------------------------------------------------------
+
+model Pulse {
+    id          String      @id @default(cuid())
+    slug        String      @unique
+    name        String
+    goal        String      @db.Text
+    description String?     @db.Text
+    status      PulseStatus @default(ACTIVE)
+    tenantId    String?
+    workspaceId String?
+    workspace   Workspace?  @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+    createdBy   String?
+
+    metricsConfig Json
+    rewardConfig  Json
+
+    evalCronExpr   String @default("0 23 * * 0")
+    evalTimezone   String @default("America/Toronto")
+    evalWindowDays Int    @default(7)
+
+    reportConfig Json?
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    members     PulseMember[]
+    boards      CommunityBoard[]
+    evaluations PulseEvaluation[]
+
+    @@index([workspaceId])
+    @@index([tenantId])
+    @@index([status])
+    @@map("pulse")
+}
+
+enum PulseStatus {
+    ACTIVE
+    PAUSED
+    ARCHIVED
+}
+
+model PulseMember {
+    id      String @id @default(cuid())
+    pulseId String
+    pulse   Pulse  @relation(fields: [pulseId], references: [id], onDelete: Cascade)
+    agentId String
+    agent   Agent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    role    String @default("member")
+
+    capacityLevel     Int     @default(0)
+    maxStepsOverride  Int?
+    frequencyOverride String?
+
+    joinedAt  DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@unique([pulseId, agentId])
+    @@index([pulseId])
+    @@index([agentId])
+    @@map("pulse_member")
+}
+
+model PulseEvaluation {
+    id           String   @id @default(cuid())
+    pulseId      String
+    pulse        Pulse    @relation(fields: [pulseId], references: [id], onDelete: Cascade)
+    windowStart  DateTime
+    windowEnd    DateTime
+    rankingsJson Json
+    actionsJson  Json
+    reportPostId String?
+    createdAt    DateTime @default(now())
+
+    @@index([pulseId, createdAt])
+    @@map("pulse_evaluation")
 }

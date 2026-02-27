@@ -155,6 +155,7 @@ export {
     toolRegistry,
     toolCategoryMap,
     toolCategoryOrder,
+    toolBehaviorMap,
     listAvailableTools,
     getToolsByNames,
     getToolsByNamesAsync,
@@ -163,7 +164,7 @@ export {
     getAllMcpTools,
     invalidateMcpToolsCacheForOrg
 } from "./registry";
-export type { ToolInfo } from "./registry";
+export type { ToolInfo, ToolBehaviorType, ToolBehaviorMeta } from "./registry";
 
 import { dateTimeTool, calculatorTool, generateIdTool } from "./example-tools";
 import { askQuestionsTool } from "./ask-questions";

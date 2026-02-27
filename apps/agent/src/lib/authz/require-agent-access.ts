@@ -11,6 +11,7 @@ export async function requireAgentAccess(
         where: {
             AND: [
                 { OR: [{ id: agentRef }, { slug: agentRef }] },
+                { isActive: true },
                 { OR: [{ workspace: { organizationId } }, { tenantId: organizationId }] }
             ]
         },

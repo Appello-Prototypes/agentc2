@@ -63,6 +63,18 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             );
         }
 
+        if (body.expectedVersion !== undefined && existing.version !== body.expectedVersion) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    error: "Version conflict: this workflow was modified by someone else",
+                    currentVersion: existing.version,
+                    expectedVersion: body.expectedVersion
+                },
+                { status: 409 }
+            );
+        }
+
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const updateData: any = {};
         if (body.name !== undefined) updateData.name = body.name;

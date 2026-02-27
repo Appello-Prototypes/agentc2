@@ -1,93 +1,171 @@
 "use client";
 
-import { type ReactNode } from "react";
-import { cn, useIsMobile, Tabs, TabsList, TabsTrigger, TabsContent } from "@repo/ui";
+import { type ReactNode, useState, useCallback } from "react";
+import { cn, Button } from "@repo/ui";
 
 interface BuilderShellProps {
-    outline: ReactNode;
+    toolbar: ReactNode;
+    palette?: ReactNode;
     canvas: ReactNode;
-    inspector: ReactNode;
+    inspector?: ReactNode;
     className?: string;
-    outlineClassName?: string;
-    canvasClassName?: string;
-    inspectorClassName?: string;
+    defaultPaletteOpen?: boolean;
+    defaultInspectorOpen?: boolean;
+    showInspector?: boolean;
 }
 
 export function BuilderShell({
-    outline,
+    toolbar,
+    palette,
     canvas,
     inspector,
     className,
-    outlineClassName,
-    canvasClassName,
-    inspectorClassName
+    defaultPaletteOpen = true,
+    defaultInspectorOpen = true,
+    showInspector = true
 }: BuilderShellProps) {
-    const isMobile = useIsMobile();
+    const [paletteOpen, setPaletteOpen] = useState(defaultPaletteOpen);
+    const [inspectorOpen, setInspectorOpen] = useState(defaultInspectorOpen);
 
-    // Mobile: tabbed interface instead of 3-column grid
-    if (isMobile) {
-        return (
-            <Tabs
-                defaultValue="canvas"
-                className={cn("flex min-h-[calc(100dvh-220px)] flex-col", className)}
-            >
-                <TabsList className="mx-4 mt-2 grid w-auto grid-cols-3">
-                    <TabsTrigger value="outline">Outline</TabsTrigger>
-                    <TabsTrigger value="canvas">Canvas</TabsTrigger>
-                    <TabsTrigger value="inspector">Inspector</TabsTrigger>
-                </TabsList>
-                <TabsContent value="outline" className="mt-0 min-h-0 flex-1">
-                    <div
-                        className={cn(
-                            "bg-muted/20 mx-4 mb-4 flex h-full flex-col overflow-hidden rounded-lg border",
-                            outlineClassName
-                        )}
-                    >
-                        {outline}
-                    </div>
-                </TabsContent>
-                <TabsContent value="canvas" className="mt-0 min-h-0 flex-1">
-                    <div className={cn("mx-4 mb-4 min-w-0 flex-1", canvasClassName)}>{canvas}</div>
-                </TabsContent>
-                <TabsContent value="inspector" className="mt-0 min-h-0 flex-1">
-                    <div
-                        className={cn(
-                            "bg-muted/20 mx-4 mb-4 flex h-full flex-col overflow-hidden rounded-lg border",
-                            inspectorClassName
-                        )}
-                    >
-                        {inspector}
-                    </div>
-                </TabsContent>
-            </Tabs>
-        );
-    }
+    const togglePalette = useCallback(() => setPaletteOpen((p) => !p), []);
+    const toggleInspector = useCallback(() => setInspectorOpen((p) => !p), []);
 
-    // Desktop: 3-column grid
     return (
-        <div
-            className={cn(
-                "grid min-h-[calc(100dvh-220px)] grid-cols-[260px_minmax(0,1fr)_360px] gap-4",
-                className
-            )}
-        >
-            <aside
-                className={cn(
-                    "bg-muted/20 flex h-full flex-col overflow-hidden rounded-lg border",
-                    outlineClassName
+        <div className={cn("flex h-[calc(100dvh-64px)] flex-col", className)}>
+            {toolbar}
+
+            <div className="relative flex-1 overflow-hidden">
+                {/* Canvas - full viewport, always underneath */}
+                <div className="absolute inset-0">{canvas}</div>
+
+                {/* Left palette overlay */}
+                {palette && (
+                    <div
+                        className={cn(
+                            "absolute top-0 left-0 z-10 flex h-full transition-transform duration-200 ease-in-out",
+                            paletteOpen ? "translate-x-0" : "-translate-x-full"
+                        )}
+                    >
+                        <aside className="bg-background/90 flex w-60 flex-col overflow-hidden border-r backdrop-blur-xl">
+                            {palette}
+                        </aside>
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={togglePalette}
+                            className="bg-background/80 border-border mt-2 h-6 w-6 rounded-l-none rounded-r-md border border-l-0 p-0 backdrop-blur-sm"
+                            title={paletteOpen ? "Hide palette ([)" : "Show palette ([)"}
+                        >
+                            <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                width="12"
+                                height="12"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                className={cn(
+                                    "transition-transform",
+                                    paletteOpen ? "rotate-0" : "rotate-180"
+                                )}
+                            >
+                                <path d="m15 18-6-6 6-6" />
+                            </svg>
+                        </Button>
+                    </div>
                 )}
-            >
-                {outline}
-            </aside>
-            <section className={cn("min-w-0", canvasClassName)}>{canvas}</section>
-            <aside
-                className={cn(
-                    "bg-muted/20 flex h-full flex-col overflow-hidden rounded-lg border",
-                    inspectorClassName
+
+                {/* Palette collapsed toggle (shown when palette is closed) */}
+                {palette && !paletteOpen && (
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={togglePalette}
+                        className="bg-background/80 border-border absolute top-2 left-0 z-10 h-6 w-6 rounded-l-none rounded-r-md border border-l-0 p-0 backdrop-blur-sm"
+                    >
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="12"
+                            height="12"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                        >
+                            <path d="m9 18 6-6-6-6" />
+                        </svg>
+                    </Button>
                 )}
-            >
-                {inspector}
-            </aside>
+
+                {/* Right inspector overlay */}
+                {showInspector && inspector && (
+                    <div
+                        className={cn(
+                            "absolute top-0 right-0 z-10 flex h-full transition-transform duration-200 ease-in-out",
+                            inspectorOpen ? "translate-x-0" : "translate-x-full"
+                        )}
+                    >
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={toggleInspector}
+                            className="bg-background/80 border-border mt-2 h-6 w-6 rounded-l-md rounded-r-none border border-r-0 p-0 backdrop-blur-sm"
+                            title={inspectorOpen ? "Hide inspector (])" : "Show inspector (])"}
+                        >
+                            <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                width="12"
+                                height="12"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                className={cn(
+                                    "transition-transform",
+                                    inspectorOpen ? "rotate-0" : "rotate-180"
+                                )}
+                            >
+                                <path d="m9 18 6-6-6-6" />
+                            </svg>
+                        </Button>
+                        <aside className="bg-background/90 flex w-[400px] flex-col overflow-hidden border-l backdrop-blur-xl">
+                            {inspector}
+                        </aside>
+                    </div>
+                )}
+
+                {/* Inspector collapsed toggle (shown when inspector is closed) */}
+                {showInspector && inspector && !inspectorOpen && (
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={toggleInspector}
+                        className="bg-background/80 border-border absolute top-2 right-0 z-10 h-6 w-6 rounded-l-md rounded-r-none border border-r-0 p-0 backdrop-blur-sm"
+                    >
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="12"
+                            height="12"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                        >
+                            <path d="m15 18-6-6 6-6" />
+                        </svg>
+                    </Button>
+                )}
+            </div>
         </div>
     );
 }
+
+export { type BuilderShellProps };

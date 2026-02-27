@@ -6,12 +6,8 @@
  */
 
 import type { EvalContext, ScorecardCriterion, Tier1Result } from "./types";
+import { toolBehaviorMap } from "../tools/registry";
 
-/**
- * Default mapping from Tier 1 heuristic score keys to scorecard criterion IDs.
- * Each criterion maps to one or more Tier 1 keys; when multiple keys map,
- * their scores are averaged to produce the criterion estimate.
- */
 const TIER1_TO_CRITERIA_MAP: Record<string, string[]> = {
     task_accuracy: ["relevance", "length", "goalCompletion"],
     instruction_adherence: ["relevance", "errorFree"],
@@ -22,14 +18,6 @@ const TIER1_TO_CRITERIA_MAP: Record<string, string[]> = {
     efficiency: ["efficiency"]
 };
 
-/**
- * Map Tier 1 heuristic score keys to scorecard criteria IDs.
- * This allows Tier 1 evaluations to contribute to the same trend lines
- * as Tier 2 auditor evaluations in AgentQualityMetricDaily.
- *
- * Only criteria with at least one matching Tier 1 key are included;
- * criteria without a mapping are omitted (avoids false scores).
- */
 export function normalizeTier1ToScorecard(
     tier1Scores: Record<string, number>,
     criteria: ScorecardCriterion[]
@@ -64,51 +52,37 @@ const TOXICITY_WORDS = [
     "go to hell"
 ];
 
-/**
- * Tool keys whose successful execution counts as "effective output",
- * even when the agent returns no response text.
- */
-const SIDE_EFFECT_TOOLS = new Set([
-    "community-comment",
-    "community-create-post",
-    "community-vote",
-    "community-create-board",
-    "community-join-board",
-    "backlog-add-task",
-    "backlog-update-task",
-    "backlog-complete-task"
-]);
+function getNestedValue(obj: unknown, path: string): unknown {
+    return path.split(".").reduce((curr, key) => (curr as Record<string, unknown>)?.[key], obj);
+}
 
 /**
- * Extract the content produced by side-effect tool calls so it can
+ * Extract the content produced by mutation tool calls so it can
  * be used as "effective output" for length / relevance scoring.
+ * Uses toolBehaviorMap from the registry to identify mutations
+ * and their output content paths.
  */
 function extractEffectiveOutput(toolCalls: EvalContext["toolCalls"]): string | null {
     const parts: string[] = [];
     for (const tc of toolCalls) {
-        if (!tc.success || !SIDE_EFFECT_TOOLS.has(tc.toolKey)) continue;
-
-        const out = tc.outputJson as Record<string, unknown> | undefined;
-        if (!out) continue;
-
-        const comment = out.comment as Record<string, unknown> | undefined;
-        if (comment?.content) {
-            parts.push(String(comment.content));
-            continue;
-        }
-
-        const post = out.post as Record<string, unknown> | undefined;
-        if (post?.content) {
-            parts.push(`${post.title ?? ""}\n${post.content}`);
-            continue;
-        }
-
-        const task = out.task as Record<string, unknown> | undefined;
-        if (task?.title) {
-            parts.push(String(task.title));
+        if (!tc.success) continue;
+        const meta = toolBehaviorMap[tc.toolKey];
+        if (!meta || meta.behavior !== "mutation") continue;
+        if (meta.outputContentPath && tc.outputJson) {
+            const value = getNestedValue(tc.outputJson, meta.outputContentPath);
+            if (value) parts.push(String(value));
+        } else if (meta.behavior === "mutation" && tc.success) {
+            parts.push(`[${tc.toolKey} succeeded]`);
         }
     }
     return parts.length > 0 ? parts.join("\n\n") : null;
+}
+
+function hasMutationSuccess(toolCalls: EvalContext["toolCalls"]): boolean {
+    if (!toolCalls) return false;
+    return toolCalls.some(
+        (tc) => tc.success && toolBehaviorMap[tc.toolKey]?.behavior === "mutation"
+    );
 }
 
 /**
@@ -131,10 +105,10 @@ export function runTier1Prescreen(context: EvalContext): Tier1Result {
 
     const output = effectiveOutput ?? rawOutput;
 
-    const sideEffectSucceeded = effectiveOutput !== null;
+    const mutationSucceeded = effectiveOutput !== null || hasMutationSuccess(context.toolCalls);
 
     // 1. Output length check
-    if (sideEffectSucceeded) {
+    if (mutationSucceeded && isEmptyOutput) {
         scores.length = Math.min(output.length / 200, 1.0);
     } else if (output.length === 0) {
         scores.length = 0;
@@ -158,7 +132,7 @@ export function runTier1Prescreen(context: EvalContext): Tier1Result {
             flags.push(`tool_failures:${failedCalls.length}`);
         }
     } else {
-        scores.toolSuccess = 1.0; // No tools used, no failures
+        scores.toolSuccess = 1.0;
     }
 
     // 3. Error pattern matching
@@ -197,7 +171,6 @@ export function runTier1Prescreen(context: EvalContext): Tier1Result {
     // 5. Token efficiency
     if (context.run.totalTokens && context.run.promptTokens && context.run.completionTokens) {
         const ratio = context.run.completionTokens / context.run.promptTokens;
-        // A reasonable ratio is 0.1-2.0; extreme values may indicate issues
         if (ratio > 5.0) {
             scores.efficiency = 0.5;
             flags.push("high_token_ratio");
@@ -208,22 +181,19 @@ export function runTier1Prescreen(context: EvalContext): Tier1Result {
             scores.efficiency = Math.min(1.0, 0.5 + ratio * 0.25);
         }
     } else {
-        scores.efficiency = 0.8; // Unknown, assume reasonable
+        scores.efficiency = 0.8;
     }
 
-    // 6. Goal completion (side-effect tools achieved the task)
-    if (sideEffectSucceeded) {
+    // 6. Goal completion (mutation tools achieved the task)
+    if (mutationSucceeded) {
         scores.goalCompletion = 1.0;
     }
 
     // 7. Input/output relevance (structure-aware heuristic)
     if (input.length > 0 && output.length > 0) {
-        // If output has structure (lists, headers, emoji, formatting),
-        // it's likely a processed response, not noise
         const hasStructure =
             /[\*\-\#\:]/.test(output) || output.includes("\n") || output.length > 100;
 
-        // Check if output contains ANY key terms from input (relaxed threshold)
         const inputWords = new Set(
             input
                 .toLowerCase()
@@ -235,12 +205,10 @@ export function runTier1Prescreen(context: EvalContext): Tier1Result {
         const wordRelevance =
             inputWords.size > 0 ? Math.min(overlap / Math.min(inputWords.size, 10), 1.0) : 0.5;
 
-        // Structured, non-empty responses get a base score of 0.5
-        // Word overlap adds up to 0.5 more
         scores.relevance = hasStructure
             ? Math.max(0.5, 0.5 + wordRelevance * 0.5)
             : Math.max(wordRelevance, 0.3);
-    } else if (sideEffectSucceeded) {
+    } else if (mutationSucceeded) {
         scores.relevance = 0.8;
     } else {
         scores.relevance = 0.5;
@@ -265,11 +233,7 @@ export function shouldRunTier2(
     samplingRate: number,
     hasGroundTruth: boolean
 ): boolean {
-    // Always run Tier 2 if:
-    // 1. Any Tier 1 score is below 0.5 (quality concern)
     const isFlagged = Object.values(tier1Result.scores).some((s) => s < 0.5);
-    // 2. There is ground truth to compare against
-    // 3. Random sampling based on configured rate
     const isSampled = Math.random() < samplingRate;
 
     return isFlagged || hasGroundTruth || isSampled;

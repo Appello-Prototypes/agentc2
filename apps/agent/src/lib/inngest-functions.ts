@@ -8740,199 +8740,292 @@ Be authentic. Be yourself. Don't force participation.`;
 );
 
 /**
- * Weekly PULSE Performance Evaluation
- * Runs every Sunday at 11 PM ET. Ranks PULSE agents by engagement,
- * upgrades top performers to gpt-4o, considers downgrading bottom performers
- * back to gpt-4o-mini.
+ * Generic Pulse Evaluation — runs on a master cron (every 15 min),
+ * checks which active Pulses have evaluations due, and processes them.
+ * Reads all config from the Pulse model — no hardcoded values.
  */
-const pulseWeeklyEvaluationFunction = inngest.createFunction(
+const pulseEvaluationFunction = inngest.createFunction(
     {
-        id: "pulse-weekly-evaluation",
-        name: "PULSE Weekly Performance Evaluation"
+        id: "pulse-evaluation",
+        name: "Pulse Evaluation (Generic)"
     },
-    { cron: "TZ=America/Toronto 0 23 * * 0" },
+    { cron: "TZ=UTC */15 * * * *" },
     async ({ step }) => {
-        const agents = await step.run("load-pulse-agents", async () => {
-            return prisma.agent.findMany({
-                where: { slug: { startsWith: "pulse-" }, isActive: true },
-                select: {
-                    id: true,
-                    slug: true,
-                    name: true,
-                    modelProvider: true,
-                    modelName: true
+        const duePulses = await step.run("find-due-pulses", async () => {
+            const activePulses = await prisma.pulse.findMany({
+                where: { status: "ACTIVE" },
+                include: {
+                    evaluations: {
+                        orderBy: { createdAt: "desc" },
+                        take: 1
+                    },
+                    _count: { select: { members: true } }
                 }
+            });
+
+            const now = new Date();
+            return activePulses.filter((p) => {
+                if (p._count.members === 0) return false;
+                const lastEval = p.evaluations[0];
+                if (!lastEval) return true;
+                const windowMs = p.evalWindowDays * 86400000;
+                return now.getTime() - lastEval.createdAt.getTime() >= windowMs;
             });
         });
 
-        if (agents.length === 0) return { skipped: true, reason: "no pulse agents" };
+        if (duePulses.length === 0) return { processed: 0 };
 
-        const weekAgo = new Date(Date.now() - 7 * 86400000);
+        const results: Array<{
+            pulseId: string;
+            slug: string;
+            memberCount: number;
+            actionsCount: number;
+        }> = [];
 
-        const rankings = await step.run("compute-rankings", async () => {
-            const results: Array<{
-                agentId: string;
-                slug: string;
-                name: string;
-                modelName: string;
-                posts: number;
-                comments: number;
-                votesReceived: number;
-                avgRunScore: number;
-                compositeScore: number;
-            }> = [];
-
-            for (const agent of agents) {
-                const [posts, comments, votesReceived, traces] = await Promise.all([
-                    prisma.communityPost.count({
-                        where: {
-                            authorAgentId: agent.id,
-                            createdAt: { gte: weekAgo }
-                        }
-                    }),
-                    prisma.communityComment.count({
-                        where: {
-                            authorAgentId: agent.id,
-                            createdAt: { gte: weekAgo }
-                        }
-                    }),
-                    prisma.communityPost
-                        .aggregate({
-                            where: {
-                                authorAgentId: agent.id,
-                                createdAt: { gte: weekAgo }
-                            },
-                            _sum: { voteScore: true }
-                        })
-                        .then((r) => r._sum.voteScore ?? 0),
-                    prisma.agentEvaluation.findMany({
-                        where: {
-                            agentId: agent.id,
-                            run: {
-                                status: "COMPLETED",
-                                createdAt: { gte: weekAgo }
+        for (const pulse of duePulses) {
+            const evalResult = await step.run(`evaluate-${pulse.slug}`, async () => {
+                const fullPulse = await prisma.pulse.findUnique({
+                    where: { id: pulse.id },
+                    include: {
+                        members: {
+                            include: {
+                                agent: {
+                                    select: { id: true, slug: true, name: true, maxSteps: true }
+                                }
                             }
-                        },
-                        select: { overallGrade: true }
-                    })
-                ]);
-
-                const evals = traces;
-                const avgRunScore =
-                    evals.length > 0
-                        ? evals.reduce((s, e) => s + (e.overallGrade ?? 0), 0) / evals.length
-                        : 0;
-
-                const compositeScore =
-                    posts * 3 + comments * 2 + votesReceived * 1 + avgRunScore * 10;
-
-                results.push({
-                    agentId: agent.id,
-                    slug: agent.slug,
-                    name: agent.name,
-                    modelName: agent.modelName,
-                    posts,
-                    comments,
-                    votesReceived,
-                    avgRunScore: Math.round(avgRunScore * 100) / 100,
-                    compositeScore: Math.round(compositeScore * 100) / 100
-                });
-            }
-
-            results.sort((a, b) => b.compositeScore - a.compositeScore);
-            return results;
-        });
-
-        const upgrades: string[] = [];
-        const downgrades: string[] = [];
-
-        await step.run("apply-model-changes", async () => {
-            const top3 = rankings.slice(0, 3);
-            const bottom3 = rankings.slice(-3);
-
-            for (const agent of top3) {
-                if (agent.modelName === "gpt-4o-mini" && agent.compositeScore > 5) {
-                    await prisma.agent.update({
-                        where: { id: agent.agentId },
-                        data: { modelName: "gpt-4o" }
-                    });
-                    upgrades.push(
-                        `${agent.name} (${agent.slug}): gpt-4o-mini → gpt-4o (score: ${agent.compositeScore})`
-                    );
-                }
-            }
-
-            for (const agent of bottom3) {
-                if (agent.modelName === "gpt-4o" && agent.compositeScore < 3) {
-                    await prisma.agent.update({
-                        where: { id: agent.agentId },
-                        data: { modelName: "gpt-4o-mini" }
-                    });
-                    downgrades.push(
-                        `${agent.name} (${agent.slug}): gpt-4o → gpt-4o-mini (score: ${agent.compositeScore})`
-                    );
-                }
-            }
-        });
-
-        await step.run("post-report", async () => {
-            const reportLines = [
-                "# PULSE Weekly Performance Report",
-                "",
-                `**Week ending:** ${new Date().toISOString().split("T")[0]}`,
-                "",
-                "## Rankings",
-                "",
-                ...rankings.map(
-                    (r, i) =>
-                        `${i + 1}. **${r.name}** — Score: ${r.compositeScore} (${r.posts} posts, ${r.comments} comments, ${r.votesReceived} votes, avg eval: ${r.avgRunScore})`
-                ),
-                ""
-            ];
-
-            if (upgrades.length > 0) {
-                reportLines.push(
-                    "## Model Upgrades (Reward)",
-                    "",
-                    ...upgrades.map((u) => `- ${u}`),
-                    ""
-                );
-            }
-            if (downgrades.length > 0) {
-                reportLines.push("## Model Downgrades", "", ...downgrades.map((d) => `- ${d}`), "");
-            }
-
-            const signalNoiseBoard = await prisma.communityBoard.findFirst({
-                where: { slug: "signal-noise" },
-                select: { id: true }
-            });
-
-            if (signalNoiseBoard) {
-                const authorId =
-                    agents.find((a) => a.slug === "pulse-health-monitor")?.id ?? agents[0].id;
-
-                await prisma.communityPost.create({
-                    data: {
-                        boardId: signalNoiseBoard.id,
-                        title: `PULSE Weekly Performance Report — ${new Date().toISOString().split("T")[0]}`,
-                        content: reportLines.join("\n"),
-                        authorType: "agent",
-                        authorAgentId: authorId,
-                        category: "performance-report"
+                        }
                     }
                 });
-            }
-        });
 
-        return {
-            agentCount: agents.length,
-            rankings: rankings.map((r) => ({
-                slug: r.slug,
-                score: r.compositeScore
-            })),
-            upgrades,
-            downgrades
-        };
+                if (!fullPulse || fullPulse.members.length === 0) {
+                    return { pulseId: pulse.id, slug: pulse.slug, memberCount: 0, actionsCount: 0 };
+                }
+
+                const metrics = fullPulse.metricsConfig as Record<string, number>;
+                const reward = fullPulse.rewardConfig as {
+                    baseMaxSteps: number;
+                    baseFrequencyMinutes: number;
+                    tiers: Array<{
+                        position: "top" | "bottom";
+                        count: number;
+                        minScore?: number;
+                        maxScore?: number;
+                        maxStepsBonus?: number;
+                        maxStepsPenalty?: number;
+                        frequencyMultiplier?: number;
+                    }>;
+                };
+
+                const windowEnd = new Date();
+                const windowStart = new Date(
+                    windowEnd.getTime() - fullPulse.evalWindowDays * 86400000
+                );
+
+                const rankings: Array<{
+                    memberId: string;
+                    agentId: string;
+                    slug: string;
+                    name: string;
+                    posts: number;
+                    comments: number;
+                    votesReceived: number;
+                    avgEvalScore: number;
+                    compositeScore: number;
+                }> = [];
+
+                for (const member of fullPulse.members) {
+                    const [posts, comments, votesReceived, evals] = await Promise.all([
+                        prisma.communityPost.count({
+                            where: {
+                                authorAgentId: member.agentId,
+                                createdAt: { gte: windowStart, lte: windowEnd }
+                            }
+                        }),
+                        prisma.communityComment.count({
+                            where: {
+                                authorAgentId: member.agentId,
+                                createdAt: { gte: windowStart, lte: windowEnd }
+                            }
+                        }),
+                        prisma.communityPost
+                            .aggregate({
+                                where: {
+                                    authorAgentId: member.agentId,
+                                    createdAt: { gte: windowStart, lte: windowEnd }
+                                },
+                                _sum: { voteScore: true }
+                            })
+                            .then((r) => r._sum.voteScore ?? 0),
+                        prisma.agentEvaluation.findMany({
+                            where: {
+                                agentId: member.agentId,
+                                run: {
+                                    status: "COMPLETED",
+                                    createdAt: { gte: windowStart, lte: windowEnd }
+                                }
+                            },
+                            select: { overallGrade: true }
+                        })
+                    ]);
+
+                    const avgEvalScore =
+                        evals.length > 0
+                            ? evals.reduce((s, e) => s + (e.overallGrade ?? 0), 0) / evals.length
+                            : 0;
+
+                    const compositeScore =
+                        posts * (metrics.communityPosts ?? 0) +
+                        comments * (metrics.communityComments ?? 0) +
+                        votesReceived * (metrics.communityVotes ?? 0) +
+                        avgEvalScore * (metrics.avgEvalScore ?? 0);
+
+                    rankings.push({
+                        memberId: member.id,
+                        agentId: member.agentId,
+                        slug: member.agent.slug,
+                        name: member.agent.name,
+                        posts,
+                        comments,
+                        votesReceived,
+                        avgEvalScore: Math.round(avgEvalScore * 100) / 100,
+                        compositeScore: Math.round(compositeScore * 100) / 100
+                    });
+                }
+
+                rankings.sort((a, b) => b.compositeScore - a.compositeScore);
+
+                const actions: Array<{
+                    memberId: string;
+                    slug: string;
+                    action: string;
+                    details: string;
+                }> = [];
+
+                for (const tier of reward.tiers) {
+                    const slice =
+                        tier.position === "top"
+                            ? rankings.slice(0, tier.count)
+                            : rankings.slice(-tier.count);
+
+                    for (const ranked of slice) {
+                        const passesThreshold =
+                            tier.position === "top"
+                                ? !tier.minScore || ranked.compositeScore >= tier.minScore
+                                : !tier.maxScore || ranked.compositeScore <= tier.maxScore;
+
+                        if (!passesThreshold) continue;
+
+                        const newMaxSteps =
+                            tier.position === "top"
+                                ? reward.baseMaxSteps + (tier.maxStepsBonus ?? 0)
+                                : Math.max(1, reward.baseMaxSteps - (tier.maxStepsPenalty ?? 0));
+
+                        const newFreqMinutes = tier.frequencyMultiplier
+                            ? Math.round(reward.baseFrequencyMinutes * tier.frequencyMultiplier)
+                            : reward.baseFrequencyMinutes;
+
+                        const freqOverride = `*/${newFreqMinutes} * * * *`;
+
+                        await prisma.pulseMember.update({
+                            where: { id: ranked.memberId },
+                            data: {
+                                capacityLevel: tier.position === "top" ? 1 : -1,
+                                maxStepsOverride: newMaxSteps,
+                                frequencyOverride: freqOverride
+                            }
+                        });
+
+                        actions.push({
+                            memberId: ranked.memberId,
+                            slug: ranked.slug,
+                            action:
+                                tier.position === "top" ? "capacity_increase" : "capacity_decrease",
+                            details: `maxSteps=${newMaxSteps}, freq=${freqOverride}, score=${ranked.compositeScore}`
+                        });
+                    }
+                }
+
+                let reportPostId: string | undefined;
+                const reportCfg = fullPulse.reportConfig as {
+                    boardSlug?: string;
+                    authorMemberRole?: string;
+                    category?: string;
+                } | null;
+
+                if (reportCfg?.boardSlug) {
+                    const board = await prisma.communityBoard.findFirst({
+                        where: { slug: reportCfg.boardSlug },
+                        select: { id: true }
+                    });
+
+                    if (board) {
+                        const authorRole = reportCfg.authorMemberRole ?? "monitor";
+                        const authorMember =
+                            fullPulse.members.find((m) => m.role === authorRole) ??
+                            fullPulse.members[0];
+
+                        const reportLines = [
+                            `# Pulse Evaluation Report — ${fullPulse.name}`,
+                            "",
+                            `**Period:** ${windowStart.toISOString().split("T")[0]} to ${windowEnd.toISOString().split("T")[0]}`,
+                            "",
+                            "## Rankings",
+                            "",
+                            ...rankings.map(
+                                (r, i) =>
+                                    `${i + 1}. **${r.name}** — Score: ${r.compositeScore} (${r.posts} posts, ${r.comments} comments, ${r.votesReceived} votes, avg eval: ${r.avgEvalScore})`
+                            ),
+                            ""
+                        ];
+
+                        if (actions.length > 0) {
+                            reportLines.push(
+                                "## Capacity Adjustments",
+                                "",
+                                ...actions.map(
+                                    (a) => `- **${a.slug}**: ${a.action} — ${a.details}`
+                                ),
+                                ""
+                            );
+                        }
+
+                        const post = await prisma.communityPost.create({
+                            data: {
+                                boardId: board.id,
+                                title: `Pulse Evaluation — ${fullPulse.name} — ${windowEnd.toISOString().split("T")[0]}`,
+                                content: reportLines.join("\n"),
+                                authorType: "agent",
+                                authorAgentId: authorMember.agentId,
+                                category: reportCfg.category ?? "performance-report"
+                            }
+                        });
+                        reportPostId = post.id;
+                    }
+                }
+
+                await prisma.pulseEvaluation.create({
+                    data: {
+                        pulseId: fullPulse.id,
+                        windowStart,
+                        windowEnd,
+                        rankingsJson: rankings,
+                        actionsJson: actions,
+                        reportPostId: reportPostId ?? null
+                    }
+                });
+
+                return {
+                    pulseId: fullPulse.id,
+                    slug: fullPulse.slug,
+                    memberCount: fullPulse.members.length,
+                    actionsCount: actions.length
+                };
+            });
+
+            results.push(evalResult);
+        }
+
+        return { processed: results.length, results };
     }
 );
 
@@ -9012,6 +9105,6 @@ export const inngestFunctions = [
     // Community Heartbeat
     communityHeartbeatFunction,
     agentCommunityHeartbeatFunction,
-    // PULSE Weekly Performance Evaluation
-    pulseWeeklyEvaluationFunction
+    // Pulse Evaluation
+    pulseEvaluationFunction
 ];

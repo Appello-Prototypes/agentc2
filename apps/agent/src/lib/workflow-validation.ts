@@ -186,6 +186,71 @@ function validateSteps(steps: unknown[], errors: string[], ids: Set<string>, pat
     });
 }
 
+function validateLayout(layout: unknown, stepIds: Set<string>, errors: string[]) {
+    if (!layout || typeof layout !== "object") return;
+    const l = layout as {
+        nodes?: unknown[];
+        edges?: unknown[];
+        viewport?: unknown;
+    };
+
+    if (l.nodes !== undefined && !Array.isArray(l.nodes)) {
+        errors.push("layout.nodes must be an array");
+    } else if (Array.isArray(l.nodes)) {
+        l.nodes.forEach((node, index) => {
+            if (!node || typeof node !== "object") {
+                errors.push(`layout.nodes[${index}] must be an object`);
+                return;
+            }
+            const n = node as { id?: string; position?: unknown };
+            if (!n.id || typeof n.id !== "string") {
+                errors.push(`layout.nodes[${index}] requires a string id`);
+            }
+            if (n.position && typeof n.position === "object") {
+                const pos = n.position as { x?: unknown; y?: unknown };
+                if (typeof pos.x !== "number" || typeof pos.y !== "number") {
+                    errors.push(`layout.nodes[${index}].position requires numeric x and y`);
+                }
+            }
+        });
+    }
+
+    if (l.edges !== undefined && !Array.isArray(l.edges)) {
+        errors.push("layout.edges must be an array");
+    } else if (Array.isArray(l.edges)) {
+        l.edges.forEach((edge, index) => {
+            if (!edge || typeof edge !== "object") {
+                errors.push(`layout.edges[${index}] must be an object`);
+                return;
+            }
+            const e = edge as { id?: string; source?: string; target?: string };
+            if (!e.id || typeof e.id !== "string") {
+                errors.push(`layout.edges[${index}] requires a string id`);
+            }
+            if (!e.source || typeof e.source !== "string") {
+                errors.push(`layout.edges[${index}] requires a string source`);
+            }
+            if (!e.target || typeof e.target !== "string") {
+                errors.push(`layout.edges[${index}] requires a string target`);
+            }
+        });
+    }
+
+    if (l.viewport !== undefined && l.viewport !== null) {
+        if (typeof l.viewport !== "object") {
+            errors.push("layout.viewport must be an object");
+        } else {
+            const v = l.viewport as { x?: unknown; y?: unknown; zoom?: unknown };
+            if (typeof v.x !== "number" || typeof v.y !== "number") {
+                errors.push("layout.viewport requires numeric x and y");
+            }
+            if (v.zoom !== undefined && typeof v.zoom !== "number") {
+                errors.push("layout.viewport.zoom must be a number");
+            }
+        }
+    }
+}
+
 export function validateWorkflowDefinition(definition: unknown) {
     const errors: string[] = [];
 
@@ -193,13 +258,19 @@ export function validateWorkflowDefinition(definition: unknown) {
         return { valid: false, errors: ["Definition must be an object"] };
     }
 
-    const steps = (definition as { steps?: unknown }).steps;
+    const def = definition as { steps?: unknown; layout?: unknown };
+
+    const steps = def.steps;
     if (!Array.isArray(steps)) {
         return { valid: false, errors: ["Definition must include a steps array"] };
     }
 
     const ids = new Set<string>();
     validateSteps(steps, errors, ids, "");
+
+    if (def.layout !== undefined) {
+        validateLayout(def.layout, ids, errors);
+    }
 
     return { valid: errors.length === 0, errors };
 }

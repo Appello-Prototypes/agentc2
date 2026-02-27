@@ -2,6 +2,7 @@ export * from "./accordion";
 export * from "./alert";
 export * from "./alert-dialog";
 export * from "./app-topbar";
+export * from "./context-menu";
 export * from "./avatar";
 export * from "./badge";
 export * from "./breadcrumb";

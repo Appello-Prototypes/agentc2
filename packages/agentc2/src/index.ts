@@ -146,6 +146,7 @@ export {
     toolRegistry,
     toolCategoryMap,
     toolCategoryOrder,
+    toolBehaviorMap,
     listAvailableTools,
     getToolsByNames,
     getToolsByNamesAsync,
@@ -154,7 +155,7 @@ export {
     getAllMcpTools,
     invalidateMcpToolsCacheForOrg
 } from "./tools";
-export type { ToolInfo } from "./tools";
+export type { ToolInfo, ToolBehaviorType, ToolBehaviorMeta } from "./tools";
 
 // Outlook Mail tools
 export {

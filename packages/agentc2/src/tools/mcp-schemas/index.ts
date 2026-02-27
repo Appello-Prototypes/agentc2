@@ -32,6 +32,7 @@ import { platformDocsToolDefinitions, platformDocsToolRoutes } from "./platform-
 import { instanceToolDefinitions, instanceToolRoutes } from "./instances";
 import { searchToolDefinitions, searchToolRoutes } from "./search";
 import { sessionOpsToolDefinitions, sessionOpsToolRoutes } from "./session-ops";
+import { pulseToolDefinitions, pulseToolRoutes } from "./pulse";
 import type { McpToolDefinition, McpToolRoute } from "./types";
 
 export type { McpToolDefinition, McpToolRoute } from "./types";
@@ -71,7 +72,8 @@ export const mcpToolDefinitions: McpToolDefinition[] = [
     ...platformDocsToolDefinitions,
     ...instanceToolDefinitions,
     ...searchToolDefinitions,
-    ...sessionOpsToolDefinitions
+    ...sessionOpsToolDefinitions,
+    ...pulseToolDefinitions
 ];
 
 export const mcpToolRoutes: McpToolRoute[] = [
@@ -108,5 +110,6 @@ export const mcpToolRoutes: McpToolRoute[] = [
     ...platformDocsToolRoutes,
     ...instanceToolRoutes,
     ...searchToolRoutes,
-    ...sessionOpsToolRoutes
+    ...sessionOpsToolRoutes,
+    ...pulseToolRoutes
 ];

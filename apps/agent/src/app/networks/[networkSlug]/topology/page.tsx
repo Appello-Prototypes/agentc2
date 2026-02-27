@@ -1,36 +1,64 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useParams } from "next/navigation";
 import {
-    Badge,
-    Button,
-    Input,
-    Label,
-    Switch,
-    Tabs,
-    TabsContent,
-    TabsList,
-    TabsTrigger,
-    Textarea
-} from "@repo/ui";
+    useCallback,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+    type DragEvent,
+    type MouseEvent
+} from "react";
+import { useParams } from "next/navigation";
+import { Badge, Button, Label, Textarea } from "@repo/ui";
+import {
+    useNodesState,
+    useEdgesState,
+    addEdge,
+    type Node,
+    type Edge,
+    type Connection,
+    type Viewport,
+    ReactFlowProvider,
+    useReactFlow
+} from "@xyflow/react";
 import { getApiBase } from "@/lib/utils";
 import { BuilderShell } from "@/components/builder/BuilderShell";
-import { OutlinePanel, type OutlineSection } from "@/components/builder/OutlinePanel";
-import { WorkflowCanvas } from "@/components/workflows/WorkflowCanvas";
-import { WorkflowNode } from "@/components/workflows/WorkflowNode";
+import { BuilderToolbar } from "@/components/builder/BuilderToolbar";
+import { BuilderCanvas } from "@/components/builder/BuilderCanvas";
+import { NodePalette, type PaletteItem } from "@/components/builder/NodePalette";
+import { InspectorPanel } from "@/components/builder/InspectorPanel";
+import { UnsavedChangesGuard } from "@/components/builder/UnsavedChangesGuard";
+import { builderNodeTypes } from "@/components/builder/nodes";
+import { EdgeInspector } from "@/components/builder/inspectors/EdgeInspector";
+import { RouterInspector } from "@/components/builder/inspectors/RouterInspector";
+import { PrimitiveInspector } from "@/components/builder/inspectors/PrimitiveInspector";
 import { workflowEdgeTypes } from "@/components/workflows/WorkflowEdge";
+import { useAutoLayout } from "@/components/builder/hooks/useAutoLayout";
+import { useUndoRedo } from "@/components/builder/hooks/useUndoRedo";
+import { useAutoSave } from "@/components/builder/hooks/useAutoSave";
+import { useKeyboardShortcuts } from "@/components/builder/hooks/useKeyboardShortcuts";
+import { CanvasContextMenu } from "@/components/builder/CanvasContextMenu";
 import {
     applyJsonPatch,
     patchTouchesProtectedPaths,
     type JsonPatchOperation
 } from "@/lib/json-patch";
-import { useBuilderSelection } from "@/hooks/useBuilderSelection";
-import type { Edge, Node, NodeTypes } from "@xyflow/react";
 
 interface NetworkTopology {
     nodes: Node[];
     edges: Edge[];
+    viewport?: { x: number; y: number; zoom: number };
+}
+
+interface NetworkPrimitive {
+    primitiveType?: string;
+    agentId?: string | null;
+    workflowId?: string | null;
+    toolId?: string | null;
+    description?: string;
+    agent?: { id: string; name: string; slug?: string | null } | null;
+    workflow?: { id: string; name: string; slug?: string | null } | null;
 }
 
 interface ChatProposal {
@@ -44,360 +72,399 @@ interface ChatProposal {
     requiresConfirmation?: boolean;
 }
 
-interface NetworkPrimitive {
-    primitiveType?: string;
-    agentId?: string | null;
-    workflowId?: string | null;
-    toolId?: string | null;
-    agent?: { id: string; name: string; slug?: string | null } | null;
-    workflow?: { id: string; name: string; slug?: string | null } | null;
-}
-
-const SECTION_LABELS = ["Triggers", "Routers", "Actions", "Subflows", "Errors/Handlers"] as const;
-
 function normalizeTopology(input?: NetworkTopology | null): NetworkTopology {
     return {
-        nodes: Array.isArray(input?.nodes) ? input?.nodes : [],
-        edges: Array.isArray(input?.edges) ? input?.edges : []
+        nodes: Array.isArray(input?.nodes) ? input.nodes : [],
+        edges: Array.isArray(input?.edges) ? input.edges : [],
+        viewport: input?.viewport
     };
 }
 
-function categoryForNode(node: Node): (typeof SECTION_LABELS)[number] {
-    const nodeType = `${node.data?.type || node.type || ""}`.toLowerCase();
-    if (nodeType.includes("trigger")) return "Triggers";
-    if (nodeType.includes("router")) return "Routers";
-    if (nodeType.includes("subflow") || nodeType.includes("workflow")) return "Subflows";
-    if (nodeType.includes("error") || nodeType.includes("handler")) return "Errors/Handlers";
-    return "Actions";
-}
-
-function tryParseJson(value: string) {
-    try {
-        return { value: value ? JSON.parse(value) : {}, error: null };
-    } catch {
-        return { value: null, error: "Invalid JSON" };
-    }
-}
-
-function resolvePrimitiveReference(primitive: NetworkPrimitive, index: number): string {
-    if (primitive.primitiveType === "agent") {
-        return primitive.agent?.slug || primitive.agentId || `agent-${index + 1}`;
-    }
-    if (primitive.primitiveType === "workflow") {
-        return primitive.workflow?.slug || primitive.workflowId || `workflow-${index + 1}`;
-    }
-    if (primitive.primitiveType === "tool") {
-        return primitive.toolId || `tool-${index + 1}`;
-    }
-    return (
-        primitive.agent?.slug ||
-        primitive.workflow?.slug ||
-        primitive.toolId ||
-        primitive.agentId ||
-        primitive.workflowId ||
-        `primitive-${index + 1}`
-    );
-}
-
-export default function NetworkTopologyPage() {
+function NetworkTopologyPageInner() {
     const params = useParams();
     const networkSlug = params.networkSlug as string;
-    const [topology, setTopology] = useState<NetworkTopology>({ nodes: [], edges: [] });
+    const reactFlowInstance = useReactFlow();
+
+    const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
+    const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
     const [primitives, setPrimitives] = useState<NetworkPrimitive[]>([]);
-    const [saving, setSaving] = useState(false);
+    const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [aiPrompt, setAiPrompt] = useState("");
-    const [aiGenerating, setAiGenerating] = useState(false);
-    const [outlineSearch, setOutlineSearch] = useState("");
-    const [validationErrors, setValidationErrors] = useState<string[]>([]);
-    const [validationLoading, setValidationLoading] = useState(false);
-    const [inspectorTab, setInspectorTab] = useState("details");
-    const [jsonPowerMode, setJsonPowerMode] = useState(false);
-    const [jsonDraft, setJsonDraft] = useState("");
-    const [jsonError, setJsonError] = useState<string | null>(null);
+    const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+    const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
+    const [inspectorTab, setInspectorTab] = useState("form");
+    const [savedViewport, setSavedViewport] = useState<Viewport | undefined>(undefined);
+    const [version, setVersion] = useState(0);
+    const [paletteOpen, setPaletteOpen] = useState(true);
+
+    // Chat state
     const [chatInput, setChatInput] = useState("");
     const [chatLoading, setChatLoading] = useState(false);
     const [chatProposals, setChatProposals] = useState<ChatProposal[]>([]);
-    const [confirmedProposals, setConfirmedProposals] = useState<Record<string, boolean>>({});
-    const [history, setHistory] = useState<
-        { topology: NetworkTopology; primitives: NetworkPrimitive[] }[]
-    >([]);
-    const [mappingDraft, setMappingDraft] = useState("");
-    const [configDraft, setConfigDraft] = useState("");
+    const [contextMenu, setContextMenu] = useState<{
+        position: { x: number; y: number };
+        nodeId?: string;
+        edgeId?: string;
+    } | null>(null);
 
-    const defaultSelection = useMemo(
-        () => (topology.nodes.length > 0 ? { kind: "node", id: topology.nodes[0].id } : null),
-        [topology.nodes]
-    );
-    const { selected, setSelection } = useBuilderSelection(defaultSelection);
+    const { applyLayout } = useAutoLayout();
+    const undoRedo = useUndoRedo(nodes, edges);
+
+    const isDirty = useRef(false);
+    const lastSavedHash = useRef("");
+    const currentHash = useMemo(() => JSON.stringify({ nodes, edges }), [nodes, edges]);
 
     useEffect(() => {
-        if (!selected && topology.nodes.length > 0) {
-            setSelection({ kind: "node", id: topology.nodes[0].id });
+        isDirty.current = currentHash !== lastSavedHash.current;
+    }, [currentHash]);
+
+    const saveFn = useCallback(async () => {
+        const topologyJson: NetworkTopology = {
+            nodes: nodes.map((n) => ({
+                ...n,
+                measured: undefined
+            })),
+            edges: edges.map((e) => ({
+                ...e
+            })),
+            viewport: reactFlowInstance.getViewport()
+        };
+
+        const res = await fetch(`${getApiBase()}/api/networks/${networkSlug}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                topologyJson,
+                primitives,
+                expectedVersion: version
+            })
+        });
+        const data = await res.json();
+
+        if (res.status === 409) {
+            return { success: false, status: 409, currentVersion: data.currentVersion };
         }
-    }, [selected, topology.nodes, setSelection]);
+        if (!res.ok) {
+            setError(data.error || "Save failed");
+            return { success: false, status: res.status };
+        }
+
+        setVersion(data.network?.version ?? version);
+        lastSavedHash.current = JSON.stringify({ nodes, edges });
+        isDirty.current = false;
+        setError(null);
+        return { success: true };
+    }, [nodes, edges, primitives, networkSlug, version, reactFlowInstance]);
+
+    const { saveStatus, saveNow } = useAutoSave(saveFn, isDirty.current, { enabled: true });
+
+    // Build palette items from available primitives
+    const networkPaletteItems: PaletteItem[] = useMemo(() => {
+        const items: PaletteItem[] = [];
+
+        primitives.forEach((p) => {
+            const name = p.agent?.name || p.workflow?.name || p.toolId || "Unknown";
+            const type = p.primitiveType || "agent";
+            items.push({
+                type,
+                label: name,
+                description: p.description || type,
+                category: "Primitives",
+                icon: (
+                    <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                    >
+                        <circle cx="12" cy="12" r="10" />
+                    </svg>
+                ),
+                defaultConfig: {
+                    primitiveType: type,
+                    agentSlug: p.agent?.slug || "",
+                    workflowSlug: p.workflow?.slug || "",
+                    toolId: p.toolId || "",
+                    description: p.description || ""
+                }
+            });
+        });
+
+        return items;
+    }, [primitives]);
 
     useEffect(() => {
         const fetchNetwork = async () => {
-            const res = await fetch(`${getApiBase()}/api/networks/${networkSlug}`);
-            const data = await res.json();
-            const network = data.network || {};
-            setTopology(normalizeTopology(network.topologyJson));
-            setPrimitives(Array.isArray(network.primitives) ? network.primitives : []);
+            try {
+                const res = await fetch(`${getApiBase()}/api/networks/${networkSlug}`);
+                const data = await res.json();
+                const network = data.network || {};
+                const topology = normalizeTopology(network.topologyJson);
+                setVersion(network.version ?? 0);
+                setPrimitives(Array.isArray(network.primitives) ? network.primitives : []);
+
+                let initialNodes: Node[] = topology.nodes.map((node: Node, index: number) => ({
+                    ...node,
+                    type: node.type || "agent",
+                    position: node.position || { x: 250, y: index * 140 },
+                    data: {
+                        ...node.data,
+                        label: String(node.data?.label || node.id),
+                        description: String(node.data?.description || node.type || "node"),
+                        stepType: node.type || "agent",
+                        config: (node.data as Record<string, unknown>)?.config || {},
+                        status: "pending"
+                    }
+                }));
+                const initialEdges = topology.edges.map((edge: Edge) => ({
+                    ...edge,
+                    id: edge.id || `edge-${edge.source}-${edge.target}`,
+                    type: edge.type || "temporary",
+                    data: { ...edge.data }
+                }));
+
+                if (!topology.viewport && initialNodes.length > 0) {
+                    initialNodes = applyLayout(initialNodes, initialEdges);
+                }
+
+                if (topology.viewport) {
+                    setSavedViewport(topology.viewport as Viewport);
+                }
+
+                setNodes(initialNodes);
+                setEdges(initialEdges);
+                undoRedo.resetState(initialNodes, initialEdges);
+                lastSavedHash.current = JSON.stringify({
+                    nodes: initialNodes,
+                    edges: initialEdges
+                });
+            } catch (err) {
+                setError(err instanceof Error ? err.message : "Failed to load network");
+            } finally {
+                setLoading(false);
+            }
         };
         fetchNetwork();
-    }, [networkSlug]);
+    }, [networkSlug]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    useEffect(() => {
-        const timeout = setTimeout(async () => {
-            try {
-                setValidationLoading(true);
-                const res = await fetch(`${getApiBase()}/api/networks/validate`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ topologyJson: topology, primitives })
-                });
-                const data = await res.json();
-                setValidationErrors(data.errors || []);
-            } catch {
-                setValidationErrors([]);
-            } finally {
-                setValidationLoading(false);
-            }
-        }, 300);
-
-        return () => clearTimeout(timeout);
-    }, [topology, primitives]);
-
-    const nodeTypes: NodeTypes = useMemo(
-        () => ({
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            workflow: WorkflowNode as any
-        }),
-        []
+    const onConnect = useCallback(
+        (connection: Connection) => {
+            setEdges((eds) => addEdge({ ...connection, type: "temporary", data: {} }, eds));
+            undoRedo.pushState(nodes, edges, "Connect nodes");
+        },
+        [nodes, edges, setEdges, undoRedo]
     );
 
-    const flowNodes = useMemo(() => {
-        return topology.nodes.map((node, index) => ({
-            ...node,
-            position: node.position || { x: 140, y: index * 140 },
-            data: {
-                ...node.data,
-                label: String(node.data?.label || node.id),
-                description: String(node.data?.description || node.type || "node"),
-                status: validationErrors.length > 0 ? "error" : "pending",
-                mapping: (node.data as Record<string, unknown>)?.mapping || {},
-                config: (node.data as Record<string, unknown>)?.config || {}
-            }
-        }));
-    }, [topology.nodes, validationErrors]);
-
-    const flowEdges = useMemo(() => {
-        return topology.edges.map((edge) => {
-            const edgeId = edge.id || `edge-${edge.source}-${edge.target}`;
-            return {
-                ...edge,
-                id: edgeId,
-                type: edge.type || "temporary",
-                data: {
-                    ...edge.data,
-                    label: edge.data?.label || ""
-                }
-            };
-        });
-    }, [topology.edges]);
-
-    const selectedNode = useMemo(
-        () =>
-            selected?.kind === "node" ? flowNodes.find((node) => node.id === selected.id) : null,
-        [selected, flowNodes]
-    );
-
-    const selectedEdge = useMemo(
-        () =>
-            selected?.kind === "link" ? flowEdges.find((edge) => edge.id === selected.id) : null,
-        [selected, flowEdges]
-    );
-
-    useEffect(() => {
-        if (selectedNode) {
-            setMappingDraft(JSON.stringify(selectedNode.data?.mapping || {}, null, 2));
-            setConfigDraft(JSON.stringify(selectedNode.data?.config || {}, null, 2));
-        } else {
-            setMappingDraft("");
-            setConfigDraft("");
-        }
-    }, [selectedNode]);
-
-    const selectedEntityJson = useMemo(() => {
-        if (selectedNode) return selectedNode;
-        if (selectedEdge) return selectedEdge;
-        return null;
-    }, [selectedNode, selectedEdge]);
-
-    useEffect(() => {
-        if (selectedEntityJson) {
-            setJsonDraft(JSON.stringify(selectedEntityJson, null, 2));
-            setJsonError(null);
-        } else {
-            setJsonDraft("");
-        }
-    }, [selectedEntityJson]);
-
-    const outlineSections: OutlineSection[] = useMemo(() => {
-        const search = outlineSearch.trim().toLowerCase();
-        const filterItem = (label: string, description?: string) => {
-            if (!search) return true;
-            return (
-                label.toLowerCase().includes(search) ||
-                (description ? description.toLowerCase().includes(search) : false)
+    const onNodeDragStop = useCallback(
+        (_event: MouseEvent, node: Node) => {
+            setNodes((nds) =>
+                nds.map((n) =>
+                    n.id === node.id ? { ...n, data: { ...n.data, manuallyPositioned: true } } : n
+                )
             );
-        };
+            undoRedo.pushState(nodes, edges, `Move ${node.data?.label || node.id}`);
+        },
+        [nodes, edges, setNodes, undoRedo]
+    );
 
-        const nodeItems = flowNodes.map((node) => ({
-            id: node.id,
-            kind: "node",
-            label: node.data?.label || node.id,
-            description: node.data?.description || node.type || "node",
-            meta: node.id
-        }));
+    const handleDrop = useCallback(
+        (event: DragEvent) => {
+            event.preventDefault();
+            const raw = event.dataTransfer.getData("application/json");
+            if (!raw) return;
 
-        const edgeItems = flowEdges.map((edge) => ({
-            id: edge.id,
-            kind: "link",
-            label: `${edge.source} → ${edge.target}`,
-            description: "link",
-            meta: edge.id
-        }));
+            try {
+                const { type, label, defaultConfig } = JSON.parse(raw);
+                const position = reactFlowInstance.screenToFlowPosition({
+                    x: event.clientX,
+                    y: event.clientY
+                });
 
-        const sections: OutlineSection[] = SECTION_LABELS.map((label) => ({
-            id: label,
-            label,
-            items: [],
-            emptyState: "No items"
-        }));
+                const id = `${type}-${Date.now()}`;
+                const newNode: Node = {
+                    id,
+                    type:
+                        type === "agent" || type === "workflow" || type === "tool" ? type : "agent",
+                    position,
+                    data: {
+                        label: label || type,
+                        description: type,
+                        stepType: type,
+                        config: defaultConfig || {},
+                        status: "pending"
+                    }
+                };
 
-        nodeItems.forEach((item) => {
-            if (!filterItem(item.label, item.description)) return;
-            const node = flowNodes.find((candidate) => candidate.id === item.id);
-            const sectionLabel = node ? categoryForNode(node) : "Actions";
-            const section = sections.find((entry) => entry.label === sectionLabel);
-            section?.items.push(item);
-        });
-
-        edgeItems.forEach((item) => {
-            if (!filterItem(item.label, item.description)) return;
-            const section = sections.find((entry) => entry.label === "Routers");
-            section?.items.push(item);
-        });
-
-        return sections;
-    }, [outlineSearch, flowNodes, flowEdges]);
-
-    const availableTokens = useMemo(() => {
-        const tokens = primitives.map((primitive, index) => {
-            const type = primitive.primitiveType || "primitive";
-            const ref = resolvePrimitiveReference(primitive, index);
-            return `{{${type}:${ref}}}`;
-        });
-        tokens.unshift("{{input}}");
-        tokens.push("{{context}}");
-        return tokens;
-    }, [primitives]);
-
-    const updateNodeData = (nodeId: string, updates: Record<string, unknown>) => {
-        setTopology((prev) => ({
-            ...prev,
-            nodes: prev.nodes.map((node) =>
-                node.id === nodeId
-                    ? {
-                          ...node,
-                          data: {
-                              ...node.data,
-                              ...updates
+                // Auto-connect to router if present
+                const routerNode = nodes.find((n) => n.type === "router");
+                const newEdges = routerNode
+                    ? [
+                          ...edges,
+                          {
+                              id: `edge-${routerNode.id}-${id}`,
+                              source: routerNode.id,
+                              target: id,
+                              type: "temporary" as const,
+                              data: {}
                           }
-                      }
-                    : node
-            )
-        }));
-    };
+                      ]
+                    : edges;
 
-    const saveTopology = async () => {
-        try {
-            setSaving(true);
-            setError(null);
-            const res = await fetch(`${getApiBase()}/api/networks/${networkSlug}`, {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    topologyJson: topology,
-                    primitives
-                })
-            });
-            if (!res.ok) {
-                throw new Error("Failed to save topology");
+                setNodes((nds) => [...nds, newNode]);
+                if (routerNode) setEdges(newEdges);
+                setSelectedNodeId(id);
+                setSelectedEdgeId(null);
+                setInspectorTab("form");
+                undoRedo.pushState([...nodes, newNode], newEdges, `Add ${label}`);
+            } catch {
+                /* ignore */
             }
-        } catch (err) {
-            setError(err instanceof Error ? err.message : "Failed to save topology");
-        } finally {
-            setSaving(false);
-        }
-    };
+        },
+        [nodes, edges, setNodes, setEdges, reactFlowInstance, undoRedo]
+    );
 
-    const generateTopology = async () => {
-        if (!aiPrompt.trim()) return;
-        try {
-            setAiGenerating(true);
-            const res = await fetch(`${getApiBase()}/api/networks/generate`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ prompt: aiPrompt })
-            });
-            const data = await res.json();
-            if (!res.ok) {
-                throw new Error(data.error || "Failed to generate network");
-            }
-            if (!data.validation?.valid) {
-                throw new Error(data.validation?.errors?.join("; ") || "Validation failed");
-            }
-            setTopology(normalizeTopology(data.topologyJson));
-            setPrimitives(Array.isArray(data.primitives) ? data.primitives : []);
-        } finally {
-            setAiGenerating(false);
-        }
-    };
+    const handleNodeClick = useCallback((_event: MouseEvent, node: Node) => {
+        setSelectedNodeId(node.id);
+        setSelectedEdgeId(null);
+        setInspectorTab("form");
+    }, []);
 
-    const handleChatSubmit = async () => {
+    const handleEdgeClick = useCallback((_event: MouseEvent, edge: Edge) => {
+        setSelectedEdgeId(edge.id);
+        setSelectedNodeId(null);
+        setInspectorTab("form");
+    }, []);
+
+    const handlePaneClick = useCallback(() => {
+        setSelectedNodeId(null);
+        setSelectedEdgeId(null);
+        setContextMenu(null);
+    }, []);
+
+    const handleNodeContextMenu = useCallback((event: MouseEvent, node: Node) => {
+        event.preventDefault();
+        setContextMenu({ position: { x: event.clientX, y: event.clientY }, nodeId: node.id });
+    }, []);
+
+    const handleEdgeContextMenu = useCallback((event: MouseEvent, edge: Edge) => {
+        event.preventDefault();
+        setContextMenu({ position: { x: event.clientX, y: event.clientY }, edgeId: edge.id });
+    }, []);
+
+    const handlePaneContextMenu = useCallback((event: MouseEvent) => {
+        event.preventDefault();
+        setContextMenu({ position: { x: event.clientX, y: event.clientY } });
+    }, []);
+
+    const handleDeleteNode = useCallback(
+        (nodeId: string) => {
+            setNodes((nds) => nds.filter((n) => n.id !== nodeId));
+            setEdges((eds) => eds.filter((e) => e.source !== nodeId && e.target !== nodeId));
+            setSelectedNodeId(null);
+            undoRedo.pushState(
+                nodes.filter((n) => n.id !== nodeId),
+                edges.filter((e) => e.source !== nodeId && e.target !== nodeId),
+                "Delete node"
+            );
+        },
+        [nodes, edges, setNodes, setEdges, undoRedo]
+    );
+
+    const handleDeleteEdge = useCallback(
+        (edgeId: string) => {
+            setEdges((eds) => eds.filter((e) => e.id !== edgeId));
+            setSelectedEdgeId(null);
+            undoRedo.pushState(
+                nodes,
+                edges.filter((e) => e.id !== edgeId),
+                "Delete edge"
+            );
+        },
+        [nodes, edges, setEdges, undoRedo]
+    );
+
+    const handleAutoLayout = useCallback(() => {
+        const layouted = applyLayout(nodes, edges);
+        setNodes(layouted);
+        undoRedo.pushState(layouted, edges, "Auto-layout");
+    }, [nodes, edges, setNodes, applyLayout, undoRedo]);
+
+    const handleFitView = useCallback(() => {
+        reactFlowInstance.fitView({ padding: 0.15 });
+    }, [reactFlowInstance]);
+
+    const handleUndo = useCallback(() => {
+        undoRedo.undo();
+        setNodes(undoRedo.currentSnapshot.nodes);
+        setEdges(undoRedo.currentSnapshot.edges);
+    }, [undoRedo, setNodes, setEdges]);
+
+    const handleRedo = useCallback(() => {
+        undoRedo.redo();
+        setNodes(undoRedo.currentSnapshot.nodes);
+        setEdges(undoRedo.currentSnapshot.edges);
+    }, [undoRedo, setNodes, setEdges]);
+
+    const isValidConnection = useCallback(
+        (connection: Connection) => {
+            if (connection.source === connection.target) return false;
+            return !edges.some(
+                (e) => e.source === connection.source && e.target === connection.target
+            );
+        },
+        [edges]
+    );
+
+    const updateNodeConfig = useCallback(
+        (nodeId: string, config: Record<string, unknown>) => {
+            setNodes((nds) =>
+                nds.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, config } } : n))
+            );
+        },
+        [setNodes]
+    );
+
+    const updateNodeData = useCallback(
+        (nodeId: string, updates: Record<string, unknown>) => {
+            setNodes((nds) =>
+                nds.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, ...updates } } : n))
+            );
+        },
+        [setNodes]
+    );
+
+    const updateEdge = useCallback(
+        (edgeId: string, updates: Partial<Edge>) => {
+            setEdges((eds) => eds.map((e) => (e.id === edgeId ? { ...e, ...updates } : e)));
+        },
+        [setEdges]
+    );
+
+    // Chat
+    const handleChatSubmit = useCallback(async () => {
         if (!chatInput.trim()) return;
         try {
             setChatLoading(true);
+            const topologyJson = { nodes, edges };
             const res = await fetch(`${getApiBase()}/api/networks/${networkSlug}/designer-chat`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    prompt: chatInput,
-                    topologyJson: topology,
-                    primitives,
-                    selected
-                })
+                body: JSON.stringify({ prompt: chatInput, topologyJson, primitives })
             });
             const data = await res.json();
-            if (!res.ok) {
-                throw new Error(data.error || "Failed to generate proposal");
-            }
-            const nextNetwork = applyJsonPatch(
-                { topologyJson: topology, primitives },
-                data.patch || []
-            ) as { topologyJson: NetworkTopology; primitives: NetworkPrimitive[] };
-            const proposalId =
-                typeof crypto !== "undefined" && "randomUUID" in crypto
-                    ? crypto.randomUUID()
-                    : `${Date.now()}-${Math.random()}`;
+            if (!res.ok) throw new Error(data.error || "Failed");
+
+            const nextNetwork = applyJsonPatch({ topologyJson, primitives }, data.patch || []);
             const proposal: ChatProposal = {
-                id: proposalId,
+                id: crypto.randomUUID(),
                 summary: data.summary || "Proposed change",
                 patch: data.patch || [],
-                beforeJson: JSON.stringify({ topologyJson: topology, primitives }, null, 2),
+                beforeJson: JSON.stringify({ topologyJson, primitives }, null, 2),
                 afterJson: JSON.stringify(nextNetwork, null, 2),
                 createdAt: new Date().toISOString(),
                 requiresConfirmation: patchTouchesProtectedPaths(data.patch || [], [
@@ -407,456 +474,339 @@ export default function NetworkTopologyPage() {
             setChatProposals((prev) => [proposal, ...prev]);
             setChatInput("");
         } catch (err) {
-            setError(err instanceof Error ? err.message : "Failed to generate proposal");
+            setError(err instanceof Error ? err.message : "Chat failed");
         } finally {
             setChatLoading(false);
         }
-    };
+    }, [chatInput, nodes, edges, primitives, networkSlug]);
 
-    const applyProposal = (proposal: ChatProposal) => {
-        try {
-            const nextNetwork = applyJsonPatch(
-                { topologyJson: topology, primitives },
-                proposal.patch
-            ) as { topologyJson: NetworkTopology; primitives: NetworkPrimitive[] };
-            setHistory((prev) => [{ topology, primitives }, ...prev]);
-            setTopology(normalizeTopology(nextNetwork.topologyJson));
-            setPrimitives(Array.isArray(nextNetwork.primitives) ? nextNetwork.primitives : []);
-            setChatProposals((prev) =>
-                prev.map((item) => (item.id === proposal.id ? { ...item, applied: true } : item))
+    const applyProposal = useCallback(
+        (proposal: ChatProposal) => {
+            try {
+                const topologyJson = { nodes, edges };
+                const nextNetwork = applyJsonPatch(
+                    { topologyJson, primitives },
+                    proposal.patch
+                ) as { topologyJson: NetworkTopology; primitives: NetworkPrimitive[] };
+                const norm = normalizeTopology(nextNetwork.topologyJson);
+                setNodes(norm.nodes);
+                setEdges(norm.edges);
+                setPrimitives(nextNetwork.primitives || primitives);
+                undoRedo.pushState(norm.nodes, norm.edges, `AI: ${proposal.summary}`);
+                setChatProposals((prev) =>
+                    prev.map((p) => (p.id === proposal.id ? { ...p, applied: true } : p))
+                );
+            } catch (err) {
+                setError(err instanceof Error ? err.message : "Apply failed");
+            }
+        },
+        [nodes, edges, primitives, setNodes, setEdges, undoRedo]
+    );
+
+    const shortcuts = useMemo(
+        () => [
+            { key: "z", meta: true, handler: handleUndo },
+            { key: "z", meta: true, shift: true, handler: handleRedo },
+            { key: "s", meta: true, handler: () => saveNow(), guard: "always" as const },
+            { key: "0", meta: true, handler: handleFitView }
+        ],
+        [handleUndo, handleRedo, saveNow, handleFitView]
+    );
+    useKeyboardShortcuts(shortcuts);
+
+    const selectedNode = useMemo(
+        () => (selectedNodeId ? nodes.find((n) => n.id === selectedNodeId) : null),
+        [selectedNodeId, nodes]
+    );
+    const selectedEdge = useMemo(
+        () => (selectedEdgeId ? edges.find((e) => e.id === selectedEdgeId) : null),
+        [selectedEdgeId, edges]
+    );
+
+    const inspectorFormContent = useMemo(() => {
+        if (selectedEdge) {
+            return (
+                <EdgeInspector
+                    edge={selectedEdge}
+                    onUpdate={(updates) => updateEdge(selectedEdge.id, updates)}
+                    onDelete={() => handleDeleteEdge(selectedEdge.id)}
+                />
             );
-        } catch (err) {
-            setError(err instanceof Error ? err.message : "Failed to apply proposal");
         }
-    };
-
-    const undoLastChange = () => {
-        setHistory((prev) => {
-            if (prev.length === 0) return prev;
-            const [latest, ...rest] = prev;
-            setTopology(normalizeTopology(latest.topology));
-            setPrimitives(latest.primitives);
-            return rest;
-        });
-    };
-
-    return (
-        <div className="space-y-4">
-            <div className="flex items-start justify-between">
-                <div>
-                    <h1 className="text-2xl font-semibold">Network Topology</h1>
-                    <p className="text-muted-foreground text-sm">
-                        Design and debug network routing using a unified builder.
-                    </p>
+        if (!selectedNode) {
+            return (
+                <div className="text-muted-foreground text-sm">
+                    Select a node or edge to configure.
                 </div>
-                <div className="flex items-center gap-2">
-                    <Button variant="outline" onClick={saveTopology} disabled={saving}>
-                        {saving ? "Saving..." : "Save topology"}
+            );
+        }
+
+        const nodeType = selectedNode.type;
+        const config = (selectedNode.data?.config as Record<string, unknown>) || {};
+
+        if (nodeType === "router") {
+            return (
+                <RouterInspector
+                    config={config}
+                    onChange={(newConfig) => updateNodeConfig(selectedNode.id, newConfig)}
+                />
+            );
+        }
+
+        return (
+            <div className="space-y-4">
+                <div className="space-y-2">
+                    <Label>Label</Label>
+                    <input
+                        className="border-input bg-background ring-offset-background flex h-9 w-full rounded-md border px-3 py-1 text-sm"
+                        value={(selectedNode.data?.label as string) || ""}
+                        onChange={(e) => updateNodeData(selectedNode.id, { label: e.target.value })}
+                    />
+                </div>
+                <PrimitiveInspector
+                    config={config}
+                    onChange={(newConfig) => updateNodeConfig(selectedNode.id, newConfig)}
+                />
+            </div>
+        );
+    }, [
+        selectedNode,
+        selectedEdge,
+        updateNodeData,
+        updateNodeConfig,
+        updateEdge,
+        handleDeleteEdge
+    ]);
+
+    const jsonTabContent = useMemo(() => {
+        const entity = selectedNode || selectedEdge;
+        if (!entity) return <div className="text-muted-foreground text-sm">Select an element.</div>;
+        return (
+            <Textarea
+                rows={15}
+                value={JSON.stringify(entity, null, 2)}
+                readOnly
+                className="font-mono text-xs"
+            />
+        );
+    }, [selectedNode, selectedEdge]);
+
+    const chatTabContent = useMemo(
+        () => (
+            <div className="space-y-4">
+                <div className="space-y-2">
+                    <Label>Ask the builder</Label>
+                    <Textarea
+                        rows={3}
+                        value={chatInput}
+                        onChange={(e) => setChatInput(e.target.value)}
+                        placeholder="Describe changes to the network..."
+                    />
+                    <Button
+                        onClick={handleChatSubmit}
+                        disabled={chatLoading || !chatInput.trim()}
+                        size="sm"
+                    >
+                        {chatLoading ? "Thinking..." : "Propose change"}
                     </Button>
                 </div>
-            </div>
-
-            <BuilderShell
-                outline={
-                    <OutlinePanel
-                        title="Outline"
-                        searchValue={outlineSearch}
-                        onSearchChange={setOutlineSearch}
-                        searchPlaceholder="Search nodes..."
-                        sections={outlineSections}
-                        selected={selected}
-                        onSelect={setSelection}
-                        headerActions={
-                            validationLoading ? (
-                                <Badge variant="secondary" className="text-[10px]">
-                                    Validating
-                                </Badge>
-                            ) : validationErrors.length > 0 ? (
-                                <Badge variant="destructive" className="text-[10px]">
-                                    {validationErrors.length} issues
-                                </Badge>
+                {chatProposals.map((proposal) => (
+                    <div key={proposal.id} className="space-y-2 rounded border p-3">
+                        <div className="flex items-start justify-between gap-2">
+                            <div className="text-sm font-semibold">{proposal.summary}</div>
+                            {proposal.applied ? (
+                                <Badge variant="outline">Applied</Badge>
                             ) : (
-                                <Badge variant="outline" className="text-[10px]">
-                                    Valid
-                                </Badge>
-                            )
-                        }
-                        footer={
-                            history.length > 0 ? (
-                                <Button variant="ghost" onClick={undoLastChange}>
-                                    Undo last change
+                                <Button size="sm" onClick={() => applyProposal(proposal)}>
+                                    Apply
                                 </Button>
-                            ) : null
-                        }
+                            )}
+                        </div>
+                    </div>
+                ))}
+            </div>
+        ),
+        [chatInput, chatLoading, chatProposals, handleChatSubmit, applyProposal]
+    );
+
+    if (loading) {
+        return (
+            <div className="flex h-[calc(100dvh-64px)] items-center justify-center">
+                <div className="text-muted-foreground animate-pulse text-sm">
+                    Loading network...
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <>
+            <UnsavedChangesGuard isDirty={isDirty.current} />
+            {contextMenu && (
+                <CanvasContextMenu
+                    position={contextMenu.position}
+                    onClose={() => setContextMenu(null)}
+                    items={
+                        contextMenu.nodeId
+                            ? [
+                                  {
+                                      label: "Edit",
+                                      onClick: () => {
+                                          setSelectedNodeId(contextMenu.nodeId!);
+                                          setInspectorTab("form");
+                                      }
+                                  },
+                                  {
+                                      label: "Duplicate",
+                                      shortcut: "\u2318D",
+                                      onClick: () => {
+                                          const node = nodes.find(
+                                              (n) => n.id === contextMenu.nodeId
+                                          );
+                                          if (!node) return;
+                                          const id = `${node.type}-${Date.now()}`;
+                                          const newNode: Node = {
+                                              ...node,
+                                              id,
+                                              position: {
+                                                  x: node.position.x + 30,
+                                                  y: node.position.y + 30
+                                              }
+                                          };
+                                          setNodes((nds) => [...nds, newNode]);
+                                          undoRedo.pushState(
+                                              [...nodes, newNode],
+                                              edges,
+                                              "Duplicate node"
+                                          );
+                                      }
+                                  },
+                                  { label: "", onClick: () => {}, separator: true },
+                                  {
+                                      label: "Delete",
+                                      shortcut: "\u232B",
+                                      destructive: true,
+                                      disabled:
+                                          nodes.find((n) => n.id === contextMenu.nodeId)?.type ===
+                                          "router",
+                                      onClick: () => handleDeleteNode(contextMenu.nodeId!)
+                                  }
+                              ]
+                            : contextMenu.edgeId
+                              ? [
+                                    {
+                                        label: "Edit",
+                                        onClick: () => {
+                                            setSelectedEdgeId(contextMenu.edgeId!);
+                                            setInspectorTab("form");
+                                        }
+                                    },
+                                    { label: "", onClick: () => {}, separator: true },
+                                    {
+                                        label: "Delete Edge",
+                                        destructive: true,
+                                        onClick: () => handleDeleteEdge(contextMenu.edgeId!)
+                                    }
+                                ]
+                              : [
+                                    {
+                                        label: "Auto-layout",
+                                        shortcut: "\u2318\u21E7L",
+                                        onClick: handleAutoLayout
+                                    },
+                                    {
+                                        label: "Fit to View",
+                                        shortcut: "\u23180",
+                                        onClick: handleFitView
+                                    }
+                                ]
+                    }
+                />
+            )}
+            <BuilderShell
+                toolbar={
+                    <BuilderToolbar
+                        title="Network Topology"
+                        subtitle={networkSlug}
+                        saveStatus={saveStatus}
+                        onSave={saveNow}
+                        onUndo={handleUndo}
+                        onRedo={handleRedo}
+                        canUndo={undoRedo.canUndo}
+                        canRedo={undoRedo.canRedo}
+                        onAutoLayout={handleAutoLayout}
+                        onFitView={handleFitView}
+                        onTogglePalette={() => setPaletteOpen((p) => !p)}
+                        paletteOpen={paletteOpen}
                     />
                 }
+                palette={<NodePalette items={networkPaletteItems} />}
+                defaultPaletteOpen={paletteOpen}
                 canvas={
-                    <WorkflowCanvas
-                        nodes={flowNodes}
-                        edges={flowEdges}
-                        nodeTypes={nodeTypes}
+                    <BuilderCanvas
+                        nodes={nodes}
+                        edges={edges}
+                        onNodesChange={onNodesChange}
+                        onEdgesChange={onEdgesChange}
+                        onConnect={onConnect}
+                        onNodeDragStop={onNodeDragStop}
+                        onDrop={handleDrop}
+                        onNodeClick={handleNodeClick}
+                        onEdgeClick={handleEdgeClick}
+                        onPaneClick={handlePaneClick}
+                        onNodeContextMenu={handleNodeContextMenu}
+                        onEdgeContextMenu={handleEdgeContextMenu}
+                        onPaneContextMenu={handlePaneContextMenu}
+                        isValidConnection={isValidConnection}
+                        nodeTypes={builderNodeTypes}
                         edgeTypes={workflowEdgeTypes}
-                        className="h-full"
-                        showMiniMap
-                        showBackground
-                        panOnScroll
-                        zoomOnScroll
-                        onNodeClick={(_, node) => setSelection({ kind: "node", id: node.id })}
-                        onEdgeClick={(_, edge) => setSelection({ kind: "link", id: edge.id })}
-                        selectedNodeIds={selected?.kind === "node" ? [selected.id] : []}
-                        selectedEdgeIds={selected?.kind === "link" ? [selected.id] : []}
+                        defaultViewport={savedViewport}
                     />
                 }
                 inspector={
-                    <div className="flex h-full flex-col">
-                        <div className="border-b p-3">
-                            <div className="flex items-start justify-between gap-2">
-                                <div>
-                                    <div className="text-sm font-semibold">
-                                        {selectedNode?.data?.label ||
-                                            selectedEdge?.id ||
-                                            "Select an item"}
-                                    </div>
-                                    <div className="text-muted-foreground text-xs">
-                                        {selectedNode
-                                            ? "Node"
-                                            : selectedEdge
-                                              ? "Link"
-                                              : "No selection"}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="flex-1 overflow-y-auto p-3">
-                            {error && (
-                                <div className="mb-3 rounded border border-red-500/40 bg-red-500/10 p-2 text-xs text-red-500">
-                                    {error}
-                                </div>
-                            )}
-
-                            <Tabs
-                                defaultValue="details"
-                                value={inspectorTab}
-                                onValueChange={setInspectorTab}
-                            >
-                                <TabsList className="mb-3 w-full">
-                                    <TabsTrigger value="details">Details</TabsTrigger>
-                                    <TabsTrigger value="mappings">Mappings</TabsTrigger>
-                                    <TabsTrigger value="config">Config</TabsTrigger>
-                                    <TabsTrigger value="json">JSON</TabsTrigger>
-                                    <TabsTrigger value="chat">Chat</TabsTrigger>
-                                </TabsList>
-
-                                <TabsContent value="details" className="space-y-4">
-                                    {selectedNode ? (
-                                        <div className="space-y-4">
-                                            <div className="space-y-2">
-                                                <Label>Node label</Label>
-                                                <Input
-                                                    value={selectedNode.data?.label || ""}
-                                                    onChange={(event) =>
-                                                        updateNodeData(selectedNode.id, {
-                                                            label: event.target.value
-                                                        })
-                                                    }
-                                                />
-                                            </div>
-                                            <div className="space-y-1 text-xs">
-                                                <div className="text-muted-foreground">Node ID</div>
-                                                <div className="flex items-center justify-between gap-2">
-                                                    <code className="text-xs">
-                                                        {selectedNode.id}
-                                                    </code>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        onClick={() =>
-                                                            navigator.clipboard.writeText(
-                                                                selectedNode.id
-                                                            )
-                                                        }
-                                                    >
-                                                        Copy
-                                                    </Button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ) : selectedEdge ? (
-                                        <div className="space-y-3 text-sm">
-                                            <div>
-                                                <div className="text-muted-foreground text-xs">
-                                                    Link ID
-                                                </div>
-                                                <div className="font-medium">{selectedEdge.id}</div>
-                                            </div>
-                                            <div>
-                                                <div className="text-muted-foreground text-xs">
-                                                    Source
-                                                </div>
-                                                <div className="font-medium">
-                                                    {selectedEdge.source}
-                                                </div>
-                                            </div>
-                                            <div>
-                                                <div className="text-muted-foreground text-xs">
-                                                    Target
-                                                </div>
-                                                <div className="font-medium">
-                                                    {selectedEdge.target}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <div className="text-muted-foreground text-sm">
-                                            Select a node or link to view details.
-                                        </div>
-                                    )}
-                                </TabsContent>
-
-                                <TabsContent value="mappings" className="space-y-3">
-                                    {selectedNode ? (
-                                        <div className="grid gap-3 md:grid-cols-3">
-                                            <div className="rounded border p-2">
-                                                <div className="text-muted-foreground mb-2 text-xs font-semibold uppercase">
-                                                    Available Data
-                                                </div>
-                                                <div className="space-y-1">
-                                                    {availableTokens.map((token) => (
-                                                        <Button
-                                                            key={token}
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            className="w-full justify-start text-xs"
-                                                            onClick={() =>
-                                                                navigator.clipboard.writeText(token)
-                                                            }
-                                                        >
-                                                            {token}
-                                                        </Button>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                            <div className="rounded border p-2 md:col-span-2">
-                                                <div className="text-muted-foreground mb-2 text-xs font-semibold uppercase">
-                                                    Mapping Rules
-                                                </div>
-                                                <Textarea
-                                                    rows={10}
-                                                    value={mappingDraft}
-                                                    onChange={(event) => {
-                                                        setMappingDraft(event.target.value);
-                                                        const parsed = tryParseJson(
-                                                            event.target.value
-                                                        );
-                                                        if (!parsed.error) {
-                                                            updateNodeData(selectedNode.id, {
-                                                                mapping: parsed.value
-                                                            });
-                                                        }
-                                                    }}
-                                                />
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <div className="text-muted-foreground text-sm">
-                                            Select a node to edit mappings.
-                                        </div>
-                                    )}
-                                </TabsContent>
-
-                                <TabsContent value="config" className="space-y-3">
-                                    {selectedNode ? (
-                                        <Textarea
-                                            rows={10}
-                                            value={configDraft}
-                                            onChange={(event) => {
-                                                setConfigDraft(event.target.value);
-                                                const parsed = tryParseJson(event.target.value);
-                                                if (!parsed.error) {
-                                                    updateNodeData(selectedNode.id, {
-                                                        config: parsed.value
-                                                    });
-                                                }
-                                            }}
-                                        />
-                                    ) : (
-                                        <div className="text-muted-foreground text-sm">
-                                            Select a node to edit config.
-                                        </div>
-                                    )}
-                                </TabsContent>
-
-                                <TabsContent value="json" className="space-y-3">
-                                    <div className="flex items-center justify-between">
-                                        <div className="text-sm font-medium">Power mode</div>
-                                        <Switch
-                                            checked={jsonPowerMode}
-                                            onCheckedChange={setJsonPowerMode}
-                                            size="sm"
-                                        />
-                                    </div>
-                                    {jsonError && (
-                                        <div className="text-destructive text-xs">{jsonError}</div>
-                                    )}
-                                    <Textarea
-                                        rows={12}
-                                        value={jsonDraft}
-                                        onChange={(event) => setJsonDraft(event.target.value)}
-                                        disabled={!jsonPowerMode}
-                                    />
-                                    {jsonPowerMode && selectedNode && (
-                                        <Button
-                                            onClick={() => {
-                                                try {
-                                                    const parsed = JSON.parse(jsonDraft);
-                                                    updateNodeData(
-                                                        selectedNode.id,
-                                                        parsed.data || {}
-                                                    );
-                                                    setJsonError(null);
-                                                } catch {
-                                                    setJsonError("Invalid JSON");
-                                                }
-                                            }}
-                                        >
-                                            Apply JSON
-                                        </Button>
-                                    )}
-                                </TabsContent>
-
-                                <TabsContent value="chat" className="space-y-4">
-                                    <div className="space-y-2">
-                                        <Label>Ask the builder</Label>
-                                        <Textarea
-                                            rows={3}
-                                            value={chatInput}
-                                            onChange={(event) => setChatInput(event.target.value)}
-                                            placeholder="Example: Add a router node between intake and ops."
-                                        />
-                                        <Button
-                                            onClick={handleChatSubmit}
-                                            disabled={chatLoading || !chatInput.trim()}
-                                        >
-                                            {chatLoading ? "Thinking..." : "Propose change"}
-                                        </Button>
-                                    </div>
-
-                                    <div className="space-y-3">
-                                        {chatProposals.length === 0 ? (
-                                            <div className="text-muted-foreground text-sm">
-                                                Proposals will appear here after you ask for
-                                                changes.
-                                            </div>
-                                        ) : (
-                                            chatProposals.map((proposal) => {
-                                                const confirmed =
-                                                    confirmedProposals[proposal.id] || false;
-                                                return (
-                                                    <div
-                                                        key={proposal.id}
-                                                        className="rounded border p-3"
-                                                    >
-                                                        <div className="flex items-start justify-between gap-2">
-                                                            <div>
-                                                                <div className="text-sm font-semibold">
-                                                                    {proposal.summary}
-                                                                </div>
-                                                                <div className="text-muted-foreground text-xs">
-                                                                    {new Date(
-                                                                        proposal.createdAt
-                                                                    ).toLocaleString()}
-                                                                </div>
-                                                            </div>
-                                                            {proposal.applied ? (
-                                                                <Badge variant="outline">
-                                                                    Applied
-                                                                </Badge>
-                                                            ) : (
-                                                                <Button
-                                                                    size="sm"
-                                                                    disabled={
-                                                                        proposal.requiresConfirmation &&
-                                                                        !confirmed
-                                                                    }
-                                                                    onClick={() =>
-                                                                        applyProposal(proposal)
-                                                                    }
-                                                                >
-                                                                    Apply
-                                                                </Button>
-                                                            )}
-                                                        </div>
-
-                                                        {proposal.requiresConfirmation && (
-                                                            <div className="mt-2 flex items-center justify-between rounded border border-amber-500/40 bg-amber-500/10 p-2 text-xs">
-                                                                <span>
-                                                                    This change touches protected
-                                                                    fields.
-                                                                </span>
-                                                                <Button
-                                                                    size="sm"
-                                                                    variant="outline"
-                                                                    onClick={() =>
-                                                                        setConfirmedProposals(
-                                                                            (prev) => ({
-                                                                                ...prev,
-                                                                                [proposal.id]: true
-                                                                            })
-                                                                        )
-                                                                    }
-                                                                >
-                                                                    Confirm
-                                                                </Button>
-                                                            </div>
-                                                        )}
-
-                                                        <div className="mt-3 grid gap-3 md:grid-cols-2">
-                                                            <div>
-                                                                <div className="text-muted-foreground mb-1 text-xs">
-                                                                    Before
-                                                                </div>
-                                                                <pre className="bg-muted/40 max-h-40 overflow-auto rounded p-2 text-[10px]">
-                                                                    {proposal.beforeJson}
-                                                                </pre>
-                                                            </div>
-                                                            <div>
-                                                                <div className="text-muted-foreground mb-1 text-xs">
-                                                                    After
-                                                                </div>
-                                                                <pre className="bg-muted/40 max-h-40 overflow-auto rounded p-2 text-[10px]">
-                                                                    {proposal.afterJson}
-                                                                </pre>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })
-                                        )}
-                                    </div>
-
-                                    <div className="space-y-2 border-t pt-3">
-                                        <Label>Generate with AI</Label>
-                                        <Textarea
-                                            rows={3}
-                                            value={aiPrompt}
-                                            onChange={(event) => setAiPrompt(event.target.value)}
-                                            placeholder="Describe the network you want..."
-                                        />
-                                        <Button
-                                            variant="outline"
-                                            onClick={generateTopology}
-                                            disabled={aiGenerating || !aiPrompt.trim()}
-                                        >
-                                            {aiGenerating ? "Generating..." : "Generate topology"}
-                                        </Button>
-                                    </div>
-                                </TabsContent>
-                            </Tabs>
-                        </div>
-                    </div>
+                    <InspectorPanel
+                        title={
+                            selectedNode
+                                ? (selectedNode.data?.label as string) || selectedNode.id
+                                : selectedEdge
+                                  ? `${selectedEdge.source} → ${selectedEdge.target}`
+                                  : "No selection"
+                        }
+                        subtitle={
+                            selectedNode
+                                ? selectedNode.type || "Node"
+                                : selectedEdge
+                                  ? "Connection"
+                                  : undefined
+                        }
+                        onDelete={
+                            selectedNode && selectedNode.type !== "router"
+                                ? () => handleDeleteNode(selectedNode.id)
+                                : selectedEdge
+                                  ? () => handleDeleteEdge(selectedEdge.id)
+                                  : undefined
+                        }
+                        activeTab={inspectorTab}
+                        onTabChange={setInspectorTab}
+                        formTab={inspectorFormContent}
+                        jsonTab={jsonTabContent}
+                        chatTab={chatTabContent}
+                        footer={
+                            error ? (
+                                <div className="text-destructive text-xs">{error}</div>
+                            ) : undefined
+                        }
+                    />
                 }
             />
-        </div>
+        </>
+    );
+}
+
+export default function NetworkTopologyPage() {
+    return (
+        <ReactFlowProvider>
+            <NetworkTopologyPageInner />
+        </ReactFlowProvider>
     );
 }
