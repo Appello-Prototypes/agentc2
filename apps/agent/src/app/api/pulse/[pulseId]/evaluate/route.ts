@@ -58,7 +58,7 @@ export async function POST(
         }
 
         const metrics = pulse.metricsConfig as MetricsConfig;
-        const reward = pulse.rewardConfig as RewardConfig;
+        const reward = pulse.rewardConfig as unknown as RewardConfig;
 
         const windowEnd = new Date();
         const windowStart = new Date(windowEnd.getTime() - pulse.evalWindowDays * 86400000);
