@@ -5615,16 +5615,17 @@ model EmbedDeployment {
 // ---------------------------------------------------------------------------
 
 model Pulse {
-    id          String      @id @default(cuid())
-    slug        String      @unique
+    id          String          @id @default(cuid())
+    slug        String          @unique
     name        String
-    goal        String      @db.Text
-    description String?     @db.Text
-    status      PulseStatus @default(ACTIVE)
+    goal        String          @db.Text
+    description String?         @db.Text
+    status      PulseStatus     @default(ACTIVE)
     tenantId    String?
     workspaceId String?
-    workspace   Workspace?  @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+    workspace   Workspace?      @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
     createdBy   String?
+    visibility  AgentVisibility @default(ORGANIZATION)
 
     metricsConfig Json
     rewardConfig  Json

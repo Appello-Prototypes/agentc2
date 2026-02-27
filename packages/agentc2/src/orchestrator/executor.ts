@@ -1,9 +1,6 @@
 import { getOrchestratorAgent } from "./agent";
 import { goalStore, Goal, GoalScore } from "./store";
-function evaluateHelpfulness(
-    input: string,
-    output: string
-): { score: number; reasoning: string } {
+function evaluateHelpfulness(input: string, output: string): { score: number; reasoning: string } {
     let score = 0.5;
     const reasoning: string[] = [];
     const actionWords = ["here's how", "follow these steps", "you can", "try this", "to do this"];
@@ -11,11 +8,7 @@ function evaluateHelpfulness(
         score += 0.2;
         reasoning.push("Contains actionable guidance");
     }
-    if (
-        output.includes("example") ||
-        output.includes("for instance") ||
-        output.includes("```")
-    ) {
+    if (output.includes("example") || output.includes("for instance") || output.includes("```")) {
         score += 0.15;
         reasoning.push("Includes examples or code");
     }

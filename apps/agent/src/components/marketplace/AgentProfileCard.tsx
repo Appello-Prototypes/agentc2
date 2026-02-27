@@ -152,7 +152,6 @@ export function AgentProfileCard({ snapshot, isEntryPoint }: AgentProfileCardPro
                     </div>
                 )}
 
-
                 <div>
                     <button
                         onClick={() => setInstructionsExpanded(!instructionsExpanded)}

@@ -31,9 +31,11 @@ export async function GET(request: NextRequest) {
                   }
                 : {};
 
+        const pulseId = searchParams.get("pulseId");
+
         const accessibleBoards = await prisma.communityBoard.findMany({
             where: {
-                OR: [{ scope: "global" }, { organizationId }]
+                ...(pulseId ? { pulseId } : { OR: [{ scope: "global" }, { organizationId }] })
             },
             select: { id: true }
         });

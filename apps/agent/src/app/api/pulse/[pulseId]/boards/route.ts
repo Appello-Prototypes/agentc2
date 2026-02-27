@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
-import { requireAuth } from "@/lib/authz";
+import { requireAuth, requirePulseAccess } from "@/lib/authz";
 
 function generateSlug(name: string): string {
     return name
@@ -16,8 +16,12 @@ export async function GET(
     try {
         const auth = await requireAuth(request);
         if (auth.response) return auth.response;
+        const { userId, organizationId } = auth.context;
 
         const { pulseId } = await params;
+
+        const access = await requirePulseAccess(pulseId, userId, organizationId);
+        if (access.response) return access.response;
 
         const boards = await prisma.communityBoard.findMany({
             where: { pulseId },
@@ -51,8 +55,12 @@ export async function POST(
     try {
         const auth = await requireAuth(request);
         if (auth.response) return auth.response;
+        const { userId, organizationId } = auth.context;
 
         const { pulseId } = await params;
+
+        const access = await requirePulseAccess(pulseId, userId, organizationId);
+        if (access.response) return access.response;
         const body = await request.json();
         const { name, description, culturePrompt } = body;
 

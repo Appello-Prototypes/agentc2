@@ -15,9 +15,12 @@ export async function GET(request: NextRequest) {
         if (auth.response) return auth.response;
         const { organizationId } = auth.context;
 
+        const { searchParams } = new URL(request.url);
+        const pulseId = searchParams.get("pulseId");
+
         const boards = await prisma.communityBoard.findMany({
             where: {
-                OR: [{ scope: "global" }, { organizationId }]
+                ...(pulseId ? { pulseId } : { OR: [{ scope: "global" }, { organizationId }] })
             },
             include: {
                 _count: { select: { posts: true, members: true } }

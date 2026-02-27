@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
 import { requireAuth } from "@/lib/authz";
+import { getDefaultWorkspaceIdForUser } from "@/lib/organization";
 
 function generateSlug(name: string): string {
     return name
@@ -13,13 +14,19 @@ export async function GET(request: NextRequest) {
     try {
         const auth = await requireAuth(request);
         if (auth.response) return auth.response;
+        const { userId, organizationId } = auth.context;
 
         const searchParams = request.nextUrl.searchParams;
         const status = searchParams.get("status");
 
         const pulses = await prisma.pulse.findMany({
             where: {
-                ...(status ? { status: status as "ACTIVE" | "PAUSED" | "ARCHIVED" } : {})
+                ...(status ? { status: status as "ACTIVE" | "PAUSED" | "ARCHIVED" } : {}),
+                OR: [
+                    { visibility: "ORGANIZATION", workspace: { organizationId } },
+                    { visibility: "PRIVATE", createdBy: userId },
+                    { visibility: "PUBLIC" }
+                ]
             },
             include: {
                 _count: { select: { members: true, boards: true, evaluations: true } }
@@ -51,6 +58,14 @@ export async function POST(request: NextRequest) {
         if (auth.response) return auth.response;
         const { userId } = auth.context;
 
+        const workspaceId = await getDefaultWorkspaceIdForUser(userId);
+        if (!workspaceId) {
+            return NextResponse.json(
+                { success: false, error: "No workspace found for user" },
+                { status: 400 }
+            );
+        }
+
         const body = await request.json();
         const {
             name,
@@ -61,7 +76,8 @@ export async function POST(request: NextRequest) {
             evalCronExpr,
             evalTimezone,
             evalWindowDays,
-            reportConfig
+            reportConfig,
+            visibility
         } = body;
 
         if (!name || !goal) {
@@ -84,6 +100,8 @@ export async function POST(request: NextRequest) {
                 name,
                 goal,
                 description: description ?? null,
+                workspaceId,
+                visibility: visibility ?? "ORGANIZATION",
                 metricsConfig: metricsConfig ?? {
                     communityPosts: 3,
                     communityComments: 2,

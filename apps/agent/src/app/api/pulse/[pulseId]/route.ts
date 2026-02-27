@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
-import { requireAuth } from "@/lib/authz";
+import { requireAuth, requirePulseAccess } from "@/lib/authz";
 
 export async function GET(
     request: NextRequest,
@@ -9,8 +9,12 @@ export async function GET(
     try {
         const auth = await requireAuth(request);
         if (auth.response) return auth.response;
+        const { userId, organizationId } = auth.context;
 
         const { pulseId } = await params;
+
+        const access = await requirePulseAccess(pulseId, userId, organizationId);
+        if (access.response) return access.response;
 
         const pulse = await prisma.pulse.findUnique({
             where: { id: pulseId },
@@ -58,8 +62,13 @@ export async function PUT(
     try {
         const auth = await requireAuth(request);
         if (auth.response) return auth.response;
+        const { userId, organizationId } = auth.context;
 
         const { pulseId } = await params;
+
+        const access = await requirePulseAccess(pulseId, userId, organizationId);
+        if (access.response) return access.response;
+
         const body = await request.json();
 
         const {
@@ -72,7 +81,8 @@ export async function PUT(
             evalCronExpr,
             evalTimezone,
             evalWindowDays,
-            reportConfig
+            reportConfig,
+            visibility
         } = body;
 
         const pulse = await prisma.pulse.update({
@@ -87,7 +97,8 @@ export async function PUT(
                 ...(evalCronExpr !== undefined && { evalCronExpr }),
                 ...(evalTimezone !== undefined && { evalTimezone }),
                 ...(evalWindowDays !== undefined && { evalWindowDays }),
-                ...(reportConfig !== undefined && { reportConfig })
+                ...(reportConfig !== undefined && { reportConfig }),
+                ...(visibility !== undefined && { visibility })
             }
         });
 
@@ -108,8 +119,12 @@ export async function DELETE(
     try {
         const auth = await requireAuth(request);
         if (auth.response) return auth.response;
+        const { userId, organizationId } = auth.context;
 
         const { pulseId } = await params;
+
+        const access = await requirePulseAccess(pulseId, userId, organizationId);
+        if (access.response) return access.response;
 
         await prisma.pulse.delete({ where: { id: pulseId } });
 

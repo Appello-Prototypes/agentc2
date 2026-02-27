@@ -77,4 +77,3 @@ export const mockAgentWithTools = {
         { id: "tool-2", toolId: "calculator", config: {} }
     ]
 };
-

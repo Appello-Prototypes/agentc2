@@ -269,4 +269,3 @@ Please help the user with their request. Keep responses concise (2-4 sentences) 
         );
     }
 }
-
