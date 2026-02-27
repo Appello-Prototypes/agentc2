@@ -34,20 +34,14 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
         }
 
-        const organizationId = authContext.organizationId;
-        if (!organizationId) {
-            return NextResponse.json(
-                { success: false, error: "Organization membership required" },
-                { status: 403 }
-            );
-        }
+        const { userId, organizationId } = authContext;
 
         const [providers, connections] = await Promise.all([
             getIntegrationProviders(),
             prisma.integrationConnection.findMany({
                 where: {
                     organizationId,
-                    OR: [{ scope: "org" }, { scope: "user", userId: authContext.userId }]
+                    OR: [{ scope: "org" }, { scope: "user", userId }]
                 },
                 include: { provider: true },
                 orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }]
@@ -237,10 +231,10 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
         }
 
-        const organizationId = authContext.organizationId;
+        const { userId, organizationId } = authContext;
 
         const membership = await prisma.membership.findFirst({
-            where: { userId: authContext.userId, organizationId }
+            where: { userId, organizationId }
         });
         if (!membership || !["owner", "admin"].includes(membership.role)) {
             return NextResponse.json(

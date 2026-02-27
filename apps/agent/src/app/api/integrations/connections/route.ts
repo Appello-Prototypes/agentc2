@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
         }
 
-        const organizationId = authContext.organizationId;
+        const { userId, organizationId } = authContext;
 
         const { searchParams } = new URL(request.url);
         const providerKey = searchParams.get("providerKey");
@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
                 organizationId,
                 ...(providerKey ? { provider: { key: providerKey } } : {}),
                 ...(scopeFilter ? { scope: scopeFilter } : {}),
-                OR: [{ scope: "org" }, { scope: "user", userId: authContext.userId }]
+                OR: [{ scope: "org" }, { scope: "user", userId }]
             },
             include: { provider: true },
             orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }]
@@ -91,15 +91,15 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
     try {
-        const authContext = await authenticateRequest(request);
-        if (!authContext) {
+        const authResult = await authenticateRequest(request);
+        if (!authResult) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
         }
 
-        const organizationId = authContext.organizationId;
+        const { userId, organizationId } = authResult;
 
         const membership = await prisma.membership.findFirst({
-            where: { userId: authContext.userId, organizationId }
+            where: { userId, organizationId }
         });
         if (!membership || !["owner", "admin"].includes(membership.role)) {
             return NextResponse.json(
@@ -133,7 +133,7 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const connectionUserId = scope === "user" ? authContext.userId : null;
+        const connectionUserId = scope === "user" ? userId : null;
 
         if (isDefault) {
             await prisma.integrationConnection.updateMany({
@@ -166,7 +166,7 @@ export async function POST(request: NextRequest) {
             include: { provider: true }
         });
 
-        await auditLog.integrationCreate(connection.id, authContext.userId, organizationId, {
+        await auditLog.integrationCreate(connection.id, userId, organizationId, {
             providerKey: provider.key,
             scope,
             name
@@ -190,7 +190,7 @@ export async function POST(request: NextRequest) {
                 if (workspace) {
                     provisionResult = await provisionIntegration(connection.id, {
                         workspaceId: workspace.id,
-                        userId: authContext.userId
+                        userId
                     });
                     console.log(
                         `[Integrations] Auto-provisioned ${provider.key}: ` +

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { headers, cookies } from "next/headers";
-import { auth } from "@repo/auth";
+import { cookies } from "next/headers";
 import { prisma } from "@repo/database";
+import { requireUser } from "@/lib/authz/require-auth";
 
 /**
  * DELETE /api/user/sessions/[sessionId]
@@ -13,25 +13,20 @@ export async function DELETE(
     { params }: { params: Promise<{ sessionId: string }> }
 ) {
     try {
-        const session = await auth.api.getSession({
-            headers: await headers()
-        });
+        const authResult = await requireUser();
+        if (authResult.response) return authResult.response;
 
-        if (!session?.user) {
-            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
-        }
+        const { userId } = authResult.context;
 
         const { sessionId } = await params;
 
-        // Get current session token from cookies
         const cookieStore = await cookies();
         const currentToken = cookieStore.get("better-auth.session_token")?.value;
 
-        // Find the session to delete
         const targetSession = await prisma.session.findFirst({
             where: {
                 id: sessionId,
-                userId: session.user.id
+                userId
             }
         });
 

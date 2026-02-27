@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { headers } from "next/headers";
-import { auth } from "@repo/auth";
 import { prisma } from "@repo/database";
 import { compare, hash } from "bcryptjs";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { RATE_LIMIT_POLICIES } from "@/lib/security/rate-limit-policy";
+import { requireUser } from "@/lib/authz/require-auth";
 
 /**
  * POST /api/user/password
@@ -13,17 +12,12 @@ import { RATE_LIMIT_POLICIES } from "@/lib/security/rate-limit-policy";
  */
 export async function POST(request: NextRequest) {
     try {
-        const session = await auth.api.getSession({
-            headers: await headers()
-        });
+        const authResult = await requireUser();
+        if (authResult.response) return authResult.response;
 
-        if (!session?.user) {
-            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
-        }
-        const rate = await checkRateLimit(
-            `password-change:${session.user.id}`,
-            RATE_LIMIT_POLICIES.auth
-        );
+        const { userId } = authResult.context;
+
+        const rate = await checkRateLimit(`password-change:${userId}`, RATE_LIMIT_POLICIES.auth);
         if (!rate.allowed) {
             return NextResponse.json(
                 { success: false, error: "Rate limit exceeded" },
@@ -56,10 +50,9 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Get the user's account with password
         const account = await prisma.account.findFirst({
             where: {
-                userId: session.user.id,
+                userId,
                 providerId: "credential"
             }
         });

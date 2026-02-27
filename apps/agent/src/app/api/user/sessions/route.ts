@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { headers, cookies } from "next/headers";
-import { auth } from "@repo/auth";
+import { cookies } from "next/headers";
 import { prisma } from "@repo/database";
+import { requireUser } from "@/lib/authz/require-auth";
 
 /**
  * GET /api/user/sessions
@@ -10,21 +10,17 @@ import { prisma } from "@repo/database";
  */
 export async function GET() {
     try {
-        const session = await auth.api.getSession({
-            headers: await headers()
-        });
+        const authResult = await requireUser();
+        if (authResult.response) return authResult.response;
 
-        if (!session?.user) {
-            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
-        }
+        const { userId } = authResult.context;
 
-        // Get current session token from cookies
         const cookieStore = await cookies();
         const currentToken = cookieStore.get("better-auth.session_token")?.value;
 
         const sessions = await prisma.session.findMany({
             where: {
-                userId: session.user.id,
+                userId,
                 expiresAt: { gt: new Date() }
             },
             orderBy: { createdAt: "desc" },
@@ -68,22 +64,17 @@ export async function GET() {
  */
 export async function DELETE() {
     try {
-        const session = await auth.api.getSession({
-            headers: await headers()
-        });
+        const authResult = await requireUser();
+        if (authResult.response) return authResult.response;
 
-        if (!session?.user) {
-            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
-        }
+        const { userId } = authResult.context;
 
-        // Get current session token from cookies
         const cookieStore = await cookies();
         const currentToken = cookieStore.get("better-auth.session_token")?.value;
 
-        // Delete all sessions except current
         const result = await prisma.session.deleteMany({
             where: {
-                userId: session.user.id,
+                userId,
                 token: { not: currentToken }
             }
         });

@@ -1,10 +1,8 @@
 import { NextResponse } from "next/server";
-import { headers } from "next/headers";
-import { auth } from "@repo/auth";
 import { prisma } from "@repo/database";
 import { getMcpToolsForServer } from "@repo/agentc2/mcp";
 import { rediscoverToolsForConnection } from "@repo/agentc2/integrations";
-import { getUserOrganizationId } from "@/lib/organization";
+import { requireUserWithOrg } from "@/lib/authz/require-auth";
 import { resolveConnectionServerId } from "@/lib/integrations";
 
 /**
@@ -17,20 +15,10 @@ export async function GET(
     { params }: { params: Promise<{ providerKey: string }> }
 ) {
     try {
-        const session = await auth.api.getSession({
-            headers: await headers()
-        });
-        if (!session?.user) {
-            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
-        }
+        const authResult = await requireUserWithOrg();
+        if (authResult.response) return authResult.response;
 
-        const organizationId = await getUserOrganizationId(session.user.id);
-        if (!organizationId) {
-            return NextResponse.json(
-                { success: false, error: "Organization membership required" },
-                { status: 403 }
-            );
-        }
+        const { userId, organizationId } = authResult.context;
 
         const { providerKey } = await params;
         const provider = await prisma.integrationProvider.findFirst({
@@ -48,7 +36,7 @@ export async function GET(
                 organizationId,
                 providerId: provider.id,
                 isActive: true,
-                OR: [{ scope: "org" }, { scope: "user", userId: session.user.id }]
+                OR: [{ scope: "org" }, { scope: "user", userId }]
             },
             orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }]
         });
@@ -62,7 +50,7 @@ export async function GET(
                 const tools = await getMcpToolsForServer({
                     serverId,
                     organizationId,
-                    userId: session.user.id,
+                    userId,
                     allowEnvFallback: false
                 }).catch(() => ({}));
                 const toolNames = Object.keys(tools);
@@ -80,7 +68,7 @@ export async function GET(
             const tools = await getMcpToolsForServer({
                 serverId: provider.key,
                 organizationId,
-                userId: session.user.id,
+                userId,
                 allowEnvFallback: true
             }).catch(() => ({}));
             const toolNames = Object.keys(tools);
@@ -123,20 +111,10 @@ export async function POST(
     { params }: { params: Promise<{ providerKey: string }> }
 ) {
     try {
-        const session = await auth.api.getSession({
-            headers: await headers()
-        });
-        if (!session?.user) {
-            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
-        }
+        const authResult = await requireUserWithOrg();
+        if (authResult.response) return authResult.response;
 
-        const organizationId = await getUserOrganizationId(session.user.id);
-        if (!organizationId) {
-            return NextResponse.json(
-                { success: false, error: "Organization membership required" },
-                { status: 403 }
-            );
-        }
+        const { userId, organizationId } = authResult.context;
 
         const { providerKey } = await params;
         const provider = await prisma.integrationProvider.findFirst({
@@ -154,7 +132,7 @@ export async function POST(
                 organizationId,
                 providerId: provider.id,
                 isActive: true,
-                OR: [{ scope: "org" }, { scope: "user", userId: session.user.id }]
+                OR: [{ scope: "org" }, { scope: "user", userId }]
             }
         });
 

@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { headers } from "next/headers";
-import { auth } from "@repo/auth";
 import { testMcpServer } from "@repo/agentc2/mcp";
-import { getUserOrganizationId } from "@/lib/organization";
+import { requireUserWithOrg } from "@/lib/authz/require-auth";
 
 /**
  * POST /api/integrations/mcp-config/test-all
@@ -13,20 +11,10 @@ import { getUserOrganizationId } from "@/lib/organization";
  */
 export async function POST(request: NextRequest) {
     try {
-        const session = await auth.api.getSession({
-            headers: await headers()
-        });
-        if (!session?.user) {
-            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
-        }
+        const authResult = await requireUserWithOrg();
+        if (authResult.response) return authResult.response;
 
-        const organizationId = await getUserOrganizationId(session.user.id);
-        if (!organizationId) {
-            return NextResponse.json(
-                { success: false, error: "Organization membership required" },
-                { status: 403 }
-            );
-        }
+        const { userId, organizationId } = authResult.context;
 
         const body = await request.json();
         const serverKeys: string[] = Array.isArray(body?.serverKeys) ? body.serverKeys : [];
@@ -41,7 +29,7 @@ export async function POST(request: NextRequest) {
                 const result = await testMcpServer({
                     serverId: serverKey,
                     organizationId,
-                    userId: session.user.id,
+                    userId,
                     allowEnvFallback: false,
                     timeoutMs
                 });

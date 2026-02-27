@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { headers } from "next/headers";
 import { randomBytes } from "crypto";
 import { z } from "zod";
-import { auth } from "@repo/auth";
 import { prisma } from "@repo/database";
 import { getIntegrationProviders } from "@repo/agentc2/mcp";
 import { auditLog } from "@/lib/audit-log";
-import { getUserOrganizationId } from "@/lib/organization";
+import { requireUserWithOrg } from "@/lib/authz/require-auth";
 import { encryptString } from "@/lib/credential-crypto";
 import {
     extractTriggerInputMapping,
@@ -31,23 +29,13 @@ const createWebhookSchema = z.object({
  */
 export async function POST(request: NextRequest) {
     try {
-        const session = await auth.api.getSession({
-            headers: await headers()
-        });
-        if (!session?.user) {
-            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
-        }
+        const authResult = await requireUserWithOrg();
+        if (authResult.response) return authResult.response;
 
-        const organizationId = await getUserOrganizationId(session.user.id);
-        if (!organizationId) {
-            return NextResponse.json(
-                { success: false, error: "Organization membership required" },
-                { status: 403 }
-            );
-        }
+        const { userId, organizationId } = authResult.context;
 
         const membership = await prisma.membership.findFirst({
-            where: { userId: session.user.id, organizationId }
+            where: { userId, organizationId }
         });
         if (!membership || !["owner", "admin"].includes(membership.role)) {
             return NextResponse.json(
@@ -150,7 +138,7 @@ export async function POST(request: NextRequest) {
             }
         });
 
-        await auditLog.webhookCreate(trigger.id, session.user.id, organizationId, {
+        await auditLog.webhookCreate(trigger.id, userId, organizationId, {
             connectionId: connection.id,
             agentId: agent.id
         });

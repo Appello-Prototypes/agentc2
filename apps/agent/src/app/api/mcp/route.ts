@@ -1,15 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { headers } from "next/headers";
 import { prisma } from "@repo/database";
 import { getToolByName, mcpToolDefinitions, mcpToolRoutes } from "@repo/agentc2/tools";
-import { auth } from "@repo/auth";
-import { getDefaultWorkspaceIdForUser, getUserOrganizationId } from "@/lib/organization";
+import { getDefaultWorkspaceIdForUser } from "@/lib/organization";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { RATE_LIMIT_POLICIES } from "@/lib/security/rate-limit-policy";
 import { resolveRequiredToolAccess, type AccessLevel } from "@/lib/security/access-matrix";
-import { validateAccessToken } from "@/lib/mcp-oauth";
 import { enforceCsrf, getCorsHeaders } from "@/lib/security/http-security";
-import { validateStoredApiKey } from "@/lib/api-key-hash";
+import { authenticateRequest } from "@/lib/api-auth";
 
 /**
  * MCP Server Gateway
@@ -28,108 +25,6 @@ import { validateStoredApiKey } from "@/lib/api-key-hash";
  * - GET /api/mcp - List available tools (agents)
  * - POST /api/mcp - Invoke a tool (agent)
  */
-
-/**
- * Authenticate request via session or API key
- * Returns { userId, organizationId } on success, or null on failure
- */
-async function authenticateRequest(
-    request: NextRequest
-): Promise<{ userId: string; organizationId: string } | null> {
-    // Try API key authentication first (for MCP clients)
-    const apiKey =
-        request.headers.get("x-api-key") ||
-        request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
-
-    if (apiKey) {
-        const oauthToken = validateAccessToken(apiKey);
-        if (oauthToken) {
-            const membership = await prisma.membership.findFirst({
-                where: { organizationId: oauthToken.organizationId },
-                select: { userId: true }
-            });
-            if (membership) {
-                return { userId: membership.userId, organizationId: oauthToken.organizationId };
-            }
-        }
-
-        const orgSlugHeader = request.headers.get("x-organization-slug")?.trim();
-        const resolveOrgContext = async (orgSlug: string) => {
-            const org = await prisma.organization.findUnique({
-                where: { slug: orgSlug },
-                select: { id: true }
-            });
-            if (!org) {
-                return null;
-            }
-
-            const membership = await prisma.membership.findFirst({
-                where: { organizationId: org.id },
-                select: { userId: true }
-            });
-            if (!membership) {
-                return null;
-            }
-
-            return { userId: membership.userId, organizationId: org.id };
-        };
-
-        const validApiKey = process.env.MCP_API_KEY;
-        if (validApiKey && apiKey === validApiKey) {
-            const orgSlug = orgSlugHeader || process.env.MCP_API_ORGANIZATION_SLUG;
-            if (orgSlug) {
-                const context = await resolveOrgContext(orgSlug);
-                if (context) {
-                    return context;
-                }
-            }
-        }
-
-        if (orgSlugHeader) {
-            const org = await prisma.organization.findUnique({
-                where: { slug: orgSlugHeader },
-                select: { id: true }
-            });
-            if (org) {
-                const credential = await prisma.toolCredential.findUnique({
-                    where: {
-                        organizationId_toolId: {
-                            organizationId: org.id,
-                            toolId: "mastra-mcp-api"
-                        }
-                    },
-                    select: { credentials: true, isActive: true }
-                });
-                if (
-                    credential &&
-                    validateStoredApiKey(apiKey, credential.credentials, credential.isActive)
-                ) {
-                    const context = await resolveOrgContext(orgSlugHeader);
-                    if (context) {
-                        return context;
-                    }
-                }
-            }
-        }
-
-        return null;
-    }
-
-    // Fall back to session authentication (for browser clients)
-    const session = await auth.api.getSession({
-        headers: await headers()
-    });
-    if (!session?.user) {
-        return null;
-    }
-
-    const organizationId = await getUserOrganizationId(session.user.id);
-    if (!organizationId) {
-        return null;
-    }
-
-    return { userId: session.user.id, organizationId };
-}
 
 async function hasRequiredToolAccess(
     userId: string,
