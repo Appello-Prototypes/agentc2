@@ -175,6 +175,8 @@ export async function GET(request: NextRequest) {
                         name: agent.name,
                         description: agent.description,
                         type: agent.type,
+                        visibility: agent.visibility,
+                        ownerId: agent.ownerId,
                         modelProvider: agent.modelProvider,
                         modelName: agent.modelName,
                         memoryEnabled: agent.memoryEnabled,
