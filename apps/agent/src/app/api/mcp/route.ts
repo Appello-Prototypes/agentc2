@@ -889,6 +889,10 @@ export async function POST(request: NextRequest) {
                     `/api/workflows/${workflowSlug}/execute`,
                     getInternalBaseUrl()
                 );
+                const requestContext = scopedParams.requestContext ?? {
+                    tenantId: organizationId
+                };
+
                 const execResponse = await fetch(execUrl, {
                     method: "POST",
                     headers: {
@@ -900,7 +904,7 @@ export async function POST(request: NextRequest) {
                         source: scopedParams.source,
                         environment: scopedParams.environment,
                         triggerType: scopedParams.triggerType,
-                        requestContext: scopedParams.requestContext
+                        requestContext
                     })
                 });
                 const execResult = await execResponse.json();

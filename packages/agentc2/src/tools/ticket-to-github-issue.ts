@@ -74,7 +74,7 @@ export const ticketToGithubIssueTool = createTool({
             };
         }
 
-        const { getToolsByNamesAsync } = await import("./registry");
+        const { executeMcpTool } = await import("../mcp/client");
 
         const [owner, repo] = repository.split("/");
         if (!owner || !repo) {
@@ -85,50 +85,38 @@ export const ticketToGithubIssueTool = createTool({
             ? `\n\n---\n_Created from ticket \`${sourceTicketId}\` via AgentC2 SDLC Pipeline_`
             : "";
 
-        const tools = await getToolsByNamesAsync(["github_create_issue"], organizationId);
-        const createIssueTool = tools["github_create_issue"];
+        const mcpResult = await executeMcpTool(
+            "github_create_issue",
+            { owner, repo, title, body: description + footer, labels: labels || [] },
+            { organizationId }
+        );
+
+        if (!mcpResult.success) {
+            throw new Error(
+                mcpResult.error ||
+                    "GitHub MCP connection not available. Connect GitHub in the integrations page."
+            );
+        }
 
         let issueNumber: number;
         let issueUrl: string;
 
-        if (createIssueTool) {
-            const handler =
-                createIssueTool.execute ||
-                createIssueTool.invoke ||
-                createIssueTool.run ||
-                createIssueTool;
-            if (typeof handler !== "function") {
-                throw new Error("GitHub create_issue tool found but has no callable handler");
-            }
+        const rawResult = mcpResult.result;
+        const parsed = rawResult && typeof rawResult === "object" ? rawResult : {};
+        const data = (parsed as Record<string, unknown>).content
+            ? JSON.parse(
+                  (
+                      (parsed as Record<string, unknown[]>).content?.find(
+                          (c: unknown) => (c as Record<string, string>).type === "text"
+                      ) as Record<string, string>
+                  )?.text || "{}"
+              )
+            : parsed;
 
-            const result = await handler({
-                owner,
-                repo,
-                title,
-                body: description + footer,
-                labels: labels || []
-            });
-
-            const parsed = result && typeof result === "object" ? result : {};
-            const data = (parsed as Record<string, unknown>).content
-                ? JSON.parse(
-                      (
-                          (parsed as Record<string, unknown[]>).content?.find(
-                              (c: unknown) => (c as Record<string, string>).type === "text"
-                          ) as Record<string, string>
-                      )?.text || "{}"
-                  )
-                : parsed;
-
-            issueNumber = (data as Record<string, number>).number || 0;
-            issueUrl =
-                (data as Record<string, string>).html_url ||
-                `https://github.com/${repository}/issues/${issueNumber}`;
-        } else {
-            throw new Error(
-                "GitHub MCP connection not available. Connect GitHub in the integrations page."
-            );
-        }
+        issueNumber = (data as Record<string, number>).number || 0;
+        issueUrl =
+            (data as Record<string, string>).html_url ||
+            `https://github.com/${repository}/issues/${issueNumber}`;
 
         let linked = false;
         if (pipelineRunId) {

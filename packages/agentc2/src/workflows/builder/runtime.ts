@@ -322,6 +322,10 @@ async function executeToolStep(
 
     const input = resolveInputMapping(step.inputMapping || config.parameters, context);
 
+    if (organizationId && typeof input === "object" && input !== null && !("organizationId" in input)) {
+        (input as Record<string, unknown>).organizationId = organizationId;
+    }
+
     const handler =
         (tool as { execute?: (args: Record<string, unknown>) => Promise<unknown> }).execute ||
         (tool as { invoke?: (args: Record<string, unknown>) => Promise<unknown> }).invoke ||
