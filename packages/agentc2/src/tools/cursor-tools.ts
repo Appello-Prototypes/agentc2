@@ -15,7 +15,7 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 
-const CURSOR_API_BASE = "https://api.cursor.com/v1";
+const CURSOR_API_BASE = "https://api.cursor.com/v0";
 const DEFAULT_POLL_INTERVAL_MS = 5_000;
 const MAX_POLL_DURATION_MS = 30 * 60_000; // 30 minutes
 
@@ -59,10 +59,11 @@ async function cursorFetch(
     options: RequestInit = {}
 ): Promise<Response> {
     const url = `${CURSOR_API_BASE}${path}`;
+    const basicAuth = Buffer.from(`${apiKey}:`).toString("base64");
     const response = await fetch(url, {
         ...options,
         headers: {
-            Authorization: `Bearer ${apiKey}`,
+            Authorization: `Basic ${basicAuth}`,
             "Content-Type": "application/json",
             ...options.headers
         }
@@ -102,7 +103,7 @@ export const cursorLaunchAgentTool = createTool({
     execute: async ({ repository, prompt, ref, organizationId }) => {
         const apiKey = await resolveCursorApiKey(organizationId);
 
-        const response = await cursorFetch("/background-agents", apiKey, {
+        const response = await cursorFetch("/agents", apiKey, {
             method: "POST",
             body: JSON.stringify({
                 prompt: { text: prompt },
@@ -131,7 +132,7 @@ export const cursorGetStatusTool = createTool({
     id: "cursor-get-status",
     description:
         "Get the current status of a Cursor Cloud Agent. " +
-        "Statuses: CREATING, RUNNING, COMPLETED, FAILED. " +
+        "Statuses: CREATING, RUNNING, FINISHED, FAILED. " +
         "Use this to poll until the agent finishes its coding task.",
     inputSchema: z.object({
         agentId: z.string().describe("The Cursor Cloud Agent ID"),
@@ -148,7 +149,7 @@ export const cursorGetStatusTool = createTool({
     execute: async ({ agentId, organizationId }) => {
         const apiKey = await resolveCursorApiKey(organizationId);
 
-        const response = await cursorFetch(`/background-agents/${agentId}`, apiKey);
+        const response = await cursorFetch(`/agents/${agentId}`, apiKey);
         const data = await response.json();
 
         return {
@@ -182,7 +183,7 @@ export const cursorAddFollowupTool = createTool({
     execute: async ({ agentId, prompt, organizationId }) => {
         const apiKey = await resolveCursorApiKey(organizationId);
 
-        await cursorFetch(`/background-agents/${agentId}/followup`, apiKey, {
+        await cursorFetch(`/agents/${agentId}/followup`, apiKey, {
             method: "POST",
             body: JSON.stringify({
                 prompt: { text: prompt }
@@ -217,15 +218,17 @@ export const cursorGetConversationTool = createTool({
     execute: async ({ agentId, organizationId }) => {
         const apiKey = await resolveCursorApiKey(organizationId);
 
-        const response = await cursorFetch(`/background-agents/${agentId}/conversation`, apiKey);
+        const response = await cursorFetch(`/agents/${agentId}/conversation`, apiKey);
         const data = await response.json();
 
         const messages = Array.isArray(data.messages)
-            ? data.messages.map((m: { role?: string; content?: string; timestamp?: string }) => ({
-                  role: m.role || "unknown",
-                  content: m.content || "",
-                  timestamp: m.timestamp || null
-              }))
+            ? data.messages.map(
+                  (m: { type?: string; text?: string; role?: string; content?: string }) => ({
+                      role: m.type || m.role || "unknown",
+                      content: m.text || m.content || "",
+                      timestamp: null
+                  })
+              )
             : [];
 
         return { agentId, messages };
@@ -237,7 +240,7 @@ export const cursorGetConversationTool = createTool({
 export const cursorPollUntilDoneTool = createTool({
     id: "cursor-poll-until-done",
     description:
-        "Poll a Cursor Cloud Agent until it reaches a terminal state (COMPLETED or FAILED). " +
+        "Poll a Cursor Cloud Agent until it reaches a terminal state (FINISHED or FAILED). " +
         "Implements exponential backoff. Returns the final status and branch name.",
     inputSchema: z.object({
         agentId: z.string().describe("The Cursor Cloud Agent ID"),
@@ -258,10 +261,10 @@ export const cursorPollUntilDoneTool = createTool({
         const startTime = Date.now();
         let interval = DEFAULT_POLL_INTERVAL_MS;
 
-        const terminalStatuses = new Set(["COMPLETED", "FAILED", "CANCELLED", "ERROR"]);
+        const terminalStatuses = new Set(["FINISHED", "COMPLETED", "FAILED", "CANCELLED", "ERROR"]);
 
         while (Date.now() - startTime < maxDuration) {
-            const response = await cursorFetch(`/background-agents/${agentId}`, apiKey);
+            const response = await cursorFetch(`/agents/${agentId}`, apiKey);
             const data = await response.json();
             const status = data.status || "UNKNOWN";
 
