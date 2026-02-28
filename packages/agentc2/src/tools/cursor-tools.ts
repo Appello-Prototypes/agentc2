@@ -269,10 +269,31 @@ export const cursorPollUntilDoneTool = createTool({
             const status = data.status || "UNKNOWN";
 
             if (terminalStatuses.has(status)) {
+                let summary = data.summary || null;
+
+                if (!summary) {
+                    try {
+                        const convResp = await cursorFetch(
+                            `/agents/${agentId}/conversation`,
+                            apiKey
+                        );
+                        const convData = await convResp.json();
+                        const assistantMessages = (convData.messages || [])
+                            .filter((m: { type?: string }) => m.type === "assistant_message")
+                            .map((m: { text?: string }) => m.text || "");
+
+                        if (assistantMessages.length > 0) {
+                            summary = assistantMessages[assistantMessages.length - 1];
+                        }
+                    } catch {
+                        // Conversation fetch failed; leave summary null
+                    }
+                }
+
                 return {
                     agentId,
                     status,
-                    summary: data.summary || null,
+                    summary,
                     branchName: data.target?.branchName || null,
                     durationMs: Date.now() - startTime,
                     timedOut: false
