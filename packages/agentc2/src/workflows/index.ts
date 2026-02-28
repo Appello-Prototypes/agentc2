@@ -18,5 +18,19 @@ export {
     type WorkflowExecutionResult,
     type WorkflowExecutionStep,
     type WorkflowExecutionContext,
-    type WorkflowResumeInput
+    type WorkflowResumeInput,
+    type WorkflowMeta
 } from "./builder";
+
+// Human engagement (transport-agnostic human-in-the-loop)
+export {
+    createEngagement,
+    resolveEngagement,
+    getEngagementContext,
+    findEngagementByGitHubIssue,
+    findEngagementBySlackMessage,
+    type EngagementDecision,
+    type EngagementContext,
+    type CreateEngagementOptions,
+    type ResolveEngagementOptions
+} from "./human-engagement";

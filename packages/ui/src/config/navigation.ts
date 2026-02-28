@@ -30,6 +30,22 @@ export const navigationItems: NavigationItem[] = [
         keywords: ["workspace", "chat", "assistant", "conversation", "ai", "home"]
     },
     {
+        label: "Command",
+        icon: icons.shield,
+        href: "/command",
+        app: "agent",
+        keywords: [
+            "command",
+            "decisions",
+            "approvals",
+            "review",
+            "human-in-the-loop",
+            "hitl",
+            "queue",
+            "pending"
+        ]
+    },
+    {
         label: "Campaigns",
         icon: icons["play-circle"],
         href: "/campaigns",

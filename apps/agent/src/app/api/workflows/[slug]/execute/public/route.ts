@@ -82,7 +82,8 @@ export async function POST(
 
         const result = await executeWorkflowDefinition({
             definition: workflow.definitionJson as unknown as WorkflowDefinition,
-            input
+            input,
+            workflowMeta: { runId: run.id, workflowSlug: workflow.slug }
         });
 
         const durationMs = result.steps.reduce((sum, step) => sum + (step.durationMs || 0), 0);

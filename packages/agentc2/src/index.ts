@@ -90,6 +90,7 @@ export {
     DEFAULT_SCORECARD_CRITERIA,
     validateCriteriaWeights,
     computeWeightedScore,
+    normalizeForDisplay,
     runTier2Auditor,
     buildAuditorPrompt,
     runTier1Prescreen,
@@ -137,6 +138,7 @@ export {
     mcpToolRoutes,
     toolRegistry,
     toolCategoryMap,
+    toolCredentialChecks,
     toolCategoryOrder,
     toolBehaviorMap,
     listAvailableTools,
@@ -208,7 +210,8 @@ export {
     type WorkflowExecutionResult,
     type WorkflowExecutionStep,
     type WorkflowExecutionContext,
-    type WorkflowResumeInput
+    type WorkflowResumeInput,
+    type WorkflowMeta
 } from "./workflows/builder";
 
 // RAG

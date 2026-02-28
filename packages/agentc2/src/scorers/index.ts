@@ -10,7 +10,12 @@ export type {
     TurnEvaluation,
     AarOutput
 } from "./types";
-export { DEFAULT_SCORECARD_CRITERIA, validateCriteriaWeights, computeWeightedScore } from "./types";
+export {
+    DEFAULT_SCORECARD_CRITERIA,
+    validateCriteriaWeights,
+    computeWeightedScore,
+    normalizeForDisplay
+} from "./types";
 export { runTier2Auditor, buildAuditorPrompt } from "./auditor";
 export { runTier1Prescreen, shouldRunTier2, normalizeTier1ToScorecard } from "./tier1";
 export { generateScorecard } from "./scorecard-generator";

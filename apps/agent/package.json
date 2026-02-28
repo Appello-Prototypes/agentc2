@@ -18,7 +18,7 @@
     "@base-ui/react": "^1.1.0",
     "@dagrejs/dagre": "^2.0.4",
     "@hugeicons/core-free-icons": "^3.1.1",
-    "@hugeicons/react": "^1.1.4",
+    "@hugeicons/react": "^1.1.5",
     "@icons-pack/react-simple-icons": "^13.11.2",
     "@mastra/ai-sdk": "^1.0.3",
     "@mastra/core": "^1.2.0",

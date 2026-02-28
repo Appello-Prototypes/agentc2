@@ -14,7 +14,7 @@
 
 export const SIGNAL_THRESHOLDS = {
     /** Number of signals required to trigger a learning session */
-    signalCount: 5,
+    signalCount: 10,
 
     /** Time window (in minutes) for signal accumulation */
     signalWindowMinutes: 60,
@@ -53,7 +53,7 @@ export const SCHEDULE_CONFIG = {
      * Minimum hours between sessions for the same agent.
      * Prevents over-learning and thrashing.
      */
-    minHoursBetweenSessions: 4,
+    minHoursBetweenSessions: 8,
 
     /**
      * Maximum concurrent learning sessions across all agents.

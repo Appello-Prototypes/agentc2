@@ -1,2 +1,2 @@
 export * from "./types";
-export { executeWorkflowDefinition } from "./runtime";
+export { executeWorkflowDefinition, type WorkflowMeta } from "./runtime";

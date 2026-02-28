@@ -8,7 +8,12 @@
 
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import { resolveGitHubToken, parseRepoOwnerName, githubFetch } from "./github-helpers";
+import {
+    resolveGitHubToken,
+    parseRepoOwnerName,
+    githubFetch,
+    buildSignatureFooter
+} from "./github-helpers";
 
 export const githubCreatePullRequestTool = createTool({
     id: "github-create-pull-request",
@@ -26,22 +31,39 @@ export const githubCreatePullRequestTool = createTool({
             .optional()
             .describe("Pull request body (Markdown). Include 'Fixes #N' to link an issue."),
         draft: z.boolean().optional().describe("Create as draft PR (default: false)"),
-        organizationId: z.string().optional().describe("Organization ID for credential lookup")
+        organizationId: z.string().optional().describe("Organization ID for credential lookup"),
+        workflowSlug: z.string().optional().describe("Workflow slug (for attribution footer)"),
+        runId: z.string().optional().describe("Workflow run ID (for attribution footer)"),
+        stepId: z.string().optional().describe("Workflow step ID (for attribution footer)"),
+        agentSlug: z.string().optional().describe("Agent slug (for attribution footer)")
     }),
     outputSchema: z.object({
         prNumber: z.number(),
         prUrl: z.string(),
         htmlUrl: z.string()
     }),
-    execute: async ({ repository, head, base, title, body, draft, organizationId }) => {
+    execute: async ({
+        repository,
+        head,
+        base,
+        title,
+        body,
+        draft,
+        organizationId,
+        workflowSlug,
+        runId,
+        stepId,
+        agentSlug
+    }) => {
         const token = await resolveGitHubToken(organizationId);
         const { owner, repo } = parseRepoOwnerName(repository);
+        const footer = buildSignatureFooter({ workflowSlug, runId, stepId, agentSlug });
 
         const response = await githubFetch(`/repos/${owner}/${repo}/pulls`, token, {
             method: "POST",
             body: JSON.stringify({
                 title,
-                body: body || "",
+                body: (body || "") + footer,
                 head,
                 base: base || "main",
                 draft: draft || false

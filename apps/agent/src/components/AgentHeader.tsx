@@ -8,6 +8,7 @@ import { AgentBrand } from "@/components/AgentBrand";
 
 const navItems = [
     { label: "Workspace", href: "/workspace" },
+    { label: "Command", href: "/command" },
     { label: "Campaigns", href: "/campaigns" },
     { label: "Pulse", href: "/pulse" },
     {
@@ -21,6 +22,7 @@ const navItems = [
         ]
     },
     { label: "Schedule", href: "/schedule" },
+    { label: "God Mode", href: "/godmode" },
     { label: "Observe", href: "/observe" },
     { label: "Knowledge", href: "/knowledge" },
     { label: "Integrations", href: "/mcp" }

@@ -154,6 +154,7 @@ export { goalCreateTool, goalListTool, goalGetTool } from "./goal-tools";
 export {
     toolRegistry,
     toolCategoryMap,
+    toolCredentialChecks,
     toolCategoryOrder,
     toolBehaviorMap,
     listAvailableTools,

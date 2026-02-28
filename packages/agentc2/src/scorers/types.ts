@@ -233,6 +233,18 @@ export function validateCriteriaWeights(criteria: ScorecardCriterion[]): {
 }
 
 /**
+ * Normalizes a raw score for display so that higher always means better.
+ * For "lower_better" criteria (e.g. safety where 0 = clean), this inverts
+ * the score so the LLM and dashboards see 100% for a perfectly safe response.
+ */
+export function normalizeForDisplay(
+    score: number,
+    direction: "higher_better" | "lower_better"
+): number {
+    return direction === "lower_better" ? 1 - score : score;
+}
+
+/**
  * Computes weighted overall score from per-criterion scores.
  */
 export function computeWeightedScore(

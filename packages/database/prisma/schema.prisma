@@ -561,7 +561,7 @@ model ApprovalRequest {
     workflowRun    WorkflowRun?  @relation(fields: [workflowRunId], references: [id], onDelete: SetNull)
     sourceType     String
     sourceId       String?
-    status         String        @default("pending") // "pending" | "approved" | "rejected"
+    status         String        @default("pending") // "pending" | "approved" | "rejected" | "feedback"
     requestedBy    String?
     requestedAt    DateTime      @default(now())
     decidedBy      String?
@@ -574,10 +574,21 @@ model ApprovalRequest {
     createdAt      DateTime      @default(now())
     updatedAt      DateTime      @updatedAt
 
+    // Human engagement context
+    reviewContext     Json? // { summary, analysisUrl, issueUrl, riskLevel, filesChanged }
+    githubCommentId   BigInt? // GitHub comment ID for the review request
+    githubRepo        String? // owner/repo for webhook matching
+    githubIssueNumber Int? // Issue number for webhook matching
+    notifiedChannels  String[] // ["slack", "github", "email"]
+    responseChannel   String? // Which channel the response came from
+    feedbackText      String?  @db.Text // Free-form feedback from human
+    feedbackRound     Int      @default(1) // Which iteration of feedback (for loops)
+
     @@index([organizationId])
     @@index([workspaceId])
     @@index([agentId])
     @@index([status])
+    @@index([githubRepo, githubIssueNumber, status])
     @@map("approval_request")
 }
 

@@ -12,7 +12,12 @@ import { prisma, Prisma } from "@repo/database";
 import { mastra } from "../mastra";
 import { storage } from "../storage";
 import { vector } from "../vector";
-import { getToolsByNamesAsync, getAllMcpTools, toolRegistry } from "../tools/registry";
+import {
+    getToolsByNamesAsync,
+    getAllMcpTools,
+    toolRegistry,
+    toolCredentialChecks
+} from "../tools/registry";
 import { TOOL_OAUTH_REQUIREMENTS } from "../tools/oauth-requirements";
 
 import { getThreadSkillState } from "../skills/thread-state";
@@ -639,6 +644,24 @@ export class AgentResolver {
             }
         }
 
+        // --- Credential Gating ---
+        // Remove tools whose required credentials are missing to prevent runtime failures
+        const credentialFiltered: string[] = [];
+        for (const toolName of Object.keys(tools)) {
+            const check = toolCredentialChecks[toolName];
+            if (check && !check()) {
+                delete tools[toolName];
+                credentialFiltered.push(toolName);
+            }
+        }
+        if (credentialFiltered.length > 0) {
+            filteredTools.push(...credentialFiltered);
+            console.warn(
+                `[AgentResolver] Credential gating for "${record.slug}": ` +
+                    `removed ${credentialFiltered.length} tool(s) with missing credentials: ${credentialFiltered.join(", ")}`
+            );
+        }
+
         // --- Tool Health Check ---
         // Compare loaded tools against what was expected from AgentTool + SkillTool records
         const loadedToolNames = new Set(Object.keys(tools));
@@ -1241,6 +1264,13 @@ export class AgentResolver {
             }): Promise<void> => {
                 let { workingMemory } = args;
 
+                if (!args.threadId) {
+                    console.error(
+                        "[AgentResolver] updateWorkingMemory called without threadId, skipping"
+                    );
+                    return;
+                }
+
                 if (workingMemory.length > maxChars) {
                     console.warn(
                         `[AgentResolver] Working memory exceeds ${maxChars} chars (${workingMemory.length}). ` +
@@ -1254,13 +1284,30 @@ export class AgentResolver {
                     } catch (err) {
                         console.error(
                             "[AgentResolver] Working memory consolidation failed, truncating:",
-                            err
+                            (err as Error)?.message || err
                         );
                         workingMemory = workingMemory.slice(0, maxChars);
                     }
                 }
 
-                return originalUpdate({ ...args, workingMemory });
+                // Retry once on failure before giving up
+                try {
+                    return await originalUpdate({ ...args, workingMemory });
+                } catch (firstErr) {
+                    console.warn(
+                        `[AgentResolver] Working memory update failed for thread ${args.threadId}, retrying in 2s:`,
+                        (firstErr as Error)?.message || firstErr
+                    );
+                    await new Promise((r) => setTimeout(r, 2000));
+                    try {
+                        return await originalUpdate({ ...args, workingMemory });
+                    } catch (retryErr) {
+                        console.error(
+                            `[AgentResolver] Working memory update retry failed for thread ${args.threadId}:`,
+                            (retryErr as Error)?.message || retryErr
+                        );
+                    }
+                }
             };
         }
 
@@ -1454,12 +1501,24 @@ export class AgentResolver {
 
         // Post-filter: Prisma's NOT with JSON path returns NULL for missing keys,
         // which SQL treats as false — incorrectly excluding agents without the key.
-        return agents.filter((a) => {
+        const visible = agents.filter((a) => {
             if (a.metadata && typeof a.metadata === "object" && !Array.isArray(a.metadata)) {
                 return (a.metadata as Record<string, unknown>).chatVisible !== false;
             }
             return true;
         });
+
+        // Deduplicate by slug: the compound unique @@unique([workspaceId, slug])
+        // allows the same slug across different workspaces. When multiple agents
+        // share a slug, prefer workspace-scoped over global (workspaceId=null).
+        const slugMap = new Map<string, AgentRecordWithTools>();
+        for (const a of visible) {
+            const existing = slugMap.get(a.slug);
+            if (!existing || (a.workspaceId && !existing.workspaceId)) {
+                slugMap.set(a.slug, a);
+            }
+        }
+        return [...slugMap.values()];
     }
 
     /**

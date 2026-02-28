@@ -72,6 +72,63 @@ export function parseRepoOwnerName(repository: string): { owner: string; repo: s
     return { owner: parts[0], repo: parts[1] };
 }
 
+/* ─── AgentC2 Signature ──────────────────────────────────────────────────── */
+
+export interface AgentC2Signature {
+    workflowSlug?: string;
+    runId?: string;
+    stepId?: string;
+    agentSlug?: string;
+    extra?: string;
+}
+
+const PLATFORM_URL = process.env.NEXT_PUBLIC_APP_URL || "https://agentc2.ai";
+
+/**
+ * Build a markdown attribution footer for GitHub artifacts.
+ * Omits fields that are not provided.
+ */
+export function buildSignatureFooter(sig?: AgentC2Signature): string {
+    if (!sig) return "";
+
+    const parts: string[] = [];
+
+    if (sig.agentSlug) {
+        parts.push(`Agent: \`${sig.agentSlug}\``);
+    }
+    if (sig.workflowSlug) {
+        parts.push(`Workflow: \`${sig.workflowSlug}\``);
+    }
+    if (sig.runId && sig.workflowSlug) {
+        const shortId = sig.runId.length > 12 ? sig.runId.slice(0, 12) + "…" : sig.runId;
+        const runUrl = `${PLATFORM_URL}/workflows/${sig.workflowSlug}/runs/${sig.runId}`;
+        parts.push(`Run: [\`${shortId}\`](${runUrl})`);
+    } else if (sig.runId) {
+        const shortId = sig.runId.length > 12 ? sig.runId.slice(0, 12) + "…" : sig.runId;
+        parts.push(`Run: \`${shortId}\``);
+    }
+    if (sig.stepId) {
+        parts.push(`Step: \`${sig.stepId}\``);
+    }
+    if (sig.extra) {
+        parts.push(sig.extra);
+    }
+
+    if (parts.length === 0) {
+        return "\n\n---\n_Automated by [AgentC2](https://agentc2.ai)_";
+    }
+
+    return `\n\n---\n🤖 _Automated by [AgentC2](${PLATFORM_URL}) | ${parts.join(" | ")}_`;
+}
+
+/** Zod-compatible shape for the optional signature input field. */
+export const signatureInputFields = {
+    workflowSlug: "Workflow slug (for attribution footer)",
+    runId: "Workflow run ID (for attribution footer)",
+    stepId: "Workflow step ID (for attribution footer)",
+    agentSlug: "Agent slug (for attribution footer)"
+} as const;
+
 /**
  * Thin wrapper around fetch that adds auth + standard GitHub headers.
  */

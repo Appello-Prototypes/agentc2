@@ -8,7 +8,7 @@
 
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import { resolveGitHubToken } from "./github-helpers";
+import { resolveGitHubToken, buildSignatureFooter, type AgentC2Signature } from "./github-helpers";
 
 export const ticketToGithubIssueTool = createTool({
     id: "ticket-to-github-issue",
@@ -45,7 +45,10 @@ export const ticketToGithubIssueTool = createTool({
         existingIssueNumber: z
             .number()
             .optional()
-            .describe("Issue number of the existing issue (used with existingIssueUrl)")
+            .describe("Issue number of the existing issue (used with existingIssueUrl)"),
+        workflowSlug: z.string().optional().describe("Workflow slug (for attribution footer)"),
+        runId: z.string().optional().describe("Workflow run ID (for attribution footer)"),
+        stepId: z.string().optional().describe("Workflow step ID (for attribution footer)")
     }),
     outputSchema: z.object({
         issueNumber: z.number(),
@@ -62,7 +65,10 @@ export const ticketToGithubIssueTool = createTool({
         pipelineRunId,
         organizationId,
         existingIssueUrl,
-        existingIssueNumber
+        existingIssueNumber,
+        workflowSlug,
+        runId,
+        stepId
     }) => {
         if (existingIssueUrl) {
             const issueNumber =
@@ -81,9 +87,10 @@ export const ticketToGithubIssueTool = createTool({
         }
 
         const token = await resolveGitHubToken(organizationId);
-        const footer = sourceTicketId
-            ? `\n\n---\n_Created from ticket \`${sourceTicketId}\` via AgentC2 SDLC Pipeline_`
-            : "";
+        const sig: AgentC2Signature = { workflowSlug, runId, stepId };
+        const ticketRef = sourceTicketId ? `Source ticket: \`${sourceTicketId}\`` : undefined;
+        if (ticketRef) sig.extra = ticketRef;
+        const footer = buildSignatureFooter(sig);
 
         const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/issues`, {
             method: "POST",

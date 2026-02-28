@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma, Prisma } from "@repo/database";
-import { executeWorkflowDefinition, type WorkflowDefinition } from "@repo/agentc2/workflows";
+import {
+    executeWorkflowDefinition,
+    createEngagement,
+    type WorkflowDefinition
+} from "@repo/agentc2/workflows";
 import { refreshWorkflowMetrics } from "@/lib/metrics";
 
 function mapStepStatus(status: "completed" | "failed" | "suspended") {
@@ -62,7 +66,8 @@ export async function POST(
                 data: body.resumeData || {}
             },
             existingSteps,
-            requestContext: body.requestContext
+            requestContext: body.requestContext,
+            workflowMeta: { runId: run.id, workflowSlug: workflow.slug }
         });
 
         const durationMs = result.steps.reduce((sum, step) => sum + (step.durationMs || 0), 0);
@@ -118,6 +123,28 @@ export async function POST(
                 }
             });
             await refreshWorkflowMetrics(workflow.id, new Date());
+
+            const organizationId =
+                body.requestContext?.tenantId || body.requestContext?.resource?.tenantId;
+            if (organizationId && result.suspended?.stepId) {
+                try {
+                    await createEngagement({
+                        organizationId,
+                        workspaceId: workflow.workspaceId,
+                        workflowRunId: run.id,
+                        workflowSlug: workflow.slug,
+                        suspendedStep: result.suspended.stepId,
+                        suspendData: result.suspended.data,
+                        stepOutputs: result.steps.map((s) => ({
+                            stepId: s.stepId,
+                            stepType: s.stepType,
+                            output: s.output
+                        }))
+                    });
+                } catch (e) {
+                    console.warn("[Workflow Resume] Failed to create engagement:", e);
+                }
+            }
 
             return NextResponse.json({
                 success: true,

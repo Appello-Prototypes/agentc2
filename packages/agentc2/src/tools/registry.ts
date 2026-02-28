@@ -344,6 +344,29 @@ import { githubAddIssueCommentTool } from "./github-issue-comment";
 import { githubCreatePullRequestTool } from "./github-create-pr";
 import { runScenariosTool, calculateTrustScoreTool } from "./scenario-tools";
 import {
+    moltbookRegisterAgentTool,
+    moltbookGetProfileTool,
+    moltbookUpdateProfileTool,
+    moltbookViewAgentTool,
+    moltbookCreatePostTool,
+    moltbookGetFeedTool,
+    moltbookGetPersonalizedFeedTool,
+    moltbookGetPostTool,
+    moltbookDeletePostTool,
+    moltbookCommentTool,
+    moltbookGetCommentsTool,
+    moltbookVotePostTool,
+    moltbookVoteCommentTool,
+    moltbookListSubmoltsTool,
+    moltbookGetSubmoltTool,
+    moltbookCreateSubmoltTool,
+    moltbookSubscribeSubmoltTool,
+    moltbookUnsubscribeSubmoltTool,
+    moltbookFollowAgentTool,
+    moltbookUnfollowAgentTool,
+    moltbookSearchTool
+} from "./moltbook-client";
+import {
     provisionComputeTool,
     remoteExecuteTool,
     remoteFileTransferTool,
@@ -705,6 +728,29 @@ export const toolCategoryMap: Record<string, string> = {
     "community-vote": "Community",
     "community-my-stats": "Community",
 
+    // MoltBook
+    "moltbook-register-agent": "MoltBook",
+    "moltbook-get-profile": "MoltBook",
+    "moltbook-update-profile": "MoltBook",
+    "moltbook-view-agent": "MoltBook",
+    "moltbook-create-post": "MoltBook",
+    "moltbook-get-feed": "MoltBook",
+    "moltbook-get-personalized-feed": "MoltBook",
+    "moltbook-get-post": "MoltBook",
+    "moltbook-delete-post": "MoltBook",
+    "moltbook-comment": "MoltBook",
+    "moltbook-get-comments": "MoltBook",
+    "moltbook-vote-post": "MoltBook",
+    "moltbook-vote-comment": "MoltBook",
+    "moltbook-list-submolts": "MoltBook",
+    "moltbook-get-submolt": "MoltBook",
+    "moltbook-create-submolt": "MoltBook",
+    "moltbook-subscribe-submolt": "MoltBook",
+    "moltbook-unsubscribe-submolt": "MoltBook",
+    "moltbook-follow-agent": "MoltBook",
+    "moltbook-unfollow-agent": "MoltBook",
+    "moltbook-search": "MoltBook",
+
     // Pulse
     "pulse-list": "Pulse",
     "pulse-create": "Pulse",
@@ -745,6 +791,7 @@ export const toolCategoryOrder: string[] = [
     "Organization",
     "Email & Calendar",
     "File Storage",
+    "MoltBook",
     "BIM",
     "Support"
 ];
@@ -767,6 +814,20 @@ export const toolBehaviorMap: Record<string, ToolBehaviorMeta> = {
     "community-create-post": { behavior: "mutation", outputContentPath: "post.content" },
     "community-comment": { behavior: "mutation", outputContentPath: "comment.content" },
     "community-vote": { behavior: "mutation" },
+
+    // MoltBook
+    "moltbook-register-agent": { behavior: "mutation" },
+    "moltbook-update-profile": { behavior: "mutation" },
+    "moltbook-create-post": { behavior: "mutation", outputContentPath: "content" },
+    "moltbook-delete-post": { behavior: "mutation" },
+    "moltbook-comment": { behavior: "mutation", outputContentPath: "content" },
+    "moltbook-vote-post": { behavior: "mutation" },
+    "moltbook-vote-comment": { behavior: "mutation" },
+    "moltbook-create-submolt": { behavior: "mutation" },
+    "moltbook-subscribe-submolt": { behavior: "mutation" },
+    "moltbook-unsubscribe-submolt": { behavior: "mutation" },
+    "moltbook-follow-agent": { behavior: "mutation" },
+    "moltbook-unfollow-agent": { behavior: "mutation" },
 
     // Backlog
     "backlog-add-task": { behavior: "mutation", outputContentPath: "task.title" },
@@ -949,6 +1010,54 @@ export const toolBehaviorMap: Record<string, ToolBehaviorMeta> = {
     "pulse-remove-member": { behavior: "mutation" },
     "pulse-add-board": { behavior: "mutation" },
     "pulse-evaluate": { behavior: "mutation" }
+};
+
+/**
+ * Credential availability checks for tools that require external API keys.
+ * Maps tool ID to a function that returns true if the required credentials are present.
+ * Used by AgentResolver to filter out tools with missing credentials at resolution time.
+ */
+export const toolCredentialChecks: Record<string, () => boolean> = {
+    "exa-search": () => !!process.env.EXA_API_KEY,
+    "exa-find-similar": () => !!process.env.EXA_API_KEY,
+    "exa-get-contents": () => !!process.env.EXA_API_KEY,
+    "exa-research": () => !!process.env.EXA_API_KEY,
+    "brave-search": () => !!process.env.BRAVE_SEARCH_API_KEY,
+    "brave-local-search": () => !!process.env.BRAVE_SEARCH_API_KEY,
+    "brave-news-search": () => !!process.env.BRAVE_SEARCH_API_KEY,
+    "perplexity-research": () => !!process.env.PERPLEXITY_API_KEY,
+    "perplexity-search": () => !!process.env.PERPLEXITY_API_KEY,
+    "smart-search": () =>
+        !!process.env.EXA_API_KEY ||
+        !!process.env.BRAVE_SEARCH_API_KEY ||
+        !!process.env.PERPLEXITY_API_KEY,
+    "stripe-acs-create-session": () => !!process.env.STRIPE_SECRET_KEY,
+    "stripe-acs-get-product": () => !!process.env.STRIPE_SECRET_KEY,
+    "stripe-acs-list-products": () => !!process.env.STRIPE_SECRET_KEY,
+    "youtube-get-transcript": () => !!process.env.YOUTUBE_API_KEY,
+    "youtube-search-videos": () => !!process.env.YOUTUBE_API_KEY,
+    "youtube-analyze-video": () => !!process.env.YOUTUBE_API_KEY,
+    "youtube-ingest-to-knowledge": () => !!process.env.YOUTUBE_API_KEY,
+    "moltbook-get-profile": () => !!process.env.MOLTBOOK_API_KEY,
+    "moltbook-update-profile": () => !!process.env.MOLTBOOK_API_KEY,
+    "moltbook-view-agent": () => !!process.env.MOLTBOOK_API_KEY,
+    "moltbook-create-post": () => !!process.env.MOLTBOOK_API_KEY,
+    "moltbook-get-feed": () => !!process.env.MOLTBOOK_API_KEY,
+    "moltbook-get-personalized-feed": () => !!process.env.MOLTBOOK_API_KEY,
+    "moltbook-get-post": () => !!process.env.MOLTBOOK_API_KEY,
+    "moltbook-delete-post": () => !!process.env.MOLTBOOK_API_KEY,
+    "moltbook-comment": () => !!process.env.MOLTBOOK_API_KEY,
+    "moltbook-get-comments": () => !!process.env.MOLTBOOK_API_KEY,
+    "moltbook-vote-post": () => !!process.env.MOLTBOOK_API_KEY,
+    "moltbook-vote-comment": () => !!process.env.MOLTBOOK_API_KEY,
+    "moltbook-list-submolts": () => !!process.env.MOLTBOOK_API_KEY,
+    "moltbook-get-submolt": () => !!process.env.MOLTBOOK_API_KEY,
+    "moltbook-create-submolt": () => !!process.env.MOLTBOOK_API_KEY,
+    "moltbook-subscribe-submolt": () => !!process.env.MOLTBOOK_API_KEY,
+    "moltbook-unsubscribe-submolt": () => !!process.env.MOLTBOOK_API_KEY,
+    "moltbook-follow-agent": () => !!process.env.MOLTBOOK_API_KEY,
+    "moltbook-unfollow-agent": () => !!process.env.MOLTBOOK_API_KEY,
+    "moltbook-search": () => !!process.env.MOLTBOOK_API_KEY
 };
 
 /**
@@ -1373,6 +1482,29 @@ export const toolRegistry: Record<string, any> = {
     "community-comment": communityCommentTool,
     "community-vote": communityVoteTool,
     "community-my-stats": communityMyStatsTool,
+
+    // MoltBook
+    "moltbook-register-agent": moltbookRegisterAgentTool,
+    "moltbook-get-profile": moltbookGetProfileTool,
+    "moltbook-update-profile": moltbookUpdateProfileTool,
+    "moltbook-view-agent": moltbookViewAgentTool,
+    "moltbook-create-post": moltbookCreatePostTool,
+    "moltbook-get-feed": moltbookGetFeedTool,
+    "moltbook-get-personalized-feed": moltbookGetPersonalizedFeedTool,
+    "moltbook-get-post": moltbookGetPostTool,
+    "moltbook-delete-post": moltbookDeletePostTool,
+    "moltbook-comment": moltbookCommentTool,
+    "moltbook-get-comments": moltbookGetCommentsTool,
+    "moltbook-vote-post": moltbookVotePostTool,
+    "moltbook-vote-comment": moltbookVoteCommentTool,
+    "moltbook-list-submolts": moltbookListSubmoltsTool,
+    "moltbook-get-submolt": moltbookGetSubmoltTool,
+    "moltbook-create-submolt": moltbookCreateSubmoltTool,
+    "moltbook-subscribe-submolt": moltbookSubscribeSubmoltTool,
+    "moltbook-unsubscribe-submolt": moltbookUnsubscribeSubmoltTool,
+    "moltbook-follow-agent": moltbookFollowAgentTool,
+    "moltbook-unfollow-agent": moltbookUnfollowAgentTool,
+    "moltbook-search": moltbookSearchTool,
 
     // Agent Sessions (Mesh Communication)
     "session-create": sessionCreateTool,

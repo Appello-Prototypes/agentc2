@@ -2666,7 +2666,7 @@ async function getIntegrationConnections(options: {
 
     await ensureIntegrationProviders();
 
-    const connections = await prisma.integrationConnection.findMany({
+    const allConnections = await prisma.integrationConnection.findMany({
         where: {
             organizationId: options.organizationId,
             isActive: true,
@@ -2677,6 +2677,17 @@ async function getIntegrationConnections(options: {
         },
         include: { provider: true },
         orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }]
+    });
+
+    // Filter out connections with persistent errors to prevent loading broken tools
+    const connections = allConnections.filter((conn) => {
+        if (conn.errorMessage) {
+            console.warn(
+                `[MCP] Skipping connection "${conn.name}" (${conn.provider.key}): ${conn.errorMessage}`
+            );
+            return false;
+        }
+        return true;
     });
 
     if (connections.length > 0) {

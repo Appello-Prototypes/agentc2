@@ -19,6 +19,11 @@ import {
     type WorkflowDoWhileConfig
 } from "./types";
 
+export interface WorkflowMeta {
+    runId?: string;
+    workflowSlug?: string;
+}
+
 interface ExecuteWorkflowOptions {
     definition: WorkflowDefinition;
     input: unknown;
@@ -27,6 +32,7 @@ interface ExecuteWorkflowOptions {
     onStepEvent?: (event: WorkflowExecutionStep) => void;
     requestContext?: RequestContext;
     depth?: number;
+    workflowMeta?: WorkflowMeta;
 }
 
 const MAX_NESTING_DEPTH = 5;
@@ -306,7 +312,8 @@ async function executeAgentStep(
 async function executeToolStep(
     step: WorkflowStep,
     context: WorkflowExecutionContext,
-    requestContext?: RequestContext
+    requestContext?: RequestContext,
+    workflowMeta?: WorkflowMeta
 ) {
     const config = (step.config || {}) as unknown as WorkflowToolConfig;
     if (!config.toolId) {
@@ -322,8 +329,21 @@ async function executeToolStep(
 
     const input = resolveInputMapping(step.inputMapping || config.parameters, context);
 
-    if (organizationId && typeof input === "object" && input !== null && !("organizationId" in input)) {
+    if (
+        organizationId &&
+        typeof input === "object" &&
+        input !== null &&
+        !("organizationId" in input)
+    ) {
         (input as Record<string, unknown>).organizationId = organizationId;
+    }
+
+    if (workflowMeta && typeof input === "object" && input !== null) {
+        const inp = input as Record<string, unknown>;
+        if (!inp.workflowSlug && workflowMeta.workflowSlug)
+            inp.workflowSlug = workflowMeta.workflowSlug;
+        if (!inp.runId && workflowMeta.runId) inp.runId = workflowMeta.runId;
+        if (!inp.stepId) inp.stepId = step.id;
     }
 
     const handler =
@@ -423,7 +443,12 @@ async function executeSteps(
                     output = await executeAgentStep(step, context, options.requestContext);
                     break;
                 case "tool":
-                    output = await executeToolStep(step, context, options.requestContext);
+                    output = await executeToolStep(
+                        step,
+                        context,
+                        options.requestContext,
+                        options.workflowMeta
+                    );
                     break;
                 case "workflow": {
                     const result = await executeWorkflowStep(

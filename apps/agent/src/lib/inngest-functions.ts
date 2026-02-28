@@ -1823,21 +1823,53 @@ export const learningSignalDetectorFunction = inngest.createFunction(
                 });
             });
 
-            if (!activeSession) {
-                // Trigger new learning session
-                await step.sendEvent("trigger-learning", {
-                    name: "learning/session.start",
-                    data: {
+            if (activeSession) {
+                console.log(`[Inngest] Active session exists for ${agentId}, skipping trigger`);
+                return {
+                    agentId,
+                    signalType,
+                    signalCount,
+                    threshold: config.signalThreshold,
+                    skipped: true,
+                    reason: "active session"
+                };
+            }
+
+            // Cooldown: skip if ANY session was created in the last 2 hours
+            const recentSession = await step.run("check-cooldown", async () => {
+                const cooldownCutoff = new Date(Date.now() - 2 * 60 * 60 * 1000);
+                return prisma.learningSession.findFirst({
+                    where: {
                         agentId,
-                        triggerReason: `${signalCount} signals detected in the last ${config.signalWindowMinutes} minutes (threshold: ${config.signalThreshold})`,
-                        triggerType: "threshold"
+                        createdAt: { gte: cooldownCutoff }
                     }
                 });
+            });
 
-                console.log(`[Inngest] Triggered learning session for ${agentId} via threshold`);
-            } else {
-                console.log(`[Inngest] Active session exists for ${agentId}, skipping trigger`);
+            if (recentSession) {
+                console.log(
+                    `[Inngest] Session created within 2h cooldown for ${agentId}, skipping`
+                );
+                return {
+                    agentId,
+                    signalType,
+                    signalCount,
+                    threshold: config.signalThreshold,
+                    skipped: true,
+                    reason: "cooldown"
+                };
             }
+
+            await step.sendEvent("trigger-learning", {
+                name: "learning/session.start",
+                data: {
+                    agentId,
+                    triggerReason: `${signalCount} signals detected in the last ${config.signalWindowMinutes} minutes (threshold: ${config.signalThreshold})`,
+                    triggerType: "threshold"
+                }
+            });
+
+            console.log(`[Inngest] Triggered learning session for ${agentId} via threshold`);
         }
 
         return { agentId, signalType, signalCount, threshold: config.signalThreshold };
@@ -3624,11 +3656,89 @@ export const learningApprovalHandlerFunction = inngest.createFunction(
             });
         });
 
-        // Note: In a production system, this would wait for human approval
-        // via the UI and a webhook/API call. For now, we just log the request.
+        // Notify via Slack if available
+        await step.run("notify-channels", async () => {
+            try {
+                const { decryptJson } = await import("@repo/agentc2/crypto");
+                const org = data.tenantId
+                    ? await prisma.organization.findUnique({
+                          where: { id: data.tenantId },
+                          select: { id: true }
+                      })
+                    : null;
+
+                if (!org) return;
+
+                const slackConnection = await prisma.integrationConnection.findFirst({
+                    where: {
+                        organizationId: org.id,
+                        isActive: true,
+                        provider: { key: "slack" }
+                    },
+                    include: { provider: true },
+                    orderBy: [{ isDefault: "desc" }, { updatedAt: "desc" }]
+                });
+
+                const botToken = slackConnection?.credentials
+                    ? ((decryptJson(slackConnection.credentials) as Record<string, unknown>)
+                          ?.bot_token as string)
+                    : process.env.SLACK_BOT_TOKEN;
+
+                const meta = slackConnection?.metadata as Record<string, unknown> | null;
+                const channel =
+                    (meta?.alertsChannelId as string) ||
+                    (meta?.defaultChannelId as string) ||
+                    process.env.SLACK_ALERTS_CHANNEL;
+
+                if (!botToken || !channel) return;
+
+                const reviewUrl = `${process.env.NEXT_PUBLIC_APP_URL || "https://agentc2.ai"}/agent/command`;
+                const proposalTitle = data.proposals[0]?.title || "Untitled proposal";
+
+                await fetch("https://slack.com/api/chat.postMessage", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${botToken}`
+                    },
+                    body: JSON.stringify({
+                        channel,
+                        text: `📚 Learning proposal for agent \`${data.agent.slug}\` needs approval`,
+                        blocks: [
+                            {
+                                type: "header",
+                                text: {
+                                    type: "plain_text",
+                                    text: "📚 Learning Approval Required",
+                                    emoji: true
+                                }
+                            },
+                            {
+                                type: "section",
+                                text: {
+                                    type: "mrkdwn",
+                                    text: `*Agent:* \`${data.agent.slug}\` (${data.agent.name})\n*Proposal:* ${proposalTitle}`
+                                }
+                            },
+                            {
+                                type: "section",
+                                text: {
+                                    type: "mrkdwn",
+                                    text: `<${reviewUrl}|Review in dashboard>`
+                                }
+                            }
+                        ]
+                    })
+                });
+                console.log(
+                    `[Inngest] Slack notification sent for learning approval: ${data.agent.slug}`
+                );
+            } catch (err) {
+                console.warn("[Inngest] Learning approval notification failed:", err);
+            }
+        });
 
         console.log(`[Inngest] Approval request created for session: ${sessionId}`);
-        console.log(`[Inngest] Agent: ${data.agent.slug}, Proposal: ${data.proposals[0]?.title}`);
 
         return {
             sessionId,
@@ -4079,6 +4189,7 @@ interface GeneratedInsight {
  */
 interface InsightSignals {
     avgScoreByScorer: Record<string, number>;
+    scoreDirections: Record<string, "higher_better" | "lower_better">;
     scoreTrends: Record<string, { current: number; previous: number; change: number }>;
     lowScoreCount: number;
     totalEvaluations: number;
@@ -4115,6 +4226,23 @@ export const generateInsightsFunction = inngest.createFunction(
             const windowStart = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
             const windowMid = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
+            // Fetch agent scorecard criteria for score direction awareness
+            const { DEFAULT_SCORECARD_CRITERIA } = await import("@repo/agentc2");
+            const agentRecord = await prisma.agent.findUnique({
+                where: { id: agentId },
+                select: { scorecard: { select: { criteria: true } } }
+            });
+            const criteria =
+                (agentRecord?.scorecard?.criteria as unknown as {
+                    id: string;
+                    scoreDirection: string;
+                }[]) || DEFAULT_SCORECARD_CRITERIA;
+            const scoreDirections: Record<string, "higher_better" | "lower_better"> = {};
+            for (const c of criteria) {
+                scoreDirections[c.id] =
+                    (c.scoreDirection as "higher_better" | "lower_better") || "higher_better";
+            }
+
             // Get recent evaluations
             const evaluations = await prisma.agentEvaluation.findMany({
                 where: {
@@ -4126,7 +4254,6 @@ export const generateInsightsFunction = inngest.createFunction(
             });
 
             if (evaluations.length < 5) {
-                // Not enough data to generate meaningful insights
                 return null;
             }
 
@@ -4226,6 +4353,7 @@ export const generateInsightsFunction = inngest.createFunction(
 
             const signals: InsightSignals = {
                 avgScoreByScorer,
+                scoreDirections,
                 scoreTrends,
                 lowScoreCount,
                 totalEvaluations: evaluations.length,
@@ -4400,6 +4528,30 @@ Return ONLY a valid JSON array of insights, no other text.`;
             await step.run("route-insight-actions", async () => {
                 for (const insight of persistedCount.createdInsights) {
                     if (insight.actionType === "learning_trigger") {
+                        // Rate-limit: max 1 insight-triggered session per agent per 24h
+                        const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+                        const recentInsightSession = await prisma.learningSession.findFirst({
+                            where: {
+                                agentId,
+                                createdAt: { gte: oneDayAgo },
+                                metadata: {
+                                    path: ["triggerReason"],
+                                    string_starts_with: "Insight:"
+                                }
+                            }
+                        });
+
+                        if (recentInsightSession) {
+                            console.log(
+                                `[Inngest] Skipping insight-triggered session for ${agentId}: already triggered within 24h`
+                            );
+                            await prisma.insight.update({
+                                where: { id: insight.id },
+                                data: { actionStatus: "dismissed" }
+                            });
+                            continue;
+                        }
+
                         try {
                             await inngest.send({
                                 name: "learning/session.start",
@@ -5232,19 +5384,25 @@ function buildSignalsSummary(signals: InsightSignals): string {
     );
     lines.push("");
 
-    lines.push("Average scores by category:");
+    lines.push("Average scores by category (all normalized so higher = better):");
     for (const [scorer, avg] of Object.entries(signals.avgScoreByScorer)) {
-        lines.push(`  - ${scorer}: ${(avg * 100).toFixed(1)}%`);
+        const dir = signals.scoreDirections[scorer] || "higher_better";
+        const displayScore = dir === "lower_better" ? 1 - avg : avg;
+        lines.push(`  - ${scorer}: ${(displayScore * 100).toFixed(1)}%`);
     }
     lines.push("");
 
     if (Object.keys(signals.scoreTrends).length > 0) {
-        lines.push("Score trends (last 7 days vs previous 7 days):");
+        lines.push("Score trends (last 7 days vs previous 7 days, normalized so higher = better):");
         for (const [scorer, trend] of Object.entries(signals.scoreTrends)) {
-            const direction = trend.change > 0 ? "↑" : trend.change < 0 ? "↓" : "→";
-            const changePercent = (trend.change * 100).toFixed(1);
+            const dir = signals.scoreDirections[scorer] || "higher_better";
+            const normCurrent = dir === "lower_better" ? 1 - trend.current : trend.current;
+            const normPrevious = dir === "lower_better" ? 1 - trend.previous : trend.previous;
+            const normChange = normCurrent - normPrevious;
+            const direction = normChange > 0 ? "↑" : normChange < 0 ? "↓" : "→";
+            const changePercent = (normChange * 100).toFixed(1);
             lines.push(
-                `  - ${scorer}: ${(trend.current * 100).toFixed(1)}% ${direction} (${trend.change > 0 ? "+" : ""}${changePercent}% change)`
+                `  - ${scorer}: ${(normCurrent * 100).toFixed(1)}% ${direction} (${normChange > 0 ? "+" : ""}${changePercent}% change)`
             );
         }
         lines.push("");
@@ -5993,21 +6151,25 @@ export const agentScheduleTriggerFunction = inngest.createFunction(
         }
         const orgContext = scheduleOrgId ? { resource: { tenantId: scheduleOrgId } } : {};
 
-        const context =
+        // Ensure threadId and resourceId are set for memory-enabled agents on scheduled runs.
+        // Uses a deterministic ID based on schedule+agent so memory persists across runs.
+        const baseContext =
             inputJson?.context && typeof inputJson.context === "object"
-                ? {
-                      ...(inputJson.context as Record<string, unknown>),
-                      scheduleId: schedule.id,
-                      scheduleName: schedule.name,
-                      ...(environment ? { environment } : {}),
-                      ...orgContext
-                  }
-                : {
-                      scheduleId: schedule.id,
-                      scheduleName: schedule.name,
-                      ...(environment ? { environment } : {}),
-                      ...orgContext
-                  };
+                ? (inputJson.context as Record<string, unknown>)
+                : {};
+        const stableThreadId =
+            baseContext.threadId || `schedule-${schedule.id}-${schedule.agent.id}`;
+        const stableResourceId = baseContext.resourceId || scheduleOrgId || schedule.agent.id;
+
+        const context = {
+            ...baseContext,
+            threadId: stableThreadId,
+            resourceId: stableResourceId,
+            scheduleId: schedule.id,
+            scheduleName: schedule.name,
+            ...(environment ? { environment } : {}),
+            ...orgContext
+        };
         const maxSteps = typeof inputJson?.maxSteps === "number" ? inputJson.maxSteps : undefined;
 
         // Gmail watch refresh is a special short-circuit path that doesn't need async invoke

@@ -1,6 +1,10 @@
 import { NextRequest } from "next/server";
 import { prisma, Prisma } from "@repo/database";
-import { executeWorkflowDefinition, type WorkflowDefinition } from "@repo/agentc2/workflows";
+import {
+    executeWorkflowDefinition,
+    createEngagement,
+    type WorkflowDefinition
+} from "@repo/agentc2/workflows";
 import { refreshWorkflowMetrics } from "@/lib/metrics";
 import { resolveRunEnvironment, resolveRunTriggerType } from "@/lib/run-metadata";
 import { createTriggerEventRecord } from "@/lib/trigger-events";
@@ -83,6 +87,7 @@ export async function POST(
                     definition: workflow.definitionJson as unknown as WorkflowDefinition,
                     input,
                     requestContext: body.requestContext,
+                    workflowMeta: { runId: run.id, workflowSlug: workflow.slug },
                     onStepEvent: (event) => {
                         sendEvent("step", {
                             stepId: event.stepId,
@@ -130,6 +135,29 @@ export async function POST(
                         }
                     });
                     await refreshWorkflowMetrics(workflow.id, new Date());
+
+                    const organizationId =
+                        body.requestContext?.tenantId || body.requestContext?.resource?.tenantId;
+                    if (organizationId && result.suspended?.stepId) {
+                        try {
+                            await createEngagement({
+                                organizationId,
+                                workspaceId: workflow.workspaceId,
+                                workflowRunId: run.id,
+                                workflowSlug: workflow.slug,
+                                suspendedStep: result.suspended.stepId,
+                                suspendData: result.suspended.data,
+                                stepOutputs: result.steps.map((s) => ({
+                                    stepId: s.stepId,
+                                    stepType: s.stepType,
+                                    output: s.output
+                                }))
+                            });
+                        } catch (e) {
+                            console.warn("[Workflow Stream] Failed to create engagement:", e);
+                        }
+                    }
+
                     sendEvent("suspended", result.suspended);
                     controller.close();
                     return;
