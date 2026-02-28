@@ -340,6 +340,8 @@ import {
 import { ticketToGithubIssueTool } from "./ticket-to-github-issue";
 import { lookupPipelineConfigTool } from "./pipeline-config-tools";
 import { mergePullRequestTool, awaitDeployTool } from "./merge-deploy-tools";
+import { githubAddIssueCommentTool } from "./github-issue-comment";
+import { githubCreatePullRequestTool } from "./github-create-pr";
 import { runScenariosTool, calculateTrustScoreTool } from "./scenario-tools";
 import {
     provisionComputeTool,
@@ -422,6 +424,8 @@ export const toolCategoryMap: Record<string, string> = {
     "update-pipeline-status": "Coding Pipeline",
     "lookup-pipeline-config": "Coding Pipeline",
     "merge-pull-request": "Coding Pipeline",
+    "github-add-issue-comment": "Coding Pipeline",
+    "github-create-pull-request": "Coding Pipeline",
     "await-deploy": "Coding Pipeline",
     "run-scenarios": "Coding Pipeline",
     "calculate-trust-score": "Coding Pipeline",
@@ -907,6 +911,8 @@ export const toolBehaviorMap: Record<string, ToolBehaviorMeta> = {
     "dispatch-coding-pipeline": { behavior: "mutation" },
     "update-pipeline-status": { behavior: "mutation" },
     "merge-pull-request": { behavior: "mutation" },
+    "github-add-issue-comment": { behavior: "mutation" },
+    "github-create-pull-request": { behavior: "mutation" },
     "ticket-to-github-issue": { behavior: "mutation" },
     "ingest-ticket": { behavior: "mutation" },
 
@@ -1067,6 +1073,8 @@ export const toolRegistry: Record<string, any> = {
     "run-scenarios": runScenariosTool,
     "calculate-trust-score": calculateTrustScoreTool,
     "ticket-to-github-issue": ticketToGithubIssueTool,
+    "github-add-issue-comment": githubAddIssueCommentTool,
+    "github-create-pull-request": githubCreatePullRequestTool,
 
     // Remote Compute
     "provision-compute": provisionComputeTool,

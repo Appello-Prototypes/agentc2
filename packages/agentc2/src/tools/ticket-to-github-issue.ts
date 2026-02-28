@@ -8,39 +8,7 @@
 
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-
-async function resolveGitHubToken(organizationId?: string): Promise<string> {
-    const { prisma } = await import("@repo/database");
-    const { decryptCredentials } = await import("../crypto");
-
-    if (organizationId) {
-        const connection = await prisma.integrationConnection.findFirst({
-            where: {
-                organizationId,
-                provider: { key: "github" },
-                isActive: true
-            },
-            include: { provider: true },
-            orderBy: [{ isDefault: "desc" }, { updatedAt: "desc" }]
-        });
-        if (connection) {
-            const creds = decryptCredentials(connection.credentials);
-            const token =
-                (creds as Record<string, string>)?.GITHUB_PERSONAL_ACCESS_TOKEN ||
-                (creds as Record<string, string>)?.GITHUB_TOKEN;
-            if (token) return token;
-        }
-    }
-
-    if (process.env.GITHUB_PERSONAL_ACCESS_TOKEN) {
-        return process.env.GITHUB_PERSONAL_ACCESS_TOKEN;
-    }
-
-    throw new Error(
-        "GitHub credentials not available. Connect GitHub in the integrations page " +
-            "or set GITHUB_PERSONAL_ACCESS_TOKEN environment variable."
-    );
-}
+import { resolveGitHubToken } from "./github-helpers";
 
 export const ticketToGithubIssueTool = createTool({
     id: "ticket-to-github-issue",
@@ -134,9 +102,7 @@ export const ticketToGithubIssueTool = createTool({
 
         if (!response.ok) {
             const errorBody = await response.text();
-            throw new Error(
-                `GitHub API error (${response.status}): ${errorBody}`
-            );
+            throw new Error(`GitHub API error (${response.status}): ${errorBody}`);
         }
 
         const data = (await response.json()) as { number: number; html_url: string };
