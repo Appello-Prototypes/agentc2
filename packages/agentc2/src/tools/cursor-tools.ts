@@ -20,8 +20,6 @@ const DEFAULT_POLL_INTERVAL_MS = 5_000;
 const MAX_POLL_DURATION_MS = 30 * 60_000; // 30 minutes
 
 async function resolveCursorApiKey(organizationId?: string): Promise<string> {
-    console.log("[CursorTools] resolveCursorApiKey called, organizationId:", organizationId);
-
     if (organizationId) {
         try {
             const { prisma } = await import("@repo/database");
@@ -37,30 +35,10 @@ async function resolveCursorApiKey(organizationId?: string): Promise<string> {
                 orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }]
             });
 
-            console.log(
-                "[CursorTools] Connection lookup result:",
-                connection
-                    ? {
-                          id: connection.id,
-                          name: connection.name,
-                          hasCredentials: !!connection.credentials,
-                          credentialsType: typeof connection.credentials,
-                          providerKey: connection.provider?.key
-                      }
-                    : "null"
-            );
-
             if (connection?.credentials) {
                 const decrypted = decryptJson(connection.credentials);
-                const keys = decrypted ? Object.keys(decrypted) : [];
-                console.log("[CursorTools] Decrypted credential keys:", keys);
-                const key =
-                    (decrypted?.CURSOR_API_KEY as string) || (decrypted?.apiKey as string);
-                if (key) {
-                    console.log("[CursorTools] Found key, length:", key.length);
-                    return key;
-                }
-                console.warn("[CursorTools] Decrypted credentials but no matching key field");
+                const key = (decrypted?.CURSOR_API_KEY as string) || (decrypted?.apiKey as string);
+                if (key) return key;
             }
         } catch (err) {
             console.warn("[CursorTools] Failed to resolve org credentials:", err);

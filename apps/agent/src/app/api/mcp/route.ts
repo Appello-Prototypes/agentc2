@@ -1234,6 +1234,10 @@ export async function POST(request: NextRequest) {
                 );
             }
 
+            const requestContext = (params?.requestContext as Record<string, unknown>) ?? {
+                tenantId: organizationId
+            };
+
             const execUrl = new URL(`/api/workflows/${workflowSlug}/execute`, getInternalBaseUrl());
             const execResponse = await fetch(execUrl, {
                 method: "POST",
@@ -1246,7 +1250,7 @@ export async function POST(request: NextRequest) {
                     source: params.source,
                     environment: params.environment,
                     triggerType: params.triggerType,
-                    requestContext: params.requestContext
+                    requestContext
                 })
             });
             const execResult = await execResponse.json();
