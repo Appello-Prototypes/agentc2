@@ -262,6 +262,12 @@ jobs:
             echo "::warning::Health check could not reach production URLs"
           fi
 
+      - name: Sync Inngest functions
+        run: |
+          echo "Syncing Inngest functions with Inngest Cloud..."
+          SYNC_RESULT=$(curl -sf -X PUT https://agentc2.ai/api/inngest 2>&1 || echo '{"error":"sync failed"}')
+          echo "Inngest sync result: $SYNC_RESULT"
+
       - name: Notify Slack (success)
         if: success()
         run: |
