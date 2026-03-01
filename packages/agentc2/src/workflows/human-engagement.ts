@@ -27,6 +27,8 @@ export interface EngagementContext {
     issueNumber?: number;
     repository?: string;
     analysisUrl?: string;
+    prUrl?: string;
+    prNumber?: number;
     riskLevel?: string;
     filesChanged?: string[];
     prompt?: string;
@@ -99,6 +101,18 @@ export function getEngagementContext(
                 ctx.summary = text.length > 1000 ? text.slice(0, 1000) + "…" : text;
             }
         }
+
+        if (step.stepId === "create-pr") {
+            if (out.htmlUrl) ctx.prUrl = String(out.htmlUrl);
+            if (out.prNumber) ctx.prNumber = Number(out.prNumber);
+        }
+
+        if (step.stepId === "implement-wait") {
+            if (out.summary && !ctx.summary) {
+                const full = String(out.summary);
+                ctx.summary = full.length > 1000 ? full.slice(0, 1000) + "…" : full;
+            }
+        }
     }
 
     return ctx;
@@ -131,6 +145,10 @@ function buildReviewComment(
 
     if (context.analysisUrl) {
         lines.push(`**Full analysis:** ${context.analysisUrl}\n`);
+    }
+
+    if (context.prUrl) {
+        lines.push(`**Pull Request:** ${context.prUrl}\n`);
     }
 
     lines.push("### Actions\n");
@@ -311,13 +329,14 @@ async function postSlackReviewMessage(
         });
     }
 
-    if (context.issueUrl) {
+    if (context.issueUrl || context.prUrl) {
+        const links: string[] = [];
+        if (context.issueUrl) links.push(`📋 <${context.issueUrl}|View GitHub Issue>`);
+        if (context.analysisUrl) links.push(`🔎 <${context.analysisUrl}|View Analysis>`);
+        if (context.prUrl) links.push(`🔀 <${context.prUrl}|View Pull Request>`);
         blocks.push({
             type: "section",
-            text: {
-                type: "mrkdwn",
-                text: `📋 <${context.issueUrl}|View GitHub Issue>${context.analysisUrl ? ` | 🔎 <${context.analysisUrl}|View Analysis>` : ""}`
-            }
+            text: { type: "mrkdwn", text: links.join(" | ") }
         });
     }
 

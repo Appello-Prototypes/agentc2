@@ -84,8 +84,71 @@ export async function POST(request: NextRequest) {
                 );
             }
 
+            // Determine SDLC workflow variant from labels
+            const labelNames = (labels || []) as string[];
+            const isBug = labelNames.some((l: string) =>
+                ["bug", "bugfix", "fix"].includes(l.toLowerCase())
+            );
+            const sdlcSlug = isBug ? "sdlc-bugfix" : "sdlc-bugfix"; // TODO: add sdlc-feature routing
+
+            const sdlcWorkflow = await prisma.workflow.findFirst({
+                where: { slug: sdlcSlug, isActive: true }
+            });
+
+            let workflowRunId: string | null = null;
+
+            if (sdlcWorkflow) {
+                const workflowRun = await prisma.workflowRun.create({
+                    data: {
+                        workflowId: sdlcWorkflow.id,
+                        status: "QUEUED",
+                        inputJson: {
+                            title: issueTitle,
+                            description: issueBody,
+                            repository: repoPath,
+                            existingIssueUrl: result.issueUrl,
+                            existingIssueNumber: result.issueNumber,
+                            labels: labels || ["agentc2-sdlc"],
+                            sourceType,
+                            sourceId,
+                            organizationId: authResult.organizationId
+                        },
+                        source: "coding-pipeline",
+                        triggerType: "API"
+                    }
+                });
+                workflowRunId = workflowRun.id;
+
+                await inngest.send({
+                    name: "workflow/execute.async",
+                    data: {
+                        workflowRunId: workflowRun.id,
+                        workflowId: sdlcWorkflow.id,
+                        workflowSlug: sdlcWorkflow.slug,
+                        input: {
+                            title: issueTitle,
+                            description: issueBody,
+                            repository: repoPath,
+                            existingIssueUrl: result.issueUrl,
+                            existingIssueNumber: result.issueNumber,
+                            labels: labels || ["agentc2-sdlc"],
+                            sourceType,
+                            sourceId,
+                            organizationId: authResult.organizationId
+                        }
+                    }
+                });
+            }
+
             if (sourceType === "support_ticket") {
                 await prisma.supportTicket
+                    .update({
+                        where: { id: sourceId },
+                        data: { status: "IN_PROGRESS" }
+                    })
+                    .catch(() => {});
+            } else if (sourceType === "backlog_task") {
+                await prisma.backlogTask
                     .update({
                         where: { id: sourceId },
                         data: { status: "IN_PROGRESS" }
@@ -99,8 +162,11 @@ export async function POST(request: NextRequest) {
                 issueNumber: result.issueNumber,
                 issueUrl: result.issueUrl,
                 repository: result.repository,
-                message:
-                    "GitHub Issue created. The webhook will trigger the SDLC workflow automatically."
+                workflowRunId,
+                workflowSlug: sdlcWorkflow?.slug ?? null,
+                message: workflowRunId
+                    ? "GitHub Issue created and SDLC workflow triggered."
+                    : "GitHub Issue created. No active SDLC workflow found to trigger."
             });
         }
 

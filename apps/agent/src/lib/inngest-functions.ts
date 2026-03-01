@@ -8224,7 +8224,7 @@ export const asyncWorkflowExecuteFunction = inngest.createFunction(
     },
     { event: "workflow/execute.async" },
     async ({ event, step }) => {
-        const { workflowRunId, workflowId, input, pipelineRunId } = event.data;
+        const { workflowRunId, workflowId, workflowSlug, input, pipelineRunId } = event.data;
 
         console.log(`[Inngest] Executing async workflow run: ${workflowRunId}`);
 
@@ -8249,10 +8249,23 @@ export const asyncWorkflowExecuteFunction = inngest.createFunction(
             const { executeWorkflowDefinition } = await import("@repo/agentc2/workflows");
             type WorkflowDefinition = Parameters<typeof executeWorkflowDefinition>[0]["definition"];
 
+            const organizationId = (input as Record<string, unknown>)?.organizationId as
+                | string
+                | undefined;
+            const inputObj = input as Record<string, unknown> | undefined;
+
             return await executeWorkflowDefinition({
                 definition: workflow.definitionJson as unknown as WorkflowDefinition,
                 input,
-                requestContext: {}
+                requestContext: organizationId ? { tenantId: organizationId } : {},
+                workflowMeta: {
+                    runId: workflowRunId,
+                    workflowSlug:
+                        workflowSlug ||
+                        workflow.slug ||
+                        ((inputObj?._trigger as Record<string, unknown>)?.routedTo as string) ||
+                        ""
+                }
             });
         });
 
@@ -8332,6 +8345,44 @@ export const asyncWorkflowExecuteFunction = inngest.createFunction(
                 console.log(
                     `[Inngest] Workflow ${workflowRunId} suspended at step: ${result.suspended?.stepId}`
                 );
+
+                // Create human engagement for suspended human steps
+                const orgId = (input as Record<string, unknown>)?.organizationId as
+                    | string
+                    | undefined;
+                if (orgId && result.suspended?.stepId) {
+                    try {
+                        const { createEngagement } = await import("@repo/agentc2/workflows");
+                        const slug =
+                            workflowSlug ||
+                            (
+                                await prisma.workflow.findUnique({
+                                    where: { id: workflowId },
+                                    select: { slug: true }
+                                })
+                            )?.slug;
+                        await createEngagement({
+                            organizationId: orgId,
+                            workspaceId: null,
+                            workflowRunId,
+                            workflowSlug: slug || "",
+                            suspendedStep: result.suspended.stepId,
+                            suspendData: result.suspended.data as
+                                | Record<string, unknown>
+                                | undefined,
+                            stepOutputs: (result.steps || []).map(
+                                (s: { stepId: string; stepType: string; output?: unknown }) => ({
+                                    stepId: s.stepId,
+                                    stepType: s.stepType,
+                                    output: s.output
+                                })
+                            )
+                        });
+                    } catch (engErr) {
+                        console.warn("[Inngest] Failed to create engagement:", engErr);
+                    }
+                }
+
                 return { status: "suspended", suspendedStep: result.suspended?.stepId };
             }
 
