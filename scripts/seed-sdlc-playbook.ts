@@ -45,20 +45,37 @@ const AUDITOR_INSTRUCTIONS = `You are the SDLC Auditor agent. You review plans, 
 3. **Code Review**: Assess code changes against coding standards, architectural patterns, and best practices
 4. **Gap Detection**: Identify missing steps, untested scenarios, and potential regressions
 
-## Output Standards
-- Provide a clear PASS/FAIL/NEEDS_REVISION verdict
-- List specific issues with severity (critical, major, minor)
-- Suggest concrete fixes or improvements for each issue
-- If the plan/code passes, confirm what was verified
+## Output Format
+Always output structured JSON:
+{
+    "verdict": "PASS" | "NEEDS_REVISION" | "FAIL",
+    "severity": "none" | "minor" | "major" | "critical",
+    "issues": [
+        { "severity": "critical|major|minor", "area": "...", "description": "...", "suggestedFix": "..." }
+    ],
+    "positives": ["What was done well"],
+    "summary": "One-paragraph overall assessment",
+    "checklist": {
+        "requirementsAddressed": true | false,
+        "edgeCasesConsidered": true | false,
+        "errorHandlingPresent": true | false,
+        "noBreakingChanges": true | false,
+        "securityReviewed": true | false,
+        "performanceAssessed": true | false,
+        "testingCovered": true | false
+    }
+}
 
-## Audit Checklist
-- [ ] All requirements addressed
-- [ ] Edge cases considered
-- [ ] Error handling present
-- [ ] No breaking changes introduced without migration plan
-- [ ] Security implications reviewed
-- [ ] Performance impact assessed
-- [ ] Tests included or plan for testing provided`;
+## Verdict Criteria
+- **PASS**: All checklist items satisfied, no critical or major issues. Minor issues acceptable if noted.
+- **NEEDS_REVISION**: Major issues found that need addressing, or critical checklist items not met. Provide specific fixes.
+- **FAIL**: Fundamental design flaws, security vulnerabilities, or completely missing requirements. Requires restart.
+
+## Rules
+- Always populate the issues array, even on PASS (use minor observations)
+- Always populate positives to acknowledge good work
+- The summary must reference the verdict and key reasoning
+- For NEEDS_REVISION, suggestedFix on each issue must be actionable and specific`;
 
 const CLASSIFIER_INSTRUCTIONS = `You are the SDLC Classifier agent. You analyze incoming tickets to determine type, priority, complexity, and routing.
 
@@ -787,7 +804,7 @@ async function main() {
                             config: {
                                 maxIterations: 3,
                                 conditionExpression:
-                                    "steps['options-review']?.approved === false && !steps['options-review']?.rejected",
+                                    "steps['options-review']?.approved !== true && steps['options-review']?.rejected !== true",
                                 steps: [
                                     {
                                         id: "options",
@@ -796,7 +813,7 @@ async function main() {
                                         config: {
                                             agentSlug: "sdlc-planner",
                                             promptTemplate:
-                                                "Based on the analysis:\n{{steps.analyze.text}}\n\nGenerate 2-3 development options with pros/cons and risk assessment.\n\n{{#if steps['options-review']}}Revision feedback: {{steps['options-review'].feedback}}{{/if}}"
+                                                "Based on the analysis:\n{{steps.analyze.text}}\n\nGenerate 2-3 development options with pros/cons and risk assessment.\n\n{{#if steps['options-audit']}}Previous audit feedback: {{steps['options-audit'].summary}}\nIssues to address: {{helpers.json(steps['options-audit'].issues)}}{{/if}}\n\n{{#if steps['options-review']}}Human feedback: {{steps['options-review'].feedback}}{{/if}}"
                                         }
                                     },
                                     {
@@ -806,15 +823,48 @@ async function main() {
                                         config: {
                                             agentSlug: "sdlc-auditor",
                                             promptTemplate:
-                                                "Audit these development options:\n\n{{steps.options.text}}\n\nCheck for: feasibility, missed alternatives, risk underestimation, completeness."
+                                                "Audit these development options:\n\n{{steps.options.text}}\n\nCheck for: feasibility, missed alternatives, risk underestimation, completeness.",
+                                            outputFormat: "json"
                                         }
                                     },
                                     {
-                                        id: "options-review",
-                                        type: "human",
-                                        name: "Review Options",
+                                        id: "options-verdict-route",
+                                        type: "branch",
+                                        name: "Route by Audit Verdict",
                                         config: {
-                                            prompt: "Review the development options and audit. Approve the preferred option, request revision with feedback, or reject."
+                                            branches: [
+                                                {
+                                                    id: "passed",
+                                                    condition:
+                                                        "steps['options-audit']?.verdict === 'PASS'",
+                                                    steps: [
+                                                        {
+                                                            id: "options-review",
+                                                            type: "human",
+                                                            name: "Review Options",
+                                                            config: {
+                                                                prompt: "The auditor has APPROVED the development options. Review and approve the preferred option, provide feedback for changes, or reject."
+                                                            }
+                                                        }
+                                                    ]
+                                                }
+                                            ],
+                                            defaultBranch: [
+                                                {
+                                                    id: "options-audit-notes",
+                                                    type: "tool",
+                                                    name: "Post Audit Feedback",
+                                                    config: {
+                                                        toolId: "github-add-issue-comment",
+                                                        parameters: {
+                                                            issueNumber:
+                                                                "{{ steps.intake.issueNumber || input.existingIssueNumber }}",
+                                                            repository: "{{ input.repository }}",
+                                                            body: "## SDLC Audit: Options Revision Required\n\n**Verdict:** {{ steps['options-audit'].verdict }}\n**Severity:** {{ steps['options-audit'].severity }}\n\n**Summary:** {{ steps['options-audit'].summary }}\n\n**Issues:**\n{{ helpers.json(steps['options-audit'].issues) }}\n\nRevised options will be generated automatically."
+                                                        }
+                                                    }
+                                                }
+                                            ]
                                         }
                                     }
                                 ]
@@ -827,7 +877,7 @@ async function main() {
                             config: {
                                 maxIterations: 3,
                                 conditionExpression:
-                                    "steps['plan-review']?.approved === false && !steps['plan-review']?.rejected",
+                                    "steps['plan-review']?.approved !== true && steps['plan-review']?.rejected !== true",
                                 steps: [
                                     {
                                         id: "plan",
@@ -836,7 +886,7 @@ async function main() {
                                         config: {
                                             agentSlug: "sdlc-planner",
                                             promptTemplate:
-                                                "Create a detailed implementation plan based on the approved option.\n\nApproved option context: {{steps['options-cycle'].text}}\nCodebase analysis: {{steps.analyze.text}}\n\n{{#if steps['plan-review']}}Revision feedback: {{steps['plan-review'].feedback}}{{/if}}"
+                                                "Create a detailed implementation plan based on the approved option.\n\nApproved option context: {{steps['options-cycle'].text}}\nCodebase analysis: {{steps.analyze.text}}\n\n{{#if steps['plan-audit']}}Previous audit feedback: {{steps['plan-audit'].summary}}\nIssues to address: {{helpers.json(steps['plan-audit'].issues)}}{{/if}}\n\n{{#if steps['plan-review']}}Human feedback: {{steps['plan-review'].feedback}}{{/if}}"
                                         }
                                     },
                                     {
@@ -846,15 +896,48 @@ async function main() {
                                         config: {
                                             agentSlug: "sdlc-auditor",
                                             promptTemplate:
-                                                "Audit this implementation plan:\n\n{{steps.plan.text}}\n\nVerify: completeness, correct sequencing, edge case handling, testing coverage."
+                                                "Audit this implementation plan:\n\n{{steps.plan.text}}\n\nVerify: completeness, correct sequencing, edge case handling, testing coverage.",
+                                            outputFormat: "json"
                                         }
                                     },
                                     {
-                                        id: "plan-review",
-                                        type: "human",
-                                        name: "Review Plan",
+                                        id: "plan-verdict-route",
+                                        type: "branch",
+                                        name: "Route by Audit Verdict",
                                         config: {
-                                            prompt: "Review the implementation plan and audit. Approve to proceed to coding, request revision with feedback, or reject."
+                                            branches: [
+                                                {
+                                                    id: "passed",
+                                                    condition:
+                                                        "steps['plan-audit']?.verdict === 'PASS'",
+                                                    steps: [
+                                                        {
+                                                            id: "plan-review",
+                                                            type: "human",
+                                                            name: "Review Plan",
+                                                            config: {
+                                                                prompt: "The auditor has APPROVED the implementation plan. Review and approve to proceed to coding, provide feedback for changes, or reject."
+                                                            }
+                                                        }
+                                                    ]
+                                                }
+                                            ],
+                                            defaultBranch: [
+                                                {
+                                                    id: "plan-audit-notes",
+                                                    type: "tool",
+                                                    name: "Post Audit Feedback",
+                                                    config: {
+                                                        toolId: "github-add-issue-comment",
+                                                        parameters: {
+                                                            issueNumber:
+                                                                "{{ steps.intake.issueNumber || input.existingIssueNumber }}",
+                                                            repository: "{{ input.repository }}",
+                                                            body: "## SDLC Audit: Plan Revision Required\n\n**Verdict:** {{ steps['plan-audit'].verdict }}\n**Severity:** {{ steps['plan-audit'].severity }}\n\n**Summary:** {{ steps['plan-audit'].summary }}\n\n**Issues:**\n{{ helpers.json(steps['plan-audit'].issues) }}\n\nA revised plan will be generated automatically."
+                                                        }
+                                                    }
+                                                }
+                                            ]
                                         }
                                     }
                                 ]
@@ -975,7 +1058,7 @@ async function main() {
                 config: {
                     maxIterations: 3,
                     conditionExpression:
-                        "steps['fix-review']?.approved === false && !steps['fix-review']?.rejected",
+                        "steps['fix-review']?.approved !== true && steps['fix-review']?.rejected !== true",
                     steps: [
                         {
                             id: "fix-plan",
@@ -984,7 +1067,7 @@ async function main() {
                             config: {
                                 agentSlug: "sdlc-planner",
                                 promptTemplate:
-                                    "Create a focused fix plan:\n\nRoot cause: {{steps.analyze.text}}\n\n{{#if steps['fix-review']}}Feedback: {{steps['fix-review'].feedback}}{{/if}}"
+                                    "Create a focused fix plan:\n\nRoot cause: {{steps.analyze.text}}\n\n{{#if steps['fix-audit']}}Previous audit feedback: {{steps['fix-audit'].summary}}\nIssues to address: {{helpers.json(steps['fix-audit'].issues)}}{{/if}}\n\n{{#if steps['fix-review']}}Human feedback: {{steps['fix-review'].feedback}}{{/if}}"
                             }
                         },
                         {
@@ -994,15 +1077,48 @@ async function main() {
                             config: {
                                 agentSlug: "sdlc-auditor",
                                 promptTemplate:
-                                    "Audit this bugfix plan:\n\n{{steps['fix-plan'].text}}\n\nRoot cause: {{steps.analyze.text}}"
+                                    "Audit this bugfix plan:\n\n{{steps['fix-plan'].text}}\n\nRoot cause: {{steps.analyze.text}}",
+                                outputFormat: "json"
                             }
                         },
                         {
-                            id: "fix-review",
-                            type: "human",
-                            name: "Review Fix",
+                            id: "fix-verdict-route",
+                            type: "branch",
+                            name: "Route by Audit Verdict",
                             config: {
-                                prompt: "Review the bugfix plan and audit. Approve, request revision, or reject."
+                                branches: [
+                                    {
+                                        id: "passed",
+                                        condition:
+                                            "steps['fix-audit']?.verdict === 'PASS'",
+                                        steps: [
+                                            {
+                                                id: "fix-review",
+                                                type: "human",
+                                                name: "Final Approval",
+                                                config: {
+                                                    prompt: "The auditor has APPROVED the fix plan. Review and approve to proceed with implementation, provide feedback for changes, or reject."
+                                                }
+                                            }
+                                        ]
+                                    }
+                                ],
+                                defaultBranch: [
+                                    {
+                                        id: "fix-audit-notes",
+                                        type: "tool",
+                                        name: "Post Audit Feedback",
+                                        config: {
+                                            toolId: "github-add-issue-comment",
+                                            parameters: {
+                                                issueNumber:
+                                                    "{{ steps.intake.issueNumber || input.existingIssueNumber }}",
+                                                repository: "{{ input.repository }}",
+                                                body: "## SDLC Audit: Revision Required\n\n**Verdict:** {{ steps['fix-audit'].verdict }}\n**Severity:** {{ steps['fix-audit'].severity }}\n\n**Summary:** {{ steps['fix-audit'].summary }}\n\n**Issues:**\n{{ helpers.json(steps['fix-audit'].issues) }}\n\nA revised plan will be generated automatically."
+                                            }
+                                        }
+                                    }
+                                ]
                             }
                         }
                     ]
@@ -1092,7 +1208,7 @@ async function main() {
                 config: {
                     maxIterations: 3,
                     conditionExpression:
-                        "steps['feature-plan-review']?.approved === false && !steps['feature-plan-review']?.rejected",
+                        "steps['feature-plan-review']?.approved !== true && steps['feature-plan-review']?.rejected !== true",
                     steps: [
                         {
                             id: "feature-plan",
@@ -1101,7 +1217,7 @@ async function main() {
                             config: {
                                 agentSlug: "sdlc-planner",
                                 promptTemplate:
-                                    "Create a phased implementation plan for this feature:\n\nDesign: {{steps.design.text}}\n\nBreak into deliverable phases with clear milestones.\n\n{{#if steps['feature-plan-review']}}Feedback: {{steps['feature-plan-review'].feedback}}{{/if}}"
+                                    "Create a phased implementation plan for this feature:\n\nDesign: {{steps.design.text}}\n\nBreak into deliverable phases with clear milestones.\n\n{{#if steps['feature-plan-audit']}}Previous audit feedback: {{steps['feature-plan-audit'].summary}}\nIssues to address: {{helpers.json(steps['feature-plan-audit'].issues)}}{{/if}}\n\n{{#if steps['feature-plan-review']}}Human feedback: {{steps['feature-plan-review'].feedback}}{{/if}}"
                             }
                         },
                         {
@@ -1111,15 +1227,48 @@ async function main() {
                             config: {
                                 agentSlug: "sdlc-auditor",
                                 promptTemplate:
-                                    "Audit this phased implementation plan:\n\n{{steps['feature-plan'].text}}"
+                                    "Audit this phased implementation plan:\n\n{{steps['feature-plan'].text}}",
+                                outputFormat: "json"
                             }
                         },
                         {
-                            id: "feature-plan-review",
-                            type: "human",
-                            name: "Review Plan",
+                            id: "feature-verdict-route",
+                            type: "branch",
+                            name: "Route by Audit Verdict",
                             config: {
-                                prompt: "Review the phased plan and audit. Approve to begin implementation."
+                                branches: [
+                                    {
+                                        id: "passed",
+                                        condition:
+                                            "steps['feature-plan-audit']?.verdict === 'PASS'",
+                                        steps: [
+                                            {
+                                                id: "feature-plan-review",
+                                                type: "human",
+                                                name: "Review Plan",
+                                                config: {
+                                                    prompt: "The auditor has APPROVED the phased implementation plan. Review and approve to begin implementation, provide feedback for changes, or reject."
+                                                }
+                                            }
+                                        ]
+                                    }
+                                ],
+                                defaultBranch: [
+                                    {
+                                        id: "feature-audit-notes",
+                                        type: "tool",
+                                        name: "Post Audit Feedback",
+                                        config: {
+                                            toolId: "github-add-issue-comment",
+                                            parameters: {
+                                                issueNumber:
+                                                    "{{ steps.intake.issueNumber || input.existingIssueNumber }}",
+                                                repository: "{{ input.repository }}",
+                                                body: "## SDLC Audit: Plan Revision Required\n\n**Verdict:** {{ steps['feature-plan-audit'].verdict }}\n**Severity:** {{ steps['feature-plan-audit'].severity }}\n\n**Summary:** {{ steps['feature-plan-audit'].summary }}\n\n**Issues:**\n{{ helpers.json(steps['feature-plan-audit'].issues) }}\n\nA revised plan will be generated automatically."
+                                            }
+                                        }
+                                    }
+                                ]
                             }
                         }
                     ]

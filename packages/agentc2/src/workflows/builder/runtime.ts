@@ -35,6 +35,7 @@ interface ExecuteWorkflowOptions {
     depth?: number;
     workflowMeta?: WorkflowMeta;
     agentStepHooks?: AgentStepHooks;
+    _parentIterationIndex?: number;
 }
 
 const MAX_NESTING_DEPTH = 5;
@@ -608,12 +609,10 @@ async function executeSteps(
                                     iterationContext,
                                     {
                                         ...options,
-                                        existingSteps: options.existingSteps
+                                        existingSteps: options.existingSteps,
+                                        _parentIterationIndex: index
                                     }
                                 );
-                                result.steps.forEach((stepResult) => {
-                                    stepResult.iterationIndex = index;
-                                });
                                 results.push(result);
                             }
                         });
@@ -656,12 +655,10 @@ async function executeSteps(
 
                         const iterResult = await executeSteps(dwConfig.steps || [], iterContext, {
                             ...options,
-                            existingSteps: options.existingSteps
+                            existingSteps: options.existingSteps,
+                            _parentIterationIndex: iteration
                         });
 
-                        iterResult.steps.forEach((s) => {
-                            s.iterationIndex = iteration;
-                        });
                         executionSteps.push(...iterResult.steps);
 
                         if (iterResult.status === "suspended") {
@@ -743,7 +740,10 @@ async function executeSteps(
                 startedAt,
                 completedAt,
                 durationMs,
-                ...(agentRunId ? { agentRunId } : {})
+                ...(agentRunId ? { agentRunId } : {}),
+                ...(options._parentIterationIndex != null
+                    ? { iterationIndex: options._parentIterationIndex }
+                    : {})
             };
             executionSteps.push(stepResult);
             context.steps[step.id] = output;
@@ -772,7 +772,10 @@ async function executeSteps(
                 error: error instanceof Error ? error.message : error,
                 startedAt,
                 completedAt,
-                durationMs
+                durationMs,
+                ...(options._parentIterationIndex != null
+                    ? { iterationIndex: options._parentIterationIndex }
+                    : {})
             };
             executionSteps.push(stepResult);
             if (options.onStepEvent) {
