@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 type OrgOption = {
     id: string;
@@ -18,6 +18,15 @@ type WorkflowOption = {
     version: number;
     workspaceName: string | null;
     playbookSource: { name: string; slug: string } | null;
+};
+
+type GitHubRepo = {
+    id: number;
+    fullName: string;
+    name: string;
+    owner: string;
+    url: string;
+    isPrivate: boolean;
 };
 
 type SavedConfig = {
@@ -40,6 +49,9 @@ export function DispatchConfigManager() {
     const [workflows, setWorkflows] = useState<WorkflowOption[]>([]);
     const [workflowsLoading, setWorkflowsLoading] = useState(false);
     const [selectedWorkflowId, setSelectedWorkflowId] = useState("");
+    const [githubRepos, setGithubRepos] = useState<GitHubRepo[]>([]);
+    const [reposLoading, setReposLoading] = useState(false);
+    const [reposError, setReposError] = useState("");
     const [repository, setRepository] = useState("");
 
     const [savedConfig, setSavedConfig] = useState<SavedConfig | null>(null);
@@ -79,13 +91,37 @@ export function DispatchConfigManager() {
         }
     }
 
+    const loadGithubRepos = useCallback(async (orgId: string) => {
+        setReposLoading(true);
+        setReposError("");
+        try {
+            const res = await fetch(`/admin/api/tenants/${orgId}/github-repos`, {
+                credentials: "include"
+            });
+            const data = await res.json().catch(() => ({}));
+            if (data.error && (!data.repos || data.repos.length === 0)) {
+                setReposError(data.error);
+                setGithubRepos([]);
+            } else {
+                setGithubRepos((data.repos ?? []) as GitHubRepo[]);
+            }
+        } catch {
+            setGithubRepos([]);
+            setReposError("Failed to load GitHub repositories");
+        } finally {
+            setReposLoading(false);
+        }
+    }, []);
+
     useEffect(() => {
         if (!selectedOrgId) {
             setWorkflows([]);
+            setGithubRepos([]);
             return;
         }
         void loadWorkflows(selectedOrgId);
-    }, [selectedOrgId]);
+        void loadGithubRepos(selectedOrgId);
+    }, [selectedOrgId, loadGithubRepos]);
 
     async function loadWorkflows(orgId: string) {
         setWorkflowsLoading(true);
@@ -108,6 +144,7 @@ export function DispatchConfigManager() {
     function handleOrgChange(orgId: string) {
         setSelectedOrgId(orgId);
         setSelectedWorkflowId("");
+        setRepository("");
         setSuccess("");
     }
 
@@ -149,7 +186,6 @@ export function DispatchConfigManager() {
         }
     }
 
-    const selectedOrg = orgs.find((o) => o.id === selectedOrgId);
     const selectedWorkflow = workflows.find((w) => w.id === selectedWorkflowId);
     const hasChanges =
         savedConfig?.targetOrganizationId !== selectedOrgId ||
@@ -172,8 +208,8 @@ export function DispatchConfigManager() {
             <div>
                 <h1 className="text-2xl font-bold">Dispatch Configuration</h1>
                 <p className="text-muted-foreground mt-1 text-sm">
-                    Configure which organization and workflow to use when dispatching tickets to the
-                    coding pipeline.
+                    Configure which organization, workflow, and repository to use when dispatching
+                    tickets to the coding pipeline.
                 </p>
             </div>
 
@@ -276,24 +312,42 @@ export function DispatchConfigManager() {
                         </div>
                     )}
 
-                    {selectedOrgId && selectedWorkflowId && (
+                    {selectedOrgId && (
                         <div>
                             <label className="text-muted-foreground mb-1 block text-xs font-medium">
                                 Target Repository
                             </label>
-                            <input
-                                type="text"
-                                value={repository}
-                                onChange={(e) => {
-                                    setRepository(e.target.value);
-                                    setSuccess("");
-                                }}
-                                placeholder="https://github.com/org/repo"
-                                className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
-                            />
-                            <p className="text-muted-foreground mt-1 text-xs">
-                                GitHub repository URL where issues and PRs will be created.
-                            </p>
+                            {reposLoading ? (
+                                <div className="text-muted-foreground rounded-md bg-gray-500/10 px-3 py-2 text-sm">
+                                    Loading repositories from GitHub integration...
+                                </div>
+                            ) : reposError ? (
+                                <div className="rounded-md bg-amber-500/10 px-3 py-2 text-sm text-amber-600">
+                                    {reposError}
+                                </div>
+                            ) : githubRepos.length > 0 ? (
+                                <select
+                                    value={repository}
+                                    onChange={(e) => {
+                                        setRepository(e.target.value);
+                                        setSuccess("");
+                                    }}
+                                    className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+                                >
+                                    <option value="">Select repository...</option>
+                                    {githubRepos.map((repo) => (
+                                        <option key={repo.id} value={repo.url}>
+                                            {repo.fullName}
+                                            {repo.isPrivate ? " (Private)" : ""}
+                                        </option>
+                                    ))}
+                                </select>
+                            ) : (
+                                <div className="rounded-md bg-amber-500/10 px-3 py-2 text-sm text-amber-600">
+                                    No repositories found. Check the GitHub integration for this
+                                    organization.
+                                </div>
+                            )}
                         </div>
                     )}
 
