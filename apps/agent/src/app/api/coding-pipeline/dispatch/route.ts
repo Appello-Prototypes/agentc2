@@ -25,8 +25,12 @@ export async function POST(request: NextRequest) {
             via,
             title,
             description,
-            labels
+            labels,
+            targetOrganizationId,
+            workflowId
         } = body;
+
+        const orgId = targetOrganizationId || authResult.organizationId;
 
         if (!sourceType || !sourceId || !repository) {
             return NextResponse.json(
@@ -72,7 +76,7 @@ export async function POST(request: NextRequest) {
                     repository: repoPath,
                     labels: labels || ["agentc2-sdlc"],
                     sourceTicketId: sourceId,
-                    organizationId: authResult.organizationId
+                    organizationId: orgId
                 },
                 {} as Parameters<NonNullable<typeof ticketToGithubIssueTool.execute>>[1]
             );
@@ -84,16 +88,15 @@ export async function POST(request: NextRequest) {
                 );
             }
 
-            // Determine SDLC workflow variant from labels
-            const labelNames = (labels || []) as string[];
-            const isBug = labelNames.some((l: string) =>
-                ["bug", "bugfix", "fix"].includes(l.toLowerCase())
-            );
-            const sdlcSlug = isBug ? "sdlc-bugfix" : "sdlc-bugfix"; // TODO: add sdlc-feature routing
-
-            const sdlcWorkflow = await prisma.workflow.findFirst({
-                where: { slug: sdlcSlug, isActive: true }
-            });
+            const sdlcWorkflow = workflowId
+                ? await prisma.workflow.findUnique({ where: { id: workflowId } })
+                : await prisma.workflow.findFirst({
+                      where: {
+                          slug: "sdlc-standard",
+                          isActive: true,
+                          workspace: { organizationId: orgId }
+                      }
+                  });
 
             let workflowRunId: string | null = null;
 
@@ -111,7 +114,7 @@ export async function POST(request: NextRequest) {
                             labels: labels || ["agentc2-sdlc"],
                             sourceType,
                             sourceId,
-                            organizationId: authResult.organizationId
+                            organizationId: orgId
                         },
                         source: "coding-pipeline",
                         triggerType: "API"
@@ -134,7 +137,7 @@ export async function POST(request: NextRequest) {
                             labels: labels || ["agentc2-sdlc"],
                             sourceType,
                             sourceId,
-                            organizationId: authResult.organizationId
+                            organizationId: orgId
                         }
                     }
                 });
@@ -183,7 +186,7 @@ export async function POST(request: NextRequest) {
                 baseBranch: branch || "main",
                 status: "running",
                 variant: variant || "standard",
-                organizationId: authResult.organizationId
+                organizationId: orgId
             }
         });
 
@@ -219,7 +222,7 @@ export async function POST(request: NextRequest) {
                     repository,
                     branch: branch || "main",
                     pipelineRunId: pipelineRun.id,
-                    organizationId: authResult.organizationId
+                    organizationId: orgId
                 },
                 source: "coding-pipeline",
                 triggerType: "API"
@@ -243,7 +246,7 @@ export async function POST(request: NextRequest) {
                     repository,
                     branch: branch || "main",
                     pipelineRunId: pipelineRun.id,
-                    organizationId: authResult.organizationId
+                    organizationId: orgId
                 },
                 pipelineRunId: pipelineRun.id
             }

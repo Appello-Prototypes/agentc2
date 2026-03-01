@@ -152,31 +152,34 @@ async function ensureAssistantAgent() {
 }
 
 async function upsertWorkflow(workflow: (typeof SAMPLE_WORKFLOWS)[number], createdBy: string) {
-    const existing = await prisma.workflow.findUnique({
+    const existing = await prisma.workflow.findFirst({
         where: { slug: workflow.slug }
     });
 
-    const record = await prisma.workflow.upsert({
-        where: { slug: workflow.slug },
-        update: {
-            name: workflow.name,
-            description: workflow.description,
-            definitionJson: workflow.definitionJson,
-            maxSteps: workflow.maxSteps,
-            isActive: true
-        },
-        create: {
-            slug: workflow.slug,
-            name: workflow.name,
-            description: workflow.description,
-            definitionJson: workflow.definitionJson,
-            maxSteps: workflow.maxSteps,
-            isPublished: false,
-            isActive: true,
-            type: "USER",
-            createdBy
-        }
-    });
+    const record = existing
+        ? await prisma.workflow.update({
+              where: { id: existing.id },
+              data: {
+                  name: workflow.name,
+                  description: workflow.description,
+                  definitionJson: workflow.definitionJson,
+                  maxSteps: workflow.maxSteps,
+                  isActive: true
+              }
+          })
+        : await prisma.workflow.create({
+              data: {
+                  slug: workflow.slug,
+                  name: workflow.name,
+                  description: workflow.description,
+                  definitionJson: workflow.definitionJson,
+                  maxSteps: workflow.maxSteps,
+                  isPublished: false,
+                  isActive: true,
+                  type: "USER",
+                  createdBy
+              }
+          });
 
     await prisma.workflowVersion.upsert({
         where: {

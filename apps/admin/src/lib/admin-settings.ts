@@ -2,8 +2,17 @@ import { prisma } from "@repo/database";
 
 export const ADMIN_SETTING_KEYS = {
     githubConnection: "github_connection",
-    pipelineRepositories: "pipeline_repositories"
+    pipelineRepositories: "pipeline_repositories",
+    dispatchConfig: "dispatch_config"
 } as const;
+
+export type DispatchConfig = {
+    targetOrganizationId: string;
+    targetOrganizationName: string;
+    workflowId: string;
+    workflowSlug: string;
+    workflowName: string;
+};
 
 export type PipelineRepository = {
     id: string;

@@ -81,7 +81,9 @@ export const workflowCreateTool = createTool({
     }),
     execute: async (input) => {
         const slug = input.slug || generateSlug(input.name);
-        const existing = await prisma.workflow.findUnique({ where: { slug } });
+        const existing = await prisma.workflow.findFirst({
+            where: { slug, workspaceId: input.workspaceId ?? null }
+        });
         if (existing) {
             throw new Error(`Workflow slug '${slug}' already exists`);
         }

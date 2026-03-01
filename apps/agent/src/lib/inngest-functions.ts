@@ -7115,8 +7115,8 @@ export const workflowTriggerFireFunction = inngest.createFunction(
 
             if (routedSlug && routedSlug !== targetWorkflowSlug) {
                 const routedWorkflow = await step.run("load-routed-workflow", async () => {
-                    return prisma.workflow.findUnique({
-                        where: { slug: routedSlug },
+                    return prisma.workflow.findFirst({
+                        where: { slug: routedSlug, isActive: true },
                         select: { id: true, slug: true, isActive: true }
                     });
                 });

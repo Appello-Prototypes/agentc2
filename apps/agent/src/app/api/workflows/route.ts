@@ -54,8 +54,8 @@ export async function POST(request: NextRequest) {
         }
 
         const workflowSlug = slug || generateSlug(name);
-        const existing = await prisma.workflow.findUnique({
-            where: { slug: workflowSlug }
+        const existing = await prisma.workflow.findFirst({
+            where: { slug: workflowSlug, workspaceId: body.workspaceId ?? null }
         });
 
         if (existing) {

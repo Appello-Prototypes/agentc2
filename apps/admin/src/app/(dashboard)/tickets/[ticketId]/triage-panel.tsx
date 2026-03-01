@@ -36,6 +36,14 @@ interface PipelineRepository {
     isDefault: boolean;
 }
 
+type DispatchConfig = {
+    targetOrganizationId: string;
+    targetOrganizationName: string;
+    workflowId: string;
+    workflowSlug: string;
+    workflowName: string;
+};
+
 const MANUAL_REPO_OPTION = "__manual__";
 
 export function TicketTriagePanel({
@@ -58,23 +66,28 @@ export function TicketTriagePanel({
     const [pipelineReposError, setPipelineReposError] = useState("");
     const [pipelineDispatching, setPipelineDispatching] = useState(false);
     const [pipelineRunId, setPipelineRunId] = useState(ticket.pipelineRunId ?? null);
+    const [dispatchConfig, setDispatchConfig] = useState<DispatchConfig | null>(null);
+    const [dispatchConfigLoading, setDispatchConfigLoading] = useState(false);
 
     useEffect(() => {
         if (!showPipelineModal) return;
 
-        const loadRepos = async () => {
+        const loadModalData = async () => {
             setPipelineReposLoading(true);
+            setDispatchConfigLoading(true);
             setPipelineReposError("");
-            try {
-                const response = await fetch("/admin/api/settings/repos", {
-                    credentials: "include"
-                });
-                const data = await response.json().catch(() => ({}));
-                if (!response.ok) {
-                    throw new Error(data.error || "Failed to load repositories");
-                }
 
-                const repositories = (data.repositories ?? []) as PipelineRepository[];
+            const [reposResult, configResult] = await Promise.allSettled([
+                fetch("/admin/api/settings/repos", { credentials: "include" }).then((r) =>
+                    r.json()
+                ),
+                fetch("/admin/api/settings/dispatch-config", { credentials: "include" }).then((r) =>
+                    r.json()
+                )
+            ]);
+
+            if (reposResult.status === "fulfilled") {
+                const repositories = (reposResult.value.repositories ?? []) as PipelineRepository[];
                 setPipelineRepos(repositories);
                 const defaultRepo = repositories.find((repo) => repo.isDefault);
                 if (defaultRepo) {
@@ -82,18 +95,23 @@ export function TicketTriagePanel({
                 } else {
                     setPipelineRepoSelection(MANUAL_REPO_OPTION);
                 }
-            } catch (error) {
+            } else {
                 setPipelineRepos([]);
                 setPipelineRepoSelection(MANUAL_REPO_OPTION);
-                setPipelineReposError(
-                    error instanceof Error ? error.message : "Failed to load repositories"
-                );
-            } finally {
-                setPipelineReposLoading(false);
+                setPipelineReposError("Failed to load repositories");
             }
+
+            if (configResult.status === "fulfilled" && configResult.value.config) {
+                setDispatchConfig(configResult.value.config);
+            } else {
+                setDispatchConfig(null);
+            }
+
+            setPipelineReposLoading(false);
+            setDispatchConfigLoading(false);
         };
 
-        void loadRepos();
+        void loadModalData();
     }, [showPipelineModal]);
 
     const selectedRepoUrl =
@@ -136,9 +154,6 @@ export function TicketTriagePanel({
         if (!selectedRepoUrl) return;
         setPipelineDispatching(true);
         try {
-            const agentBaseUrl = process.env.NEXT_PUBLIC_AGENT_URL || "http://localhost:3001";
-            const agentPath = agentBaseUrl.includes("localhost") ? "" : "/agent";
-
             const typeLabel =
                 ticket.type === "BUG"
                     ? "bug"
@@ -146,15 +161,14 @@ export function TicketTriagePanel({
                       ? "feature"
                       : "task";
 
-            const res = await fetch(`${agentBaseUrl}${agentPath}/api/coding-pipeline/dispatch`, {
+            const res = await fetch("/admin/api/dispatch", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
+                credentials: "include",
                 body: JSON.stringify({
                     sourceType: "support_ticket",
                     sourceId: ticket.id,
                     repository: selectedRepoUrl,
-                    variant: "standard",
-                    via: "github",
                     title: ticket.title,
                     description: ticket.description,
                     labels: ["agentc2-sdlc", typeLabel]
@@ -167,6 +181,8 @@ export function TicketTriagePanel({
                 setManualPipelineRepo("");
                 setStatus("IN_PROGRESS");
                 router.refresh();
+            } else if (data.error) {
+                setPipelineReposError(data.error);
             }
         } finally {
             setPipelineDispatching(false);
@@ -310,6 +326,35 @@ export function TicketTriagePanel({
                             </button>
                             {showPipelineModal && (
                                 <div className="bg-background border-border space-y-3 rounded-md border p-3">
+                                    {dispatchConfigLoading ? (
+                                        <div className="text-muted-foreground text-xs">
+                                            Loading config...
+                                        </div>
+                                    ) : dispatchConfig ? (
+                                        <div className="rounded-md bg-blue-500/10 px-3 py-2 text-xs text-blue-600">
+                                            <span className="font-medium">
+                                                {dispatchConfig.targetOrganizationName}
+                                            </span>
+                                            {" / "}
+                                            <span className="font-medium">
+                                                {dispatchConfig.workflowName}
+                                            </span>
+                                            <span className="text-muted-foreground ml-1">
+                                                ({dispatchConfig.workflowSlug})
+                                            </span>
+                                        </div>
+                                    ) : (
+                                        <div className="rounded-md bg-amber-500/10 px-3 py-2 text-xs text-amber-600">
+                                            No dispatch target configured.{" "}
+                                            <a
+                                                href="/admin/settings"
+                                                className="underline hover:no-underline"
+                                            >
+                                                Go to Settings &gt; Dispatch
+                                            </a>
+                                        </div>
+                                    )}
+
                                     <label className="text-muted-foreground block text-xs font-medium">
                                         Target Repository
                                     </label>
@@ -353,7 +398,11 @@ export function TicketTriagePanel({
                                     <div className="flex gap-2">
                                         <button
                                             onClick={handleDispatchPipeline}
-                                            disabled={pipelineDispatching || !selectedRepoUrl}
+                                            disabled={
+                                                pipelineDispatching ||
+                                                !selectedRepoUrl ||
+                                                !dispatchConfig
+                                            }
                                             className="flex-1 rounded-md bg-purple-500 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-purple-600 disabled:opacity-50"
                                         >
                                             {pipelineDispatching ? "Dispatching..." : "Dispatch"}
