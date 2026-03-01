@@ -2,6 +2,7 @@ import { agentResolver, type RequestContext } from "../../agents/resolver";
 import { getToolsByNamesAsync } from "../../tools/registry";
 import { mastra } from "../../mastra";
 import { prisma } from "@repo/database";
+import { z } from "zod";
 import {
     type WorkflowDefinition,
     type WorkflowExecutionContext,
@@ -323,11 +324,36 @@ async function executeAgentStep(
             if (jsonMatch) {
                 try {
                     output = JSON.parse(jsonMatch[0]);
-                } catch {
-                    output = { raw: text };
+
+                    if (config.outputSchema) {
+                        const schema = z.object(config.outputSchema as z.ZodRawShape);
+                        const validation = schema.safeParse(output);
+
+                        if (!validation.success) {
+                            const errorMsg = `Agent step "${step.id}" output validation failed: ${validation.error.message}`;
+                            console.error(errorMsg, {
+                                agentSlug,
+                                output,
+                                expectedSchema: config.outputSchema,
+                                errors: validation.error.errors
+                            });
+
+                            output = {
+                                _validationError: errorMsg,
+                                _rawOutput: output,
+                                _expectedSchema: config.outputSchema,
+                                _validationErrors: validation.error.errors
+                            };
+                        }
+                    }
+                } catch (error) {
+                    if (error instanceof Error && error.message.includes("output validation failed")) {
+                        throw error;
+                    }
+                    output = { raw: text, _parseError: error };
                 }
             } else {
-                output = { raw: text };
+                output = { raw: text, _noJsonFound: true };
             }
         } else {
             output = {

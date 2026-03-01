@@ -17,6 +17,7 @@
 
 import { prisma } from "../packages/database/src/index";
 import { randomBytes } from "crypto";
+import { z } from "zod";
 
 /* ─── Instructions ─────────────────────────────────────────────────── */
 
@@ -46,7 +47,10 @@ const AUDITOR_INSTRUCTIONS = `You are the SDLC Auditor agent. You review plans, 
 4. **Gap Detection**: Identify missing steps, untested scenarios, and potential regressions
 
 ## Output Format
-Always output structured JSON:
+
+**CRITICAL: You MUST output valid JSON. Do not wrap in markdown code blocks. Do not add explanatory text before or after the JSON.**
+
+Always output structured JSON matching this exact format:
 {
     "verdict": "PASS" | "NEEDS_REVISION" | "FAIL",
     "severity": "none" | "minor" | "major" | "critical",
@@ -66,6 +70,14 @@ Always output structured JSON:
     }
 }
 
+**Example valid output:**
+{"verdict":"PASS","severity":"none","issues":[],"positives":["Clear requirements"],"summary":"All checks passed.","checklist":{"requirementsAddressed":true,"edgeCasesConsidered":true,"errorHandlingPresent":true,"noBreakingChanges":true,"securityReviewed":true,"performanceAssessed":true,"testingCovered":true}}
+
+**WRONG - Do not do this:**
+\`\`\`json
+{"verdict": "PASS"}
+\`\`\`
+
 ## Verdict Criteria
 - **PASS**: All checklist items satisfied, no critical or major issues. Minor issues acceptable if noted.
 - **NEEDS_REVISION**: Major issues found that need addressing, or critical checklist items not met. Provide specific fixes.
@@ -76,6 +88,34 @@ Always output structured JSON:
 - Always populate positives to acknowledge good work
 - The summary must reference the verdict and key reasoning
 - For NEEDS_REVISION, suggestedFix on each issue must be actionable and specific`;
+
+const AUDITOR_OUTPUT_SCHEMA = {
+    verdict: z.enum(["PASS", "NEEDS_REVISION", "FAIL"]).describe("Audit verdict"),
+    severity: z.enum(["none", "minor", "major", "critical"]).describe("Severity level"),
+    issues: z
+        .array(
+            z.object({
+                severity: z.enum(["critical", "major", "minor"]),
+                area: z.string(),
+                description: z.string(),
+                suggestedFix: z.string()
+            })
+        )
+        .describe("List of issues found"),
+    positives: z.array(z.string()).describe("Positive aspects"),
+    summary: z.string().describe("Overall assessment summary"),
+    checklist: z
+        .object({
+            requirementsAddressed: z.boolean(),
+            edgeCasesConsidered: z.boolean(),
+            errorHandlingPresent: z.boolean(),
+            noBreakingChanges: z.boolean(),
+            securityReviewed: z.boolean(),
+            performanceAssessed: z.boolean(),
+            testingCovered: z.boolean()
+        })
+        .describe("Quality checklist")
+};
 
 const CLASSIFIER_INSTRUCTIONS = `You are the SDLC Classifier agent. You analyze incoming tickets to determine type, priority, complexity, and routing.
 
@@ -824,7 +864,8 @@ async function main() {
                                             agentSlug: "sdlc-auditor",
                                             promptTemplate:
                                                 "Audit these development options:\n\n{{steps.options.text}}\n\nCheck for: feasibility, missed alternatives, risk underestimation, completeness.",
-                                            outputFormat: "json"
+                                            outputFormat: "json",
+                                            outputSchema: AUDITOR_OUTPUT_SCHEMA
                                         }
                                     },
                                     {
@@ -897,7 +938,8 @@ async function main() {
                                             agentSlug: "sdlc-auditor",
                                             promptTemplate:
                                                 "Audit this implementation plan:\n\n{{steps.plan.text}}\n\nVerify: completeness, correct sequencing, edge case handling, testing coverage.",
-                                            outputFormat: "json"
+                                            outputFormat: "json",
+                                            outputSchema: AUDITOR_OUTPUT_SCHEMA
                                         }
                                     },
                                     {
@@ -1078,7 +1120,8 @@ async function main() {
                                 agentSlug: "sdlc-auditor",
                                 promptTemplate:
                                     "Audit this bugfix plan:\n\n{{steps['fix-plan'].text}}\n\nRoot cause: {{steps.analyze.text}}",
-                                outputFormat: "json"
+                                outputFormat: "json",
+                                outputSchema: AUDITOR_OUTPUT_SCHEMA
                             }
                         },
                         {
@@ -1228,7 +1271,8 @@ async function main() {
                                 agentSlug: "sdlc-auditor",
                                 promptTemplate:
                                     "Audit this phased implementation plan:\n\n{{steps['feature-plan'].text}}",
-                                outputFormat: "json"
+                                outputFormat: "json",
+                                outputSchema: AUDITOR_OUTPUT_SCHEMA
                             }
                         },
                         {

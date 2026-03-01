@@ -8313,6 +8313,25 @@ export const asyncWorkflowExecuteFunction = inngest.createFunction(
                 durationMs?: number;
                 agentRunId?: string;
             }) => {
+                if (
+                    stepResult.stepType === "agent" &&
+                    stepResult.output &&
+                    typeof stepResult.output === "object" &&
+                    stepResult.status === "completed"
+                ) {
+                    const output = stepResult.output as Record<string, unknown>;
+                    console.log(`[Workflow Debug] Agent step ${stepResult.stepId}:`, {
+                        stepId: stepResult.stepId,
+                        stepName: stepResult.stepName,
+                        hasVerdict: "verdict" in output,
+                        verdict: output.verdict,
+                        hasValidationError: "_validationError" in output,
+                        validationError: output._validationError,
+                        outputKeys: Object.keys(output),
+                        outputPreview: JSON.stringify(output).slice(0, 500)
+                    });
+                }
+
                 const key = `${stepResult.stepId}:${stepResult.iterationIndex ?? ""}`;
                 if (persistedKeys.has(key)) return;
 
