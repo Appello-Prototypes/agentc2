@@ -319,14 +319,22 @@ async function executeAgentStep(
         let output: unknown;
         if (config.outputFormat === "json") {
             const text = response.text || "";
-            const jsonMatch = text.match(/\{[\s\S]*\}/);
+            
+            // Try to extract JSON from markdown code fences first (```json ... ```)
+            const markdownMatch = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+            const jsonText = markdownMatch ? markdownMatch[1] : text;
+            
+            // Now extract the JSON object from the cleaned text
+            const jsonMatch = jsonText.match(/\{[\s\S]*\}/);
             if (jsonMatch) {
                 try {
                     output = JSON.parse(jsonMatch[0]);
                 } catch {
+                    console.warn(`[WorkflowRuntime] Failed to parse JSON from agent step "${step.id}". Raw text:`, text);
                     output = { raw: text };
                 }
             } else {
+                console.warn(`[WorkflowRuntime] No JSON found in agent step "${step.id}" output. Raw text:`, text);
                 output = { raw: text };
             }
         } else {
@@ -525,10 +533,33 @@ async function executeSteps(
                         defaultBranch?: WorkflowStep[];
                     };
                     const branches = config.branches || [];
-                    const selected = branches.find((branch) =>
-                        evaluateCondition(branch.condition, context)
-                    );
+                    
+                    // Evaluate branch conditions with debug logging
+                    let selected: WorkflowBranchConfig | undefined;
+                    for (const branch of branches) {
+                        const conditionResult = evaluateCondition(branch.condition, context);
+                        console.log(`[WorkflowRuntime] Branch step "${step.id}" evaluating condition "${branch.condition}": ${conditionResult}`);
+                        
+                        // Log relevant step data for debugging
+                        const referencedSteps = branch.condition.match(/steps\['([^']+)'\]/g);
+                        if (referencedSteps) {
+                            for (const ref of referencedSteps) {
+                                const stepId = ref.match(/steps\['([^']+)'\]/)?.[1];
+                                if (stepId) {
+                                    console.log(`[WorkflowRuntime]   Referenced step '${stepId}' data:`, JSON.stringify(context.steps[stepId], null, 2));
+                                }
+                            }
+                        }
+                        
+                        if (conditionResult) {
+                            selected = branch;
+                            break;
+                        }
+                    }
+                    
                     const branchSteps = selected?.steps || config.defaultBranch || [];
+                    console.log(`[WorkflowRuntime] Branch step "${step.id}" selected: ${selected ? `"${selected.id}"` : "default branch"}`);
+                    
                     const branchResult = await executeSteps(branchSteps, context, {
                         ...options,
                         existingSteps: options.existingSteps

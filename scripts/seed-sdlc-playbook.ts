@@ -46,7 +46,9 @@ const AUDITOR_INSTRUCTIONS = `You are the SDLC Auditor agent. You review plans, 
 4. **Gap Detection**: Identify missing steps, untested scenarios, and potential regressions
 
 ## Output Format
-Always output structured JSON:
+Respond with ONLY a JSON object. Do NOT wrap it in markdown code fences (no \`\`\`json). Output the raw JSON directly.
+
+Structure:
 {
     "verdict": "PASS" | "NEEDS_REVISION" | "FAIL",
     "severity": "none" | "minor" | "major" | "critical",
