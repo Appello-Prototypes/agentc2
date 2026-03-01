@@ -83,6 +83,58 @@ export interface VersionInfo {
     createdAt: string;
 }
 
+export interface WorkflowStep {
+    id: string;
+    stepId: string;
+    stepType: string;
+    stepName?: string | null;
+    status: string;
+    inputJson?: unknown;
+    outputJson?: unknown;
+    errorJson?: unknown;
+    durationMs?: number | null;
+    startedAt?: string | null;
+    completedAt?: string | null;
+    iterationIndex?: number | null;
+    agentRunId?: string | null;
+}
+
+export interface NetworkStep {
+    id: string;
+    stepNumber: number;
+    stepType: string;
+    primitiveType?: string | null;
+    primitiveId?: string | null;
+    routingDecision?: unknown;
+    inputJson?: unknown;
+    outputJson?: unknown;
+    errorJson?: unknown;
+    status: string;
+    durationMs?: number | null;
+    tokens?: number | null;
+    costUsd?: number | null;
+    agentRunId?: string | null;
+}
+
+export interface WorkflowEvaluation {
+    id: string;
+    stepSuccessRate?: number | null;
+    outputQuality?: number | null;
+    durationScore?: number | null;
+    overallScore?: number | null;
+    stepScores?: unknown;
+    narrative?: string | null;
+    createdAt: string;
+}
+
+export interface NetworkEvaluation {
+    id: string;
+    routingScore?: number | null;
+    agentScores?: Record<string, number> | null;
+    narrative?: string | null;
+    createdAt: string;
+}
+
 export interface RunDetail {
     id: string;
     agentId: string;
@@ -122,6 +174,16 @@ export interface RunDetail {
     instanceId?: string | null;
     instanceName?: string | null;
     instanceSlug?: string | null;
+    workflowSteps?: WorkflowStep[];
+    networkSteps?: NetworkStep[];
+    workflowEvaluation?: WorkflowEvaluation | null;
+    networkEvaluation?: NetworkEvaluation | null;
+    workflow?: { id: string; slug: string; name: string } | null;
+    network?: { id: string; slug: string; name: string } | null;
+    suspendedStep?: string | null;
+    environment?: string | null;
+    inputJson?: unknown;
+    outputJson?: unknown;
 }
 
 // ─── Formatting helpers ──────────────────────────────────────────────────────

@@ -64,6 +64,8 @@ interface LiveFilters {
         isActive: boolean;
         version: number;
     }>;
+    workflows: Array<{ id: string; slug: string; name: string }>;
+    networks: Array<{ id: string; slug: string; name: string }>;
     versions: Array<{
         id: string;
         agentId: string;
@@ -76,6 +78,7 @@ interface LiveFilters {
     models: Array<{ modelName: string | null; modelProvider: string | null; count: number }>;
     tools: string[];
     runTypes: Array<{ runType: string; count: number }>;
+    kinds: Array<{ kind: string; label: string }>;
 }
 
 interface LiveMetricsSummary {
@@ -152,6 +155,34 @@ interface LiveMetrics {
         totalCostUsd: number;
         failureRate: number;
     }>;
+    workflowSummary?: {
+        totalRuns: number;
+        completedRuns: number;
+        failedRuns: number;
+        runningRuns: number;
+        queuedRuns: number;
+        successRate: number;
+        avgLatencyMs: number;
+        totalTokens: number;
+        totalCostUsd: number;
+    };
+    networkSummary?: {
+        totalRuns: number;
+        completedRuns: number;
+        failedRuns: number;
+        runningRuns: number;
+        queuedRuns: number;
+        successRate: number;
+        avgLatencyMs: number;
+        totalTokens: number;
+        totalCostUsd: number;
+    };
+    grandTotal?: {
+        allRuns: number;
+        allCompleted: number;
+        allFailed: number;
+        allRunning: number;
+    };
     dateRange: {
         from: string | null;
         to: string | null;
@@ -160,40 +191,52 @@ interface LiveMetrics {
 
 interface Run {
     id: string;
-    agentId: string;
-    agentSlug: string;
-    agentName: string;
-    runType: string;
+    kind: "agent" | "workflow" | "network";
+    name: string;
+    slug: string;
+    agentId?: string | null;
+    agentSlug?: string;
+    agentName?: string;
+    runType?: string | null;
     status: string;
     source: string | null;
-    sessionId: string | null;
-    threadId: string | null;
+    sessionId?: string | null;
+    threadId?: string | null;
     inputText: string;
-    outputText: string | null;
+    outputText?: string | null;
     durationMs: number | null;
     startedAt: string;
-    completedAt: string | null;
-    modelProvider: string | null;
-    modelName: string | null;
-    promptTokens: number | null;
-    completionTokens: number | null;
-    totalTokens: number | null;
-    costUsd: number | null;
-    toolCallCount: number;
-    uniqueToolCount: number;
-    stepCount: number;
-    versionId: string | null;
-    versionNumber: number | null;
-    failureReason: string | null;
+    completedAt?: string | null;
+    modelProvider?: string | null;
+    modelName?: string | null;
+    promptTokens?: number | null;
+    completionTokens?: number | null;
+    totalTokens?: number | null;
+    costUsd?: number | null;
+    toolCallCount?: number | null;
+    uniqueToolCount?: number;
+    stepCount?: number;
+    stepsCount?: number | null;
+    versionId?: string | null;
+    versionNumber?: number | null;
+    failureReason?: string | null;
+    triggerType?: string;
+    suspendedStep?: string | null;
+    environment?: string | null;
 }
 
 interface RunCounts {
     total: number;
-    queued: number;
-    running: number;
-    completed: number;
-    failed: number;
-    cancelled: number;
+    byKind?: {
+        agent: number;
+        workflow: number;
+        network: number;
+    };
+    queued?: number;
+    running?: number;
+    completed?: number;
+    failed?: number;
+    cancelled?: number;
 }
 
 interface BudgetAlert {
@@ -228,6 +271,7 @@ export function LiveRunsContent() {
     const [runsLoading, setRunsLoading] = useState(false);
     const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
     const [searchQuery, setSearchQuery] = useState("");
+    const [kindFilter, setKindFilter] = useState("all");
     const [sourceFilter, setSourceFilter] = useState("all");
     const [statusFilter, setStatusFilter] = useState("all");
     const [agentFilter, setAgentFilter] = useState("all");
@@ -303,6 +347,7 @@ export function LiveRunsContent() {
         setRunsLoading(true);
         try {
             const params = new URLSearchParams();
+            params.set("kind", kindFilter);
             params.set("runType", runTypeFilter);
             params.set("limit", String(pageSize));
             params.set("offset", String((currentPage - 1) * pageSize));
@@ -346,15 +391,7 @@ export function LiveRunsContent() {
                     setHasMore(data.pagination.hasMore);
                 }
                 if (data.counts) {
-                    const statusCountMap: Record<string, number> = {
-                        all: data.counts.total,
-                        completed: data.counts.completed,
-                        failed: data.counts.failed,
-                        running: data.counts.running,
-                        queued: data.counts.queued,
-                        cancelled: data.counts.cancelled
-                    };
-                    setTotalFilteredCount(statusCountMap[statusFilter] ?? data.counts.total);
+                    setTotalFilteredCount(data.counts.total ?? 0);
                 }
             }
         } catch (error) {
@@ -363,6 +400,7 @@ export function LiveRunsContent() {
             setRunsLoading(false);
         }
     }, [
+        kindFilter,
         runTypeFilter,
         statusFilter,
         sourceFilter,
@@ -381,10 +419,92 @@ export function LiveRunsContent() {
         setRunDetailLoading(true);
         setRunDetail(null);
         try {
-            const res = await fetch(`${getApiBase()}/api/agents/${run.agentSlug}/runs/${run.id}`);
+            let url: string;
+            if (run.kind === "workflow") {
+                url = `${getApiBase()}/api/workflows/${run.slug}/runs/${run.id}`;
+            } else if (run.kind === "network") {
+                url = `${getApiBase()}/api/networks/${run.slug}/runs/${run.id}`;
+            } else {
+                url = `${getApiBase()}/api/agents/${run.agentSlug || run.slug}/runs/${run.id}`;
+            }
+            const res = await fetch(url);
             const data = await res.json();
             if (data.success) {
-                setRunDetail(data.run);
+                if (run.kind === "workflow") {
+                    const wfRun = data.run;
+                    const inputStr =
+                        typeof wfRun.inputJson === "object" && wfRun.inputJson
+                            ? JSON.stringify(wfRun.inputJson, null, 2)
+                            : wfRun.inputText || "";
+                    const outputStr =
+                        typeof wfRun.outputJson === "object" && wfRun.outputJson
+                            ? JSON.stringify(wfRun.outputJson, null, 2)
+                            : wfRun.outputText || null;
+                    setRunDetail({
+                        id: wfRun.id,
+                        agentId: "",
+                        runType: "workflow",
+                        status: wfRun.status,
+                        inputText: inputStr,
+                        outputText: outputStr,
+                        durationMs: wfRun.durationMs,
+                        startedAt: wfRun.startedAt,
+                        completedAt: wfRun.completedAt,
+                        modelProvider: null,
+                        modelName: null,
+                        versionId: wfRun.versionId || null,
+                        promptTokens: null,
+                        completionTokens: null,
+                        totalTokens: wfRun.totalTokens || null,
+                        costUsd: wfRun.totalCostUsd || null,
+                        trace: null,
+                        evaluation: null,
+                        feedback: wfRun.feedback || null,
+                        costEvent: null,
+                        guardrailEvents: null,
+                        version: null,
+                        workflowSteps: wfRun.steps || [],
+                        workflowEvaluation: wfRun.evaluation || null,
+                        workflow: data.workflow || null,
+                        suspendedStep: wfRun.suspendedStep || null,
+                        environment: wfRun.environment || null,
+                        inputJson: wfRun.inputJson,
+                        outputJson: wfRun.outputJson,
+                    });
+                } else if (run.kind === "network") {
+                    const netRun = data.run;
+                    setRunDetail({
+                        id: netRun.id,
+                        agentId: "",
+                        runType: "network",
+                        status: netRun.status,
+                        inputText: netRun.inputText || "",
+                        outputText: netRun.outputText || null,
+                        durationMs: netRun.durationMs,
+                        startedAt: netRun.startedAt,
+                        completedAt: netRun.completedAt,
+                        modelProvider: null,
+                        modelName: null,
+                        versionId: netRun.versionId || null,
+                        promptTokens: null,
+                        completionTokens: null,
+                        totalTokens: netRun.totalTokens || null,
+                        costUsd: netRun.totalCostUsd || null,
+                        trace: null,
+                        evaluation: null,
+                        feedback: netRun.feedback || null,
+                        costEvent: null,
+                        guardrailEvents: null,
+                        version: null,
+                        networkSteps: netRun.steps || [],
+                        networkEvaluation: netRun.evaluation || null,
+                        network: data.network || null,
+                        environment: netRun.environment || null,
+                        outputJson: netRun.outputJson,
+                    });
+                } else {
+                    setRunDetail(data.run);
+                }
             }
         } catch (error) {
             console.error("Failed to fetch run detail:", error);
@@ -446,7 +566,7 @@ export function LiveRunsContent() {
                 case "totalTokens":
                     return ((a.totalTokens || 0) - (b.totalTokens || 0)) * dir;
                 case "toolCallCount":
-                    return (a.toolCallCount - b.toolCallCount) * dir;
+                    return ((a.toolCallCount || 0) - (b.toolCallCount || 0)) * dir;
                 case "status":
                     return a.status.localeCompare(b.status) * dir;
                 case "startedAt":
@@ -467,12 +587,14 @@ export function LiveRunsContent() {
         const groups = new Map<string, Run[]>();
         const getGroupLabel = (run: Run) => {
             switch (groupBy) {
+                case "kind":
+                    return (run.kind ?? "agent").charAt(0).toUpperCase() + (run.kind ?? "agent").slice(1);
                 case "agent":
-                    return run.agentName;
+                    return run.name || run.agentName || "Unknown";
                 case "version":
                     return run.versionNumber ? `v${run.versionNumber}` : "Unknown Version";
                 case "model":
-                    return run.modelName || "Unknown Model";
+                    return run.modelName ?? "Unknown Model";
                 case "status":
                     return run.status;
                 case "source":
@@ -511,6 +633,7 @@ export function LiveRunsContent() {
 
     const hasActiveFilters =
         searchQuery.length > 0 ||
+        kindFilter !== "all" ||
         statusFilter !== "all" ||
         sourceFilter !== "all" ||
         agentFilter !== "all" ||
@@ -671,6 +794,44 @@ export function LiveRunsContent() {
                     </div>
                 )}
 
+                {runCounts?.byKind && (
+                    <div className="grid grid-cols-3 gap-4">
+                        <Card>
+                            <CardHeader className="pb-2">
+                                <CardDescription className="flex items-center gap-1.5">
+                                    <span className="inline-block h-2 w-2 rounded-full bg-blue-500" />
+                                    Agent Runs
+                                </CardDescription>
+                                <CardTitle className="text-xl">
+                                    {runCounts.byKind.agent.toLocaleString()}
+                                </CardTitle>
+                            </CardHeader>
+                        </Card>
+                        <Card>
+                            <CardHeader className="pb-2">
+                                <CardDescription className="flex items-center gap-1.5">
+                                    <span className="inline-block h-2 w-2 rounded-full bg-purple-500" />
+                                    Workflow Runs
+                                </CardDescription>
+                                <CardTitle className="text-xl">
+                                    {runCounts.byKind.workflow.toLocaleString()}
+                                </CardTitle>
+                            </CardHeader>
+                        </Card>
+                        <Card>
+                            <CardHeader className="pb-2">
+                                <CardDescription className="flex items-center gap-1.5">
+                                    <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
+                                    Network Runs
+                                </CardDescription>
+                                <CardTitle className="text-xl">
+                                    {runCounts.byKind.network.toLocaleString()}
+                                </CardTitle>
+                            </CardHeader>
+                        </Card>
+                    </div>
+                )}
+
                 <div className="grid grid-cols-2 gap-4 md:grid-cols-4 xl:grid-cols-8">
                     <Card>
                         <CardHeader className="pb-2">
@@ -755,6 +916,25 @@ export function LiveRunsContent() {
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 className="min-w-0 flex-1 sm:min-w-[240px]"
                             />
+                            <Select
+                                value={kindFilter}
+                                onValueChange={(value) => {
+                                    setKindFilter(value ?? "all");
+                                    if (value !== "all" && value !== "agent") {
+                                        setAgentFilter("all");
+                                    }
+                                }}
+                            >
+                                <SelectTrigger className="w-40">
+                                    <SelectValue placeholder="Kind" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Kinds</SelectItem>
+                                    <SelectItem value="agent">Agent</SelectItem>
+                                    <SelectItem value="workflow">Workflow</SelectItem>
+                                    <SelectItem value="network">Network</SelectItem>
+                                </SelectContent>
+                            </Select>
                             <Select
                                 value={statusFilter}
                                 onValueChange={(value) => setStatusFilter(value ?? "all")}
@@ -907,6 +1087,7 @@ export function LiveRunsContent() {
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="none">No Group</SelectItem>
+                                    <SelectItem value="kind">Kind</SelectItem>
                                     <SelectItem value="agent">Agent</SelectItem>
                                     <SelectItem value="version">Version</SelectItem>
                                     <SelectItem value="model">Model</SelectItem>
@@ -948,6 +1129,7 @@ export function LiveRunsContent() {
                                     size="sm"
                                     onClick={() => {
                                         setSearchQuery("");
+                                        setKindFilter("all");
                                         setStatusFilter("all");
                                         setSourceFilter("all");
                                         setAgentFilter("all");
@@ -988,35 +1170,35 @@ export function LiveRunsContent() {
                             className="cursor-pointer"
                             onClick={() => setStatusFilter("completed")}
                         >
-                            Completed {runCounts.completed.toLocaleString()}
+                            Completed {(runCounts.completed ?? 0).toLocaleString()}
                         </Badge>
                         <Badge
                             variant={statusFilter === "failed" ? "destructive" : "outline"}
                             className="cursor-pointer"
                             onClick={() => setStatusFilter("failed")}
                         >
-                            Failed {runCounts.failed.toLocaleString()}
+                            Failed {(runCounts.failed ?? 0).toLocaleString()}
                         </Badge>
                         <Badge
                             variant={statusFilter === "running" ? "default" : "outline"}
                             className="cursor-pointer"
                             onClick={() => setStatusFilter("running")}
                         >
-                            Running {runCounts.running.toLocaleString()}
+                            Running {(runCounts.running ?? 0).toLocaleString()}
                         </Badge>
                         <Badge
                             variant={statusFilter === "queued" ? "default" : "outline"}
                             className="cursor-pointer"
                             onClick={() => setStatusFilter("queued")}
                         >
-                            Queued {runCounts.queued.toLocaleString()}
+                            Queued {(runCounts.queued ?? 0).toLocaleString()}
                         </Badge>
                         <Badge
                             variant={statusFilter === "cancelled" ? "default" : "outline"}
                             className="cursor-pointer"
                             onClick={() => setStatusFilter("cancelled")}
                         >
-                            Cancelled {runCounts.cancelled.toLocaleString()}
+                            Cancelled {(runCounts.cancelled ?? 0).toLocaleString()}
                         </Badge>
                     </div>
                 )}
@@ -1063,9 +1245,8 @@ export function LiveRunsContent() {
                                     <Table>
                                         <TableHeader>
                                             <TableRow>
-                                                <TableHead>Agent</TableHead>
-                                                <TableHead>Version</TableHead>
-                                                <TableHead>Model</TableHead>
+                                                <TableHead>Kind</TableHead>
+                                                <TableHead>Name</TableHead>
                                                 <TableHead>Status</TableHead>
                                                 <TableHead>Source</TableHead>
                                                 <TableHead>Input</TableHead>
@@ -1073,9 +1254,8 @@ export function LiveRunsContent() {
                                                     Duration
                                                 </TableHead>
                                                 <TableHead className="text-right">
-                                                    Tool Calls
+                                                    Steps
                                                 </TableHead>
-                                                <TableHead className="text-right">Tools</TableHead>
                                                 <TableHead className="text-right">Tokens</TableHead>
                                                 <TableHead className="text-right">Cost</TableHead>
                                                 <TableHead className="text-right">Time</TableHead>
@@ -1087,7 +1267,7 @@ export function LiveRunsContent() {
                                                     {groupBy !== "none" && (
                                                         <TableRow>
                                                             <TableCell
-                                                                colSpan={12}
+                                                                colSpan={10}
                                                                 className="text-muted-foreground bg-muted/30 text-xs font-semibold uppercase"
                                                             >
                                                                 {group.label} ({group.runs.length})
@@ -1106,25 +1286,30 @@ export function LiveRunsContent() {
                                                                 onClick={() => handleRunClick(run)}
                                                             >
                                                                 <TableCell>
+                                                                    <Badge
+                                                                        variant="outline"
+                                                                        className={
+                                                                            run.kind === "agent"
+                                                                                ? "border-blue-500/30 text-blue-600 dark:text-blue-400"
+                                                                                : run.kind ===
+                                                                                    "workflow"
+                                                                                  ? "border-purple-500/30 text-purple-600 dark:text-purple-400"
+                                                                                  : "border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
+                                                                        }
+                                                                    >
+                                                                        {run.kind}
+                                                                    </Badge>
+                                                                </TableCell>
+                                                                <TableCell>
                                                                     <div>
                                                                         <p className="font-medium">
-                                                                            {run.agentName}
+                                                                            {run.name ||
+                                                                                run.agentName}
                                                                         </p>
                                                                         <p className="text-muted-foreground text-xs">
-                                                                            {run.id}
+                                                                            {run.id.slice(0, 12)}...
                                                                         </p>
                                                                     </div>
-                                                                </TableCell>
-                                                                <TableCell>
-                                                                    {run.versionNumber
-                                                                        ? `v${run.versionNumber}`
-                                                                        : "-"}
-                                                                </TableCell>
-                                                                <TableCell>
-                                                                    {formatModelLabel(
-                                                                        run.modelName,
-                                                                        run.modelProvider
-                                                                    )}
                                                                 </TableCell>
                                                                 <TableCell>
                                                                     <div className="flex items-center gap-1.5">
@@ -1172,10 +1357,10 @@ export function LiveRunsContent() {
                                                                         : "-"}
                                                                 </TableCell>
                                                                 <TableCell className="text-right">
-                                                                    {run.toolCallCount}
-                                                                </TableCell>
-                                                                <TableCell className="text-right">
-                                                                    {run.uniqueToolCount}
+                                                                    {run.stepsCount ??
+                                                                        run.stepCount ??
+                                                                        run.toolCallCount ??
+                                                                        0}
                                                                 </TableCell>
                                                                 <TableCell className="text-right">
                                                                     {formatTokens(run.totalTokens)}
@@ -1259,9 +1444,25 @@ export function LiveRunsContent() {
                                     <div className="flex shrink-0 flex-col gap-4 border-b px-6 py-4">
                                         <div className="flex items-start justify-between gap-4">
                                             <div className="min-w-0 flex-1">
-                                                <h2 className="text-xl font-semibold">
-                                                    {selectedRun.agentName}
-                                                </h2>
+                                                <div className="flex items-center gap-2">
+                                                    <Badge
+                                                        variant="outline"
+                                                        className={
+                                                            selectedRun.kind === "agent"
+                                                                ? "border-blue-500/30 text-blue-600 dark:text-blue-400"
+                                                                : selectedRun.kind ===
+                                                                    "workflow"
+                                                                  ? "border-purple-500/30 text-purple-600 dark:text-purple-400"
+                                                                  : "border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
+                                                        }
+                                                    >
+                                                        {selectedRun.kind}
+                                                    </Badge>
+                                                    <h2 className="text-xl font-semibold">
+                                                        {selectedRun.name ||
+                                                            selectedRun.agentName}
+                                                    </h2>
+                                                </div>
                                                 <p className="text-muted-foreground truncate font-mono text-xs">
                                                     {selectedRun.id}
                                                 </p>
@@ -1311,13 +1512,20 @@ export function LiveRunsContent() {
                                                     v{selectedRun.versionNumber}
                                                 </Badge>
                                             )}
-                                            <Badge variant="outline">{selectedRun.runType}</Badge>
-                                            <Badge variant="outline">
-                                                {formatModelLabel(
-                                                    selectedRun.modelName,
-                                                    selectedRun.modelProvider
-                                                )}
-                                            </Badge>
+                                            {selectedRun.runType && (
+                                                <Badge variant="outline">
+                                                    {selectedRun.runType}
+                                                </Badge>
+                                            )}
+                                            {(selectedRun.modelName ||
+                                                selectedRun.modelProvider) && (
+                                                <Badge variant="outline">
+                                                    {formatModelLabel(
+                                                        selectedRun.modelName ?? null,
+                                                        selectedRun.modelProvider ?? null
+                                                    )}
+                                                </Badge>
+                                            )}
                                         </div>
 
                                         <div className="grid grid-cols-4 gap-3">
@@ -1370,8 +1578,13 @@ export function LiveRunsContent() {
                                             totalTokens={selectedRun.totalTokens}
                                             sessionId={selectedRun.sessionId}
                                             threadId={selectedRun.threadId}
-                                            agentSlug={selectedRun.agentSlug}
+                                            agentSlug={
+                                                selectedRun.agentSlug || selectedRun.slug
+                                            }
                                             runId={selectedRun.id}
+                                            kind={selectedRun.kind}
+                                            primitiveName={selectedRun.name}
+                                            onRefresh={() => fetchRunDetail(selectedRun)}
                                         />
                                     </div>
                                 </div>

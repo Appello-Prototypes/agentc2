@@ -116,10 +116,26 @@ export async function GET(request: NextRequest) {
                 : Promise.resolve([])
         ]);
 
+        // Workflow filter options
+        const workflows = await prisma.workflow.findMany({
+            where: { workspace: { organizationId: authContext.organizationId } },
+            select: { id: true, slug: true, name: true },
+            orderBy: { name: "asc" }
+        });
+
+        // Network filter options
+        const networks = await prisma.network.findMany({
+            where: { workspace: { organizationId: authContext.organizationId } },
+            select: { id: true, slug: true, name: true },
+            orderBy: { name: "asc" }
+        });
+
         return NextResponse.json({
             success: true,
             filters: {
                 agents,
+                workflows,
+                networks,
                 versions,
                 sources: sourceRows.map((row) => ({
                     source: row.source,
@@ -134,7 +150,12 @@ export async function GET(request: NextRequest) {
                 runTypes: runTypeRows.map((row) => ({
                     runType: row.runType,
                     count: row._count._all
-                }))
+                })),
+                kinds: [
+                    { kind: "agent", label: "Agent" },
+                    { kind: "workflow", label: "Workflow" },
+                    { kind: "network", label: "Network" }
+                ]
             }
         });
     } catch (error) {

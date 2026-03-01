@@ -83,6 +83,33 @@ export interface WorkflowExecutionStep {
     completedAt?: Date;
     durationMs?: number;
     iterationIndex?: number;
+    agentRunId?: string;
+}
+
+export interface AgentStepHooks {
+    onAgentStart?: (info: {
+        stepId: string;
+        agentSlug: string;
+        prompt: string;
+    }) => Promise<string | undefined>;
+    onAgentComplete?: (info: {
+        stepId: string;
+        agentRunId?: string;
+        agentSlug: string;
+        output: unknown;
+        durationMs: number;
+        modelName?: string;
+        modelProvider?: string;
+        totalTokens?: number;
+        costUsd?: number;
+    }) => Promise<void>;
+    onAgentFail?: (info: {
+        stepId: string;
+        agentRunId?: string;
+        agentSlug: string;
+        error: Error;
+        durationMs: number;
+    }) => Promise<void>;
 }
 
 export interface WorkflowExecutionResult {

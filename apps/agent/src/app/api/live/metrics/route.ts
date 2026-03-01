@@ -46,8 +46,21 @@ export async function GET(request: NextRequest) {
             startedAtFilter.lte = new Date(to);
         }
 
-        if (Object.keys(startedAtFilter).length > 0) {
+        const hasDateFilter = Object.keys(startedAtFilter).length > 0;
+        if (hasDateFilter) {
             baseWhere.startedAt = startedAtFilter;
+        }
+
+        // Workflow and network metrics (org-scoped)
+        const wfWhere: Prisma.WorkflowRunWhereInput = {
+            workflow: { workspace: { organizationId: authContext.organizationId } }
+        };
+        const netWhere: Prisma.NetworkRunWhereInput = {
+            network: { workspace: { organizationId: authContext.organizationId } }
+        };
+        if (hasDateFilter) {
+            wfWhere.startedAt = startedAtFilter as Prisma.DateTimeFilter;
+            netWhere.startedAt = startedAtFilter as Prisma.DateTimeFilter;
         }
 
         const [
@@ -67,7 +80,19 @@ export async function GET(request: NextRequest) {
             modelTotals,
             modelStatusCounts,
             versionTotals,
-            versionStatusCounts
+            versionStatusCounts,
+            wfTotal,
+            wfCompleted,
+            wfFailed,
+            wfRunning,
+            wfQueued,
+            wfAggregate,
+            netTotal,
+            netCompleted,
+            netFailed,
+            netRunning,
+            netQueued,
+            netAggregate
         ] = await Promise.all([
             prisma.agentRun.count({ where: baseWhere }),
             prisma.agentRun.count({ where: { ...baseWhere, status: "COMPLETED" } }),
@@ -132,6 +157,28 @@ export async function GET(request: NextRequest) {
                 by: ["versionId", "status"],
                 where: { ...baseWhere, versionId: { not: null } },
                 _count: { _all: true }
+            }),
+            // Workflow metrics
+            prisma.workflowRun.count({ where: wfWhere }),
+            prisma.workflowRun.count({ where: { ...wfWhere, status: "COMPLETED" } }),
+            prisma.workflowRun.count({ where: { ...wfWhere, status: "FAILED" } }),
+            prisma.workflowRun.count({ where: { ...wfWhere, status: "RUNNING" } }),
+            prisma.workflowRun.count({ where: { ...wfWhere, status: "QUEUED" } }),
+            prisma.workflowRun.aggregate({
+                where: wfWhere,
+                _avg: { durationMs: true },
+                _sum: { totalTokens: true, totalCostUsd: true }
+            }),
+            // Network metrics
+            prisma.networkRun.count({ where: netWhere }),
+            prisma.networkRun.count({ where: { ...netWhere, status: "COMPLETED" } }),
+            prisma.networkRun.count({ where: { ...netWhere, status: "FAILED" } }),
+            prisma.networkRun.count({ where: { ...netWhere, status: "RUNNING" } }),
+            prisma.networkRun.count({ where: { ...netWhere, status: "QUEUED" } }),
+            prisma.networkRun.aggregate({
+                where: netWhere,
+                _avg: { durationMs: true },
+                _sum: { totalTokens: true, totalCostUsd: true }
             })
         ]);
 
@@ -335,6 +382,34 @@ export async function GET(request: NextRequest) {
             perAgent,
             perVersion,
             modelUsage,
+            workflowSummary: {
+                totalRuns: wfTotal,
+                completedRuns: wfCompleted,
+                failedRuns: wfFailed,
+                runningRuns: wfRunning,
+                queuedRuns: wfQueued,
+                successRate: wfTotal > 0 ? Math.round((wfCompleted / wfTotal) * 100) : 0,
+                avgLatencyMs: Math.round(wfAggregate._avg.durationMs || 0),
+                totalTokens: wfAggregate._sum.totalTokens || 0,
+                totalCostUsd: wfAggregate._sum.totalCostUsd || 0
+            },
+            networkSummary: {
+                totalRuns: netTotal,
+                completedRuns: netCompleted,
+                failedRuns: netFailed,
+                runningRuns: netRunning,
+                queuedRuns: netQueued,
+                successRate: netTotal > 0 ? Math.round((netCompleted / netTotal) * 100) : 0,
+                avgLatencyMs: Math.round(netAggregate._avg.durationMs || 0),
+                totalTokens: netAggregate._sum.totalTokens || 0,
+                totalCostUsd: netAggregate._sum.totalCostUsd || 0
+            },
+            grandTotal: {
+                allRuns: totalRuns + wfTotal + netTotal,
+                allCompleted: completedRuns + wfCompleted + netCompleted,
+                allFailed: failedRuns + wfFailed + netFailed,
+                allRunning: runningRuns + wfRunning + netRunning
+            },
             dateRange: {
                 from: from || null,
                 to: to || null

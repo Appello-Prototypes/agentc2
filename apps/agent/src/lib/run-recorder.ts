@@ -52,7 +52,9 @@ export type RunSource =
     | "event"
     | "mcp"
     | "manual"
-    | "schedule";
+    | "schedule"
+    | "workflow"
+    | "network";
 
 /**
  * Options for starting a new run

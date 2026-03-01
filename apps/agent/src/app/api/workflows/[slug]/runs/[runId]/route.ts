@@ -20,7 +20,11 @@ export async function GET(
 
         const run = await prisma.workflowRun.findUnique({
             where: { id: runId },
-            include: { steps: true }
+            include: {
+                steps: { orderBy: { startedAt: "asc" } },
+                evaluation: true,
+                feedback: true
+            }
         });
 
         if (!run || run.workflowId !== workflow.id) {
@@ -32,7 +36,12 @@ export async function GET(
 
         return NextResponse.json({
             success: true,
-            run
+            run,
+            workflow: {
+                id: workflow.id,
+                slug: workflow.slug,
+                name: workflow.name
+            }
         });
     } catch (error) {
         console.error("[Workflow Run Detail] Error:", error);

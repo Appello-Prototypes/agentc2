@@ -16,7 +16,8 @@ import {
     type WorkflowForeachConfig,
     type WorkflowHumanConfig,
     type WorkflowCallConfig,
-    type WorkflowDoWhileConfig
+    type WorkflowDoWhileConfig,
+    type AgentStepHooks
 } from "./types";
 
 export interface WorkflowMeta {
@@ -29,10 +30,11 @@ interface ExecuteWorkflowOptions {
     input: unknown;
     resume?: WorkflowResumeInput;
     existingSteps?: Record<string, unknown>;
-    onStepEvent?: (event: WorkflowExecutionStep) => void;
+    onStepEvent?: (event: WorkflowExecutionStep) => void | Promise<void>;
     requestContext?: RequestContext;
     depth?: number;
     workflowMeta?: WorkflowMeta;
+    agentStepHooks?: AgentStepHooks;
 }
 
 const MAX_NESTING_DEPTH = 5;
@@ -269,8 +271,9 @@ function evaluateCondition(expression: string, context: WorkflowExecutionContext
 async function executeAgentStep(
     step: WorkflowStep,
     context: WorkflowExecutionContext,
-    requestContext?: RequestContext
-) {
+    requestContext?: RequestContext,
+    hooks?: AgentStepHooks
+): Promise<{ output: unknown; agentRunId?: string }> {
     const config = (step.config || {}) as unknown as WorkflowAgentConfig;
     const agentSlug = config.agentSlug;
     if (!agentSlug) {
@@ -283,30 +286,71 @@ async function executeAgentStep(
         requestContext
     });
 
-    const response = await agent.generate(prompt, {
-        maxSteps: config.maxSteps
-    });
+    let agentRunId: string | undefined;
+    const stepStart = Date.now();
 
-    if (config.outputFormat === "json") {
-        const text = response.text || "";
-        const jsonMatch = text.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-            try {
-                return JSON.parse(jsonMatch[0]);
-            } catch {
-                return { raw: text };
-            }
+    try {
+        if (hooks?.onAgentStart) {
+            agentRunId = await hooks.onAgentStart({ stepId: step.id, agentSlug, prompt });
         }
-        return { raw: text };
-    }
 
-    // Bug 4 fix: include .result as alias for .text so both template paths work
-    return {
-        text: response.text,
-        result: response.text,
-        toolCalls: response.toolCalls || [],
-        _agentSlug: agentSlug // metadata for cost attribution
-    };
+        const response = await agent.generate(prompt, {
+            maxSteps: config.maxSteps
+        });
+
+        const durationMs = Date.now() - stepStart;
+
+        if (hooks?.onAgentComplete) {
+            await hooks.onAgentComplete({
+                stepId: step.id,
+                agentRunId,
+                agentSlug,
+                output: response.text,
+                durationMs,
+                modelName: response.response?.modelId,
+                totalTokens: response.usage
+                    ? (response.usage.totalTokens ?? 0)
+                    : undefined,
+                costUsd: undefined
+            });
+        }
+
+        let output: unknown;
+        if (config.outputFormat === "json") {
+            const text = response.text || "";
+            const jsonMatch = text.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+                try {
+                    output = JSON.parse(jsonMatch[0]);
+                } catch {
+                    output = { raw: text };
+                }
+            } else {
+                output = { raw: text };
+            }
+        } else {
+            output = {
+                text: response.text,
+                result: response.text,
+                toolCalls: response.toolCalls || [],
+                _agentSlug: agentSlug
+            };
+        }
+
+        return { output, agentRunId };
+    } catch (error) {
+        const durationMs = Date.now() - stepStart;
+        if (hooks?.onAgentFail) {
+            await hooks.onAgentFail({
+                stepId: step.id,
+                agentRunId,
+                agentSlug,
+                error: error instanceof Error ? error : new Error(String(error)),
+                durationMs
+            });
+        }
+        throw error;
+    }
 }
 
 async function executeToolStep(
@@ -438,10 +482,20 @@ async function executeSteps(
             let status: WorkflowExecutionResult["status"] = "success";
             let suspended: WorkflowExecutionResult["suspended"] | undefined;
 
+            let agentRunId: string | undefined;
+
             switch (step.type) {
-                case "agent":
-                    output = await executeAgentStep(step, context, options.requestContext);
+                case "agent": {
+                    const agentResult = await executeAgentStep(
+                        step,
+                        context,
+                        options.requestContext,
+                        options.agentStepHooks
+                    );
+                    output = agentResult.output;
+                    agentRunId = agentResult.agentRunId;
                     break;
+                }
                 case "tool":
                     output = await executeToolStep(
                         step,
@@ -688,13 +742,14 @@ async function executeSteps(
                 output,
                 startedAt,
                 completedAt,
-                durationMs
+                durationMs,
+                ...(agentRunId ? { agentRunId } : {})
             };
             executionSteps.push(stepResult);
             context.steps[step.id] = output;
 
             if (options.onStepEvent) {
-                options.onStepEvent(stepResult);
+                await options.onStepEvent(stepResult);
             }
 
             if (status === "suspended") {
@@ -721,7 +776,7 @@ async function executeSteps(
             };
             executionSteps.push(stepResult);
             if (options.onStepEvent) {
-                options.onStepEvent(stepResult);
+                await options.onStepEvent(stepResult);
             }
             return {
                 status: "failed",

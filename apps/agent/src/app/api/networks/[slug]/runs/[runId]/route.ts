@@ -20,7 +20,11 @@ export async function GET(
 
         const run = await prisma.networkRun.findUnique({
             where: { id: runId },
-            include: { steps: true }
+            include: {
+                steps: { orderBy: { stepNumber: "asc" } },
+                evaluation: true,
+                feedback: true
+            }
         });
 
         if (!run || run.networkId !== network.id) {
@@ -32,7 +36,12 @@ export async function GET(
 
         return NextResponse.json({
             success: true,
-            run
+            run,
+            network: {
+                id: network.id,
+                slug: network.slug,
+                name: network.name
+            }
         });
     } catch (error) {
         console.error("[Network Run Detail] Error:", error);

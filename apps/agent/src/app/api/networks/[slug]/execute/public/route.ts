@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma, Prisma, RunStatus } from "@repo/database";
 import { buildNetworkAgent } from "@repo/agentc2/networks";
 import { refreshNetworkMetrics } from "@/lib/metrics";
+import { processNetworkStreamWithSubRuns } from "@/lib/network-stream-processor";
 
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
 
@@ -20,26 +21,6 @@ function checkRateLimit(ip: string, maxPerMinute: number): { allowed: boolean; r
 
     entry.count++;
     return { allowed: true, remaining: maxPerMinute - entry.count };
-}
-
-function inferStepType(eventType: string) {
-    if (eventType.includes("routing")) return "routing";
-    if (eventType.includes("agent")) return "agent";
-    if (eventType.includes("workflow")) return "workflow";
-    if (eventType.includes("tool")) return "tool";
-    return "event";
-}
-
-function inferPrimitive(eventType: string, payload: Record<string, unknown>) {
-    if (payload.agentId) return { type: "agent", id: payload.agentId as string };
-    if (payload.workflowId) return { type: "workflow", id: payload.workflowId as string };
-    if (payload.toolName) return { type: "tool", id: payload.toolName as string };
-    if (payload.toolId) return { type: "tool", id: payload.toolId as string };
-    if (eventType.includes("agent")) return { type: "agent", id: payload.agentId as string };
-    if (eventType.includes("workflow"))
-        return { type: "workflow", id: payload.workflowId as string };
-    if (eventType.includes("tool")) return { type: "tool", id: payload.toolName as string };
-    return { type: undefined, id: undefined };
 }
 
 export async function POST(
@@ -129,71 +110,13 @@ export async function POST(
             }
         });
 
-        const steps: Array<{
-            stepNumber: number;
-            stepType: string;
-            primitiveType?: string;
-            primitiveId?: string;
-            routingDecision?: Record<string, unknown>;
-            inputJson?: Record<string, unknown>;
-            outputJson?: Record<string, unknown>;
-            status: RunStatus;
-        }> = [];
-
-        let stepNumber = 0;
-        let outputText = "";
-        let outputJson: Record<string, unknown> | undefined;
-        let totalTokens = 0;
-
-        for await (const chunk of result) {
-            const chunkAny = chunk as { type: string; payload?: Record<string, unknown> };
-            const payload = chunkAny.payload || {};
-
-            if (chunkAny.type === "agent-execution-event-text-delta" && payload.textDelta) {
-                outputText += payload.textDelta as string;
-            }
-
-            if (chunkAny.type === "network-object-result") {
-                outputJson = payload as Record<string, unknown>;
-            }
-
-            if (payload.usage && typeof payload.usage === "object") {
-                const usage = payload.usage as {
-                    totalTokens?: number;
-                    promptTokens?: number;
-                    completionTokens?: number;
-                };
-                if (usage.totalTokens) {
-                    totalTokens += usage.totalTokens;
-                } else if (usage.promptTokens || usage.completionTokens) {
-                    totalTokens += (usage.promptTokens || 0) + (usage.completionTokens || 0);
-                }
-            }
-
-            const stepType = inferStepType(chunkAny.type);
-            const primitive = inferPrimitive(chunkAny.type, payload);
-            if (
-                chunkAny.type.includes("start") ||
-                chunkAny.type.includes("end") ||
-                chunkAny.type.includes("step-finish") ||
-                chunkAny.type.includes("routing")
-            ) {
-                steps.push({
-                    stepNumber: stepNumber++,
-                    stepType,
-                    primitiveType: primitive.type,
-                    primitiveId: primitive.id,
-                    routingDecision: stepType === "routing" ? payload : undefined,
-                    inputJson: payload.input as Record<string, unknown>,
-                    outputJson: payload.result as Record<string, unknown>,
-                    status: RunStatus.COMPLETED
-                });
-            }
-        }
-
-        if (!outputText && outputJson) {
-            outputText = JSON.stringify(outputJson, null, 2);
-        }
+        const { outputText, outputJson, steps, totalTokens } =
+            await processNetworkStreamWithSubRuns(result, {
+                networkRunId: run.id,
+                networkSlug: network.slug,
+                tenantId: networkOrgId || undefined,
+                inputMessage: message
+            });
 
         if (steps.length > 0) {
             await prisma.networkRunStep.createMany({
@@ -212,7 +135,8 @@ export async function POST(
                     outputJson: step.outputJson
                         ? (step.outputJson as Prisma.InputJsonValue)
                         : Prisma.DbNull,
-                    status: step.status
+                    status: step.status,
+                    agentRunId: step.agentRunId || undefined
                 }))
             });
         }

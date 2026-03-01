@@ -1485,6 +1485,7 @@ model AgentRun {
     trace           AgentTrace?
     toolCalls       AgentToolCall[]
     workflowSteps   WorkflowRunStep[]
+    networkSteps    NetworkRunStep[]
     evaluation      AgentEvaluation?
     feedbacks       AgentFeedback[]
     costEvents      CostEvent[]
@@ -2846,6 +2847,10 @@ model NetworkRunStep {
     // Token usage for this step
     tokens  Int?
     costUsd Float?
+
+    // Nested agent run (links to AgentRun for observability)
+    agentRunId String?
+    agentRun   AgentRun? @relation(fields: [agentRunId], references: [id], onDelete: SetNull)
 
     @@index([runId])
     @@index([stepNumber])

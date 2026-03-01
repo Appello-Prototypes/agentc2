@@ -5,38 +5,7 @@ import { recordActivity, inputPreview } from "@repo/agentc2/activity/service";
 import { refreshNetworkMetrics } from "@/lib/metrics";
 import { resolveRunEnvironment, resolveRunTriggerType } from "@/lib/run-metadata";
 import { createTriggerEventRecord } from "@/lib/trigger-events";
-
-function inferStepType(eventType: string) {
-    if (eventType.includes("routing")) return "routing";
-    if (eventType.includes("agent")) return "agent";
-    if (eventType.includes("workflow")) return "workflow";
-    if (eventType.includes("tool")) return "tool";
-    return "event";
-}
-
-function inferPrimitive(eventType: string, payload: Record<string, unknown>) {
-    if (payload.agentId) return { type: "agent", id: payload.agentId as string };
-    if (payload.workflowId) return { type: "workflow", id: payload.workflowId as string };
-    if (payload.toolName) return { type: "tool", id: payload.toolName as string };
-    if (payload.toolId) return { type: "tool", id: payload.toolId as string };
-    if (eventType.includes("agent")) return { type: "agent", id: payload.agentId as string };
-    if (eventType.includes("workflow"))
-        return { type: "workflow", id: payload.workflowId as string };
-    if (eventType.includes("tool")) return { type: "tool", id: payload.toolName as string };
-    return { type: undefined, id: undefined };
-}
-
-function tryParseJson(value: string) {
-    try {
-        const parsed = JSON.parse(value);
-        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-            return parsed as Record<string, unknown>;
-        }
-    } catch {
-        return null;
-    }
-    return null;
-}
+import { processNetworkStreamWithSubRuns } from "@/lib/network-stream-processor";
 
 export async function POST(
     request: NextRequest,
@@ -135,104 +104,13 @@ export async function POST(
             }
         });
 
-        const steps: Array<{
-            stepNumber: number;
-            stepType: string;
-            primitiveType?: string;
-            primitiveId?: string;
-            routingDecision?: Record<string, unknown>;
-            inputJson?: Record<string, unknown>;
-            outputJson?: Record<string, unknown>;
-            status: RunStatus;
-        }> = [];
-
-        let stepNumber = 0;
-        let outputText = "";
-        let outputJson: Record<string, unknown> | undefined;
-        let lastResult: Record<string, unknown> | undefined;
-        let lastResultText: string | undefined;
-
-        // Token/cost tracking
-        let totalTokens = 0;
-        let totalCostUsd = 0;
-
-        for await (const chunk of result) {
-            const chunkAny = chunk as { type: string; payload?: Record<string, unknown> };
-            const payload = chunkAny.payload || {};
-
-            if (chunkAny.type === "agent-execution-event-text-delta" && payload.textDelta) {
-                outputText += payload.textDelta as string;
-            }
-
-            if (chunkAny.type === "network-object-result") {
-                outputJson = payload as Record<string, unknown>;
-            }
-
-            // Extract token usage from step-finish or usage events
-            if (payload.usage && typeof payload.usage === "object") {
-                const usage = payload.usage as {
-                    promptTokens?: number;
-                    completionTokens?: number;
-                    totalTokens?: number;
-                };
-                if (usage.totalTokens) {
-                    totalTokens += usage.totalTokens;
-                } else if (usage.promptTokens || usage.completionTokens) {
-                    totalTokens += (usage.promptTokens || 0) + (usage.completionTokens || 0);
-                }
-            }
-
-            // Some events carry cost directly
-            if (typeof payload.costUsd === "number") {
-                totalCostUsd += payload.costUsd;
-            }
-
-            if (
-                payload.result &&
-                typeof payload.result === "object" &&
-                !Array.isArray(payload.result)
-            ) {
-                lastResult = payload.result as Record<string, unknown>;
-            }
-            if (typeof payload.result === "string") {
-                lastResultText = payload.result;
-                const parsed = tryParseJson(payload.result);
-                if (parsed) {
-                    lastResult = parsed;
-                }
-            }
-
-            const stepType = inferStepType(chunkAny.type);
-            const primitive = inferPrimitive(chunkAny.type, payload);
-            if (
-                chunkAny.type.includes("start") ||
-                chunkAny.type.includes("end") ||
-                chunkAny.type.includes("step-finish") ||
-                chunkAny.type.includes("routing")
-            ) {
-                steps.push({
-                    stepNumber: stepNumber++,
-                    stepType,
-                    primitiveType: primitive.type,
-                    primitiveId: primitive.id,
-                    routingDecision: stepType === "routing" ? payload : undefined,
-                    inputJson: payload.input as Record<string, unknown>,
-                    outputJson: payload.result as Record<string, unknown>,
-                    status: RunStatus.COMPLETED
-                });
-            }
-        }
-
-        if (!outputJson && lastResult) {
-            outputJson = lastResult;
-        }
-        if (!outputText) {
-            if (lastResultText) {
-                outputText = lastResultText;
-            } else if (outputJson) {
-                outputText = JSON.stringify(outputJson, null, 2);
-            }
-        }
+        const { outputText, outputJson, steps, totalTokens, totalCostUsd } =
+            await processNetworkStreamWithSubRuns(result, {
+                networkRunId: run.id,
+                networkSlug: network.slug,
+                tenantId: networkOrgId || undefined,
+                inputMessage: message
+            });
 
         if (steps.length > 0) {
             await prisma.networkRunStep.createMany({
@@ -251,7 +129,8 @@ export async function POST(
                     outputJson: step.outputJson
                         ? (step.outputJson as Prisma.InputJsonValue)
                         : Prisma.DbNull,
-                    status: step.status
+                    status: step.status,
+                    agentRunId: step.agentRunId || undefined
                 }))
             });
         }

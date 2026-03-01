@@ -8236,7 +8236,9 @@ export const asyncWorkflowExecuteFunction = inngest.createFunction(
             });
         });
 
-        // Step 2: Load workflow and execute
+        // Step 2: Load workflow and execute with progressive step persistence.
+        // On Inngest retries, previously completed steps are loaded from DB and skipped
+        // to prevent duplicate side effects (e.g., posting GitHub comments twice).
         const result = await step.run("execute-workflow", async () => {
             const workflow = await prisma.workflow.findUnique({
                 where: { id: workflowId }
@@ -8247,16 +8249,187 @@ export const asyncWorkflowExecuteFunction = inngest.createFunction(
             }
 
             const { executeWorkflowDefinition } = await import("@repo/agentc2/workflows");
+            const { agentResolver } = await import("@repo/agentc2");
+            const { startRun } = await import("./run-recorder");
             type WorkflowDefinition = Parameters<typeof executeWorkflowDefinition>[0]["definition"];
+            type AgentStepHooks = Parameters<typeof executeWorkflowDefinition>[0]["agentStepHooks"];
 
             const organizationId = (input as Record<string, unknown>)?.organizationId as
                 | string
                 | undefined;
             const inputObj = input as Record<string, unknown> | undefined;
 
+            // --- Retry resilience: load previously completed steps from DB ---
+            const savedSteps = await prisma.workflowRunStep.findMany({
+                where: { runId: workflowRunId },
+                select: {
+                    stepId: true,
+                    outputJson: true,
+                    iterationIndex: true,
+                    status: true
+                }
+            });
+
+            // Build existingSteps from top-level completed steps only.
+            // Steps inside dowhile loops have iterationIndex set -- those must
+            // NOT be pre-skipped because each iteration needs fresh execution.
+            const existingSteps: Record<string, unknown> = {};
+            for (const s of savedSteps) {
+                if (s.iterationIndex === null && s.status === "COMPLETED") {
+                    existingSteps[s.stepId] = s.outputJson;
+                }
+            }
+
+            if (Object.keys(existingSteps).length > 0) {
+                console.log(
+                    `[Inngest] Resuming workflow ${workflowRunId} — skipping ${Object.keys(existingSteps).length} completed steps:`,
+                    Object.keys(existingSteps)
+                );
+            }
+
+            // Track which steps are already persisted to avoid duplicate DB writes
+            const persistedKeys = new Set(
+                savedSteps.map((s) => `${s.stepId}:${s.iterationIndex ?? ""}`)
+            );
+
+            function mapStepStatus(status: string) {
+                if (status === "failed") return "FAILED" as const;
+                if (status === "suspended") return "RUNNING" as const;
+                return "COMPLETED" as const;
+            }
+
+            // --- Progressive step persistence: save each step as it completes ---
+            const onStepEvent = async (stepResult: {
+                stepId: string;
+                stepType: string;
+                stepName?: string;
+                status: "completed" | "failed" | "suspended";
+                input?: unknown;
+                output?: unknown;
+                error?: unknown;
+                iterationIndex?: number;
+                startedAt?: Date;
+                completedAt?: Date;
+                durationMs?: number;
+                agentRunId?: string;
+            }) => {
+                const key = `${stepResult.stepId}:${stepResult.iterationIndex ?? ""}`;
+                if (persistedKeys.has(key)) return;
+
+                try {
+                    await prisma.workflowRunStep.create({
+                        data: {
+                            runId: workflowRunId,
+                            stepId: stepResult.stepId,
+                            stepType: stepResult.stepType,
+                            stepName: stepResult.stepName ?? stepResult.stepId,
+                            status: mapStepStatus(stepResult.status),
+                            inputJson: stepResult.input as Prisma.InputJsonValue,
+                            outputJson: stepResult.output as Prisma.InputJsonValue,
+                            errorJson: stepResult.error as Prisma.InputJsonValue,
+                            iterationIndex: stepResult.iterationIndex,
+                            startedAt: stepResult.startedAt,
+                            completedAt: stepResult.completedAt,
+                            durationMs: stepResult.durationMs,
+                            agentRunId: stepResult.agentRunId
+                        }
+                    });
+                    persistedKeys.add(key);
+                } catch (err) {
+                    console.warn(
+                        `[Inngest] Failed to persist step ${stepResult.stepId}:`,
+                        err
+                    );
+                }
+            };
+
+            const agentStepHooks: AgentStepHooks = {
+                onAgentStart: async ({ agentSlug, prompt }) => {
+                    try {
+                        const resolved = await agentResolver.resolve({
+                            slug: agentSlug,
+                            requestContext: organizationId
+                                ? { tenantId: organizationId }
+                                : {}
+                        });
+                        const agentId = resolved.record?.id;
+                        if (!agentId) return undefined;
+
+                        const handle = await startRun({
+                            agentId,
+                            agentSlug,
+                            input: prompt.slice(0, 2000),
+                            source: "workflow",
+                            tenantId: organizationId,
+                            metadata: {
+                                workflowRunId,
+                                workflowSlug: workflowSlug || workflow.slug
+                            }
+                        });
+                        return handle.runId;
+                    } catch (err) {
+                        console.warn(
+                            `[Inngest] Failed to start agent sub-run for ${agentSlug}:`,
+                            err
+                        );
+                        return undefined;
+                    }
+                },
+                onAgentComplete: async ({
+                    agentRunId,
+                    output,
+                    durationMs,
+                    modelName,
+                    totalTokens
+                }) => {
+                    if (!agentRunId) return;
+                    try {
+                        await prisma.agentRun.update({
+                            where: { id: agentRunId },
+                            data: {
+                                status: "COMPLETED",
+                                outputText: typeof output === "string"
+                                    ? output.slice(0, 5000)
+                                    : JSON.stringify(output).slice(0, 5000),
+                                completedAt: new Date(),
+                                durationMs,
+                                modelName,
+                                totalTokens
+                            }
+                        });
+                    } catch (err) {
+                        console.warn(
+                            `[Inngest] Failed to complete agent sub-run ${agentRunId}:`,
+                            err
+                        );
+                    }
+                },
+                onAgentFail: async ({ agentRunId, error, durationMs }) => {
+                    if (!agentRunId) return;
+                    try {
+                        await prisma.agentRun.update({
+                            where: { id: agentRunId },
+                            data: {
+                                status: "FAILED",
+                                failureReason: error.message?.slice(0, 2000),
+                                completedAt: new Date(),
+                                durationMs
+                            }
+                        });
+                    } catch (err) {
+                        console.warn(
+                            `[Inngest] Failed to fail agent sub-run ${agentRunId}:`,
+                            err
+                        );
+                    }
+                }
+            };
+
             return await executeWorkflowDefinition({
                 definition: workflow.definitionJson as unknown as WorkflowDefinition,
                 input,
+                existingSteps,
+                onStepEvent,
                 requestContext: organizationId ? { tenantId: organizationId } : {},
                 workflowMeta: {
                     runId: workflowRunId,
@@ -8265,60 +8438,80 @@ export const asyncWorkflowExecuteFunction = inngest.createFunction(
                         workflow.slug ||
                         ((inputObj?._trigger as Record<string, unknown>)?.routedTo as string) ||
                         ""
-                }
+                },
+                agentStepHooks
             });
         });
 
-        // Step 3: Save step results
+        // Step 3: Reconcile step results — only save steps not already persisted progressively
         await step.run("save-steps", async () => {
             if (!result.steps || result.steps.length === 0) return;
 
+            const alreadySaved = await prisma.workflowRunStep.findMany({
+                where: { runId: workflowRunId },
+                select: { stepId: true, iterationIndex: true }
+            });
+            const savedKeys = new Set(
+                alreadySaved.map((s) => `${s.stepId}:${s.iterationIndex ?? ""}`)
+            );
+
             function mapStepStatus(status: "completed" | "failed" | "suspended") {
-                if (status === "failed") return "FAILED";
-                if (status === "suspended") return "RUNNING";
-                return "COMPLETED";
+                if (status === "failed") return "FAILED" as const;
+                if (status === "suspended") return "RUNNING" as const;
+                return "COMPLETED" as const;
             }
 
-            await prisma.workflowRunStep.createMany({
-                data: result.steps.map(
-                    (s: {
-                        stepId: string;
-                        stepType: string;
-                        stepName?: string;
-                        status: "completed" | "failed" | "suspended";
-                        input?: unknown;
-                        output?: unknown;
-                        error?: unknown;
-                        iterationIndex?: number;
-                        startedAt?: string | Date;
-                        completedAt?: string | Date;
-                        durationMs?: number;
-                    }) => ({
-                        runId: workflowRunId,
-                        stepId: s.stepId,
-                        stepType: s.stepType,
-                        stepName: s.stepName ?? s.stepId,
-                        status: mapStepStatus(s.status),
-                        inputJson: s.input as Prisma.InputJsonValue,
-                        outputJson: s.output as Prisma.InputJsonValue,
-                        errorJson: s.error as Prisma.InputJsonValue,
-                        iterationIndex: s.iterationIndex,
-                        startedAt: s.startedAt,
-                        completedAt: s.completedAt,
-                        durationMs: s.durationMs
-                    })
-                )
-            });
+            const unsaved = result.steps.filter(
+                (s: { stepId: string; iterationIndex?: number }) =>
+                    !savedKeys.has(`${s.stepId}:${s.iterationIndex ?? ""}`)
+            );
+
+            if (unsaved.length > 0) {
+                await prisma.workflowRunStep.createMany({
+                    data: unsaved.map(
+                        (s: {
+                            stepId: string;
+                            stepType: string;
+                            stepName?: string;
+                            status: "completed" | "failed" | "suspended";
+                            input?: unknown;
+                            output?: unknown;
+                            error?: unknown;
+                            iterationIndex?: number;
+                            startedAt?: string | Date;
+                            completedAt?: string | Date;
+                            durationMs?: number;
+                            agentRunId?: string;
+                        }) => ({
+                            runId: workflowRunId,
+                            stepId: s.stepId,
+                            stepType: s.stepType,
+                            stepName: s.stepName ?? s.stepId,
+                            status: mapStepStatus(s.status),
+                            inputJson: s.input as Prisma.InputJsonValue,
+                            outputJson: s.output as Prisma.InputJsonValue,
+                            errorJson: s.error as Prisma.InputJsonValue,
+                            iterationIndex: s.iterationIndex,
+                            startedAt: s.startedAt,
+                            completedAt: s.completedAt,
+                            durationMs: s.durationMs,
+                            agentRunId: s.agentRunId
+                        })
+                    )
+                });
+            }
         });
 
-        // Step 4: Update final status
+        // Step 4: Update final status (query all persisted steps for accurate duration)
         await step.run("update-final-status", async () => {
-            const durationMs = result.steps
-                ? result.steps.reduce(
-                      (sum: number, s: { durationMs?: number }) => sum + (s.durationMs || 0),
-                      0
-                  )
-                : 0;
+            const allSteps = await prisma.workflowRunStep.findMany({
+                where: { runId: workflowRunId },
+                select: { durationMs: true }
+            });
+            const durationMs = allSteps.reduce(
+                (sum, s) => sum + (s.durationMs || 0),
+                0
+            );
 
             if (result.status === "suspended") {
                 await prisma.workflowRun.update({
@@ -8361,6 +8554,11 @@ export const asyncWorkflowExecuteFunction = inngest.createFunction(
                                     select: { slug: true }
                                 })
                             )?.slug;
+                        const allPersistedSteps = await prisma.workflowRunStep.findMany({
+                            where: { runId: workflowRunId },
+                            select: { stepId: true, stepType: true, outputJson: true },
+                            orderBy: { startedAt: "asc" }
+                        });
                         await createEngagement({
                             organizationId: orgId,
                             workspaceId: null,
@@ -8370,13 +8568,11 @@ export const asyncWorkflowExecuteFunction = inngest.createFunction(
                             suspendData: result.suspended.data as
                                 | Record<string, unknown>
                                 | undefined,
-                            stepOutputs: (result.steps || []).map(
-                                (s: { stepId: string; stepType: string; output?: unknown }) => ({
-                                    stepId: s.stepId,
-                                    stepType: s.stepType,
-                                    output: s.output
-                                })
-                            )
+                            stepOutputs: allPersistedSteps.map((s) => ({
+                                stepId: s.stepId,
+                                stepType: s.stepType,
+                                output: s.outputJson
+                            }))
                         });
                     } catch (engErr) {
                         console.warn("[Inngest] Failed to create engagement:", engErr);
