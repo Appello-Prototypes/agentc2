@@ -18,11 +18,11 @@ export async function POST(request: NextRequest) {
         await requireAdmin(request, "platform_admin");
 
         const body = await request.json();
-        const { sourceType, sourceId, repository, title, description, labels } = body;
+        const { sourceType, sourceId, title, description, labels } = body;
 
-        if (!sourceType || !sourceId || !repository) {
+        if (!sourceType || !sourceId) {
             return NextResponse.json(
-                { error: "Missing required fields: sourceType, sourceId, repository" },
+                { error: "Missing required fields: sourceType, sourceId" },
                 { status: 400 }
             );
         }
@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
         const dispatchPayload = {
             sourceType,
             sourceId,
-            repository,
+            repository: config.repository,
             variant: "standard",
             via: "github",
             title: title || "",

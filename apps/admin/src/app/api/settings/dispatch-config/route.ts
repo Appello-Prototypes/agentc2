@@ -32,12 +32,15 @@ export async function POST(request: NextRequest) {
             targetOrganizationName,
             workflowId,
             workflowSlug,
-            workflowName
+            workflowName,
+            repository
         } = body;
 
-        if (!targetOrganizationId || !workflowId || !workflowSlug) {
+        if (!targetOrganizationId || !workflowId || !workflowSlug || !repository) {
             return NextResponse.json(
-                { error: "targetOrganizationId, workflowId, and workflowSlug are required" },
+                {
+                    error: "targetOrganizationId, workflowId, workflowSlug, and repository are required"
+                },
                 { status: 400 }
             );
         }
@@ -47,7 +50,8 @@ export async function POST(request: NextRequest) {
             targetOrganizationName: targetOrganizationName || "",
             workflowId,
             workflowSlug,
-            workflowName: workflowName || ""
+            workflowName: workflowName || "",
+            repository
         };
 
         await upsertAdminSetting(ADMIN_SETTING_KEYS.dispatchConfig, config, admin.adminUserId);

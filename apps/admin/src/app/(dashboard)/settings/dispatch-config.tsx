@@ -26,6 +26,7 @@ type SavedConfig = {
     workflowId: string;
     workflowSlug: string;
     workflowName: string;
+    repository: string;
 };
 
 export function DispatchConfigManager() {
@@ -39,6 +40,7 @@ export function DispatchConfigManager() {
     const [workflows, setWorkflows] = useState<WorkflowOption[]>([]);
     const [workflowsLoading, setWorkflowsLoading] = useState(false);
     const [selectedWorkflowId, setSelectedWorkflowId] = useState("");
+    const [repository, setRepository] = useState("");
 
     const [savedConfig, setSavedConfig] = useState<SavedConfig | null>(null);
 
@@ -68,6 +70,7 @@ export function DispatchConfigManager() {
                 setSavedConfig(configData.config);
                 setSelectedOrgId(configData.config.targetOrganizationId);
                 setSelectedWorkflowId(configData.config.workflowId);
+                setRepository(configData.config.repository || "");
             }
         } catch (err) {
             setError(err instanceof Error ? err.message : "Failed to load configuration");
@@ -109,7 +112,7 @@ export function DispatchConfigManager() {
     }
 
     async function handleSave() {
-        if (!selectedOrgId || !selectedWorkflowId) return;
+        if (!selectedOrgId || !selectedWorkflowId || !repository.trim()) return;
         setSaving(true);
         setError("");
         setSuccess("");
@@ -129,7 +132,8 @@ export function DispatchConfigManager() {
                     targetOrganizationName: selectedOrg.name,
                     workflowId: selectedWorkflow.id,
                     workflowSlug: selectedWorkflow.slug,
-                    workflowName: selectedWorkflow.name
+                    workflowName: selectedWorkflow.name,
+                    repository: repository.trim()
                 })
             });
 
@@ -149,7 +153,8 @@ export function DispatchConfigManager() {
     const selectedWorkflow = workflows.find((w) => w.id === selectedWorkflowId);
     const hasChanges =
         savedConfig?.targetOrganizationId !== selectedOrgId ||
-        savedConfig?.workflowId !== selectedWorkflowId;
+        savedConfig?.workflowId !== selectedWorkflowId ||
+        (savedConfig?.repository || "") !== repository.trim();
 
     if (loading) {
         return (
@@ -203,6 +208,10 @@ export function DispatchConfigManager() {
                                     ({savedConfig.workflowSlug})
                                 </span>
                             </span>
+                        </div>
+                        <div className="flex justify-between">
+                            <span className="text-muted-foreground">Repository</span>
+                            <span className="font-medium">{savedConfig.repository}</span>
                         </div>
                     </div>
                 </div>
@@ -267,6 +276,27 @@ export function DispatchConfigManager() {
                         </div>
                     )}
 
+                    {selectedOrgId && selectedWorkflowId && (
+                        <div>
+                            <label className="text-muted-foreground mb-1 block text-xs font-medium">
+                                Target Repository
+                            </label>
+                            <input
+                                type="text"
+                                value={repository}
+                                onChange={(e) => {
+                                    setRepository(e.target.value);
+                                    setSuccess("");
+                                }}
+                                placeholder="https://github.com/org/repo"
+                                className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+                            />
+                            <p className="text-muted-foreground mt-1 text-xs">
+                                GitHub repository URL where issues and PRs will be created.
+                            </p>
+                        </div>
+                    )}
+
                     {selectedWorkflow && (
                         <div className="rounded-md bg-blue-500/10 px-3 py-2 text-sm text-blue-600">
                             <p className="font-medium">{selectedWorkflow.name}</p>
@@ -290,7 +320,13 @@ export function DispatchConfigManager() {
 
                     <button
                         onClick={handleSave}
-                        disabled={saving || !selectedOrgId || !selectedWorkflowId || !hasChanges}
+                        disabled={
+                            saving ||
+                            !selectedOrgId ||
+                            !selectedWorkflowId ||
+                            !repository.trim() ||
+                            !hasChanges
+                        }
                         className="rounded-md bg-purple-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-purple-600 disabled:opacity-50"
                     >
                         {saving ? "Saving..." : "Save Configuration"}

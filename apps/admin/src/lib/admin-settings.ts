@@ -12,6 +12,7 @@ export type DispatchConfig = {
     workflowId: string;
     workflowSlug: string;
     workflowName: string;
+    repository: string;
 };
 
 export type PipelineRepository = {

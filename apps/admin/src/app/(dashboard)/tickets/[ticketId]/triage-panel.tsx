@@ -28,23 +28,14 @@ interface AdminUser {
     email: string;
 }
 
-interface PipelineRepository {
-    id: string;
-    url: string;
-    name: string;
-    owner: string;
-    isDefault: boolean;
-}
-
 type DispatchConfig = {
     targetOrganizationId: string;
     targetOrganizationName: string;
     workflowId: string;
     workflowSlug: string;
     workflowName: string;
+    repository: string;
 };
-
-const MANUAL_REPO_OPTION = "__manual__";
 
 export function TicketTriagePanel({
     ticket,
@@ -59,12 +50,8 @@ export function TicketTriagePanel({
     const [priority, setPriority] = useState(ticket.priority);
     const [assignedToId, setAssignedToId] = useState(ticket.assignedToId ?? "");
     const [showPipelineModal, setShowPipelineModal] = useState(false);
-    const [pipelineRepoSelection, setPipelineRepoSelection] = useState("");
-    const [manualPipelineRepo, setManualPipelineRepo] = useState("");
-    const [pipelineRepos, setPipelineRepos] = useState<PipelineRepository[]>([]);
-    const [pipelineReposLoading, setPipelineReposLoading] = useState(false);
-    const [pipelineReposError, setPipelineReposError] = useState("");
     const [pipelineDispatching, setPipelineDispatching] = useState(false);
+    const [pipelineError, setPipelineError] = useState("");
     const [pipelineRunId, setPipelineRunId] = useState(ticket.pipelineRunId ?? null);
     const [dispatchConfig, setDispatchConfig] = useState<DispatchConfig | null>(null);
     const [dispatchConfigLoading, setDispatchConfigLoading] = useState(false);
@@ -72,52 +59,28 @@ export function TicketTriagePanel({
     useEffect(() => {
         if (!showPipelineModal) return;
 
-        const loadModalData = async () => {
-            setPipelineReposLoading(true);
+        const loadConfig = async () => {
             setDispatchConfigLoading(true);
-            setPipelineReposError("");
-
-            const [reposResult, configResult] = await Promise.allSettled([
-                fetch("/admin/api/settings/repos", { credentials: "include" }).then((r) =>
-                    r.json()
-                ),
-                fetch("/admin/api/settings/dispatch-config", { credentials: "include" }).then((r) =>
-                    r.json()
-                )
-            ]);
-
-            if (reposResult.status === "fulfilled") {
-                const repositories = (reposResult.value.repositories ?? []) as PipelineRepository[];
-                setPipelineRepos(repositories);
-                const defaultRepo = repositories.find((repo) => repo.isDefault);
-                if (defaultRepo) {
-                    setPipelineRepoSelection(defaultRepo.id);
+            setPipelineError("");
+            try {
+                const res = await fetch("/admin/api/settings/dispatch-config", {
+                    credentials: "include"
+                });
+                const data = await res.json().catch(() => ({}));
+                if (res.ok && data.config) {
+                    setDispatchConfig(data.config);
                 } else {
-                    setPipelineRepoSelection(MANUAL_REPO_OPTION);
+                    setDispatchConfig(null);
                 }
-            } else {
-                setPipelineRepos([]);
-                setPipelineRepoSelection(MANUAL_REPO_OPTION);
-                setPipelineReposError("Failed to load repositories");
-            }
-
-            if (configResult.status === "fulfilled" && configResult.value.config) {
-                setDispatchConfig(configResult.value.config);
-            } else {
+            } catch {
                 setDispatchConfig(null);
+            } finally {
+                setDispatchConfigLoading(false);
             }
-
-            setPipelineReposLoading(false);
-            setDispatchConfigLoading(false);
         };
 
-        void loadModalData();
+        void loadConfig();
     }, [showPipelineModal]);
-
-    const selectedRepoUrl =
-        pipelineRepoSelection === MANUAL_REPO_OPTION
-            ? manualPipelineRepo.trim()
-            : pipelineRepos.find((repo) => repo.id === pipelineRepoSelection)?.url || "";
 
     async function handleUpdate(updates: Record<string, unknown>) {
         setSaving(true);
@@ -151,8 +114,9 @@ export function TicketTriagePanel({
     }
 
     async function handleDispatchPipeline() {
-        if (!selectedRepoUrl) return;
+        if (!dispatchConfig) return;
         setPipelineDispatching(true);
+        setPipelineError("");
         try {
             const typeLabel =
                 ticket.type === "BUG"
@@ -168,7 +132,6 @@ export function TicketTriagePanel({
                 body: JSON.stringify({
                     sourceType: "support_ticket",
                     sourceId: ticket.id,
-                    repository: selectedRepoUrl,
                     title: ticket.title,
                     description: ticket.description,
                     labels: ["agentc2-sdlc", typeLabel]
@@ -178,11 +141,10 @@ export function TicketTriagePanel({
             if (data.success) {
                 setPipelineRunId(data.pipelineRunId || data.issueUrl || "dispatched");
                 setShowPipelineModal(false);
-                setManualPipelineRepo("");
                 setStatus("IN_PROGRESS");
                 router.refresh();
             } else if (data.error) {
-                setPipelineReposError(data.error);
+                setPipelineError(data.error);
             }
         } finally {
             setPipelineDispatching(false);
@@ -331,17 +293,24 @@ export function TicketTriagePanel({
                                             Loading config...
                                         </div>
                                     ) : dispatchConfig ? (
-                                        <div className="rounded-md bg-blue-500/10 px-3 py-2 text-xs text-blue-600">
-                                            <span className="font-medium">
-                                                {dispatchConfig.targetOrganizationName}
-                                            </span>
-                                            {" / "}
-                                            <span className="font-medium">
-                                                {dispatchConfig.workflowName}
-                                            </span>
-                                            <span className="text-muted-foreground ml-1">
-                                                ({dispatchConfig.workflowSlug})
-                                            </span>
+                                        <div className="space-y-1">
+                                            <div className="rounded-md bg-blue-500/10 px-3 py-2 text-xs text-blue-600">
+                                                <div>
+                                                    <span className="font-medium">
+                                                        {dispatchConfig.targetOrganizationName}
+                                                    </span>
+                                                    {" / "}
+                                                    <span className="font-medium">
+                                                        {dispatchConfig.workflowName}
+                                                    </span>
+                                                    <span className="text-muted-foreground ml-1">
+                                                        ({dispatchConfig.workflowSlug})
+                                                    </span>
+                                                </div>
+                                                <div className="text-muted-foreground mt-1">
+                                                    {dispatchConfig.repository}
+                                                </div>
+                                            </div>
                                         </div>
                                     ) : (
                                         <div className="rounded-md bg-amber-500/10 px-3 py-2 text-xs text-amber-600">
@@ -355,63 +324,19 @@ export function TicketTriagePanel({
                                         </div>
                                     )}
 
-                                    <label className="text-muted-foreground block text-xs font-medium">
-                                        Target Repository
-                                    </label>
-                                    {pipelineReposLoading ? (
-                                        <div className="text-muted-foreground rounded-md bg-gray-500/10 px-3 py-2 text-sm">
-                                            Loading repositories...
-                                        </div>
-                                    ) : (
-                                        <>
-                                            <select
-                                                value={pipelineRepoSelection}
-                                                onChange={(e) =>
-                                                    setPipelineRepoSelection(e.target.value)
-                                                }
-                                                className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
-                                            >
-                                                {pipelineRepos.map((repo) => (
-                                                    <option key={repo.id} value={repo.id}>
-                                                        {repo.owner}/{repo.name}
-                                                        {repo.isDefault ? " (Default)" : ""}
-                                                    </option>
-                                                ))}
-                                                <option value={MANUAL_REPO_OPTION}>Other...</option>
-                                            </select>
-                                            {pipelineRepoSelection === MANUAL_REPO_OPTION && (
-                                                <input
-                                                    type="text"
-                                                    value={manualPipelineRepo}
-                                                    onChange={(e) =>
-                                                        setManualPipelineRepo(e.target.value)
-                                                    }
-                                                    placeholder="https://github.com/org/repo"
-                                                    className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
-                                                />
-                                            )}
-                                        </>
-                                    )}
-                                    {pipelineReposError && (
-                                        <p className="text-xs text-red-500">{pipelineReposError}</p>
+                                    {pipelineError && (
+                                        <p className="text-xs text-red-500">{pipelineError}</p>
                                     )}
                                     <div className="flex gap-2">
                                         <button
                                             onClick={handleDispatchPipeline}
-                                            disabled={
-                                                pipelineDispatching ||
-                                                !selectedRepoUrl ||
-                                                !dispatchConfig
-                                            }
+                                            disabled={pipelineDispatching || !dispatchConfig}
                                             className="flex-1 rounded-md bg-purple-500 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-purple-600 disabled:opacity-50"
                                         >
                                             {pipelineDispatching ? "Dispatching..." : "Dispatch"}
                                         </button>
                                         <button
-                                            onClick={() => {
-                                                setShowPipelineModal(false);
-                                                setManualPipelineRepo("");
-                                            }}
+                                            onClick={() => setShowPipelineModal(false)}
                                             className="rounded-md bg-gray-500/10 px-3 py-2 text-sm font-medium text-gray-500 transition-colors hover:bg-gray-500/20"
                                         >
                                             Cancel
