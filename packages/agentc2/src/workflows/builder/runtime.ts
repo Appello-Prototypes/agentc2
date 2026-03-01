@@ -2,6 +2,7 @@ import { agentResolver, type RequestContext } from "../../agents/resolver";
 import { getToolsByNamesAsync } from "../../tools/registry";
 import { mastra } from "../../mastra";
 import { prisma } from "@repo/database";
+import type { z } from "zod";
 import {
     type WorkflowDefinition,
     type WorkflowExecutionContext,
@@ -225,6 +226,126 @@ function unwrapToolResult(result: unknown): unknown {
     return result;
 }
 
+/* ---------- Robust JSON parsing for agent outputs ---------- */
+
+/**
+ * Parse JSON from agent output with robust error handling.
+ * Handles common LLM output patterns:
+ * - Markdown code blocks (```json, ```)
+ * - Nested JSON objects
+ * - Whitespace variations
+ *
+ * Throws descriptive errors instead of silently failing.
+ */
+function parseAgentJsonOutput(text: string, stepId: string): unknown {
+    if (!text || typeof text !== "string") {
+        throw new Error(
+            `[Step: ${stepId}] Agent output is empty or not a string. Cannot parse JSON.`
+        );
+    }
+
+    // Step 1: Strip markdown code blocks
+    // Handles: ```json\n{...}\n```, ```\n{...}\n```, or plain JSON
+    let cleaned = text.trim();
+
+    // Remove opening code fence with optional language tag
+    cleaned = cleaned.replace(/^```(?:json|javascript|js)?\s*/i, "");
+
+    // Remove closing code fence
+    cleaned = cleaned.replace(/\s*```\s*$/, "");
+
+    cleaned = cleaned.trim();
+
+    // Step 2: Extract first complete JSON object or array
+    // Find the first { or [ and the last matching } or ]
+    const jsonStartMatch = cleaned.match(/[{\[]/);
+    if (!jsonStartMatch) {
+        throw new Error(
+            `[Step: ${stepId}] No JSON object or array found in agent output. ` +
+                `Output must contain a valid JSON object {...} or array [...]. ` +
+                `Received: ${text.slice(0, 200)}${text.length > 200 ? "..." : ""}`
+        );
+    }
+
+    const jsonStart = jsonStartMatch.index!;
+    const firstChar = cleaned[jsonStart];
+    const matchingChar = firstChar === "{" ? "}" : "]";
+
+    // Find matching closing bracket
+    let depth = 0;
+    let jsonEnd = -1;
+
+    for (let i = jsonStart; i < cleaned.length; i++) {
+        if (
+            cleaned[i] === firstChar ||
+            (firstChar === "{" && cleaned[i] === "{") ||
+            (firstChar === "[" && cleaned[i] === "[")
+        ) {
+            if (cleaned[i] === firstChar) depth++;
+        } else if (cleaned[i] === matchingChar) {
+            depth--;
+            if (depth === 0) {
+                jsonEnd = i;
+                break;
+            }
+        }
+    }
+
+    if (jsonEnd === -1) {
+        throw new Error(
+            `[Step: ${stepId}] Incomplete JSON in agent output. ` +
+                `Found opening '${firstChar}' but no matching '${matchingChar}'. ` +
+                `This usually means the JSON is truncated or malformed.`
+        );
+    }
+
+    const jsonText = cleaned.slice(jsonStart, jsonEnd + 1);
+
+    // Step 3: Parse the extracted JSON
+    try {
+        const parsed = JSON.parse(jsonText);
+        return parsed;
+    } catch (parseError) {
+        const errorMsg = parseError instanceof Error ? parseError.message : String(parseError);
+        throw new Error(
+            `[Step: ${stepId}] Failed to parse JSON from agent output. ` +
+                `Parse error: ${errorMsg}. ` +
+                `Extracted text: ${jsonText.slice(0, 300)}${jsonText.length > 300 ? "..." : ""}`
+        );
+    }
+}
+
+/**
+ * Validate parsed output against a Zod schema (optional).
+ * If schema is provided and validation fails, throws a detailed error.
+ * If schema is not provided, returns the output as-is.
+ */
+function validateAgentOutput(
+    output: unknown,
+    schema: z.ZodType | undefined,
+    stepId: string
+): unknown {
+    if (!schema) {
+        return output;
+    }
+
+    const result = schema.safeParse(output);
+
+    if (!result.success) {
+        const issues = result.error.issues
+            .map((issue) => `  - ${issue.path.join(".")}: ${issue.message}`)
+            .join("\n");
+
+        throw new Error(
+            `[Step: ${stepId}] Agent output failed schema validation.\n` +
+                `Validation errors:\n${issues}\n` +
+                `Received output: ${JSON.stringify(output, null, 2).slice(0, 500)}...`
+        );
+    }
+
+    return result.data;
+}
+
 function resolveValue(value: unknown, context: WorkflowExecutionContext): unknown {
     if (typeof value === "string") {
         return resolveTemplate(value, context);
@@ -262,10 +383,19 @@ function evaluateCondition(expression: string, context: WorkflowExecutionContext
             "helpers",
             `return (${expression});`
         );
-        return Boolean(evaluator(context.input, context.steps, context.variables, env, helpers));
+        const result = evaluator(context.input, context.steps, context.variables, env, helpers);
+        return Boolean(result);
     } catch (error) {
-        console.warn("[WorkflowRuntime] Condition evaluation failed:", error);
-        return false;
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        const stepsSnapshot = JSON.stringify(context.steps, null, 2).slice(0, 500);
+
+        throw new Error(
+            `Branch condition evaluation failed.\n` +
+                `Expression: ${expression}\n` +
+                `Error: ${errorMsg}\n` +
+                `Available steps: ${Object.keys(context.steps).join(", ")}\n` +
+                `Steps snapshot: ${stepsSnapshot}...`
+        );
     }
 }
 
@@ -309,9 +439,7 @@ async function executeAgentStep(
                 output: response.text,
                 durationMs,
                 modelName: response.response?.modelId,
-                totalTokens: response.usage
-                    ? (response.usage.totalTokens ?? 0)
-                    : undefined,
+                totalTokens: response.usage ? (response.usage.totalTokens ?? 0) : undefined,
                 costUsd: undefined
             });
         }
@@ -319,15 +447,13 @@ async function executeAgentStep(
         let output: unknown;
         if (config.outputFormat === "json") {
             const text = response.text || "";
-            const jsonMatch = text.match(/\{[\s\S]*\}/);
-            if (jsonMatch) {
-                try {
-                    output = JSON.parse(jsonMatch[0]);
-                } catch {
-                    output = { raw: text };
-                }
-            } else {
-                output = { raw: text };
+            try {
+                output = parseAgentJsonOutput(text, step.id);
+            } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                throw new Error(
+                    `Agent step "${step.id}" (${agentSlug}) failed to produce valid JSON output. ${errorMessage}`
+                );
             }
         } else {
             output = {
@@ -525,10 +651,53 @@ async function executeSteps(
                         defaultBranch?: WorkflowStep[];
                     };
                     const branches = config.branches || [];
-                    const selected = branches.find((branch) =>
-                        evaluateCondition(branch.condition, context)
-                    );
+
+                    let selected: WorkflowBranchConfig | undefined;
+                    const evaluationResults: Array<{
+                        branchId?: string;
+                        condition: string;
+                        result: boolean;
+                        error?: string;
+                    }> = [];
+
+                    for (const branch of branches) {
+                        try {
+                            const result = evaluateCondition(branch.condition, context);
+                            evaluationResults.push({
+                                branchId: branch.id,
+                                condition: branch.condition,
+                                result
+                            });
+                            if (result) {
+                                selected = branch;
+                                break;
+                            }
+                        } catch (error) {
+                            const errorMsg = error instanceof Error ? error.message : String(error);
+                            evaluationResults.push({
+                                branchId: branch.id,
+                                condition: branch.condition,
+                                result: false,
+                                error: errorMsg
+                            });
+                            throw new Error(
+                                `[Branch: ${step.id}] Branch condition evaluation failed.\n` +
+                                    `Branch ID: ${branch.id || "unnamed"}\n` +
+                                    `Condition: ${branch.condition}\n` +
+                                    `Error: ${errorMsg}`
+                            );
+                        }
+                    }
+
                     const branchSteps = selected?.steps || config.defaultBranch || [];
+
+                    if (!selected && !config.defaultBranch) {
+                        console.warn(
+                            `[Branch: ${step.id}] No branch conditions matched and no defaultBranch defined.\n` +
+                                `Evaluated branches:\n${evaluationResults.map((r) => `  - ${r.branchId || "unnamed"}: ${r.condition} → ${r.result}`).join("\n")}`
+                        );
+                    }
+
                     const branchResult = await executeSteps(branchSteps, context, {
                         ...options,
                         existingSteps: options.existingSteps
@@ -536,7 +705,8 @@ async function executeSteps(
                     status = branchResult.status;
                     output = {
                         branchId: selected?.id,
-                        result: branchResult.output
+                        result: branchResult.output,
+                        _evaluationResults: evaluationResults
                     };
                     executionSteps.push(...branchResult.steps);
                     suspended = branchResult.suspended;
@@ -642,6 +812,7 @@ async function executeSteps(
                     const maxIter = dwConfig.maxIterations || 10;
                     let iteration = 0;
                     let iterOutput: unknown = stepInput;
+                    let continueLoop = true;
 
                     do {
                         const iterContext: WorkflowExecutionContext = {
@@ -682,10 +853,29 @@ async function executeSteps(
                         };
 
                         Object.assign(context.steps, iterContext.steps);
-                    } while (
-                        iteration < maxIter &&
-                        evaluateCondition(dwConfig.conditionExpression, context)
-                    );
+
+                        if (iteration >= maxIter) {
+                            continueLoop = false;
+                            console.warn(
+                                `[DoWhile: ${step.id}] Max iterations (${maxIter}) reached. ` +
+                                    `Condition: ${dwConfig.conditionExpression}. ` +
+                                    `Final iteration output: ${JSON.stringify(iterOutput, null, 2).slice(0, 300)}`
+                            );
+                        } else {
+                            try {
+                                continueLoop = evaluateCondition(
+                                    dwConfig.conditionExpression,
+                                    context
+                                );
+                            } catch (error) {
+                                const errorMsg =
+                                    error instanceof Error ? error.message : String(error);
+                                throw new Error(
+                                    `[DoWhile: ${step.id}] Condition evaluation failed at iteration ${iteration}. ${errorMsg}`
+                                );
+                            }
+                        }
+                    } while (continueLoop);
 
                     if (status !== "failed" && status !== "suspended") {
                         output = {
