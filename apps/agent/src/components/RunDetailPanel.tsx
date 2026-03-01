@@ -149,11 +149,7 @@ function useRunStream(
 
 // ─── Polling hook (workflow/network) ────────────────────────────────────────
 
-function useRunPolling(
-    kind: string,
-    status: string | undefined,
-    onRefresh?: () => void
-) {
+function useRunPolling(kind: string, status: string | undefined, onRefresh?: () => void) {
     const [isPolling, setIsPolling] = useState(false);
     const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -244,12 +240,7 @@ export default function RunDetailPanel({
     const [detailTab, setDetailTab] = useState("overview");
     const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
 
-    const { liveSteps, liveToolCalls, isStreaming } = useRunStream(
-        agentSlug,
-        runId,
-        status,
-        kind
-    );
+    const { liveSteps, liveToolCalls, isStreaming } = useRunStream(agentSlug, runId, status, kind);
     const { isPolling } = useRunPolling(kind, runDetail?.status || status, onRefresh);
 
     const feedbackList = useMemo(() => {
@@ -424,9 +415,7 @@ export default function RunDetailPanel({
                                     <h3 className="text-muted-foreground mb-1 text-xs font-medium uppercase">
                                         {kind === "workflow" ? "Workflow" : "Network"}
                                     </h3>
-                                    <span className="text-sm font-medium">
-                                        {primitiveName}
-                                    </span>
+                                    <span className="text-sm font-medium">{primitiveName}</span>
                                     {runDetail?.environment && (
                                         <Badge variant="outline" className="ml-2">
                                             {runDetail.environment}
@@ -510,10 +499,13 @@ export default function RunDetailPanel({
                                         </span>
                                         <span>
                                             Completion:{" "}
-                                            <strong>{formatTokens(effectiveCompletionTokens)}</strong>
+                                            <strong>
+                                                {formatTokens(effectiveCompletionTokens)}
+                                            </strong>
                                         </span>
                                         <span>
-                                            Total: <strong>{formatTokens(effectiveTotalTokens)}</strong>
+                                            Total:{" "}
+                                            <strong>{formatTokens(effectiveTotalTokens)}</strong>
                                         </span>
                                     </div>
                                 </div>
@@ -523,7 +515,8 @@ export default function RunDetailPanel({
                                 <div className="flex flex-wrap gap-4 text-sm">
                                     {effectiveTotalTokens != null && (
                                         <span>
-                                            Tokens: <strong>{formatTokens(effectiveTotalTokens)}</strong>
+                                            Tokens:{" "}
+                                            <strong>{formatTokens(effectiveTotalTokens)}</strong>
                                         </span>
                                     )}
                                     {runDetail?.costUsd != null && (
@@ -647,13 +640,19 @@ export default function RunDetailPanel({
                                 )}
                                 {(() => {
                                     const steps = runDetail?.trace?.steps ?? [];
-                                    const stepsJson = runDetail?.trace?.stepsJson as unknown[] | null;
+                                    const stepsJson = runDetail?.trace?.stepsJson as
+                                        | unknown[]
+                                        | null;
                                     const hasSteps = steps.length > 0;
                                     const hasStepsJson =
                                         Array.isArray(stepsJson) && stepsJson.length > 0;
 
                                     const turnSteps: unknown[] = [];
-                                    if (!hasSteps && !hasStepsJson && Array.isArray(runDetail?.turns)) {
+                                    if (
+                                        !hasSteps &&
+                                        !hasStepsJson &&
+                                        Array.isArray(runDetail?.turns)
+                                    ) {
                                         for (const turn of runDetail.turns) {
                                             if (Array.isArray(turn.stepsJson)) {
                                                 turnSteps.push(...(turn.stepsJson as unknown[]));
@@ -688,7 +687,11 @@ export default function RunDetailPanel({
                                                         <pre className="bg-background max-h-48 overflow-auto rounded border p-3 text-xs whitespace-pre-wrap">
                                                             {typeof step.content === "string"
                                                                 ? step.content
-                                                                : JSON.stringify(step.content, null, 2)}
+                                                                : JSON.stringify(
+                                                                      step.content,
+                                                                      null,
+                                                                      2
+                                                                  )}
                                                         </pre>
                                                     </div>
                                                 ))}
@@ -696,7 +699,11 @@ export default function RunDetailPanel({
                                         );
                                     }
 
-                                    const jsonSteps = hasStepsJson ? stepsJson : hasTurnSteps ? turnSteps : null;
+                                    const jsonSteps = hasStepsJson
+                                        ? stepsJson
+                                        : hasTurnSteps
+                                          ? turnSteps
+                                          : null;
                                     if (jsonSteps) {
                                         return (
                                             <div className="space-y-3">
@@ -717,8 +724,11 @@ export default function RunDetailPanel({
                                                                     </Badge>
                                                                 </div>
                                                                 <span className="text-muted-foreground text-sm">
-                                                                    {typeof s.durationMs === "number"
-                                                                        ? formatLatency(s.durationMs)
+                                                                    {typeof s.durationMs ===
+                                                                    "number"
+                                                                        ? formatLatency(
+                                                                              s.durationMs
+                                                                          )
                                                                         : "-"}
                                                                 </span>
                                                             </div>
@@ -816,7 +826,8 @@ export default function RunDetailPanel({
                                         ))}
                                     </div>
                                 )}
-                                {runDetail?.trace?.toolCalls && runDetail.trace.toolCalls.length > 0 ? (
+                                {runDetail?.trace?.toolCalls &&
+                                runDetail.trace.toolCalls.length > 0 ? (
                                     <div className="space-y-4">
                                         {runDetail.trace.toolCalls.map((toolCall, idx) => (
                                             <div
@@ -960,7 +971,9 @@ export default function RunDetailPanel({
                                                         <span className="font-medium">
                                                             {event.guardrailKey}
                                                         </span>
-                                                        <Badge variant="outline">{event.type}</Badge>
+                                                        <Badge variant="outline">
+                                                            {event.type}
+                                                        </Badge>
                                                     </div>
                                                     <p className="text-muted-foreground mt-2 text-xs">
                                                         {event.reason}
@@ -975,8 +988,8 @@ export default function RunDetailPanel({
                                     guardrailEvents.length === 0 &&
                                     effectiveStatus.toUpperCase() !== "FAILED" && (
                                         <p className="text-muted-foreground text-sm">
-                                            No errors, retries, or guardrail events recorded for this
-                                            run.
+                                            No errors, retries, or guardrail events recorded for
+                                            this run.
                                         </p>
                                     )}
                             </TabsContent>
@@ -987,7 +1000,9 @@ export default function RunDetailPanel({
                             <TabsContent value="latency" className="mt-0 space-y-4">
                                 {(() => {
                                     const steps = runDetail?.trace?.steps ?? [];
-                                    const stepsJson = runDetail?.trace?.stepsJson as unknown[] | null;
+                                    const stepsJson = runDetail?.trace?.stepsJson as
+                                        | unknown[]
+                                        | null;
                                     const rawSteps =
                                         steps.length > 0
                                             ? steps
@@ -1308,8 +1323,8 @@ function WorkflowStepDetail({
             )}
             {step.errorJson != null && (
                 <div>
-                    <h4 className="mb-1 text-xs font-medium uppercase text-red-600">Error</h4>
-                    <pre className="max-h-48 overflow-auto rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700 whitespace-pre-wrap dark:border-red-900/30 dark:bg-red-900/10 dark:text-red-400">
+                    <h4 className="mb-1 text-xs font-medium text-red-600 uppercase">Error</h4>
+                    <pre className="max-h-48 overflow-auto rounded-lg border border-red-200 bg-red-50 p-3 text-xs whitespace-pre-wrap text-red-700 dark:border-red-900/30 dark:bg-red-900/10 dark:text-red-400">
                         {typeof step.errorJson === "string"
                             ? step.errorJson
                             : JSON.stringify(step.errorJson, null, 2)}

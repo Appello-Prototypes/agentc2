@@ -469,7 +469,7 @@ export function LiveRunsContent() {
                         suspendedStep: wfRun.suspendedStep || null,
                         environment: wfRun.environment || null,
                         inputJson: wfRun.inputJson,
-                        outputJson: wfRun.outputJson,
+                        outputJson: wfRun.outputJson
                     });
                 } else if (run.kind === "network") {
                     const netRun = data.run;
@@ -500,7 +500,7 @@ export function LiveRunsContent() {
                         networkEvaluation: netRun.evaluation || null,
                         network: data.network || null,
                         environment: netRun.environment || null,
-                        outputJson: netRun.outputJson,
+                        outputJson: netRun.outputJson
                     });
                 } else {
                     setRunDetail(data.run);
@@ -588,7 +588,10 @@ export function LiveRunsContent() {
         const getGroupLabel = (run: Run) => {
             switch (groupBy) {
                 case "kind":
-                    return (run.kind ?? "agent").charAt(0).toUpperCase() + (run.kind ?? "agent").slice(1);
+                    return (
+                        (run.kind ?? "agent").charAt(0).toUpperCase() +
+                        (run.kind ?? "agent").slice(1)
+                    );
                 case "agent":
                     return run.name || run.agentName || "Unknown";
                 case "version":
@@ -1253,9 +1256,7 @@ export function LiveRunsContent() {
                                                 <TableHead className="text-right">
                                                     Duration
                                                 </TableHead>
-                                                <TableHead className="text-right">
-                                                    Steps
-                                                </TableHead>
+                                                <TableHead className="text-right">Steps</TableHead>
                                                 <TableHead className="text-right">Tokens</TableHead>
                                                 <TableHead className="text-right">Cost</TableHead>
                                                 <TableHead className="text-right">Time</TableHead>
@@ -1450,8 +1451,7 @@ export function LiveRunsContent() {
                                                         className={
                                                             selectedRun.kind === "agent"
                                                                 ? "border-blue-500/30 text-blue-600 dark:text-blue-400"
-                                                                : selectedRun.kind ===
-                                                                    "workflow"
+                                                                : selectedRun.kind === "workflow"
                                                                   ? "border-purple-500/30 text-purple-600 dark:text-purple-400"
                                                                   : "border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
                                                         }
@@ -1459,8 +1459,7 @@ export function LiveRunsContent() {
                                                         {selectedRun.kind}
                                                     </Badge>
                                                     <h2 className="text-xl font-semibold">
-                                                        {selectedRun.name ||
-                                                            selectedRun.agentName}
+                                                        {selectedRun.name || selectedRun.agentName}
                                                     </h2>
                                                 </div>
                                                 <p className="text-muted-foreground truncate font-mono text-xs">
@@ -1578,9 +1577,7 @@ export function LiveRunsContent() {
                                             totalTokens={selectedRun.totalTokens}
                                             sessionId={selectedRun.sessionId}
                                             threadId={selectedRun.threadId}
-                                            agentSlug={
-                                                selectedRun.agentSlug || selectedRun.slug
-                                            }
+                                            agentSlug={selectedRun.agentSlug || selectedRun.slug}
                                             runId={selectedRun.id}
                                             kind={selectedRun.kind}
                                             primitiveName={selectedRun.name}

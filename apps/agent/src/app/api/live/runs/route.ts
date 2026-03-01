@@ -71,8 +71,7 @@ export async function GET(request: NextRequest) {
         const includeWorkflows = kind === "all" || kind === "workflow";
         const includeNetworks = kind === "all" || kind === "network";
 
-        const statusFilter =
-            status && status !== "all" ? status.toUpperCase() : null;
+        const statusFilter = status && status !== "all" ? status.toUpperCase() : null;
 
         const startedAtFilter: Record<string, Date> = {};
         if (from) startedAtFilter.gte = new Date(from);
@@ -202,9 +201,7 @@ export async function GET(request: NextRequest) {
                         run._count.toolCalls > 0
                             ? run._count.toolCalls
                             : (run.trace?._count?.toolCalls ?? 0),
-                    versionNumber: run.versionId
-                        ? versionMap.get(run.versionId) || null
-                        : null,
+                    versionNumber: run.versionId ? versionMap.get(run.versionId) || null : null,
                     suspendedStep: null,
                     environment: null,
                     runType: run.runType,
@@ -272,9 +269,7 @@ export async function GET(request: NextRequest) {
                           JSON.stringify(run.inputJson).slice(0, 500)
                         : String(run.inputJson || "");
                 const outputText =
-                    run.outputJson != null
-                        ? JSON.stringify(run.outputJson).slice(0, 500)
-                        : null;
+                    run.outputJson != null ? JSON.stringify(run.outputJson).slice(0, 500) : null;
 
                 allRuns.push({
                     id: run.id,
@@ -385,8 +380,7 @@ export async function GET(request: NextRequest) {
         // Sort merged results by startedAt desc and paginate for kind=all
         if (kind === "all") {
             allRuns.sort(
-                (a, b) =>
-                    new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime()
+                (a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime()
             );
             const paginated = allRuns.slice(offset, offset + limit);
             const grandTotal = agentTotal + workflowTotal + networkTotal;
@@ -413,11 +407,7 @@ export async function GET(request: NextRequest) {
 
         // Single-kind response
         const total =
-            kind === "agent"
-                ? agentTotal
-                : kind === "workflow"
-                  ? workflowTotal
-                  : networkTotal;
+            kind === "agent" ? agentTotal : kind === "workflow" ? workflowTotal : networkTotal;
 
         return NextResponse.json({
             success: true,
@@ -475,10 +465,7 @@ async function getBudgetAlerts() {
                 },
                 select: { costUsd: true }
             });
-            const currentSpend = costEvents.reduce(
-                (sum, e) => sum + (e.costUsd || 0),
-                0
-            );
+            const currentSpend = costEvents.reduce((sum, e) => sum + (e.costUsd || 0), 0);
             if (currentSpend >= policy.monthlyLimitUsd) {
                 alerts.push({
                     agentId: policy.agent.id,
@@ -486,9 +473,7 @@ async function getBudgetAlerts() {
                     agentName: policy.agent.name,
                     currentSpendUsd: Math.round(currentSpend * 100) / 100,
                     monthlyLimitUsd: policy.monthlyLimitUsd,
-                    percentUsed: Math.round(
-                        (currentSpend / policy.monthlyLimitUsd) * 100
-                    )
+                    percentUsed: Math.round((currentSpend / policy.monthlyLimitUsd) * 100)
                 });
             }
         }
