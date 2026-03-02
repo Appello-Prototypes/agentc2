@@ -310,9 +310,7 @@ async function executeAgentStep(
                 output: response.text,
                 durationMs,
                 modelName: response.response?.modelId,
-                totalTokens: response.usage
-                    ? (response.usage.totalTokens ?? 0)
-                    : undefined,
+                totalTokens: response.usage ? (response.usage.totalTokens ?? 0) : undefined,
                 costUsd: undefined
             });
         }
@@ -347,9 +345,6 @@ async function executeAgentStep(
                         }
                     }
                 } catch (error) {
-                    if (error instanceof Error && error.message.includes("output validation failed")) {
-                        throw error;
-                    }
                     output = { raw: text, _parseError: error };
                 }
             } else {

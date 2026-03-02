@@ -1132,8 +1132,7 @@ async function main() {
                                 branches: [
                                     {
                                         id: "passed",
-                                        condition:
-                                            "steps['fix-audit']?.verdict === 'PASS'",
+                                        condition: "steps['fix-audit']?.verdict === 'PASS'",
                                         steps: [
                                             {
                                                 id: "fix-review",
