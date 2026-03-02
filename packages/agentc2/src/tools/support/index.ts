@@ -17,6 +17,58 @@ import { prisma } from "@repo/database";
 
 const baseOutputSchema = z.object({ success: z.boolean().optional() }).passthrough();
 
+/**
+ * Splits a compound "orgId:userId" resourceId into its parts.
+ * Returns the raw value if no separator is found.
+ */
+function splitResourceId(raw: string): { orgId: string | null; userId: string } {
+    const idx = raw.indexOf(":");
+    if (idx === -1) return { orgId: null, userId: raw };
+    return { orgId: raw.slice(0, idx), userId: raw.slice(idx + 1) };
+}
+
+const ticketTypeEnum = ["BUG", "FEATURE_REQUEST", "IMPROVEMENT", "QUESTION"] as const;
+type TicketType = (typeof ticketTypeEnum)[number];
+
+const ticketTypeAliases: Record<string, TicketType> = {
+    bug: "BUG",
+    feature_request: "FEATURE_REQUEST",
+    feature: "FEATURE_REQUEST",
+    improvement: "IMPROVEMENT",
+    question: "QUESTION"
+};
+
+function normalizeTicketType(val: string): TicketType {
+    const upper = val.toUpperCase() as TicketType;
+    if (ticketTypeEnum.includes(upper)) return upper;
+    const alias = ticketTypeAliases[val.toLowerCase()];
+    if (alias) return alias;
+    return upper;
+}
+
+const ticketTypeSchema = z
+    .string()
+    .transform(normalizeTicketType)
+    .describe(
+        "Type of ticket: BUG for bugs/errors, FEATURE_REQUEST for new features, IMPROVEMENT for enhancements, QUESTION for general questions"
+    );
+
+const ticketStatusEnum = [
+    "NEW",
+    "TRIAGED",
+    "IN_PROGRESS",
+    "WAITING_ON_CUSTOMER",
+    "RESOLVED",
+    "CLOSED"
+] as const;
+
+const ticketStatusSchema = z
+    .string()
+    .transform((v) => v.toUpperCase())
+    .pipe(z.enum(ticketStatusEnum))
+    .optional()
+    .describe("Filter by status (optional)");
+
 // ─── submit-support-ticket ──────────────────────────────────────────────────
 
 export const submitSupportTicketTool = createTool({
@@ -26,41 +78,85 @@ export const submitSupportTicketTool = createTool({
         "Creates a new ticket in the system that will be reviewed by the platform team. " +
         "Returns the ticket number for future reference.",
     inputSchema: z.object({
-        type: z
-            .enum(["BUG", "FEATURE_REQUEST", "IMPROVEMENT", "QUESTION"])
-            .describe(
-                "Type of ticket: BUG for bugs/errors, FEATURE_REQUEST for new features, IMPROVEMENT for enhancements, QUESTION for general questions"
-            ),
+        type: ticketTypeSchema,
         title: z.string().describe("Short, descriptive title for the ticket"),
         description: z
             .string()
             .describe(
                 "Detailed description. For bugs: include steps to reproduce, expected vs actual behavior. For features: describe the desired functionality and use case."
             ),
+        priority: z
+            .string()
+            .optional()
+            .describe("Optional priority: low, medium, high, or critical"),
         tags: z
             .array(z.string())
             .optional()
             .describe("Optional tags for categorization (e.g., 'ui', 'api', 'performance')"),
-        userId: z.string().describe("The ID of the user submitting the ticket"),
-        organizationId: z.string().describe("The organization ID of the submitting user")
+        userId: z
+            .string()
+            .optional()
+            .describe(
+                "The ID of the user submitting the ticket (auto-filled from context if omitted)"
+            ),
+        organizationId: z
+            .string()
+            .optional()
+            .describe("The organization ID (auto-filled from context if omitted)")
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ type, title, description, tags, userId, organizationId }) => {
+    execute: async ({
+        type,
+        title,
+        description,
+        priority,
+        tags,
+        userId: rawUserId,
+        organizationId: rawOrgId
+    }) => {
+        let userId = rawUserId;
+        let organizationId = rawOrgId;
+
+        if (userId && userId.includes(":")) {
+            const parts = splitResourceId(userId);
+            userId = parts.userId;
+            organizationId = organizationId || parts.orgId || undefined;
+        }
+
+        if (!userId || !organizationId) {
+            return {
+                success: false,
+                error: "Missing userId or organizationId. Please provide them or ensure the agent has user context."
+            };
+        }
+
         const user = await prisma.user.findUnique({
             where: { id: userId },
             select: { id: true, name: true, email: true }
         });
 
         if (!user) {
-            return { success: false, error: "User not found" };
+            return { success: false, error: `User not found for ID: ${userId}` };
+        }
+
+        const validPriorities = ["CRITICAL", "HIGH", "MEDIUM", "LOW"] as const;
+        type PrismaTicketPriority = (typeof validPriorities)[number];
+
+        let resolvedPriority: PrismaTicketPriority | undefined;
+        if (priority) {
+            const upper = priority.toUpperCase();
+            if (validPriorities.includes(upper as PrismaTicketPriority)) {
+                resolvedPriority = upper as PrismaTicketPriority;
+            }
         }
 
         const ticket = await prisma.supportTicket.create({
             data: {
-                type,
+                type: type as "BUG" | "FEATURE_REQUEST" | "IMPROVEMENT" | "QUESTION",
                 title,
                 description,
                 tags: tags ?? [],
+                ...(resolvedPriority ? { priority: resolvedPriority } : {}),
                 submittedById: userId,
                 organizationId
             }
@@ -91,23 +187,43 @@ export const listMyTicketsTool = createTool({
         "Shows ticket number, title, type, status, priority, and creation date. " +
         "Results are ordered by most recent first.",
     inputSchema: z.object({
-        status: z
-            .enum(["NEW", "TRIAGED", "IN_PROGRESS", "WAITING_ON_CUSTOMER", "RESOLVED", "CLOSED"])
-            .optional()
-            .describe("Filter by status (optional)"),
-        type: z
-            .enum(["BUG", "FEATURE_REQUEST", "IMPROVEMENT", "QUESTION"])
-            .optional()
-            .describe("Filter by ticket type (optional)"),
+        status: ticketStatusSchema,
+        type: ticketTypeSchema.optional().describe("Filter by ticket type (optional)"),
         limit: z
             .number()
             .optional()
             .describe("Max number of tickets to return (default: 20, max: 50)"),
-        userId: z.string().describe("The ID of the user whose tickets to list"),
-        organizationId: z.string().describe("The organization ID to scope tickets to")
+        userId: z
+            .string()
+            .optional()
+            .describe(
+                "The ID of the user whose tickets to list (auto-filled from context if omitted)"
+            ),
+        organizationId: z
+            .string()
+            .optional()
+            .describe(
+                "The organization ID to scope tickets to (auto-filled from context if omitted)"
+            )
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ status, type, limit, userId, organizationId }) => {
+    execute: async ({ status, type, limit, userId: rawUserId, organizationId: rawOrgId }) => {
+        let userId = rawUserId;
+        let organizationId = rawOrgId;
+
+        if (userId && userId.includes(":")) {
+            const parts = splitResourceId(userId);
+            userId = parts.userId;
+            organizationId = organizationId || parts.orgId || undefined;
+        }
+
+        if (!userId || !organizationId) {
+            return {
+                success: false,
+                error: "Missing userId or organizationId."
+            };
+        }
+
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const where: any = {
             submittedById: userId,
@@ -159,11 +275,35 @@ export const viewTicketDetailsTool = createTool({
         "Only shows comments visible to users (excludes internal admin notes).",
     inputSchema: z.object({
         ticketNumber: z.number().describe("The ticket number (e.g., 1, 2, 3)"),
-        userId: z.string().describe("The ID of the requesting user"),
-        organizationId: z.string().describe("The organization ID to scope the lookup to")
+        userId: z
+            .string()
+            .optional()
+            .describe("The ID of the requesting user (auto-filled from context if omitted)"),
+        organizationId: z
+            .string()
+            .optional()
+            .describe(
+                "The organization ID to scope the lookup to (auto-filled from context if omitted)"
+            )
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ ticketNumber, userId, organizationId }) => {
+    execute: async ({ ticketNumber, userId: rawUserId, organizationId: rawOrgId }) => {
+        let userId = rawUserId;
+        let organizationId = rawOrgId;
+
+        if (userId && userId.includes(":")) {
+            const parts = splitResourceId(userId);
+            userId = parts.userId;
+            organizationId = organizationId || parts.orgId || undefined;
+        }
+
+        if (!userId || !organizationId) {
+            return {
+                success: false,
+                error: "Missing userId or organizationId."
+            };
+        }
+
         const ticket = await prisma.supportTicket.findFirst({
             where: {
                 ticketNumber,
@@ -187,7 +327,6 @@ export const viewTicketDetailsTool = createTool({
             };
         }
 
-        // Verify the user belongs to the same org (they can see any ticket in their org)
         const membership = await prisma.membership.findUnique({
             where: {
                 userId_organizationId: {
@@ -241,11 +380,37 @@ export const commentOnTicketTool = createTool({
     inputSchema: z.object({
         ticketNumber: z.number().describe("The ticket number to comment on"),
         message: z.string().describe("The comment text to add"),
-        userId: z.string().describe("The ID of the user adding the comment"),
-        organizationId: z.string().describe("The organization ID to scope the lookup to")
+        userId: z
+            .string()
+            .optional()
+            .describe(
+                "The ID of the user adding the comment (auto-filled from context if omitted)"
+            ),
+        organizationId: z
+            .string()
+            .optional()
+            .describe(
+                "The organization ID to scope the lookup to (auto-filled from context if omitted)"
+            )
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ ticketNumber, message, userId, organizationId }) => {
+    execute: async ({ ticketNumber, message, userId: rawUserId, organizationId: rawOrgId }) => {
+        let userId = rawUserId;
+        let organizationId = rawOrgId;
+
+        if (userId && userId.includes(":")) {
+            const parts = splitResourceId(userId);
+            userId = parts.userId;
+            organizationId = organizationId || parts.orgId || undefined;
+        }
+
+        if (!userId || !organizationId) {
+            return {
+                success: false,
+                error: "Missing userId or organizationId."
+            };
+        }
+
         const ticket = await prisma.supportTicket.findFirst({
             where: {
                 ticketNumber,
