@@ -23,11 +23,51 @@ export type NavigationItem = {
 export const navigationItems: NavigationItem[] = [
     // Primary navigation
     {
-        label: "Workspace",
+        label: "Work",
         icon: icons.home,
         href: "/workspace",
         app: "agent",
-        keywords: ["workspace", "chat", "assistant", "conversation", "ai", "home"]
+        keywords: ["work", "workspace", "chat", "assistant", "conversation", "ai", "home"]
+    },
+    // Build group
+    {
+        label: "Build",
+        icon: icons.dashboard,
+        href: "/agents",
+        app: "agent",
+        keywords: ["build", "agents", "workflows", "networks", "skills"],
+        children: [
+            {
+                label: "Agents",
+                href: "/agents",
+                keywords: ["agents", "manage", "monitor", "configure", "analytics"]
+            },
+            {
+                label: "Workflows",
+                href: "/workflows",
+                keywords: ["workflows", "builder", "automation", "steps"]
+            },
+            {
+                label: "Networks",
+                href: "/networks",
+                keywords: ["networks", "routing", "multi-agent", "orchestration", "topology"]
+            },
+            {
+                label: "Skills",
+                href: "/skills",
+                keywords: ["skills", "instructions", "tools", "documents"]
+            },
+            {
+                label: "Campaigns",
+                href: "/campaigns",
+                keywords: ["campaigns", "missions", "autopilot", "autonomous", "long-running"]
+            },
+            {
+                label: "Pulse",
+                href: "/pulse",
+                keywords: ["pulse", "collective", "community", "evaluation", "rewards", "capacity"]
+            }
+        ]
     },
     {
         label: "Command",
@@ -46,63 +86,12 @@ export const navigationItems: NavigationItem[] = [
         ]
     },
     {
-        label: "Campaigns",
-        icon: icons["play-circle"],
-        href: "/campaigns",
-        app: "agent",
-        keywords: ["campaigns", "missions", "autopilot", "autonomous", "long-running"]
-    },
-    {
-        label: "Pulse",
-        icon: icons.activity,
-        href: "/pulse",
-        app: "agent",
-        keywords: [
-            "pulse",
-            "collective",
-            "community",
-            "evaluation",
-            "rewards",
-            "capacity",
-            "agents"
-        ]
-    },
-    // Build group
-    {
-        label: "Agents",
-        icon: icons.dashboard,
-        href: "/agents",
-        app: "agent",
-        keywords: ["agents", "manage", "monitor", "configure", "analytics", "build"]
-    },
-    {
-        label: "Workflows",
-        icon: icons["git-branch"],
-        href: "/workflows",
-        app: "agent",
-        keywords: ["workflows", "builder", "automation", "steps", "runs", "traces", "build"]
-    },
-    {
-        label: "Networks",
-        icon: icons["ai-network"],
-        href: "/networks",
-        app: "agent",
-        keywords: ["networks", "routing", "multi-agent", "orchestration", "topology", "build"]
-    },
-    {
-        label: "Skills",
-        icon: icons["task-list"],
-        href: "/skills",
-        app: "agent",
-        keywords: ["skills", "instructions", "tools", "documents", "build"]
-    },
-    // Schedule
-    {
-        label: "Schedule",
+        label: "Coordinate",
         icon: icons.calendar,
         href: "/schedule",
         app: "agent",
         keywords: [
+            "coordinate",
             "schedule",
             "automations",
             "triggers",
@@ -112,7 +101,7 @@ export const navigationItems: NavigationItem[] = [
             "registry"
         ]
     },
-    // Observe
+    // Observe group
     {
         label: "Observe",
         icon: icons.activity,
@@ -127,6 +116,28 @@ export const navigationItems: NavigationItem[] = [
             "activity",
             "triggers",
             "real-time"
+        ],
+        children: [
+            {
+                label: "Dashboard",
+                href: "/observe",
+                keywords: ["dashboard", "overview", "metrics", "monitoring"]
+            },
+            {
+                label: "Runs",
+                href: "/observe/runs",
+                keywords: ["runs", "executions", "traces", "history"]
+            },
+            {
+                label: "Triggers",
+                href: "/observe/triggers",
+                keywords: ["triggers", "events", "webhooks", "scheduled"]
+            },
+            {
+                label: "God Mode",
+                href: "/godmode",
+                keywords: ["god mode", "admin", "system", "debug"]
+            }
         ]
     },
     // Knowledge
@@ -137,7 +148,7 @@ export const navigationItems: NavigationItem[] = [
         app: "agent",
         keywords: ["knowledge", "rag", "documents", "vectors", "search"]
     },
-    // Integrations
+    // Integrations (accessible via icon in top bar and command palette)
     {
         label: "Integrations",
         icon: icons["ai-network"],

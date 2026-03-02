@@ -9,6 +9,7 @@ import { code } from "@streamdown/code";
 import { math } from "@streamdown/math";
 import { mermaid } from "@streamdown/mermaid";
 import type { UIMessage } from "ai";
+import remarkBreaks from "remark-breaks";
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import type { ComponentProps, HTMLAttributes, ReactElement } from "react";
 import { createContext, memo, useContext, useEffect, useState } from "react";
@@ -277,6 +278,7 @@ export const MessageResponse = memo(
         <Streamdown
             className={cn("size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0", className)}
             plugins={{ code, mermaid, math, cjk }}
+            remarkPlugins={[remarkBreaks]}
             controls
             {...props}
         />

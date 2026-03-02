@@ -38,6 +38,7 @@ type AppTopBarProps = {
     onHelp?: () => void;
     onCommunity?: () => void;
     onMarketplace?: () => void;
+    onIntegrations?: () => void;
     isActive?: (href: string) => boolean;
     renderNavLink?: (item: NavItem, isActive: boolean) => React.ReactNode;
 };
@@ -53,6 +54,7 @@ export function AppTopBar({
     onHelp,
     onCommunity,
     onMarketplace,
+    onIntegrations,
     isActive = () => false,
     renderNavLink
 }: AppTopBarProps) {
@@ -80,7 +82,7 @@ export function AppTopBar({
                 </div>
 
                 {/* Center Navigation Links -- hidden on mobile */}
-                <nav className="hidden flex-1 items-center gap-6 md:flex">
+                <nav className="hidden flex-1 items-baseline gap-6 md:flex">
                     {navItems.map((item) => {
                         if (item.children && item.children.length > 0) {
                             const groupActive = item.children.some((c) => isActive(c.href));
@@ -88,9 +90,10 @@ export function AppTopBar({
                                 <DropdownMenu key={item.href}>
                                     <DropdownMenuTrigger
                                         render={
-                                            <button
-                                                type="button"
-                                                className={`hover:text-primary flex items-center gap-1 text-sm font-medium transition-colors ${
+                                            <span
+                                                role="button"
+                                                tabIndex={0}
+                                                className={`hover:text-primary inline-flex cursor-pointer items-center gap-1 text-sm font-medium transition-colors ${
                                                     groupActive
                                                         ? "text-foreground"
                                                         : "text-muted-foreground"
@@ -101,7 +104,7 @@ export function AppTopBar({
                                                     icon={icons["chevron-down"]!}
                                                     className="size-3.5"
                                                 />
-                                            </button>
+                                            </span>
                                         }
                                     />
                                     <DropdownMenuContent
@@ -176,6 +179,18 @@ export function AppTopBar({
                         >
                             <HugeiconsIcon icon={icons.store!} className="size-5" />
                             <span className="sr-only">Marketplace</span>
+                        </Button>
+                    )}
+                    {onIntegrations && (
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-9"
+                            onClick={onIntegrations}
+                            title="Integrations"
+                        >
+                            <HugeiconsIcon icon={icons["ai-network"]!} className="size-5" />
+                            <span className="sr-only">Integrations</span>
                         </Button>
                     )}
                     <Button variant="ghost" size="icon" className="size-9" onClick={onSearchClick}>

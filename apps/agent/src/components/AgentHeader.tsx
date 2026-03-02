@@ -7,10 +7,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { AgentBrand } from "@/components/AgentBrand";
 
 const navItems = [
-    { label: "Workspace", href: "/workspace" },
-    { label: "Command", href: "/command" },
-    { label: "Campaigns", href: "/campaigns" },
-    { label: "Pulse", href: "/pulse" },
+    { label: "Work", href: "/workspace" },
     {
         label: "Build",
         href: "/agents",
@@ -18,14 +15,24 @@ const navItems = [
             { label: "Agents", href: "/agents" },
             { label: "Workflows", href: "/workflows" },
             { label: "Networks", href: "/networks" },
-            { label: "Skills", href: "/skills" }
+            { label: "Skills", href: "/skills" },
+            { label: "Campaigns", href: "/campaigns" },
+            { label: "Pulse", href: "/pulse" }
         ]
     },
-    { label: "Schedule", href: "/schedule" },
-    { label: "God Mode", href: "/godmode" },
-    { label: "Observe", href: "/observe" },
-    { label: "Knowledge", href: "/knowledge" },
-    { label: "Integrations", href: "/mcp" }
+    { label: "Command", href: "/command" },
+    { label: "Coordinate", href: "/schedule" },
+    {
+        label: "Observe",
+        href: "/observe",
+        children: [
+            { label: "Dashboard", href: "/observe" },
+            { label: "Runs", href: "/observe/runs" },
+            { label: "Triggers", href: "/observe/triggers" },
+            { label: "God Mode", href: "/godmode" }
+        ]
+    },
+    { label: "Knowledge", href: "/knowledge" }
 ];
 
 export function AgentHeader() {
@@ -56,6 +63,9 @@ export function AgentHeader() {
         if (href === "/workspace") {
             return pathname === "/workspace";
         }
+        if (href === "/observe") {
+            return pathname === "/observe";
+        }
         return pathname?.startsWith(href);
     };
 
@@ -71,6 +81,10 @@ export function AgentHeader() {
         router.push("/marketplace");
     };
 
+    const handleIntegrations = () => {
+        router.push("/mcp");
+    };
+
     return (
         <AppTopBar
             title=""
@@ -83,6 +97,7 @@ export function AgentHeader() {
             onHelp={handleHelp}
             onCommunity={handleCommunity}
             onMarketplace={handleMarketplace}
+            onIntegrations={handleIntegrations}
             isActive={isActive}
             renderNavLink={(item, active) => (
                 <Link
