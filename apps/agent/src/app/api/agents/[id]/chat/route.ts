@@ -662,6 +662,80 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                                 durationMs
                             });
                         }
+
+                        if (c.type === "tool-error") {
+                            const payload =
+                                c.payload &&
+                                typeof c.payload === "object" &&
+                                !Array.isArray(c.payload)
+                                    ? (c.payload as Record<string, unknown>)
+                                    : {};
+                            const toolCallId =
+                                (typeof payload.toolCallId === "string" && payload.toolCallId) ||
+                                (typeof payload.id === "string" && payload.id) ||
+                                (typeof c.toolCallId === "string" && c.toolCallId) ||
+                                c.id ||
+                                "";
+                            const toolName =
+                                (typeof payload.toolName === "string" && payload.toolName) ||
+                                (typeof c.toolName === "string" && c.toolName) ||
+                                "unknown";
+                            const errorObj = payload.error ?? c.error;
+                            const errorMessage =
+                                typeof errorObj === "string"
+                                    ? errorObj
+                                    : errorObj &&
+                                        typeof errorObj === "object" &&
+                                        "message" in (errorObj as Record<string, unknown>)
+                                      ? String((errorObj as Record<string, unknown>).message)
+                                      : "Tool execution error";
+                            const call = toolCallMap.get(toolCallId);
+                            let durationMs: number | undefined;
+
+                            if (call) {
+                                durationMs = Date.now() - call.startTime;
+                                toolCalls.push({
+                                    toolKey: call.toolName,
+                                    input: call.args,
+                                    output: undefined,
+                                    success: false,
+                                    error: errorMessage,
+                                    durationMs
+                                });
+                            } else {
+                                toolCalls.push({
+                                    toolKey: toolName,
+                                    input: {},
+                                    output: undefined,
+                                    success: false,
+                                    error: errorMessage
+                                });
+                            }
+
+                            console.warn(
+                                `[Agent Chat] tool-error for ${call?.toolName || toolName} (callId=${toolCallId}): ${errorMessage}`
+                            );
+
+                            writer.write({
+                                type: "tool-output-error",
+                                toolCallId,
+                                errorText: errorMessage
+                            });
+
+                            writer.write({ type: "finish-step" });
+                            const nextTextId = generateId();
+                            writer.write({ type: "text-start", id: nextTextId });
+                            textState.currentId = nextTextId;
+
+                            stepCounter++;
+                            executionSteps.push({
+                                step: stepCounter,
+                                type: "tool_result",
+                                content: `Tool ${call?.toolName || toolName} failed: ${errorMessage}`,
+                                timestamp: new Date().toISOString(),
+                                durationMs
+                            });
+                        }
                     };
 
                     // ── Stream consumption with retry on empty response ──
@@ -828,6 +902,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                     const capturedRun = run;
                     const capturedStreamResult = activeStreamResult;
                     const capturedToolCalls = [...toolCalls];
+                    const capturedToolCallMap = new Map(toolCallMap);
                     const capturedFullOutput = fullOutput;
                     const capturedExecutionSteps = [...executionSteps];
                     const capturedStepCounter = stepCounter;
@@ -860,6 +935,31 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                                     `[Agent Chat] Captured ${capturedToolCalls.length} tool calls:`,
                                     capturedToolCalls.map((tc) => tc.toolKey).join(", ")
                                 );
+                            }
+
+                            // Detect tool calls that were initiated but never received a result
+                            if (capturedToolCallMap.size > 0) {
+                                const resolvedToolCallIds = new Set(
+                                    capturedToolCalls.map((tc) => {
+                                        for (const [
+                                            callId,
+                                            entry
+                                        ] of capturedToolCallMap.entries()) {
+                                            if (entry.toolName === tc.toolKey) return callId;
+                                        }
+                                        return null;
+                                    })
+                                );
+                                for (const [callId, entry] of capturedToolCallMap.entries()) {
+                                    if (!resolvedToolCallIds.has(callId)) {
+                                        console.error(
+                                            `[Agent Chat] ORPHANED TOOL CALL for run ${capturedRun?.runId}: ` +
+                                                `tool="${entry.toolName}" callId="${callId}" was called but never received a tool-result or tool-error chunk. ` +
+                                                `Stream used: ${capturedStreamResult?.fullStream ? "fullStream" : "textStream"}. ` +
+                                                `Total captured results: ${capturedToolCalls.length}/${capturedToolCallMap.size}`
+                                        );
+                                    }
+                                }
                             }
 
                             // Record tool calls

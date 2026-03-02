@@ -463,6 +463,75 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                                 durationMs
                             });
                         }
+
+                        if (c.type === "tool-error") {
+                            const payload =
+                                c.payload &&
+                                typeof c.payload === "object" &&
+                                !Array.isArray(c.payload)
+                                    ? (c.payload as Record<string, unknown>)
+                                    : {};
+                            const toolCallId =
+                                (typeof payload.toolCallId === "string" && payload.toolCallId) ||
+                                (typeof payload.id === "string" && payload.id) ||
+                                (typeof c.toolCallId === "string" && c.toolCallId) ||
+                                c.id ||
+                                "";
+                            const toolName =
+                                (typeof payload.toolName === "string" && payload.toolName) ||
+                                (typeof c.toolName === "string" && c.toolName) ||
+                                "unknown";
+                            const errorObj = payload.error ?? c.error;
+                            const errorMessage =
+                                typeof errorObj === "string"
+                                    ? errorObj
+                                    : errorObj &&
+                                        typeof errorObj === "object" &&
+                                        "message" in (errorObj as Record<string, unknown>)
+                                      ? String((errorObj as Record<string, unknown>).message)
+                                      : "Tool execution error";
+                            const call = toolCallMap.get(toolCallId);
+                            let durationMs: number | undefined;
+
+                            if (call) {
+                                durationMs = Date.now() - call.startTime;
+                                toolCalls.push({
+                                    toolKey: call.toolName,
+                                    input: call.args,
+                                    output: undefined,
+                                    success: false,
+                                    error: errorMessage,
+                                    durationMs
+                                });
+                            } else {
+                                toolCalls.push({
+                                    toolKey: toolName,
+                                    input: {},
+                                    output: undefined,
+                                    success: false,
+                                    error: errorMessage
+                                });
+                            }
+
+                            console.warn(
+                                `[Agent Chat Public] tool-error for ${call?.toolName || toolName} (callId=${toolCallId}): ${errorMessage}`
+                            );
+
+                            writer.write({
+                                type: "tool-output-error",
+                                toolCallId,
+                                errorText: errorMessage
+                            });
+
+                            stepCounter++;
+                            executionSteps.push({
+                                step: stepCounter,
+                                type: "tool_result",
+                                content: `Tool ${call?.toolName || toolName} failed: ${errorMessage}`,
+                                timestamp: new Date().toISOString(),
+                                durationMs
+                            });
+                        }
                     };
 
                     const IDLE_TIMEOUT_MS = 10_000;

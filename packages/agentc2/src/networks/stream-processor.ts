@@ -105,11 +105,14 @@ export async function processNetworkStream(
                 promptTokens?: number;
                 completionTokens?: number;
                 totalTokens?: number;
+                inputTokens?: number;
+                outputTokens?: number;
             };
-            if (usage.totalTokens) {
-                totalTokens += usage.totalTokens;
-            } else if (usage.promptTokens || usage.completionTokens) {
-                totalTokens += (usage.promptTokens || 0) + (usage.completionTokens || 0);
+            const prompt = usage.promptTokens ?? usage.inputTokens ?? 0;
+            const completion = usage.completionTokens ?? usage.outputTokens ?? 0;
+            const total = usage.totalTokens ?? prompt + completion;
+            if (total) {
+                totalTokens += total;
             }
         }
 
