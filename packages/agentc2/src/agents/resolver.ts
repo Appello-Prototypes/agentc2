@@ -203,10 +203,11 @@ interface ModelConfig {
     thinking?: {
         type: "enabled" | "disabled";
         budget_tokens?: number;
+        budgetTokens?: number;
     };
     parallelToolCalls?: boolean;
     reasoningEffort?: "low" | "medium" | "high";
-    cacheControl?: { type: "ephemeral" };
+    cacheControl?: string | { type: "ephemeral" };
 }
 
 /**
@@ -1382,13 +1383,21 @@ export class AgentResolver {
         if (record.modelProvider === "anthropic") {
             const anthropicOptions: Record<string, unknown> = {};
             if (modelConfig.thinking?.type === "enabled") {
+                const thinkingConfig = modelConfig.thinking as Record<string, unknown>;
+                const budgetTokens =
+                    (thinkingConfig.budgetTokens as number) ||
+                    (thinkingConfig.budget_tokens as number) ||
+                    10000;
                 anthropicOptions.thinking = {
                     type: "enabled",
-                    budgetTokens: modelConfig.thinking.budget_tokens || 10000
+                    budgetTokens
                 };
             }
             if (modelConfig.cacheControl) {
-                anthropicOptions.cacheControl = modelConfig.cacheControl;
+                anthropicOptions.cacheControl =
+                    typeof modelConfig.cacheControl === "string"
+                        ? { type: modelConfig.cacheControl }
+                        : modelConfig.cacheControl;
             }
             if (Object.keys(anthropicOptions).length > 0) {
                 options.providerOptions = {

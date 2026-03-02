@@ -177,7 +177,7 @@ async function main() {
                 temperature: 0.4,
                 modelConfig: {
                     thinking: { type: "enabled", budgetTokens: 31744 },
-                    cacheControl: "ephemeral",
+                    cacheControl: { type: "ephemeral" },
                     parallelToolCalls: false
                 },
                 routingConfig: { mode: "locked" },

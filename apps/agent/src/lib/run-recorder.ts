@@ -983,7 +983,10 @@ function buildTurnMethods(
             await tx.agentRun.update({
                 where: { id: runId },
                 data: {
-                    outputText: `Error: ${errorMessage}`
+                    status: "FAILED",
+                    outputText: `Error: ${errorMessage}`,
+                    durationMs,
+                    completedAt: new Date()
                 }
             });
         });

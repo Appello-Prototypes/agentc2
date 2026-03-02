@@ -846,8 +846,18 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                                     promptTokens === 0 &&
                                     completionTokens === 0
                                 ) {
-                                    console.warn(
-                                        `[Agent Chat] Empty output with zero tokens for run ${capturedRun.runId}. Marking as FAILED.`
+                                    console.error(
+                                        `[Agent Chat] ZERO-TOKEN FAILURE for run ${capturedRun.runId}:`,
+                                        JSON.stringify({
+                                            agentSlug: id,
+                                            model: `${actualModelProvider}/${actualModelName}`,
+                                            threadId: userThreadId,
+                                            inputLength: lastUserMessage?.length ?? 0,
+                                            hasFullStream: !!capturedStreamResult?.fullStream,
+                                            hasTextStream: !!capturedStreamResult?.textStream,
+                                            usageResolved: !!usage,
+                                            stepsCount: capturedExecutionSteps.length
+                                        })
                                     );
                                     await capturedRun.fail(
                                         "Empty response: agent produced no output, no tool calls, and zero tokens"
