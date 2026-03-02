@@ -7,7 +7,9 @@ import {
     getAgentColor,
     getAgentInitials,
     formatRelativeTime,
-    formatDuration
+    formatDuration,
+    getEventInsight,
+    getUrgencyStyles
 } from "../_lib/helpers";
 
 export function FeedCardCompact({
@@ -25,6 +27,10 @@ export function FeedCardCompact({
     const isFailed = event.status === "failure" || event.type.includes("FAILED");
     const isRunning = event.type === "RUN_STARTED" && event.status !== "success";
 
+    const insight = getEventInsight(event);
+    const urgencyStyles = getUrgencyStyles(insight.urgency);
+    const needsAttention = insight.urgency === "critical" || insight.urgency === "action";
+
     return (
         <div
             className={cn(
@@ -32,19 +38,16 @@ export function FeedCardCompact({
                 "hover:bg-muted/50",
                 isFailed && "border-red-500/20 bg-red-500/5",
                 isRunning && "border-blue-400/20 bg-blue-500/5",
+                insight.urgency === "action" && "border-amber-400/20 bg-amber-500/5",
                 isNew && "animate-in fade-in duration-300"
             )}
         >
+            {/* Urgency dot */}
             <div
                 className={cn(
                     "h-1.5 w-1.5 shrink-0 rounded-full",
-                    isFailed
-                        ? "bg-red-500"
-                        : isRunning
-                          ? "animate-pulse bg-blue-500"
-                          : event.status === "success"
-                            ? "bg-emerald-500"
-                            : "bg-gray-400"
+                    urgencyStyles.dot,
+                    insight.urgency === "critical" && "animate-pulse"
                 )}
             />
 
@@ -76,6 +79,19 @@ export function FeedCardCompact({
             <span className="text-foreground/70 min-w-0 flex-1 truncate text-xs">
                 {event.summary}
             </span>
+
+            {/* Compact urgency hint */}
+            {needsAttention && (
+                <span
+                    className={cn(
+                        "shrink-0 rounded px-1.5 py-0.5 text-[9px] font-semibold",
+                        urgencyStyles.badgeBg,
+                        urgencyStyles.badge
+                    )}
+                >
+                    {insight.urgency === "critical" ? "Action" : "Review"}
+                </span>
+            )}
 
             {event.durationMs != null && event.durationMs > 0 && (
                 <span className="text-muted-foreground shrink-0 text-[10px] tabular-nums">

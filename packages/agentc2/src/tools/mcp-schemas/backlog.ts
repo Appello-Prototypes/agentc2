@@ -18,7 +18,7 @@ export const backlogToolDefinitions: McpToolDefinition[] = [
     {
         name: "backlog-add-task",
         description:
-            "Add a task to an agent's backlog. Auto-creates backlog if needed. Tasks persist across sessions.",
+            "Add a task to an agent's backlog. If a task with the same title already exists (any status), returns the existing task instead of creating a duplicate. Auto-creates backlog if needed.",
         inputSchema: {
             type: "object",
             properties: {

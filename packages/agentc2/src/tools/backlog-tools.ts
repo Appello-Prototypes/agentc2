@@ -104,8 +104,8 @@ export const backlogGetTool = createTool({
 export const backlogAddTaskTool = createTool({
     id: "backlog-add-task",
     description:
-        "Add a task to an agent's backlog. Auto-creates the backlog if it doesn't exist. " +
-        "Tasks persist across sessions and are processed during heartbeat runs.",
+        "Add a task to an agent's backlog. If a task with the same title already exists (any status), " +
+        "returns the existing task instead of creating a duplicate. Auto-creates the backlog if needed.",
     inputSchema: z.object({
         agentSlug: z.string().describe("Agent slug to add task to"),
         title: z.string().describe("Short task title"),
@@ -140,6 +140,31 @@ export const backlogAddTaskTool = createTool({
         const agent = await resolveAgent(agentSlug);
         const backlog = await getOrCreateBacklog(agent.id, agent.tenantId, agent.workspaceId);
 
+        // Deduplication: check for an existing task with the same title (case-insensitive, any status)
+        const existing = await prisma.backlogTask.findFirst({
+            where: {
+                backlogId: backlog.id,
+                title: { equals: title, mode: "insensitive" }
+            },
+            orderBy: { createdAt: "desc" }
+        });
+
+        if (existing) {
+            return {
+                success: true,
+                deduplicated: true,
+                message: `Task "${existing.title}" already exists with status ${existing.status}. Use backlog-update-task to modify it.`,
+                existingTask: {
+                    id: existing.id,
+                    title: existing.title,
+                    status: existing.status,
+                    priority: existing.priority,
+                    dueDate: existing.dueDate,
+                    createdAt: existing.createdAt
+                }
+            };
+        }
+
         const task = await prisma.backlogTask.create({
             data: {
                 backlogId: backlog.id,
@@ -154,7 +179,6 @@ export const backlogAddTaskTool = createTool({
             }
         });
 
-        // Record activity event
         recordActivity({
             type: "TASK_CREATED",
             agentId: agent.id,
@@ -172,6 +196,7 @@ export const backlogAddTaskTool = createTool({
 
         return {
             success: true,
+            deduplicated: false,
             task: {
                 id: task.id,
                 title: task.title,

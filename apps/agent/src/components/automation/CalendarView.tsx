@@ -1,7 +1,23 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Button, Card, CardContent, Checkbox, HugeiconsIcon, icons, Label } from "@repo/ui";
+import {
+    Badge,
+    Button,
+    Card,
+    CardContent,
+    Checkbox,
+    DropdownMenu,
+    DropdownMenuCheckboxItem,
+    DropdownMenuContent,
+    DropdownMenuGroup,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+    HugeiconsIcon,
+    icons,
+    Label
+} from "@repo/ui";
 import { cn } from "@/lib/utils";
 import { expandCronForRange, getAgentColor, getEventColor } from "./helpers";
 import { getAutomationHealth, getAutomationHealthStyles } from "./health";
@@ -361,20 +377,29 @@ export function CalendarView({ automations, onEditAutomation }: CalendarViewProp
                 </div>
                 <div className="flex items-center gap-3">
                     {/* Color mode toggle */}
-                    <div className="flex items-center gap-1 rounded-lg border p-0.5">
-                        {(["agent", "primitive", "health"] as CalendarColorMode[]).map((mode) => (
-                            <button
-                                key={mode}
-                                onClick={() => setColorMode(mode)}
-                                className={`rounded-md px-2.5 py-1 text-xs font-medium capitalize transition-colors ${
-                                    colorMode === mode
-                                        ? "bg-primary text-primary-foreground"
-                                        : "text-muted-foreground hover:text-foreground"
-                                }`}
-                            >
-                                {mode}
-                            </button>
-                        ))}
+                    <div className="flex items-center gap-2">
+                        <span className="text-muted-foreground text-xs">Color by:</span>
+                        <div className="flex items-center gap-1 rounded-lg border p-0.5">
+                            {(
+                                [
+                                    { key: "agent", label: "Agent" },
+                                    { key: "primitive", label: "Type" },
+                                    { key: "health", label: "Health" }
+                                ] as { key: CalendarColorMode; label: string }[]
+                            ).map(({ key, label }) => (
+                                <button
+                                    key={key}
+                                    onClick={() => setColorMode(key)}
+                                    className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                                        colorMode === key
+                                            ? "bg-primary text-primary-foreground"
+                                            : "text-muted-foreground hover:text-foreground"
+                                    }`}
+                                >
+                                    {label}
+                                </button>
+                            ))}
+                        </div>
                     </div>
                     {/* View mode toggle */}
                     <div className="flex items-center gap-1 rounded-lg border p-0.5">
@@ -397,31 +422,69 @@ export function CalendarView({ automations, onEditAutomation }: CalendarViewProp
 
             {/* Filters */}
             {(allAgentIds.length > 1 || automations.some((a) => a.sourceType === "trigger")) && (
-                <div className="flex flex-wrap items-center gap-4">
+                <div className="flex flex-wrap items-center gap-3">
                     {allAgentIds.length > 1 && (
-                        <div className="flex items-center gap-2">
-                            <Label className="text-xs">Agents:</Label>
-                            {allAgentIds.map((id) => {
-                                const agent = automations.find((a) => a.agent?.id === id)?.agent;
-                                return (
-                                    <label key={id} className="flex items-center gap-1.5 text-xs">
-                                        <Checkbox
-                                            checked={
-                                                filterAgentIds.size === 0 || filterAgentIds.has(id)
-                                            }
-                                            onCheckedChange={() => toggleAgentFilter(id)}
-                                        />
-                                        <div
-                                            className={cn(
-                                                "size-2 rounded-full",
-                                                getAgentColor(id, allAgentIds)
-                                            )}
-                                        />
-                                        {agent?.name || id}
-                                    </label>
-                                );
-                            })}
-                        </div>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger
+                                render={<Button variant="outline" size="sm" className="gap-2" />}
+                            >
+                                <HugeiconsIcon icon={icons["user-group"]!} className="size-3.5" />
+                                Agents
+                                {filterAgentIds.size > 0 && (
+                                    <Badge
+                                        variant="secondary"
+                                        className="ml-0.5 size-5 justify-center rounded-full px-0 text-[10px]"
+                                    >
+                                        {filterAgentIds.size}
+                                    </Badge>
+                                )}
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent
+                                align="start"
+                                className="max-h-72 w-56 overflow-y-auto"
+                            >
+                                <DropdownMenuGroup>
+                                    <DropdownMenuLabel className="flex items-center justify-between">
+                                        <span>Filter by agent</span>
+                                        {filterAgentIds.size > 0 && (
+                                            <button
+                                                onClick={() => setFilterAgentIds(new Set())}
+                                                className="text-muted-foreground hover:text-foreground text-[10px] font-normal"
+                                            >
+                                                Clear
+                                            </button>
+                                        )}
+                                    </DropdownMenuLabel>
+                                    <DropdownMenuSeparator />
+                                    {allAgentIds.map((id) => {
+                                        const agent = automations.find(
+                                            (a) => a.agent?.id === id
+                                        )?.agent;
+                                        return (
+                                            <DropdownMenuCheckboxItem
+                                                key={id}
+                                                checked={
+                                                    filterAgentIds.size === 0 ||
+                                                    filterAgentIds.has(id)
+                                                }
+                                                onCheckedChange={() => toggleAgentFilter(id)}
+                                                closeOnClick={false}
+                                            >
+                                                <div
+                                                    className={cn(
+                                                        "size-2 rounded-full",
+                                                        getAgentColor(id, allAgentIds)
+                                                    )}
+                                                />
+                                                <span className="truncate">
+                                                    {agent?.name || id}
+                                                </span>
+                                            </DropdownMenuCheckboxItem>
+                                        );
+                                    })}
+                                </DropdownMenuGroup>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                     )}
                     <div className="flex items-center gap-2">
                         <Label className="text-xs">Type:</Label>
