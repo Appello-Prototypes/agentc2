@@ -520,11 +520,88 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                         : {})
                 } as unknown as Parameters<typeof agent.generate>[1];
 
-                const response = await agent.generate(input, generateOptions);
+                let currentAgent = agent;
+                const response = await currentAgent.generate(input, generateOptions);
                 responseText = response.text;
                 usage = extractTokenUsage(response);
 
-                const toolCalls = extractToolCalls(response);
+                let toolCalls = extractToolCalls(response);
+
+                // Orphaned-tool-call recovery for invoke route:
+                // If activate-skill was called and some tool calls have no output,
+                // re-resolve the agent and retry with the newly activated skill tools.
+                const skillActivated = toolCalls.some(
+                    (tc) => tc.toolKey === "activate-skill" && tc.success
+                );
+                const orphanedTools = toolCalls.filter(
+                    (tc) =>
+                        tc.toolKey !== "activate-skill" &&
+                        tc.toolKey !== "search-skills" &&
+                        tc.toolKey !== "list-active-skills" &&
+                        tc.toolKey !== "updateWorkingMemory" &&
+                        tc.output === undefined &&
+                        !tc.error
+                );
+
+                if (skillActivated && orphanedTools.length > 0) {
+                    const orphanedNames = orphanedTools
+                        .map((t) => t.toolKey)
+                        .join(", ");
+                    console.warn(
+                        `[Agent Invoke] ${orphanedTools.length} orphaned tool call(s) after skill activation (${orphanedNames}). Re-resolving agent…`
+                    );
+
+                    try {
+                        const reResolved = await agentResolver.resolve({
+                            slug: id,
+                            requestContext: context,
+                            threadId:
+                                context?.threadId || context?.thread?.id,
+                            modelOverride: routedModelOverride
+                        });
+                        currentAgent = reResolved.agent;
+
+                        const retryPrompt =
+                            `[System: Your previous tool calls for ${orphanedNames} did not execute. ` +
+                            `The tools are now available. Please retry those calls to complete the user's request. ` +
+                            `Do NOT repeat information you already told the user.]`;
+
+                        const retryResponse = await currentAgent.generate(
+                            retryPrompt,
+                            generateOptions
+                        );
+                        const retryText = retryResponse.text;
+                        if (retryText) {
+                            responseText =
+                                (responseText || "") + "\n" + retryText;
+                        }
+                        const retryUsage = extractTokenUsage(retryResponse);
+                        if (retryUsage && usage) {
+                            usage = {
+                                promptTokens:
+                                    usage.promptTokens +
+                                    retryUsage.promptTokens,
+                                completionTokens:
+                                    usage.completionTokens +
+                                    retryUsage.completionTokens,
+                                totalTokens:
+                                    usage.totalTokens +
+                                    retryUsage.totalTokens
+                            };
+                        }
+                        const retryToolCalls =
+                            extractToolCalls(retryResponse);
+                        toolCalls = [...toolCalls, ...retryToolCalls];
+                    } catch (retryErr) {
+                        console.error(
+                            `[Agent Invoke] Re-resolve/retry failed:`,
+                            retryErr instanceof Error
+                                ? retryErr.message
+                                : retryErr
+                        );
+                    }
+                }
+
                 let stepCounter = 0;
                 for (const tc of toolCalls) {
                     const toolName = tc.toolKey || "unknown";
