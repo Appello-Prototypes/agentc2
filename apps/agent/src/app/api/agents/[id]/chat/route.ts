@@ -843,6 +843,98 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                         textState
                     );
 
+                    // ── Orphaned-tool-call recovery ──
+                    // If the stream produced content but some tool calls never received
+                    // results (e.g., skill tools called before activation took effect),
+                    // re-resolve the agent and continue so the LLM can retry.
+                    const MAX_ORPHAN_RETRIES = 1;
+                    if (hasReceivedContent) {
+                        const orphanedCalls: Array<{
+                            callId: string;
+                            toolName: string;
+                            args: Record<string, unknown>;
+                        }> = [];
+                        const resolvedToolNames = new Set(toolCalls.map((tc) => tc.toolKey));
+                        for (const [callId, entry] of toolCallMap.entries()) {
+                            if (!resolvedToolNames.has(entry.toolName)) {
+                                orphanedCalls.push({
+                                    callId,
+                                    toolName: entry.toolName,
+                                    args: entry.args
+                                });
+                            }
+                        }
+
+                        if (orphanedCalls.length > 0) {
+                            const orphanedNames = orphanedCalls.map((o) => o.toolName).join(", ");
+                            console.warn(
+                                `[Agent Chat] ${orphanedCalls.length} orphaned tool call(s) detected (${orphanedNames}). ` +
+                                    `Re-resolving agent and continuing…`
+                            );
+
+                            const skillActivated = toolCalls.some(
+                                (tc) => tc.toolKey === "activate-skill" && tc.success
+                            );
+
+                            let continuationAgent = agent;
+                            if (skillActivated) {
+                                try {
+                                    const reResolved = await agentResolver.resolve({
+                                        slug: id,
+                                        requestContext: enrichedRequestContext,
+                                        threadId: userThreadId,
+                                        modelOverride: modelOverrideForResolve
+                                    });
+                                    continuationAgent = reResolved.agent;
+                                    console.log(
+                                        `[Agent Chat] Agent re-resolved with newly activated skills`
+                                    );
+                                } catch (reErr) {
+                                    console.error(
+                                        `[Agent Chat] Re-resolve failed, using original agent:`,
+                                        reErr
+                                    );
+                                }
+                            }
+
+                            const retryPrompt =
+                                `[System: Your previous tool calls for ${orphanedNames} did not execute. ` +
+                                `The tools are now available. Please retry those calls to complete the user's request. ` +
+                                `Do NOT repeat information you already told the user.]`;
+
+                            for (
+                                let orphanRetry = 0;
+                                orphanRetry < MAX_ORPHAN_RETRIES;
+                                orphanRetry++
+                            ) {
+                                try {
+                                    const contStream = await continuationAgent.stream(
+                                        retryPrompt,
+                                        streamOptions
+                                    );
+                                    const contResult = contStream as unknown as StreamResult;
+                                    activeStreamResult = contResult;
+                                    activeResponseStream = contStream;
+
+                                    const contGotContent = await consumeFullStream(
+                                        contResult,
+                                        writer,
+                                        textState
+                                    );
+                                    if (contGotContent) {
+                                        hasReceivedContent = true;
+                                    }
+                                    break;
+                                } catch (contErr) {
+                                    console.error(
+                                        `[Agent Chat] Continuation stream failed:`,
+                                        contErr instanceof Error ? contErr.message : contErr
+                                    );
+                                }
+                            }
+                        }
+                    }
+
                     // Retry loop: if the stream was empty, retry with backoff
                     while (!hasReceivedContent && streamAttempt < MAX_EMPTY_RETRIES) {
                         streamAttempt++;

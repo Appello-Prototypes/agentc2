@@ -620,6 +620,90 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                         await drainTextWithIdleTimeout(textStream);
                     }
 
+                    // ── Orphaned-tool-call recovery (public route) ──
+                    {
+                        const orphanedCalls: Array<{
+                            toolName: string;
+                            args: Record<string, unknown>;
+                        }> = [];
+                        const resolvedToolNames = new Set(toolCalls.map((tc) => tc.toolKey));
+                        for (const [, entry] of toolCallMap.entries()) {
+                            if (!resolvedToolNames.has(entry.toolName)) {
+                                orphanedCalls.push({
+                                    toolName: entry.toolName,
+                                    args: entry.args
+                                });
+                            }
+                        }
+
+                        if (orphanedCalls.length > 0) {
+                            const orphanedNames = orphanedCalls.map((o) => o.toolName).join(", ");
+                            console.warn(
+                                `[Public Chat] ${orphanedCalls.length} orphaned tool call(s) (${orphanedNames}). Re-resolving…`
+                            );
+
+                            const skillActivated = toolCalls.some(
+                                (tc) => tc.toolKey === "activate-skill" && tc.success
+                            );
+
+                            let contAgent = agent;
+                            if (skillActivated) {
+                                try {
+                                    const reRes = await agentResolver.resolve({
+                                        slug: id,
+                                        requestContext: {},
+                                        threadId: userThreadId
+                                    });
+                                    contAgent = reRes.agent;
+                                } catch {
+                                    // fall through with original agent
+                                }
+                            }
+
+                            const retryPrompt =
+                                `[System: Your previous tool calls for ${orphanedNames} did not execute. ` +
+                                `The tools are now available. Please retry those calls to complete the user's request. ` +
+                                `Do NOT repeat information you already told the user.]`;
+
+                            try {
+                                const contStream = await contAgent.stream(retryPrompt, {
+                                    maxSteps,
+                                    memory: {
+                                        thread: userThreadId,
+                                        resource: resourceId
+                                    }
+                                });
+                                const contResult = contStream as unknown as StreamResult;
+                                const contFS = contResult.fullStream;
+                                if (contFS) {
+                                    for await (const chunk of contFS) {
+                                        const c = normalizeChunk(chunk);
+                                        if (c.type === "text-delta") {
+                                            const text =
+                                                (typeof c.payload?.text === "string" &&
+                                                    c.payload.text) ||
+                                                (typeof c.textDelta === "string" && c.textDelta) ||
+                                                (typeof c.text === "string" && c.text) ||
+                                                "";
+                                            if (text) {
+                                                fullOutput += text;
+                                                writer.write({
+                                                    type: "text-delta",
+                                                    id: messageId,
+                                                    delta: text
+                                                });
+                                            }
+                                        } else {
+                                            handleToolChunk(c);
+                                        }
+                                    }
+                                }
+                            } catch (contErr) {
+                                console.error(`[Public Chat] Continuation failed:`, contErr);
+                            }
+                        }
+                    }
+
                     writer.write({ type: "text-end", id: messageId });
 
                     // ── Usage & cost tracking ───────────────────────────
