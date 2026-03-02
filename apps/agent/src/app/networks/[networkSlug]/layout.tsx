@@ -31,7 +31,8 @@ const navItems: { id: string; label: string; icon: IconName; path: string }[] = 
     { id: "runs", label: "Runs", icon: "play-circle", path: "/runs" },
     { id: "traces", label: "Traces", icon: "activity", path: "/traces" },
     { id: "versions", label: "Versions", icon: "git-branch", path: "/versions" },
-    { id: "deploy", label: "Deploy", icon: "checkmark-circle", path: "/deploy" }
+    { id: "deploy", label: "Deploy", icon: "checkmark-circle", path: "/deploy" },
+    { id: "automation", label: "Automation", icon: "clock", path: "/automation" }
 ];
 
 export default function NetworkLayout({ children }: { children: React.ReactNode }) {

@@ -157,6 +157,45 @@ export const networkExecuteTool = createTool({
         const { outputText, outputJson, steps, totalTokens, totalCostUsd } =
             await processNetworkStream(result);
 
+        // Record agent sub-runs for agent-type steps
+        for (const step of steps) {
+            if (step.stepType === "agent" && step.primitiveId) {
+                try {
+                    const agentRecord = await prisma.agent.findFirst({
+                        where: { OR: [{ id: step.primitiveId }, { slug: step.primitiveId }] },
+                        select: { id: true, slug: true }
+                    });
+                    if (agentRecord) {
+                        const inputStr =
+                            step.inputJson && typeof step.inputJson === "object"
+                                ? JSON.stringify(step.inputJson).slice(0, 2000)
+                                : message.slice(0, 2000);
+                        const outputStr =
+                            step.outputJson && typeof step.outputJson === "object"
+                                ? JSON.stringify(step.outputJson).slice(0, 5000)
+                                : "";
+                        const agentRun = await prisma.agentRun.create({
+                            data: {
+                                agentId: agentRecord.id,
+                                status: RunStatus.COMPLETED,
+                                inputText: inputStr,
+                                outputText: outputStr,
+                                source: "network",
+                                startedAt: new Date(),
+                                completedAt: new Date()
+                            }
+                        });
+                        step.agentRunId = agentRun.id;
+                    }
+                } catch (err) {
+                    console.warn(
+                        `[network-execute] Failed to create sub-run for step ${step.stepNumber}:`,
+                        err
+                    );
+                }
+            }
+        }
+
         if (steps.length > 0) {
             await prisma.networkRunStep.createMany({
                 data: steps.map((step) => ({
@@ -174,7 +213,8 @@ export const networkExecuteTool = createTool({
                     outputJson: step.outputJson
                         ? (step.outputJson as Prisma.InputJsonValue)
                         : Prisma.DbNull,
-                    status: step.status
+                    status: step.status,
+                    agentRunId: step.agentRunId || undefined
                 }))
             });
         }

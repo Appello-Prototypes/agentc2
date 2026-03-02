@@ -27,8 +27,8 @@ const navItems = [
         href: "/observe",
         children: [
             { label: "Dashboard", href: "/observe" },
-            { label: "Runs", href: "/observe/runs" },
-            { label: "Triggers", href: "/observe/triggers" },
+            { label: "Runs", href: "/observe?tab=runs" },
+            { label: "Triggers", href: "/observe?tab=triggers" },
             { label: "God Mode", href: "/godmode" }
         ]
     },

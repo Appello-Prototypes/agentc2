@@ -727,6 +727,7 @@ enum AlertSource {
     GUARDRAIL
     EVAL
     SYSTEM
+    HEALTH
 }
 
 // Guardrail Event Type Enum
@@ -945,6 +946,13 @@ model AgentSchedule {
     updatedAt   DateTime   @updatedAt
     createdBy   String?
     color       String?
+
+    // Health policy: auto-disable schedule when failure rate exceeds threshold
+    healthPolicyEnabled Boolean   @default(false)
+    healthThreshold     Float? // Failure rate 0.0–1.0 that triggers the action
+    healthWindow        Int? // Number of recent runs to evaluate
+    healthAction        String? // "pause" | "alert" | "pause_and_alert"
+    healthTriggeredAt   DateTime? // When health policy last fired
 
     @@index([agentId])
     @@index([workspaceId])
@@ -2802,6 +2810,7 @@ model NetworkRun {
     source      String?
     environment RunEnvironment @default(DEVELOPMENT)
     triggerType RunTriggerType @default(API)
+    triggerId   String?
 
     // Relations
     steps        NetworkRunStep[]
@@ -2815,6 +2824,7 @@ model NetworkRun {
     @@index([networkId, triggerType])
     @@index([status])
     @@index([threadId])
+    @@index([triggerId])
     @@map("network_run")
 }
 
@@ -4145,11 +4155,12 @@ model ActivityEvent {
     status  String? // "success", "failure", "info", "warning"
 
     // Context links
-    source       String? // "slack", "schedule", "webhook", "api", "heartbeat", "campaign"
-    runId        String? // Link to AgentRun
-    taskId       String? // Link to BacklogTask
-    networkRunId String? // Link to NetworkRun
-    campaignId   String? // Link to Campaign
+    source        String? // "slack", "schedule", "webhook", "api", "heartbeat", "campaign"
+    runId         String? // Link to AgentRun
+    taskId        String? // Link to BacklogTask
+    networkRunId  String? // Link to NetworkRun
+    workflowRunId String? // Link to WorkflowRun
+    campaignId    String? // Link to Campaign
 
     // Metrics (denormalized for feed display without joins)
     costUsd    Float?
@@ -4188,6 +4199,12 @@ enum ActivityEventType {
     TASK_COMPLETED
     TASK_FAILED
     TASK_DEFERRED
+
+    // Workflow execution
+    WORKFLOW_STARTED
+    WORKFLOW_COMPLETED
+    WORKFLOW_FAILED
+    WORKFLOW_SUSPENDED
 
     // Network delegation
     NETWORK_ROUTED

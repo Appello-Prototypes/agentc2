@@ -27,6 +27,7 @@ export interface RecordActivityInput {
     runId?: string;
     taskId?: string;
     networkRunId?: string;
+    workflowRunId?: string;
     campaignId?: string;
     costUsd?: number;
     durationMs?: number;
@@ -56,6 +57,7 @@ export async function recordActivity(input: RecordActivityInput): Promise<void> 
                 runId: input.runId,
                 taskId: input.taskId,
                 networkRunId: input.networkRunId,
+                workflowRunId: input.workflowRunId,
                 campaignId: input.campaignId,
                 costUsd: input.costUsd,
                 durationMs: input.durationMs,

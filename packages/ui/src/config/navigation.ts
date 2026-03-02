@@ -98,7 +98,11 @@ export const navigationItems: NavigationItem[] = [
             "cron",
             "webhooks",
             "calendar",
-            "registry"
+            "registry",
+            "orchestration",
+            "density",
+            "health",
+            "cost"
         ]
     },
     // Observe group
@@ -125,12 +129,12 @@ export const navigationItems: NavigationItem[] = [
             },
             {
                 label: "Runs",
-                href: "/observe/runs",
+                href: "/observe?tab=runs",
                 keywords: ["runs", "executions", "traces", "history"]
             },
             {
                 label: "Triggers",
-                href: "/observe/triggers",
+                href: "/observe?tab=triggers",
                 keywords: ["triggers", "events", "webhooks", "scheduled"]
             },
             {

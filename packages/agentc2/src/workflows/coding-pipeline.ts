@@ -236,6 +236,7 @@ Respond with ONLY a JSON object: { "riskLevel": "trivial|low|medium|high|critica
             inputMapping: {
                 agentId: "{{ steps.dispatch-cursor.agentId }}",
                 maxWaitMinutes: 30,
+                repository: "{{ input.repository }}",
                 organizationId: "{{ input.organizationId }}"
             }
         },

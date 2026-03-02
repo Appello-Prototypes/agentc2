@@ -357,6 +357,16 @@ export const inngest = new Inngest({
                 childCampaignId: string;
             };
         };
+        // Network Trigger Events
+        "network/trigger.fire": {
+            data: {
+                triggerId: string;
+                networkId: string;
+                networkSlug: string;
+                triggerEventId?: string;
+                payload: Record<string, unknown>;
+            };
+        };
         // Workflow Trigger Events
         "workflow/trigger.fire": {
             data: {
@@ -414,6 +424,12 @@ export const inngest = new Inngest({
             data: {
                 boardId: string;
                 agentId: string;
+            };
+        };
+        // Conditional Approval Events
+        "command/check-conditions": {
+            data: {
+                approvalRequestId?: string;
             };
         };
     }>()

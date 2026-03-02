@@ -242,6 +242,17 @@ export async function POST(
                     payload: enrichedPayload
                 }
             });
+        } else if (entityType === "network" && trigger.network) {
+            await inngest.send({
+                name: "network/trigger.fire",
+                data: {
+                    triggerId: trigger.id,
+                    networkId: trigger.network.id,
+                    networkSlug: trigger.network.slug,
+                    triggerEventId: triggerEvent.id,
+                    payload: enrichedPayload
+                }
+            });
         } else {
             await updateTriggerEventRecord(triggerEvent.id, {
                 status: TriggerEventStatus.ERROR,

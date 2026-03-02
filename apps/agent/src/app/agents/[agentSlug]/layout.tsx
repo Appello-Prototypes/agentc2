@@ -57,6 +57,7 @@ function getNavItems(deploymentMode?: string): { id: string; label: string; icon
         { id: "configure", label: "Configure", icon: "settings" },
         { id: "runs", label: "Runs", icon: "play-circle" },
         { id: "automation", label: "Automation", icon: "calendar" },
+        { id: "automations", label: "Automations", icon: "clock" },
         { id: "analytics", label: "Analytics", icon: "analytics" },
         { id: "traces", label: "Traces", icon: "activity" },
         { id: "evaluations", label: "Evaluations", icon: "chart-evaluation" },

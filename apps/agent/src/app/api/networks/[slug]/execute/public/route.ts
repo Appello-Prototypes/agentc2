@@ -110,7 +110,7 @@ export async function POST(
             }
         });
 
-        const { outputText, outputJson, steps, totalTokens } =
+        const { outputText, outputJson, steps, totalTokens, totalCostUsd } =
             await processNetworkStreamWithSubRuns(result, {
                 networkRunId: run.id,
                 networkSlug: network.slug,
@@ -153,7 +153,8 @@ export async function POST(
                 completedAt,
                 durationMs,
                 stepsExecuted: steps.length,
-                totalTokens: totalTokens > 0 ? totalTokens : undefined
+                totalTokens: totalTokens > 0 ? totalTokens : undefined,
+                totalCostUsd: totalCostUsd > 0 ? totalCostUsd : undefined
             }
         });
         refreshNetworkMetrics(network.id, new Date()).catch(() => {});

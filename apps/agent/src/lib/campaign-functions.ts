@@ -723,6 +723,39 @@ export const campaignExecuteFunction = inngest.createFunction(
                             missionIds: missions.filter((m) => m.requiresApproval).map((m) => m.id)
                         }
                     );
+
+                    // Bridge into ApprovalRequest for unified Command governance
+                    try {
+                        const defaultWs = await prisma.workspace.findFirst({
+                            where: { isDefault: true },
+                            select: { id: true, organizationId: true }
+                        });
+                        if (defaultWs) {
+                            await prisma.approvalRequest.create({
+                                data: {
+                                    organizationId: defaultWs.organizationId,
+                                    workspaceId: defaultWs.id,
+                                    sourceType: "campaign",
+                                    sourceId: `campaign:${campaignId}:seq:${seq}`,
+                                    status: "pending",
+                                    reviewContext: {
+                                        type: "mission-sequence-approval",
+                                        campaignId,
+                                        sequence: seq,
+                                        missionIds: missions
+                                            .filter((m) => m.requiresApproval)
+                                            .map((m) => m.id),
+                                        missionNames: missions
+                                            .filter((m) => m.requiresApproval)
+                                            .map((m) => m.name?.slice(0, 100) ?? m.id)
+                                    },
+                                    metadata: { campaignId, sequence: seq }
+                                }
+                            });
+                        }
+                    } catch (err) {
+                        console.warn("[Campaign] Failed to create ApprovalRequest:", err);
+                    }
                 });
 
                 // Wait for approval event

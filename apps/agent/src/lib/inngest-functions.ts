@@ -26,6 +26,7 @@ import {
 } from "./learning-config";
 import { alertAutoPromotion, alertExperimentTimeout } from "./alerts";
 import { campaignFunctions } from "./campaign-functions";
+import { conditionalApprovalCheckerFunction } from "./conditional-approval";
 import { getNextRunAt } from "./schedule-utils";
 import { matchesTriggerFilter, resolveTriggerInput } from "./trigger-utils";
 import {
@@ -38,6 +39,8 @@ import {
 import { getGmailClient, watchMailbox, listHistory, getMessagesWithConcurrency } from "./gmail";
 import { createApprovalRequest, extractGmailDraftAction } from "./approvals";
 import { updateTriggerEventRecord } from "./trigger-events";
+import { buildNetworkAgent } from "@repo/agentc2/networks";
+import { processNetworkStreamWithSubRuns } from "./network-stream-processor";
 
 /**
  * Build a Gmail web URL from a hex thread ID.
@@ -605,6 +608,24 @@ export const runCompletedFunction = inngest.createFunction(
                 } catch (err) {
                     console.error(`[OutputAction] ${action.type}/${action.id} threw:`, err);
                 }
+            }
+        });
+
+        // Step 6: Evaluate health policy for scheduled runs
+        await step.run("evaluate-health-policy", async () => {
+            const run = await prisma.agentRun.findUnique({
+                where: { id: runId },
+                select: { triggerType: true, triggerId: true }
+            });
+
+            if (run?.triggerType !== "SCHEDULED" || !run.triggerId) return null;
+
+            try {
+                const { evaluateHealthPolicy } = await import("./health-policy");
+                return evaluateHealthPolicy(run.triggerId);
+            } catch (err) {
+                console.warn("[HealthPolicy] Evaluation failed:", err);
+                return null;
             }
         });
 
@@ -7152,6 +7173,7 @@ export const workflowTriggerFireFunction = inngest.createFunction(
             const workflowRun = await prisma.workflowRun.create({
                 data: {
                     workflowId: targetWorkflowId,
+                    triggerId: trigger.id,
                     status: "QUEUED",
                     inputJson: {
                         ...mappedInput,
@@ -7203,6 +7225,204 @@ export const workflowTriggerFireFunction = inngest.createFunction(
         });
 
         return { workflowRunId: runResult.workflowRunId, workflowSlug: targetWorkflowSlug };
+    }
+);
+
+/**
+ * Network Trigger Fire
+ *
+ * Handles `network/trigger.fire` events dispatched by webhook or event triggers.
+ * Resolves the network, executes it, and records the run with triggerId.
+ */
+export const networkTriggerFireFunction = inngest.createFunction(
+    {
+        id: "network-trigger-fire",
+        retries: 2
+    },
+    { event: "network/trigger.fire" },
+    async ({ event, step }) => {
+        const { triggerId, networkId, networkSlug, payload, triggerEventId } = event.data as {
+            triggerId: string;
+            networkId: string;
+            networkSlug: string;
+            payload: Record<string, unknown>;
+            triggerEventId?: string;
+        };
+
+        const trigger = await step.run("load-trigger", async () => {
+            return prisma.agentTrigger.findUnique({
+                where: { id: triggerId },
+                include: {
+                    network: {
+                        select: {
+                            id: true,
+                            slug: true,
+                            isActive: true,
+                            maxSteps: true,
+                            workspaceId: true
+                        }
+                    }
+                }
+            });
+        });
+
+        if (!trigger || !trigger.isActive || !trigger.network?.isActive) {
+            if (triggerEventId) {
+                await step.run("mark-trigger-skipped", async () => {
+                    await updateTriggerEventRecord(triggerEventId, {
+                        status: TriggerEventStatus.SKIPPED,
+                        errorMessage: "Trigger or network is disabled"
+                    });
+                });
+            }
+            return { skipped: true };
+        }
+
+        const payloadObj =
+            payload && typeof payload === "object" && !Array.isArray(payload)
+                ? payload
+                : { value: payload };
+
+        if (
+            !matchesTriggerFilter(
+                payloadObj as Record<string, unknown>,
+                trigger.filterJson as Record<string, unknown> | null
+            )
+        ) {
+            if (triggerEventId) {
+                await step.run("mark-trigger-filtered", async () => {
+                    await updateTriggerEventRecord(triggerEventId, {
+                        status: TriggerEventStatus.FILTERED,
+                        errorMessage: "Trigger filter did not match payload"
+                    });
+                });
+            }
+            return { matched: false };
+        }
+
+        const message =
+            typeof payloadObj === "object" && "message" in payloadObj
+                ? String(payloadObj.message)
+                : JSON.stringify(payloadObj);
+
+        const runResult = await step.run("execute-network", async () => {
+            const network = trigger.network!;
+            const { agent } = await buildNetworkAgent(network.id);
+
+            const run = await prisma.networkRun.create({
+                data: {
+                    networkId: network.id,
+                    status: RunStatus.RUNNING,
+                    inputText: message,
+                    source: "trigger",
+                    triggerType: RunTriggerType.WEBHOOK,
+                    triggerId: trigger.id
+                }
+            });
+
+            try {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const result = await (agent as any).network(message, {
+                    maxSteps: network.maxSteps
+                });
+
+                const { outputText, outputJson, steps, totalTokens, totalCostUsd } =
+                    await processNetworkStreamWithSubRuns(result, {
+                        networkRunId: run.id,
+                        networkSlug: network.slug,
+                        inputMessage: message
+                    });
+
+                if (steps.length > 0) {
+                    await prisma.networkRunStep.createMany({
+                        data: steps.map((s) => ({
+                            runId: run.id,
+                            stepNumber: s.stepNumber,
+                            stepType: s.stepType,
+                            primitiveType: s.primitiveType,
+                            primitiveId: s.primitiveId,
+                            routingDecision: s.routingDecision
+                                ? (s.routingDecision as Prisma.InputJsonValue)
+                                : Prisma.DbNull,
+                            inputJson: s.inputJson
+                                ? (s.inputJson as Prisma.InputJsonValue)
+                                : Prisma.DbNull,
+                            outputJson: s.outputJson
+                                ? (s.outputJson as Prisma.InputJsonValue)
+                                : Prisma.DbNull,
+                            status: s.status,
+                            agentRunId: s.agentRunId || undefined
+                        }))
+                    });
+                }
+
+                const completedAt = new Date();
+                const durationMs = completedAt.getTime() - run.createdAt.getTime();
+
+                await prisma.networkRun.update({
+                    where: { id: run.id },
+                    data: {
+                        status: RunStatus.COMPLETED,
+                        outputText,
+                        outputJson: outputJson
+                            ? (outputJson as Prisma.InputJsonValue)
+                            : Prisma.DbNull,
+                        completedAt,
+                        durationMs,
+                        stepsExecuted: steps.length,
+                        totalTokens: totalTokens > 0 ? totalTokens : undefined,
+                        totalCostUsd: totalCostUsd > 0 ? totalCostUsd : undefined
+                    }
+                });
+
+                await prisma.agentTrigger.update({
+                    where: { id: trigger.id },
+                    data: {
+                        lastTriggeredAt: new Date(),
+                        triggerCount: { increment: 1 }
+                    }
+                });
+
+                refreshNetworkMetrics(network.id, new Date()).catch(() => {});
+
+                recordActivity({
+                    type: "NETWORK_COMPLETED",
+                    summary: `Network "${network.slug}" completed via trigger (${steps.length} steps, ${durationMs}ms)`,
+                    status: "success",
+                    source: "trigger",
+                    networkRunId: run.id,
+                    durationMs,
+                    costUsd: totalCostUsd > 0 ? totalCostUsd : undefined,
+                    tokenCount: totalTokens > 0 ? totalTokens : undefined,
+                    metadata: { networkSlug: network.slug, stepsExecuted: steps.length }
+                });
+
+                return { networkRunId: run.id, status: "COMPLETED" };
+            } catch (err) {
+                await prisma.networkRun.update({
+                    where: { id: run.id },
+                    data: {
+                        status: RunStatus.FAILED,
+                        completedAt: new Date(),
+                        durationMs: Date.now() - run.createdAt.getTime()
+                    }
+                });
+                throw err;
+            }
+        });
+
+        if (triggerEventId) {
+            await step.run("mark-trigger-queued", async () => {
+                await updateTriggerEventRecord(triggerEventId, {
+                    status: TriggerEventStatus.QUEUED,
+                    entityType: "network",
+                    network: { connect: { id: networkId } },
+                    networkRun: { connect: { id: runResult.networkRunId } }
+                });
+            });
+        }
+
+        return { networkRunId: runResult.networkRunId, networkSlug };
     }
 );
 
@@ -8228,11 +8448,19 @@ export const asyncWorkflowExecuteFunction = inngest.createFunction(
 
         console.log(`[Inngest] Executing async workflow run: ${workflowRunId}`);
 
-        // Step 1: Update run status to RUNNING
+        // Step 1: Update run status to RUNNING + emit activity event
         await step.run("update-status-running", async () => {
             await prisma.workflowRun.update({
                 where: { id: workflowRunId },
                 data: { status: "RUNNING" }
+            });
+            recordActivity({
+                type: "WORKFLOW_STARTED",
+                summary: `Workflow "${workflowSlug}" started (run ${workflowRunId.slice(0, 8)})`,
+                status: "info",
+                source: "inngest",
+                workflowRunId,
+                metadata: { workflowSlug, workflowId }
             });
         });
 
@@ -8495,13 +8723,30 @@ export const asyncWorkflowExecuteFunction = inngest.createFunction(
             }
         });
 
-        // Step 4: Update final status (query all persisted steps for accurate duration)
+        // Step 4: Update final status (query all persisted steps for accurate duration + cost)
         await step.run("update-final-status", async () => {
             const allSteps = await prisma.workflowRunStep.findMany({
                 where: { runId: workflowRunId },
-                select: { durationMs: true }
+                select: { durationMs: true, agentRunId: true }
             });
             const durationMs = allSteps.reduce((sum, s) => sum + (s.durationMs || 0), 0);
+
+            // Aggregate cost/tokens from linked agent sub-runs
+            const agentRunIds = allSteps
+                .map((s) => s.agentRunId)
+                .filter((id): id is string => id != null);
+            let aggregatedCost = 0;
+            let aggregatedTokens = 0;
+            if (agentRunIds.length > 0) {
+                const agentRuns = await prisma.agentRun.findMany({
+                    where: { id: { in: agentRunIds } },
+                    select: { costUsd: true, totalTokens: true }
+                });
+                for (const ar of agentRuns) {
+                    if (ar.costUsd) aggregatedCost += ar.costUsd;
+                    if (ar.totalTokens) aggregatedTokens += ar.totalTokens;
+                }
+            }
 
             if (result.status === "suspended") {
                 await prisma.workflowRun.update({
@@ -8512,7 +8757,9 @@ export const asyncWorkflowExecuteFunction = inngest.createFunction(
                         suspendDataJson: result.suspended?.data
                             ? (result.suspended.data as Prisma.InputJsonValue)
                             : Prisma.DbNull,
-                        durationMs
+                        durationMs,
+                        totalCostUsd: aggregatedCost > 0 ? aggregatedCost : undefined,
+                        totalTokens: aggregatedTokens > 0 ? aggregatedTokens : undefined
                     }
                 });
 
@@ -8528,6 +8775,22 @@ export const asyncWorkflowExecuteFunction = inngest.createFunction(
                 console.log(
                     `[Inngest] Workflow ${workflowRunId} suspended at step: ${result.suspended?.stepId}`
                 );
+
+                recordActivity({
+                    type: "WORKFLOW_SUSPENDED",
+                    summary: `Workflow "${workflowSlug}" suspended at step "${result.suspended?.stepId}"`,
+                    status: "warning",
+                    source: "inngest",
+                    workflowRunId,
+                    durationMs,
+                    costUsd: aggregatedCost > 0 ? aggregatedCost : undefined,
+                    tokenCount: aggregatedTokens > 0 ? aggregatedTokens : undefined,
+                    metadata: {
+                        workflowSlug,
+                        workflowId,
+                        suspendedStep: result.suspended?.stepId
+                    }
+                });
 
                 // Create human engagement for suspended human steps
                 const orgId = (input as Record<string, unknown>)?.organizationId as
@@ -8579,7 +8842,9 @@ export const asyncWorkflowExecuteFunction = inngest.createFunction(
                     status: finalStatus,
                     outputJson: result.output as Prisma.InputJsonValue,
                     completedAt: new Date(),
-                    durationMs
+                    durationMs,
+                    totalCostUsd: aggregatedCost > 0 ? aggregatedCost : undefined,
+                    totalTokens: aggregatedTokens > 0 ? aggregatedTokens : undefined
                 }
             });
 
@@ -8593,6 +8858,18 @@ export const asyncWorkflowExecuteFunction = inngest.createFunction(
                     })
                     .catch(() => {});
             }
+
+            recordActivity({
+                type: finalStatus === "COMPLETED" ? "WORKFLOW_COMPLETED" : "WORKFLOW_FAILED",
+                summary: `Workflow "${workflowSlug}" ${finalStatus.toLowerCase()} (${durationMs}ms)`,
+                status: finalStatus === "COMPLETED" ? "success" : "failure",
+                source: "inngest",
+                workflowRunId,
+                durationMs,
+                costUsd: aggregatedCost > 0 ? aggregatedCost : undefined,
+                tokenCount: aggregatedTokens > 0 ? aggregatedTokens : undefined,
+                metadata: { workflowSlug, workflowId }
+            });
 
             console.log(
                 `[Inngest] Workflow ${workflowRunId} completed with status: ${finalStatus}`
@@ -9632,6 +9909,7 @@ export const inngestFunctions = [
     gmailFollowUpFunction,
     agentTriggerFireFunction,
     workflowTriggerFireFunction,
+    networkTriggerFireFunction,
     // AI Insights generation
     generateInsightsFunction,
     // Closed-Loop Learning functions
@@ -9692,5 +9970,7 @@ export const inngestFunctions = [
     communityHeartbeatFunction,
     agentCommunityHeartbeatFunction,
     // Pulse Evaluation
-    pulseEvaluationFunction
+    pulseEvaluationFunction,
+    // Conditional Approval
+    conditionalApprovalCheckerFunction
 ];

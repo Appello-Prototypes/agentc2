@@ -59,39 +59,53 @@ export async function POST(request: NextRequest) {
             where,
             include: {
                 agent: {
-                    select: {
-                        id: true,
-                        slug: true,
-                        isActive: true
-                    }
+                    select: { id: true, slug: true, isActive: true }
+                },
+                workflow: {
+                    select: { id: true, slug: true, isActive: true }
+                },
+                network: {
+                    select: { id: true, slug: true, isActive: true }
                 }
             }
         });
 
-        const triggersWithAgent = triggers.filter(
-            (trigger): trigger is typeof trigger & { agent: NonNullable<typeof trigger.agent> } =>
-                trigger.agent != null
-        );
-        const activeTriggers = triggersWithAgent.filter((trigger) => trigger.agent.isActive);
-        const inactiveTriggers = triggersWithAgent.filter((trigger) => !trigger.agent.isActive);
         const { normalizedPayload } = buildTriggerPayloadSnapshot(payload);
+
+        type TriggerWithIncludes = (typeof triggers)[number];
+        const resolveEntityType = (t: TriggerWithIncludes) =>
+            t.entityType ?? (t.workflow ? "workflow" : t.network ? "network" : "agent");
+        const getTarget = (t: TriggerWithIncludes) => {
+            const et = resolveEntityType(t);
+            if (et === "workflow") return t.workflow;
+            if (et === "network") return t.network;
+            return t.agent;
+        };
+
+        const triggersWithTarget = triggers.filter((t) => getTarget(t) != null);
+        const activeTriggers = triggersWithTarget.filter((t) => getTarget(t)!.isActive);
+        const inactiveTriggers = triggersWithTarget.filter((t) => !getTarget(t)!.isActive);
 
         if (inactiveTriggers.length > 0) {
             await Promise.all(
-                inactiveTriggers.map((trigger) =>
-                    createTriggerEventRecord({
+                inactiveTriggers.map((trigger) => {
+                    const entityType = resolveEntityType(trigger);
+                    const target = getTarget(trigger)!;
+                    return createTriggerEventRecord({
                         triggerId: trigger.id,
-                        agentId: trigger.agent.id,
+                        ...(entityType === "agent" ? { agentId: target.id } : {}),
+                        ...(entityType === "workflow" ? { workflowId: target.id } : {}),
+                        ...(entityType === "network" ? { networkId: target.id } : {}),
                         workspaceId: trigger.workspaceId,
                         status: TriggerEventStatus.SKIPPED,
                         sourceType: "event",
                         triggerType: trigger.triggerType,
-                        entityType: "agent",
+                        entityType,
                         eventName: trigger.eventName,
                         payload: normalizedPayload,
-                        errorMessage: "Agent is disabled"
-                    })
-                )
+                        errorMessage: `${entityType} is disabled`
+                    });
+                })
             );
         }
 
@@ -135,41 +149,73 @@ export async function POST(request: NextRequest) {
         }
 
         const triggerEvents = await Promise.all(
-            activeTriggers.map((trigger) =>
-                createTriggerEventRecord({
+            activeTriggers.map((trigger) => {
+                const entityType = resolveEntityType(trigger);
+                const target = getTarget(trigger)!;
+                return createTriggerEventRecord({
                     triggerId: trigger.id,
-                    agentId: trigger.agent.id,
+                    ...(entityType === "agent" ? { agentId: target.id } : {}),
+                    ...(entityType === "workflow" ? { workflowId: target.id } : {}),
+                    ...(entityType === "network" ? { networkId: target.id } : {}),
                     workspaceId: trigger.workspaceId,
                     status: TriggerEventStatus.RECEIVED,
                     sourceType: "event",
                     triggerType: trigger.triggerType,
-                    entityType: "agent",
+                    entityType,
                     eventName: trigger.eventName,
                     payload: normalizedPayload
-                })
-            )
+                });
+            })
         );
 
         await Promise.all(
-            activeTriggers.map((trigger, index) =>
-                inngest.send({
-                    name: "agent/trigger.fire",
-                    data: {
-                        triggerId: trigger.id,
-                        agentId: trigger.agent.id,
-                        triggerEventId: triggerEvents[index]?.id,
-                        payload: {
-                            ...normalizedPayload,
-                            _trigger: {
-                                id: trigger.id,
-                                name: trigger.name,
-                                type: trigger.triggerType,
-                                eventName: trigger.eventName
-                            }
-                        }
+            activeTriggers.map((trigger, index) => {
+                const entityType = resolveEntityType(trigger);
+                const target = getTarget(trigger)!;
+                const enrichedPayload = {
+                    ...normalizedPayload,
+                    _trigger: {
+                        id: trigger.id,
+                        name: trigger.name,
+                        type: trigger.triggerType,
+                        eventName: trigger.eventName
                     }
-                })
-            )
+                };
+
+                if (entityType === "workflow") {
+                    return inngest.send({
+                        name: "workflow/trigger.fire",
+                        data: {
+                            triggerId: trigger.id,
+                            workflowId: target.id,
+                            workflowSlug: target.slug,
+                            triggerEventId: triggerEvents[index]?.id,
+                            payload: enrichedPayload
+                        }
+                    });
+                } else if (entityType === "network") {
+                    return inngest.send({
+                        name: "network/trigger.fire",
+                        data: {
+                            triggerId: trigger.id,
+                            networkId: target.id,
+                            networkSlug: target.slug,
+                            triggerEventId: triggerEvents[index]?.id,
+                            payload: enrichedPayload
+                        }
+                    });
+                } else {
+                    return inngest.send({
+                        name: "agent/trigger.fire",
+                        data: {
+                            triggerId: trigger.id,
+                            agentId: target.id,
+                            triggerEventId: triggerEvents[index]?.id,
+                            payload: enrichedPayload
+                        }
+                    });
+                }
+            })
         );
 
         // Also check for campaign triggers matching this event

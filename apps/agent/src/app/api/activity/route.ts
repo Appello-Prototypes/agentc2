@@ -18,6 +18,7 @@ export async function GET(request: NextRequest) {
         }
 
         const { searchParams } = new URL(request.url);
+        const grouped = searchParams.get("grouped") === "true";
 
         // Parse filters
         const typeFilter = searchParams.get("type"); // Comma-separated ActivityEventType values
@@ -207,9 +208,92 @@ export async function GET(request: NextRequest) {
             fullMetrics = buildMetrics(fullTotal, fullByTypeMap, fullByAgent, fullCostAgg);
         }
 
+        // If grouped mode, organize events into trees by campaignId/networkRunId/workflowRunId
+        let groupedEvents = undefined;
+        if (grouped) {
+            const groups = new Map<
+                string,
+                {
+                    key: string;
+                    type: string;
+                    rootEvent: (typeof results)[0];
+                    events: typeof results;
+                    stats: {
+                        total: number;
+                        completed: number;
+                        failed: number;
+                        running: number;
+                        totalCost: number;
+                        totalDuration: number;
+                    };
+                }
+            >();
+            const ungrouped: typeof results = [];
+
+            const completedStatuses = new Set(["completed", "success", "COMPLETED", "SUCCESS"]);
+            const failedStatuses = new Set(["failed", "error", "FAILED", "ERROR"]);
+            const runningStatuses = new Set(["running", "in_progress", "RUNNING", "IN_PROGRESS"]);
+
+            for (const event of results) {
+                const groupKey = event.campaignId
+                    ? `campaign:${event.campaignId}`
+                    : event.networkRunId
+                      ? `network:${event.networkRunId}`
+                      : event.workflowRunId
+                        ? `workflow:${event.workflowRunId}`
+                        : null;
+
+                if (groupKey) {
+                    if (!groups.has(groupKey)) {
+                        const type = groupKey.split(":")[0]!;
+                        groups.set(groupKey, {
+                            key: groupKey,
+                            type,
+                            rootEvent: event,
+                            events: [],
+                            stats: {
+                                total: 0,
+                                completed: 0,
+                                failed: 0,
+                                running: 0,
+                                totalCost: 0,
+                                totalDuration: 0
+                            }
+                        });
+                    }
+                    const group = groups.get(groupKey)!;
+                    group.events.push(event);
+                    group.stats.total++;
+                    if (completedStatuses.has(event.status || "")) group.stats.completed++;
+                    if (failedStatuses.has(event.status || "")) group.stats.failed++;
+                    if (runningStatuses.has(event.status || "")) group.stats.running++;
+                    group.stats.totalCost += event.costUsd || 0;
+                    group.stats.totalDuration += event.durationMs || 0;
+
+                    if (new Date(event.timestamp) < new Date(group.rootEvent.timestamp)) {
+                        group.rootEvent = event;
+                    }
+                } else {
+                    ungrouped.push(event);
+                }
+            }
+
+            const sortedGroups = Array.from(groups.values()).sort((a, b) => {
+                const aLatest = Math.max(...a.events.map((e) => new Date(e.timestamp).getTime()));
+                const bLatest = Math.max(...b.events.map((e) => new Date(e.timestamp).getTime()));
+                return bLatest - aLatest;
+            });
+
+            groupedEvents = {
+                groups: sortedGroups,
+                ungrouped
+            };
+        }
+
         return NextResponse.json({
             success: true,
-            events: results,
+            events: grouped ? undefined : results,
+            groupedEvents,
             metrics,
             ...(fullMetrics ? { fullMetrics } : {}),
             hasMore,

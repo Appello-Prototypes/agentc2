@@ -1808,7 +1808,7 @@ export function ObservabilityDashboard() {
                 </Button>
             </div>
 
-            {/* KPI Summary Cards */}
+            {/* KPI Summary Cards - Agent Runs */}
             <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
                 <Card>
                     <CardHeader className="pb-2">
@@ -1855,6 +1855,207 @@ export function ObservabilityDashboard() {
                     </CardHeader>
                 </Card>
             </div>
+
+            {/* Workflow & Network Summary Cards */}
+            {(metrics?.workflowSummary || metrics?.networkSummary) && (
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    {metrics?.workflowSummary && (
+                        <Card>
+                            <CardHeader className="pb-2">
+                                <div className="flex items-center gap-2">
+                                    <div className="flex h-6 w-6 items-center justify-center rounded bg-purple-100 dark:bg-purple-900/30">
+                                        <HugeiconsIcon
+                                            icon={icons["git-branch"]!}
+                                            className="size-3.5 text-purple-600 dark:text-purple-400"
+                                        />
+                                    </div>
+                                    <CardDescription>Workflow Runs</CardDescription>
+                                </div>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="grid grid-cols-5 gap-3 text-center">
+                                    <div>
+                                        <div className="text-xl font-semibold">
+                                            {metrics.workflowSummary.totalRuns}
+                                        </div>
+                                        <div className="text-muted-foreground text-xs">Total</div>
+                                    </div>
+                                    <div>
+                                        <div className="text-xl font-semibold text-green-600">
+                                            {metrics.workflowSummary.completedRuns}
+                                        </div>
+                                        <div className="text-muted-foreground text-xs">Done</div>
+                                    </div>
+                                    <div>
+                                        <div className="text-xl font-semibold text-red-500">
+                                            {metrics.workflowSummary.failedRuns}
+                                        </div>
+                                        <div className="text-muted-foreground text-xs">Failed</div>
+                                    </div>
+                                    <div>
+                                        <div className="text-xl font-semibold text-blue-500">
+                                            {metrics.workflowSummary.runningRuns}
+                                        </div>
+                                        <div className="text-muted-foreground text-xs">Running</div>
+                                    </div>
+                                    <div>
+                                        <div className="text-xl font-semibold text-amber-500">
+                                            {metrics.workflowSummary.queuedRuns}
+                                        </div>
+                                        <div className="text-muted-foreground text-xs">Queued</div>
+                                    </div>
+                                </div>
+                                {metrics.workflowSummary.totalRuns > 0 && (
+                                    <div className="bg-muted mt-3 h-1.5 overflow-hidden rounded-full">
+                                        <div
+                                            className="h-full rounded-full bg-green-500"
+                                            style={{
+                                                width: `${(metrics.workflowSummary.completedRuns / metrics.workflowSummary.totalRuns) * 100}%`
+                                            }}
+                                        />
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+                    )}
+                    {metrics?.networkSummary && (
+                        <Card>
+                            <CardHeader className="pb-2">
+                                <div className="flex items-center gap-2">
+                                    <div className="flex h-6 w-6 items-center justify-center rounded bg-emerald-100 dark:bg-emerald-900/30">
+                                        <HugeiconsIcon
+                                            icon={icons.share!}
+                                            className="size-3.5 text-emerald-600 dark:text-emerald-400"
+                                        />
+                                    </div>
+                                    <CardDescription>Network Runs</CardDescription>
+                                </div>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="grid grid-cols-5 gap-3 text-center">
+                                    <div>
+                                        <div className="text-xl font-semibold">
+                                            {metrics.networkSummary.totalRuns}
+                                        </div>
+                                        <div className="text-muted-foreground text-xs">Total</div>
+                                    </div>
+                                    <div>
+                                        <div className="text-xl font-semibold text-green-600">
+                                            {metrics.networkSummary.completedRuns}
+                                        </div>
+                                        <div className="text-muted-foreground text-xs">Done</div>
+                                    </div>
+                                    <div>
+                                        <div className="text-xl font-semibold text-red-500">
+                                            {metrics.networkSummary.failedRuns}
+                                        </div>
+                                        <div className="text-muted-foreground text-xs">Failed</div>
+                                    </div>
+                                    <div>
+                                        <div className="text-xl font-semibold text-blue-500">
+                                            {metrics.networkSummary.runningRuns}
+                                        </div>
+                                        <div className="text-muted-foreground text-xs">Running</div>
+                                    </div>
+                                    <div>
+                                        <div className="text-xl font-semibold text-amber-500">
+                                            {metrics.networkSummary.queuedRuns}
+                                        </div>
+                                        <div className="text-muted-foreground text-xs">Queued</div>
+                                    </div>
+                                </div>
+                                {metrics.networkSummary.totalRuns > 0 && (
+                                    <div className="bg-muted mt-3 h-1.5 overflow-hidden rounded-full">
+                                        <div
+                                            className="h-full rounded-full bg-emerald-500"
+                                            style={{
+                                                width: `${(metrics.networkSummary.completedRuns / metrics.networkSummary.totalRuns) * 100}%`
+                                            }}
+                                        />
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+                    )}
+                </div>
+            )}
+
+            {/* Kind Breakdown */}
+            {(metrics?.workflowSummary || metrics?.networkSummary) && (
+                <Card>
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-base">Runs by Kind</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="flex items-center gap-6">
+                            {(() => {
+                                const agentRuns = summary?.totalRuns ?? 0;
+                                const wfRuns = metrics?.workflowSummary?.totalRuns ?? 0;
+                                const netRuns = metrics?.networkSummary?.totalRuns ?? 0;
+                                const total = agentRuns + wfRuns + netRuns;
+                                if (total === 0)
+                                    return (
+                                        <p className="text-muted-foreground text-sm">No runs.</p>
+                                    );
+                                const segments = [
+                                    {
+                                        label: "Agent",
+                                        count: agentRuns,
+                                        color: "bg-indigo-500",
+                                        pct: (agentRuns / total) * 100
+                                    },
+                                    {
+                                        label: "Workflow",
+                                        count: wfRuns,
+                                        color: "bg-purple-500",
+                                        pct: (wfRuns / total) * 100
+                                    },
+                                    {
+                                        label: "Network",
+                                        count: netRuns,
+                                        color: "bg-emerald-500",
+                                        pct: (netRuns / total) * 100
+                                    }
+                                ];
+                                return (
+                                    <div className="flex w-full flex-col gap-2">
+                                        <div className="flex h-3 w-full overflow-hidden rounded-full">
+                                            {segments.map((s) =>
+                                                s.pct > 0 ? (
+                                                    <div
+                                                        key={s.label}
+                                                        className={`${s.color} transition-all`}
+                                                        style={{ width: `${s.pct}%` }}
+                                                    />
+                                                ) : null
+                                            )}
+                                        </div>
+                                        <div className="flex justify-between text-xs">
+                                            {segments.map((s) => (
+                                                <div
+                                                    key={s.label}
+                                                    className="flex items-center gap-1.5"
+                                                >
+                                                    <div
+                                                        className={`h-2 w-2 rounded-full ${s.color}`}
+                                                    />
+                                                    <span className="text-muted-foreground">
+                                                        {s.label}
+                                                    </span>
+                                                    <span className="font-medium">{s.count}</span>
+                                                    <span className="text-muted-foreground">
+                                                        ({s.pct.toFixed(0)}%)
+                                                    </span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                );
+                            })()}
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
 
             {/* Row 1: Run Volume + Success Rate */}
             <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">

@@ -19,7 +19,7 @@ const PLATFORM_URL = process.env.NEXT_PUBLIC_APP_URL || "https://agentc2.ai";
 
 /* ─── Types ───────────────────────────────────────────────────────────────── */
 
-export type EngagementDecision = "approved" | "rejected" | "feedback";
+export type EngagementDecision = "approved" | "rejected" | "feedback" | "conditional";
 
 export interface EngagementContext {
     summary?: string;
@@ -32,6 +32,8 @@ export interface EngagementContext {
     riskLevel?: string;
     filesChanged?: string[];
     prompt?: string;
+    stepsCompleted?: number;
+    stepNames?: string[];
 }
 
 export interface CreateEngagementOptions {
@@ -49,12 +51,19 @@ export interface CreateEngagementOptions {
     channels?: string[];
 }
 
+export interface ConditionalMeta {
+    conditionType: "ci-checks";
+    repository?: string;
+    ref?: string;
+}
+
 export interface ResolveEngagementOptions {
     approvalRequestId: string;
     decision: EngagementDecision;
     message?: string;
     decidedBy?: string;
     channel: string;
+    conditionMeta?: ConditionalMeta;
 }
 
 /* ─── Context extraction ──────────────────────────────────────────────────── */
@@ -74,11 +83,14 @@ export function getEngagementContext(
         ctx.prompt = String(suspendData.prompt);
     }
 
+    ctx.stepsCompleted = stepOutputs.length;
+    ctx.stepNames = stepOutputs.map((s) => s.stepId);
+
     for (const step of stepOutputs) {
         const out = step.output as Record<string, unknown> | undefined;
         if (!out || typeof out !== "object") continue;
 
-        if (step.stepId === "intake") {
+        if (step.stepId === "intake" || step.stepId === "ingest-ticket") {
             if (out.issueUrl) ctx.issueUrl = String(out.issueUrl);
             if (out.issueNumber) ctx.issueNumber = Number(out.issueNumber);
             if (out.repository) ctx.repository = String(out.repository);
@@ -95,16 +107,52 @@ export function getEngagementContext(
             }
         }
 
+        if (step.stepId === "classify-risk") {
+            if (out.riskLevel) ctx.riskLevel = String(out.riskLevel);
+            if (out.filesChanged && Array.isArray(out.filesChanged)) {
+                ctx.filesChanged = (out.filesChanged as string[]).slice(0, 50);
+            }
+        }
+
+        if (
+            step.stepId === "analyze-codebase" ||
+            step.stepId === "analyze" ||
+            step.stepId === "analyze-wait"
+        ) {
+            if (out.riskLevel && !ctx.riskLevel) ctx.riskLevel = String(out.riskLevel);
+            if (out.filesChanged && Array.isArray(out.filesChanged) && !ctx.filesChanged) {
+                ctx.filesChanged = (out.filesChanged as string[]).slice(0, 50);
+            }
+            if (out.summary && !ctx.summary) {
+                const full = String(out.summary);
+                ctx.summary = full.length > 1000 ? full.slice(0, 1000) + "…" : full;
+            }
+        }
+
         if (step.stepId === "fix-audit") {
             const text = (out.text || out.response) as string | undefined;
             if (text) {
                 ctx.summary = text.length > 1000 ? text.slice(0, 1000) + "…" : text;
+            }
+            if (out.riskLevel && !ctx.riskLevel) ctx.riskLevel = String(out.riskLevel);
+            if (out.filesChanged && Array.isArray(out.filesChanged) && !ctx.filesChanged) {
+                ctx.filesChanged = (out.filesChanged as string[]).slice(0, 50);
             }
         }
 
         if (step.stepId === "create-pr") {
             if (out.htmlUrl) ctx.prUrl = String(out.htmlUrl);
             if (out.prNumber) ctx.prNumber = Number(out.prNumber);
+        }
+
+        if (step.stepId === "poll-cursor") {
+            if (out.prNumber && !ctx.prNumber) ctx.prNumber = Number(out.prNumber);
+            if (out.repository && !ctx.repository) ctx.repository = String(out.repository);
+            if (out.branchName && !ctx.prUrl) {
+                ctx.prUrl = out.repository
+                    ? `${String(out.repository).replace(/\.git$/, "")}/tree/${String(out.branchName)}`
+                    : undefined;
+            }
         }
 
         if (step.stepId === "implement-wait") {
@@ -468,7 +516,7 @@ export async function createEngagement(options: CreateEngagementOptions): Promis
 
 export async function resolveEngagement(
     options: ResolveEngagementOptions
-): Promise<{ resumed: boolean; error?: string }> {
+): Promise<{ resumed: boolean; conditional?: boolean; error?: string }> {
     const { prisma } = await import("@repo/database");
 
     const approval = await prisma.approvalRequest.findUnique({
@@ -484,12 +532,36 @@ export async function resolveEngagement(
         return { resumed: false, error: "Approval request not found" };
     }
 
-    if (approval.status !== "pending") {
+    const allowedTransitions = new Set(["pending", "conditional"]);
+    if (!allowedTransitions.has(approval.status)) {
         return { resumed: false, error: `Already resolved: ${approval.status}` };
     }
 
     if (!approval.workflowRunId || !approval.workflowRun) {
         return { resumed: false, error: "No workflow run linked" };
+    }
+
+    if (options.decision === "conditional") {
+        const existingMeta = (approval.metadata as Record<string, unknown>) || {};
+        await prisma.approvalRequest.update({
+            where: { id: approval.id },
+            data: {
+                status: "conditional",
+                decidedBy: options.decidedBy,
+                decidedAt: new Date(),
+                decisionReason: options.message || "Conditional approval - awaiting conditions",
+                responseChannel: options.channel,
+                metadata: {
+                    ...existingMeta,
+                    conditional: options.conditionMeta || { conditionType: "ci-checks" }
+                } as unknown as Prisma.InputJsonValue
+            }
+        });
+
+        console.log(
+            `[HumanEngagement] Engagement ${approval.id} set to conditional. Workflow stays suspended.`
+        );
+        return { resumed: false, conditional: true };
     }
 
     const status =

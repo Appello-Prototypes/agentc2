@@ -1,14 +1,29 @@
 "use client";
 
-import { Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { Suspense, useCallback } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { HugeiconsIcon, Tabs, TabsContent, TabsList, TabsTrigger, icons } from "@repo/ui";
 import { LiveRunsContent, ObservabilityDashboard } from "@/app/live/page";
 import { ActivityLogTab } from "@/app/triggers/page";
 
 function ObservePageClient() {
     const searchParams = useSearchParams();
-    const initialTab = searchParams.get("tab") || "dashboard";
+    const router = useRouter();
+    const activeTab = searchParams.get("tab") || "dashboard";
+
+    const handleTabChange = useCallback(
+        (value: string) => {
+            const params = new URLSearchParams(searchParams.toString());
+            if (value === "dashboard") {
+                params.delete("tab");
+            } else {
+                params.set("tab", value);
+            }
+            const qs = params.toString();
+            router.replace(`/observe${qs ? `?${qs}` : ""}`, { scroll: false });
+        },
+        [router, searchParams]
+    );
 
     return (
         <div className="h-full overflow-y-auto">
@@ -20,7 +35,12 @@ function ObservePageClient() {
                     </p>
                 </div>
 
-                <Tabs defaultValue={initialTab} className="space-y-6">
+                <Tabs
+                    defaultValue="dashboard"
+                    value={activeTab}
+                    onValueChange={handleTabChange}
+                    className="space-y-6"
+                >
                     <TabsList>
                         <TabsTrigger value="dashboard">
                             <HugeiconsIcon icon={icons.analytics!} className="mr-1.5 size-4" />

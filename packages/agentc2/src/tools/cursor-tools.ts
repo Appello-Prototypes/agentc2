@@ -237,14 +237,44 @@ export const cursorGetConversationTool = createTool({
 
 // ─── cursor-poll-until-done ──────────────────────────────────────────────────
 
+async function detectPrFromBranch(
+    repository: string,
+    branchName: string,
+    organizationId?: string
+): Promise<{ prNumber: number; prUrl: string } | null> {
+    try {
+        const { resolveGitHubToken, parseRepoOwnerName, githubFetch } =
+            await import("./github-helpers");
+        const token = await resolveGitHubToken(organizationId);
+        const { owner, repo } = parseRepoOwnerName(repository);
+
+        const res = await githubFetch(
+            `/repos/${owner}/${repo}/pulls?head=${owner}:${branchName}&state=open`,
+            token
+        );
+        const pulls = await res.json();
+
+        if (Array.isArray(pulls) && pulls.length > 0) {
+            return {
+                prNumber: pulls[0].number as number,
+                prUrl: (pulls[0].html_url as string) || ""
+            };
+        }
+    } catch (err) {
+        console.warn("[CursorTools] PR detection failed:", err);
+    }
+    return null;
+}
+
 export const cursorPollUntilDoneTool = createTool({
     id: "cursor-poll-until-done",
     description:
         "Poll a Cursor Cloud Agent until it reaches a terminal state (FINISHED or FAILED). " +
-        "Implements exponential backoff. Returns the final status and branch name.",
+        "Implements exponential backoff. Returns the final status, branch name, and PR number.",
     inputSchema: z.object({
         agentId: z.string().describe("The Cursor Cloud Agent ID"),
         maxWaitMinutes: z.number().optional().describe("Maximum minutes to wait (default: 30)"),
+        repository: z.string().optional().describe("GitHub repository URL for PR detection"),
         organizationId: z.string().optional().describe("Organization ID for credential resolution")
     }),
     outputSchema: z.object({
@@ -252,10 +282,12 @@ export const cursorPollUntilDoneTool = createTool({
         status: z.string(),
         summary: z.string().nullable(),
         branchName: z.string().nullable(),
+        prNumber: z.number().nullable(),
+        repository: z.string().nullable(),
         durationMs: z.number(),
         timedOut: z.boolean()
     }),
-    execute: async ({ agentId, maxWaitMinutes, organizationId }) => {
+    execute: async ({ agentId, maxWaitMinutes, repository, organizationId }) => {
         const apiKey = await resolveCursorApiKey(organizationId);
         const maxDuration = Math.min((maxWaitMinutes || 30) * 60_000, MAX_POLL_DURATION_MS);
         const startTime = Date.now();
@@ -290,11 +322,34 @@ export const cursorPollUntilDoneTool = createTool({
                     }
                 }
 
+                const branchName = data.target?.branchName || null;
+                let prNumber: number | null = null;
+                let prUrl: string | null = data.target?.prUrl || null;
+
+                if (prUrl) {
+                    const match = prUrl.match(/\/pull\/(\d+)/);
+                    if (match) prNumber = Number(match[1]);
+                }
+
+                if (!prNumber && branchName && repository) {
+                    const detected = await detectPrFromBranch(
+                        repository,
+                        branchName,
+                        organizationId
+                    );
+                    if (detected) {
+                        prNumber = detected.prNumber;
+                        prUrl = detected.prUrl;
+                    }
+                }
+
                 return {
                     agentId,
                     status,
                     summary,
-                    branchName: data.target?.branchName || null,
+                    branchName,
+                    prNumber,
+                    repository: repository || null,
                     durationMs: Date.now() - startTime,
                     timedOut: false
                 };
@@ -309,6 +364,8 @@ export const cursorPollUntilDoneTool = createTool({
             status: "TIMEOUT",
             summary: null,
             branchName: null,
+            prNumber: null,
+            repository: repository || null,
             durationMs: Date.now() - startTime,
             timedOut: true
         };

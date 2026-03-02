@@ -708,11 +708,14 @@ async function executeSteps(
                     if (options.resume?.stepId === step.id) {
                         output = options.resume.data;
                     } else {
+                        const resolvedPrompt = config.prompt
+                            ? (resolveTemplate(config.prompt, context) as string)
+                            : step.name || "Human approval required";
                         status = "suspended";
                         suspended = {
                             stepId: step.id,
                             data: {
-                                prompt: config.prompt || step.name || "Human approval required",
+                                prompt: resolvedPrompt,
                                 formSchema: config.formSchema || {},
                                 timeout: config.timeout
                             }

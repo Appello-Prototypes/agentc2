@@ -1,23 +1,53 @@
 /**
  * Reviews API
  *
- * GET: List reviews or fetch decision metrics
- * POST: Resolve single or batch reviews
+ * GET: List reviews across all source types, or fetch decision metrics
+ * POST: Resolve single or batch reviews with source-type-aware dispatch
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
 import { resolveEngagement, type EngagementDecision } from "@repo/agentc2/workflows";
 import { inngest } from "@/lib/inngest";
+import { auth } from "@repo/auth";
+import { headers } from "next/headers";
+
+const SOURCE_TYPE_MAP: Record<string, string> = {
+    workflow: "workflow-review",
+    learning: "learning",
+    integration: "integration",
+    financial: "financial_action",
+    campaign: "campaign"
+};
+
+async function getAuthUser(): Promise<{
+    userId: string | null;
+    userName: string | null;
+}> {
+    try {
+        const session = await auth.api.getSession({ headers: await headers() });
+        return {
+            userId: session?.user?.id ?? null,
+            userName: session?.user?.name ?? null
+        };
+    } catch {
+        return { userId: null, userName: null };
+    }
+}
 
 export async function GET(request: NextRequest) {
     try {
         const url = new URL(request.url);
         const action = url.searchParams.get("action");
         const type = url.searchParams.get("type");
+        const source = url.searchParams.get("source");
 
         if (action === "metrics") {
-            return await getMetrics();
+            return await getMetrics(source);
+        }
+
+        if (action === "daily-counts") {
+            return await getDailyCounts(url, source);
         }
 
         if (type === "learning") {
@@ -27,9 +57,11 @@ export async function GET(request: NextRequest) {
         const status = url.searchParams.get("status") || "pending";
         const limit = Math.min(Number(url.searchParams.get("limit")) || 50, 100);
 
+        const sourceTypeFilter = source ? { sourceType: SOURCE_TYPE_MAP[source] ?? source } : {};
+
         const reviews = await prisma.approvalRequest.findMany({
             where: {
-                sourceType: "workflow-review",
+                ...sourceTypeFilter,
                 ...(status !== "all" ? { status } : {})
             },
             include: {
@@ -43,6 +75,9 @@ export async function GET(request: NextRequest) {
                         }
                     }
                 },
+                agent: {
+                    select: { id: true, slug: true, name: true }
+                },
                 organization: { select: { name: true, slug: true } }
             },
             orderBy: { createdAt: "desc" },
@@ -52,6 +87,10 @@ export async function GET(request: NextRequest) {
         const items = reviews.map((r) => ({
             id: r.id,
             status: r.status,
+            sourceType: r.sourceType,
+            agentId: r.agentId,
+            agentSlug: r.agent?.slug ?? null,
+            agentName: r.agent?.name ?? null,
             workflowSlug: r.workflowRun?.workflow?.slug,
             workflowName: r.workflowRun?.workflow?.name,
             runId: r.workflowRunId,
@@ -154,29 +193,33 @@ async function getLearningProposals(url: URL) {
     return NextResponse.json({ success: true, learningProposals: items, total: items.length });
 }
 
-async function getMetrics() {
+async function getMetrics(sourceFilter?: string | null) {
     const now = Date.now();
     const sevenDaysAgo = new Date(now - 7 * 24 * 60 * 60 * 1000);
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
     const last24h = new Date(now - 24 * 60 * 60 * 1000);
 
+    const sourceTypeWhere = sourceFilter
+        ? { sourceType: SOURCE_TYPE_MAP[sourceFilter] ?? sourceFilter }
+        : {};
+
     const [pendingItems, recentDecisions, resolved24h] = await Promise.all([
         prisma.approvalRequest.findMany({
-            where: { sourceType: "workflow-review", status: "pending" },
-            select: { createdAt: true }
+            where: { ...sourceTypeWhere, status: "pending" },
+            select: { createdAt: true, sourceType: true }
         }),
         prisma.approvalRequest.findMany({
             where: {
-                sourceType: "workflow-review",
+                ...sourceTypeWhere,
                 status: { not: "pending" },
                 decidedAt: { gte: sevenDaysAgo }
             },
-            select: { status: true, createdAt: true, decidedAt: true }
+            select: { status: true, sourceType: true, createdAt: true, decidedAt: true }
         }),
         prisma.approvalRequest.count({
             where: {
-                sourceType: "workflow-review",
+                ...sourceTypeWhere,
                 status: { not: "pending" },
                 decidedAt: { gte: last24h }
             }
@@ -216,6 +259,13 @@ async function getMetrics() {
 
     const queueTrend = pendingCount - resolved24h;
 
+    // Per-source breakdown
+    const bySource: Record<string, number> = {};
+    for (const item of pendingItems) {
+        const src = item.sourceType ?? "unknown";
+        bySource[src] = (bySource[src] ?? 0) + 1;
+    }
+
     return NextResponse.json({
         success: true,
         metrics: {
@@ -225,14 +275,56 @@ async function getMetrics() {
             decisionsToday,
             avgDecisionMinutes,
             resolved24h,
-            queueTrend
+            queueTrend,
+            bySource
         }
     });
+}
+
+async function getDailyCounts(url: URL, sourceFilter?: string | null) {
+    const days = Math.min(Number(url.searchParams.get("days")) || 30, 90);
+    const since = new Date();
+    since.setDate(since.getDate() - days);
+    since.setHours(0, 0, 0, 0);
+
+    const sourceTypeWhere = sourceFilter
+        ? { sourceType: SOURCE_TYPE_MAP[sourceFilter] ?? sourceFilter }
+        : {};
+
+    const records = await prisma.approvalRequest.findMany({
+        where: {
+            ...sourceTypeWhere,
+            createdAt: { gte: since }
+        },
+        select: { createdAt: true },
+        orderBy: { createdAt: "asc" }
+    });
+
+    const countsMap = new Map<string, number>();
+    for (let d = 0; d < days; d++) {
+        const date = new Date(since);
+        date.setDate(date.getDate() + d);
+        countsMap.set(date.toISOString().slice(0, 10), 0);
+    }
+
+    for (const r of records) {
+        const key = r.createdAt.toISOString().slice(0, 10);
+        countsMap.set(key, (countsMap.get(key) ?? 0) + 1);
+    }
+
+    const dailyCounts = Array.from(countsMap.entries()).map(([date, count]) => ({
+        date,
+        count
+    }));
+
+    return NextResponse.json({ success: true, dailyCounts });
 }
 
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
+        const { userId, userName } = await getAuthUser();
+        const decidedBy = userName || userId || "web-ui";
 
         // Learning proposal approve/reject
         if (body.type === "learning") {
@@ -243,16 +335,15 @@ export async function POST(request: NextRequest) {
             const results: Array<{ id: string; success: boolean; error?: string }> = [];
             for (const item of body.items) {
                 try {
-                    const result = await resolveEngagement({
+                    const result = await resolveBySourceType({
                         approvalRequestId: item.approvalRequestId,
                         decision: item.decision,
                         message: item.message,
-                        decidedBy: "web-ui",
-                        channel: "web"
+                        decidedBy
                     });
                     results.push({
                         id: item.approvalRequestId,
-                        success: result.resumed,
+                        success: result.success,
                         error: result.error
                     });
                 } catch (err) {
@@ -272,10 +363,11 @@ export async function POST(request: NextRequest) {
             });
         }
 
-        const { approvalRequestId, decision, message } = body as {
+        const { approvalRequestId, decision, message, conditionMeta } = body as {
             approvalRequestId: string;
             decision: EngagementDecision;
             message?: string;
+            conditionMeta?: { conditionType: "ci-checks"; repository?: string; ref?: string };
         };
 
         if (!approvalRequestId || !decision) {
@@ -285,15 +377,19 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const result = await resolveEngagement({
+        const result = await resolveBySourceType({
             approvalRequestId,
             decision,
             message,
-            decidedBy: "web-ui",
-            channel: "web"
+            decidedBy,
+            conditionMeta
         });
 
-        return NextResponse.json({ success: result.resumed, error: result.error });
+        return NextResponse.json({
+            success: result.success,
+            conditional: result.conditional,
+            error: result.error
+        });
     } catch (error) {
         console.error("[Reviews API] POST error:", error);
         return NextResponse.json(
@@ -301,6 +397,77 @@ export async function POST(request: NextRequest) {
             { status: 500 }
         );
     }
+}
+
+async function resolveBySourceType(params: {
+    approvalRequestId: string;
+    decision: EngagementDecision;
+    message?: string;
+    decidedBy: string;
+    conditionMeta?: { conditionType: "ci-checks"; repository?: string; ref?: string };
+}): Promise<{ success: boolean; conditional?: boolean; error?: string }> {
+    const approval = await prisma.approvalRequest.findUnique({
+        where: { id: params.approvalRequestId },
+        select: { sourceType: true }
+    });
+
+    if (!approval) {
+        return { success: false, error: "Approval request not found" };
+    }
+
+    const sourceType = approval.sourceType;
+
+    if (sourceType === "campaign") {
+        await prisma.approvalRequest.update({
+            where: { id: params.approvalRequestId },
+            data: {
+                status: params.decision === "approved" ? "approved" : "rejected",
+                decidedBy: params.decidedBy,
+                decidedAt: new Date(),
+                decisionReason: params.message
+            }
+        });
+
+        if (params.decision === "approved") {
+            const ar = await prisma.approvalRequest.findUnique({
+                where: { id: params.approvalRequestId },
+                select: { metadata: true }
+            });
+            const meta = ar?.metadata as Record<string, unknown> | null;
+            const campaignId = meta?.campaignId as string | undefined;
+            const missionId = meta?.missionId as string | undefined;
+            const sequence = meta?.sequence as string | undefined;
+
+            if (campaignId) {
+                await inngest.send({
+                    name: "mission/approved",
+                    data: { campaignId, missionId, sequence }
+                });
+            }
+        }
+
+        return { success: true };
+    }
+
+    // Default: workflow-review (human engagement resolution)
+    const result = await resolveEngagement({
+        approvalRequestId: params.approvalRequestId,
+        decision: params.decision,
+        message: params.message,
+        decidedBy: params.decidedBy,
+        channel: "web",
+        conditionMeta: params.conditionMeta
+    });
+
+    if (result.conditional) {
+        await inngest.send({
+            name: "command/check-conditions",
+            data: { approvalRequestId: params.approvalRequestId }
+        });
+        return { success: true, conditional: true };
+    }
+
+    return { success: result.resumed, error: result.error };
 }
 
 async function handleLearningDecision(body: {
