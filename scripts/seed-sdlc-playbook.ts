@@ -950,7 +950,7 @@ async function main() {
                             config: {
                                 toolId: "cursor-launch-agent",
                                 parameters: {
-                                    task: "{{steps.plan.text}}",
+                                    prompt: "{{steps.plan.text}}",
                                     repository: "{{input.repository}}"
                                 }
                             }
@@ -1130,7 +1130,7 @@ async function main() {
                 config: {
                     toolId: "cursor-launch-agent",
                     parameters: {
-                        task: "{{steps['fix-plan'].text}}",
+                        prompt: "{{steps['fix-plan'].text}}",
                         repository: "{{input.repository}}"
                     }
                 }
@@ -1280,7 +1280,7 @@ async function main() {
                 config: {
                     toolId: "cursor-launch-agent",
                     parameters: {
-                        task: "{{steps['feature-plan'].text}}",
+                        prompt: "{{steps['feature-plan'].text}}",
                         repository: "{{input.repository}}"
                     }
                 }

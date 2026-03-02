@@ -55,12 +55,13 @@ describe("Cursor Tools", () => {
             expect(result.status).toBe("CREATING");
             expect(result.branchName).toBe("cursor/fix-bug");
 
+            const expectedAuth = `Basic ${Buffer.from("test-cursor-key:").toString("base64")}`;
             expect(mockFetch).toHaveBeenCalledWith(
-                "https://api.cursor.com/v1/background-agents",
+                "https://api.cursor.com/v0/agents",
                 expect.objectContaining({
                     method: "POST",
                     headers: expect.objectContaining({
-                        Authorization: "Bearer test-cursor-key"
+                        Authorization: expectedAuth
                     })
                 })
             );
@@ -143,7 +144,7 @@ describe("Cursor Tools", () => {
 
             expect(result.success).toBe(true);
             expect(mockFetch).toHaveBeenCalledWith(
-                "https://api.cursor.com/v1/background-agents/agent-123/followup",
+                "https://api.cursor.com/v0/agents/agent-123/followup",
                 expect.objectContaining({ method: "POST" })
             );
         });

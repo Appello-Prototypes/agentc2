@@ -370,7 +370,11 @@ async function executeToolStep(
         throw new Error(`Tool "${config.toolId}" not found`);
     }
 
-    const input = resolveInputMapping(step.inputMapping || config.parameters, context);
+    const hasInputMapping = step.inputMapping && Object.keys(step.inputMapping).length > 0;
+    const input = resolveInputMapping(
+        hasInputMapping ? step.inputMapping : config.parameters,
+        context
+    );
 
     if (
         organizationId &&
@@ -416,7 +420,11 @@ async function executeWorkflowStep(
         throw new Error(`Workflow step "${step.id}" missing workflowId`);
     }
 
-    const input = resolveInputMapping(step.inputMapping || config.input, context);
+    const hasWfInputMapping = step.inputMapping && Object.keys(step.inputMapping).length > 0;
+    const input = resolveInputMapping(
+        hasWfInputMapping ? step.inputMapping : config.input,
+        context
+    );
     const dbWorkflow = await prisma.workflow.findFirst({
         where: {
             OR: [{ id: config.workflowId }, { slug: config.workflowId }]
