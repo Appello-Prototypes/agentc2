@@ -316,21 +316,25 @@ export default function ConfigurePage() {
                     "open-source": 3,
                     legacy: 4
                 };
-                const mapped: ModelInfo[] = data.models.map(
-                    (m: {
-                        id: string;
-                        provider: string;
-                        displayName: string;
-                        category?: string;
-                        pricing?: { inputPer1M: number; outputPer1M: number };
-                    }) => ({
-                        provider: m.provider,
-                        name: m.id,
-                        displayName: m.displayName,
-                        category: m.category || "flagship",
-                        pricing: m.pricing
-                    })
-                );
+                const mapped: ModelInfo[] = data.models
+                    .filter(
+                        (m: { id?: string; provider?: string } | null) => m != null && m.id != null
+                    )
+                    .map(
+                        (m: {
+                            id: string;
+                            provider: string;
+                            displayName: string;
+                            category?: string;
+                            pricing?: { inputPer1M: number; outputPer1M: number };
+                        }) => ({
+                            provider: m.provider,
+                            name: m.id,
+                            displayName: m.displayName,
+                            category: m.category || "flagship",
+                            pricing: m.pricing
+                        })
+                    );
                 const sorted = mapped.sort((a, b) => {
                     if (a.provider !== b.provider) return 0;
                     return (CATEGORY_ORDER[a.category] ?? 99) - (CATEGORY_ORDER[b.category] ?? 99);
@@ -353,7 +357,9 @@ export default function ConfigurePage() {
             });
             const data = await res.json();
             if (data.success) {
-                setAvailableTools(data.tools || []);
+                setAvailableTools(
+                    (data.tools || []).filter((t: ToolInfo | null) => t != null && t.name != null)
+                );
 
                 setToolCategoryOrder(data.toolCategoryOrder || []);
                 setServerErrors(data.serverErrors ?? {});
@@ -373,8 +379,16 @@ export default function ConfigurePage() {
             ]);
             const agentsData = await agentsRes.json();
             const workflowsData = await workflowsRes.json();
-            setAvailableAgents(agentsData.agents || []);
-            setAvailableWorkflows(workflowsData.workflows || []);
+            setAvailableAgents(
+                (agentsData.agents || []).filter(
+                    (a: { name?: string } | null) => a != null && a.name != null
+                )
+            );
+            setAvailableWorkflows(
+                (workflowsData.workflows || []).filter(
+                    (w: { name?: string } | null) => w != null && w.name != null
+                )
+            );
         } catch (err) {
             console.error("Failed to fetch agents/workflows:", err);
         }
@@ -406,7 +420,13 @@ export default function ConfigurePage() {
             if (res.ok) {
                 const data = await res.json();
                 if (data.scorecard) {
-                    setScorecard(data.scorecard);
+                    const sc = data.scorecard;
+                    if (sc.criteria) {
+                        sc.criteria = sc.criteria.filter(
+                            (c: ScorecardCriterion | null) => c != null && c.name != null
+                        );
+                    }
+                    setScorecard(sc);
                 }
             }
         } catch (err) {
@@ -425,7 +445,11 @@ export default function ConfigurePage() {
             });
             if (res.ok) {
                 const data = await res.json();
-                setScorecardTemplates(data.templates || []);
+                setScorecardTemplates(
+                    (data.templates || []).filter(
+                        (t: { name?: string } | null) => t != null && t.name != null
+                    )
+                );
             }
         } catch (err) {
             console.error("Failed to fetch scorecard templates:", err);
@@ -646,9 +670,13 @@ export default function ConfigurePage() {
                 deploymentMode: agentData.deploymentMode ?? "singleton"
             };
 
-            // Extract attached skills from API response
+            // Extract attached skills from API response, filtering out any with missing skill relations
             if (agentData.skills) {
-                setAttachedSkills(agentData.skills);
+                setAttachedSkills(
+                    agentData.skills.filter(
+                        (as: AttachedSkill) => as.skill != null && as.skill.name != null
+                    )
+                );
             }
 
             // Extract extended thinking settings from modelConfig

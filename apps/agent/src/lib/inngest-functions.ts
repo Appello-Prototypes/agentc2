@@ -8336,10 +8336,7 @@ export const asyncWorkflowExecuteFunction = inngest.createFunction(
                     });
                     persistedKeys.add(key);
                 } catch (err) {
-                    console.warn(
-                        `[Inngest] Failed to persist step ${stepResult.stepId}:`,
-                        err
-                    );
+                    console.warn(`[Inngest] Failed to persist step ${stepResult.stepId}:`, err);
                 }
             };
 
@@ -8348,9 +8345,7 @@ export const asyncWorkflowExecuteFunction = inngest.createFunction(
                     try {
                         const resolved = await agentResolver.resolve({
                             slug: agentSlug,
-                            requestContext: organizationId
-                                ? { tenantId: organizationId }
-                                : {}
+                            requestContext: organizationId ? { tenantId: organizationId } : {}
                         });
                         const agentId = resolved.record?.id;
                         if (!agentId) return undefined;
@@ -8388,9 +8383,10 @@ export const asyncWorkflowExecuteFunction = inngest.createFunction(
                             where: { id: agentRunId },
                             data: {
                                 status: "COMPLETED",
-                                outputText: typeof output === "string"
-                                    ? output.slice(0, 5000)
-                                    : JSON.stringify(output).slice(0, 5000),
+                                outputText:
+                                    typeof output === "string"
+                                        ? output.slice(0, 5000)
+                                        : JSON.stringify(output).slice(0, 5000),
                                 completedAt: new Date(),
                                 durationMs,
                                 modelName,
@@ -8417,10 +8413,7 @@ export const asyncWorkflowExecuteFunction = inngest.createFunction(
                             }
                         });
                     } catch (err) {
-                        console.warn(
-                            `[Inngest] Failed to fail agent sub-run ${agentRunId}:`,
-                            err
-                        );
+                        console.warn(`[Inngest] Failed to fail agent sub-run ${agentRunId}:`, err);
                     }
                 }
             };
@@ -8508,10 +8501,7 @@ export const asyncWorkflowExecuteFunction = inngest.createFunction(
                 where: { runId: workflowRunId },
                 select: { durationMs: true }
             });
-            const durationMs = allSteps.reduce(
-                (sum, s) => sum + (s.durationMs || 0),
-                0
-            );
+            const durationMs = allSteps.reduce((sum, s) => sum + (s.durationMs || 0), 0);
 
             if (result.status === "suspended") {
                 await prisma.workflowRun.update({

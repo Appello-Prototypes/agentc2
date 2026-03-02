@@ -309,9 +309,7 @@ async function executeAgentStep(
                 output: response.text,
                 durationMs,
                 modelName: response.response?.modelId,
-                totalTokens: response.usage
-                    ? (response.usage.totalTokens ?? 0)
-                    : undefined,
+                totalTokens: response.usage ? (response.usage.totalTokens ?? 0) : undefined,
                 costUsd: undefined
             });
         }

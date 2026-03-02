@@ -234,27 +234,29 @@ export function SkillDetailSheet({
                                 </h3>
                                 {skill.documents.length > 0 ? (
                                     <div className="space-y-1.5">
-                                        {skill.documents.map((d) => (
-                                            <div
-                                                key={d.documentId}
-                                                className="flex items-center justify-between text-xs"
-                                            >
-                                                <Link
-                                                    href={`/knowledge/${d.document.slug || d.documentId}`}
-                                                    className="text-primary hover:underline"
+                                        {skill.documents
+                                            .filter((d) => d.document != null)
+                                            .map((d) => (
+                                                <div
+                                                    key={d.documentId}
+                                                    className="flex items-center justify-between text-xs"
                                                 >
-                                                    {d.document.name}
-                                                </Link>
-                                                {d.role && (
-                                                    <Badge
-                                                        variant="secondary"
-                                                        className="text-[10px]"
+                                                    <Link
+                                                        href={`/knowledge/${d.document.slug || d.documentId}`}
+                                                        className="text-primary hover:underline"
                                                     >
-                                                        {d.role}
-                                                    </Badge>
-                                                )}
-                                            </div>
-                                        ))}
+                                                        {d.document.name}
+                                                    </Link>
+                                                    {d.role && (
+                                                        <Badge
+                                                            variant="secondary"
+                                                            className="text-[10px]"
+                                                        >
+                                                            {d.role}
+                                                        </Badge>
+                                                    )}
+                                                </div>
+                                            ))}
                                     </div>
                                 ) : (
                                     <p className="text-muted-foreground text-xs italic">
@@ -272,18 +274,20 @@ export function SkillDetailSheet({
                                 </h3>
                                 {skill.agents.length > 0 ? (
                                     <div className="space-y-1.5">
-                                        {skill.agents.map((a) => (
-                                            <Link
-                                                key={a.agentId}
-                                                href={`/agents/${a.agent.slug}/configure`}
-                                                className="text-primary block text-xs hover:underline"
-                                            >
-                                                {a.agent.name}
-                                                <span className="text-muted-foreground ml-1">
-                                                    ({a.agent.slug})
-                                                </span>
-                                            </Link>
-                                        ))}
+                                        {skill.agents
+                                            .filter((a) => a.agent != null)
+                                            .map((a) => (
+                                                <Link
+                                                    key={a.agentId}
+                                                    href={`/agents/${a.agent.slug}/configure`}
+                                                    className="text-primary block text-xs hover:underline"
+                                                >
+                                                    {a.agent.name}
+                                                    <span className="text-muted-foreground ml-1">
+                                                        ({a.agent.slug})
+                                                    </span>
+                                                </Link>
+                                            ))}
                                     </div>
                                 ) : (
                                     <p className="text-muted-foreground text-xs italic">
