@@ -126,10 +126,17 @@ export const activateSkillTool = createTool({
         agentId: z.string().optional().describe("Agent ID for tracking.")
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ skillSlugs, threadId, agentId }) => {
+    execute: async ({ skillSlugs, threadId, agentId }, execContext) => {
+        const effectiveThreadId =
+            threadId || (execContext as Record<string, unknown>)?.threadId;
+        if (!effectiveThreadId) {
+            console.warn(
+                `[activate-skill] No threadId from LLM args or execution context — skills will NOT persist across turns`
+            );
+        }
         const result = await callInternalApi("/api/skills/activate", {
             method: "POST",
-            body: { skillSlugs, threadId, agentId }
+            body: { skillSlugs, threadId: effectiveThreadId, agentId }
         });
         return {
             success: true,
@@ -152,8 +159,10 @@ export const listActiveSkillsTool = createTool({
         threadId: z.string().optional().describe("Thread ID to check activated skills for.")
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ threadId }) => {
-        if (!threadId) {
+    execute: async ({ threadId }, execContext) => {
+        const effectiveThreadId =
+            threadId || (execContext as Record<string, unknown>)?.threadId;
+        if (!effectiveThreadId) {
             return {
                 success: true,
                 skills: [],
@@ -163,7 +172,7 @@ export const listActiveSkillsTool = createTool({
 
         const result = await callInternalApi("/api/skills/active", {
             method: "GET",
-            query: { threadId }
+            query: { threadId: effectiveThreadId }
         });
         return {
             success: true,
