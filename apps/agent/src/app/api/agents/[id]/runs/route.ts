@@ -98,6 +98,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         // Source filter: "production" (default, excludes simulations), "simulation", or "all"
         const source = searchParams.get("source") || "production";
         const instanceId = searchParams.get("instanceId");
+        const threadId = searchParams.get("threadId");
 
         // Find agent by slug or id
         const agent = await prisma.agent.findFirst({
@@ -169,6 +170,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
         if (instanceId) {
             where.instanceId = instanceId;
+        }
+
+        if (threadId) {
+            where.threadId = threadId;
         }
 
         // Query runs
@@ -258,6 +263,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                     versionId: run.versionId,
                     experimentGroup: run.experimentGroup,
                     source: run.source,
+                    threadId: run.threadId ?? null,
+                    sessionId: run.sessionId ?? null,
                     instanceId: run.instanceId,
                     instanceName: run.instance?.name ?? null,
                     instanceSlug: run.instance?.slug ?? null

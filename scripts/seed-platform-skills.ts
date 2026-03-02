@@ -324,6 +324,47 @@ These tools enable data processing, file generation, and scripting tasks. Use ex
         ]
     },
     {
+        slug: "support-ticket-management",
+        name: "Support Ticket Management",
+        description:
+            "Submit bug reports, feature requests, improvements, and questions. List, view, and comment on support tickets that roll up to the admin for SDLC dispatch.",
+        instructions: `Use these tools to manage support tickets:
+
+- **submit-support-ticket**: Create a new support ticket (BUG, FEATURE_REQUEST, IMPROVEMENT, or QUESTION). Collect a clear title, detailed description, and appropriate type from the user before submitting.
+- **list-my-tickets**: List the user's submitted tickets with optional status and type filters. Shows ticket number, title, type, status, priority, and comment count.
+- **view-ticket-details**: View full details of a ticket by its ticket number, including the comment thread.
+- **comment-on-ticket**: Add a follow-up comment to an existing ticket (e.g., additional context, answers to team questions).
+
+### Workflow
+1. When a user wants to report a bug, request a feature, suggest an improvement, or ask a question — use \`submit-support-ticket\`.
+2. Gather the required information conversationally: ask for the type, a short title, and a detailed description. For bugs, ask for steps to reproduce and expected vs actual behavior.
+3. After submission, confirm the ticket number and explain that the platform team will review it.
+4. Use \`list-my-tickets\` to show the user their open tickets when asked.
+5. Use \`view-ticket-details\` to drill into a specific ticket and show its full history.
+6. Use \`comment-on-ticket\` when the user wants to add information to an existing ticket.
+
+### Important
+- The userId and organizationId parameters are injected automatically from the conversation context — do not ask the user for these values.
+- Tickets are reviewed by the admin team and can be dispatched into the SDLC (e.g., converted to GitHub issues via the coding pipeline).`,
+        category: "Operations & Governance",
+        tags: [
+            "support",
+            "tickets",
+            "bugs",
+            "feature-requests",
+            "help",
+            "issues",
+            "feedback",
+            "bug-report"
+        ],
+        tools: [
+            "submit-support-ticket",
+            "list-my-tickets",
+            "view-ticket-details",
+            "comment-on-ticket"
+        ]
+    },
+    {
         slug: "platform-organization",
         name: "Organization Management",
         description:

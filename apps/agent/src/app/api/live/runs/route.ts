@@ -61,6 +61,7 @@ export async function GET(request: NextRequest) {
         const modelName = searchParams.get("modelName");
         const runType = searchParams.get("runType") || "PROD";
         const toolUsage = searchParams.get("toolUsage");
+        const threadId = searchParams.get("threadId");
         const search = searchParams.get("search");
         const from = searchParams.get("from");
         const to = searchParams.get("to");
@@ -115,6 +116,9 @@ export async function GET(request: NextRequest) {
             }
             if (modelName && modelName !== "all") {
                 baseWhere.modelName = modelName;
+            }
+            if (threadId) {
+                baseWhere.threadId = threadId;
             }
             if (toolUsage === "with_tools") {
                 baseWhere.toolCalls = { some: {} };

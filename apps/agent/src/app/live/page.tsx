@@ -602,6 +602,10 @@ export function LiveRunsContent() {
                     return run.status;
                 case "source":
                     return run.source || "Unknown Source";
+                case "thread":
+                    if (!run.threadId)
+                        return `Standalone: ${run.inputText?.slice(0, 50) || run.id}`;
+                    return `Thread: ${run.threadId.length > 40 ? run.threadId.slice(-20) : run.threadId}`;
                 default:
                     return "All Runs";
             }
@@ -1096,6 +1100,7 @@ export function LiveRunsContent() {
                                     <SelectItem value="model">Model</SelectItem>
                                     <SelectItem value="status">Status</SelectItem>
                                     <SelectItem value="source">Source</SelectItem>
+                                    <SelectItem value="thread">Thread</SelectItem>
                                 </SelectContent>
                             </Select>
                             <Select

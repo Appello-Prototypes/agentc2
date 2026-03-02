@@ -133,6 +133,11 @@ export const navigationItems: NavigationItem[] = [
                 keywords: ["runs", "executions", "traces", "history"]
             },
             {
+                label: "Conversations",
+                href: "/observe?tab=conversations",
+                keywords: ["conversations", "threads", "chat", "history", "messages"]
+            },
+            {
                 label: "Triggers",
                 href: "/observe?tab=triggers",
                 keywords: ["triggers", "events", "webhooks", "scheduled"]

@@ -5,6 +5,7 @@
  * Supports RequestContext for runtime context injection and dynamic instructions.
  */
 
+import { createHash } from "crypto";
 import { Agent } from "@mastra/core/agent";
 import { Memory } from "@mastra/memory";
 import { ModelRouterEmbeddingModel } from "@mastra/core/llm";
@@ -157,6 +158,8 @@ export interface ToolHealthSnapshot {
     missingTools: string[];
     /** Tool IDs that were filtered out (OAuth, budget, etc.) */
     filteredTools: string[];
+    /** Pre-flight readiness issues (truncated instructions, missing model, etc.) */
+    readinessIssues?: string[];
 }
 
 /**
@@ -836,6 +839,12 @@ export class AgentResolver {
             agentConfig.workflows = workflows;
         }
 
+        // Pre-flight validation: catch truncated instructions, missing model, etc.
+        const readinessIssues = this.validateAgentReadiness(record, finalInstructions, model);
+        if (readinessIssues.length > 0) {
+            toolHealth.readinessIssues = readinessIssues;
+        }
+
         return {
             agent: new Agent(agentConfig),
             activeSkills,
@@ -886,6 +895,76 @@ export class AgentResolver {
                 periodEnd: new Date().toISOString()
             });
         }
+    }
+
+    /**
+     * Validate that a hydrated agent is ready to serve requests.
+     * Catches configuration problems (truncated instructions, missing model, hash mismatch)
+     * before they reach the LLM and produce silent empty responses.
+     *
+     * Non-blocking: logs warnings but does not throw, to avoid breaking existing flows.
+     * Returns the list of issues found (empty array = healthy).
+     */
+    private validateAgentReadiness(
+        record: AgentRecordWithTools,
+        finalInstructions: string,
+        model: unknown
+    ): string[] {
+        const issues: string[] = [];
+
+        if (!finalInstructions || finalInstructions.length < 50) {
+            issues.push(
+                `Instructions too short (${finalInstructions?.length ?? 0} chars) — ` +
+                    `likely truncated or missing`
+            );
+        }
+
+        if (!model) {
+            issues.push("Model is null/undefined — LLM calls will fail");
+        }
+
+        // Cross-check against the stored version instructions to detect truncation
+        if (record.instructions && finalInstructions) {
+            const baseLen = record.instructions.length;
+            // Final instructions should always be >= base instructions (we append identity, skills, etc.)
+            // If final is shorter than base, something went wrong during hydration
+            if (finalInstructions.length < baseLen * 0.5 && baseLen > 100) {
+                issues.push(
+                    `Final instructions (${finalInstructions.length} chars) are less than 50% ` +
+                        `of base instructions (${baseLen} chars) — possible truncation`
+                );
+            }
+        }
+
+        if (issues.length > 0) {
+            const hash = finalInstructions
+                ? createHash("sha256").update(finalInstructions).digest("hex").slice(0, 16)
+                : "n/a";
+            console.error(
+                `[AgentResolver] Agent readiness check FAILED for "${record.slug}" ` +
+                    `(v${record.version}, hash=${hash}):`,
+                issues
+            );
+
+            recordActivity({
+                type: "ALERT_RAISED",
+                agentId: record.id,
+                agentSlug: record.slug,
+                summary: `${record.slug}: agent readiness check failed`,
+                detail: issues.join("; "),
+                status: "warning",
+                source: "agent-readiness",
+                tenantId: record.tenantId || undefined,
+                metadata: {
+                    issues,
+                    instructionsLength: finalInstructions?.length ?? 0,
+                    modelPresent: !!model,
+                    version: record.version
+                }
+            });
+        }
+
+        return issues;
     }
 
     /**

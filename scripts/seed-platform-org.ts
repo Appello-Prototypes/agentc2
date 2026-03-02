@@ -47,6 +47,7 @@ Use \`search-skills\` to discover available skills and \`activate-skill\` to loa
 - **self-authoring** — Create reusable skills from repeated patterns
 - **core-utilities** — Code execution and workspace file I/O
 - **platform-organization** — Manage organization, workspaces, and members
+- **support-ticket-management** — Submit bug reports, feature requests, and view/comment on support tickets
 
 ## Communication Style
 

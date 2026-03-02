@@ -469,16 +469,19 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         }
 
         // Stream the response using the resolved agent
+        const MAX_EMPTY_RETRIES = 2;
+        const streamOptions = {
+            maxSteps,
+            memory: {
+                thread: userThreadId,
+                resource: resourceId
+            }
+        };
+
         const tStream = performance.now();
         let responseStream;
         try {
-            responseStream = await agent.stream(streamInput, {
-                maxSteps,
-                memory: {
-                    thread: userThreadId,
-                    resource: resourceId
-                }
-            });
+            responseStream = await agent.stream(streamInput, streamOptions);
         } catch (streamInitError) {
             console.error(
                 `[Agent Chat] agent.stream() INIT FAILED:`,
@@ -661,83 +664,158 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                         }
                     };
 
-                    // Idle timeout: Mastra holds fullStream open 10-20s after
-                    // generation completes. We break after IDLE_TIMEOUT_MS of
-                    // silence ONLY after the final "finish" event (not intermediate
-                    // "step-finish" events which fire after each tool-call step).
+                    // ── Stream consumption with retry on empty response ──
+                    // Consumes the fullStream/textStream and writes to the UIMessageStreamWriter.
+                    // If the stream produces zero content, retries up to MAX_EMPTY_RETRIES times
+                    // with backoff. If all attempts fail, writes a recovery message so the user
+                    // never sees a blank response.
+
                     const IDLE_TIMEOUT_MS = 10_000;
+                    let hasReceivedContent = false;
+                    let streamAttempt = 0;
+                    let activeStreamResult = streamResult;
+                    let activeResponseStream = responseStream;
 
-                    if (fullStream) {
-                        // Unified single-stream: fullStream contains both text-delta
-                        // and tool events in the correct interleaved order.
-                        const fsIterator = (
-                            fullStream as AsyncIterable<unknown> & {
-                                [Symbol.asyncIterator](): AsyncIterator<unknown>;
-                            }
-                        )[Symbol.asyncIterator]();
+                    const consumeFullStream = async (
+                        sr: StreamResult,
+                        w: UIMessageStreamWriter,
+                        ts: { currentId: string | null }
+                    ): Promise<boolean> => {
+                        const fs = sr.fullStream;
+                        const txs = sr.textStream;
+                        let gotContent = false;
 
-                        let finishSeen = false;
+                        if (fs) {
+                            const fsIterator = (
+                                fs as AsyncIterable<unknown> & {
+                                    [Symbol.asyncIterator](): AsyncIterator<unknown>;
+                                }
+                            )[Symbol.asyncIterator]();
 
-                        while (true) {
-                            const raceTargets: Promise<
-                                IteratorResult<unknown, unknown> | { done: true; value: undefined }
-                            >[] = [fsIterator.next()];
+                            let finishSeen = false;
 
-                            if (finishSeen) {
-                                raceTargets.push(
-                                    new Promise((resolve) =>
-                                        setTimeout(
-                                            () => resolve({ done: true, value: undefined }),
-                                            IDLE_TIMEOUT_MS
+                            while (true) {
+                                const raceTargets: Promise<
+                                    | IteratorResult<unknown, unknown>
+                                    | { done: true; value: undefined }
+                                >[] = [fsIterator.next()];
+
+                                if (finishSeen) {
+                                    raceTargets.push(
+                                        new Promise((resolve) =>
+                                            setTimeout(
+                                                () => resolve({ done: true, value: undefined }),
+                                                IDLE_TIMEOUT_MS
+                                            )
                                         )
-                                    )
-                                );
+                                    );
+                                }
+
+                                const result = await Promise.race(raceTargets);
+                                if (result.done) break;
+
+                                const c = normalizeChunk(result.value);
+
+                                if (c.type === "text-delta") {
+                                    const text =
+                                        (typeof c.payload?.text === "string" && c.payload.text) ||
+                                        (typeof c.textDelta === "string" && c.textDelta) ||
+                                        (typeof c.text === "string" && c.text) ||
+                                        (typeof c.delta === "string" && c.delta) ||
+                                        (typeof c.content === "string" && c.content) ||
+                                        (typeof c.value === "string" ? c.value : "") ||
+                                        "";
+                                    if (text && ts.currentId) {
+                                        gotContent = true;
+                                        fullOutput += text;
+                                        w.write({
+                                            type: "text-delta",
+                                            id: ts.currentId,
+                                            delta: text
+                                        });
+                                    }
+                                    finishSeen = false;
+                                } else if (c.type === "finish") {
+                                    finishSeen = true;
+                                } else {
+                                    if (c.type === "tool-call" || c.type === "tool-result") {
+                                        gotContent = true;
+                                        finishSeen = false;
+                                    }
+                                    handleToolChunk(c);
+                                }
                             }
-
-                            const result = await Promise.race(raceTargets);
-                            if (result.done) break;
-
-                            const c = normalizeChunk(result.value);
-
-                            if (c.type === "text-delta") {
-                                const text =
-                                    (typeof c.payload?.text === "string" && c.payload.text) ||
-                                    (typeof c.textDelta === "string" && c.textDelta) ||
-                                    (typeof c.text === "string" && c.text) ||
-                                    (typeof c.delta === "string" && c.delta) ||
-                                    (typeof c.content === "string" && c.content) ||
-                                    (typeof c.value === "string" ? c.value : "") ||
-                                    "";
-                                if (text && textState.currentId) {
-                                    fullOutput += text;
-                                    writer.write({
+                        } else if (txs) {
+                            for await (const chunk of txs) {
+                                if (chunk && ts.currentId) {
+                                    gotContent = true;
+                                    fullOutput += chunk;
+                                    w.write({
                                         type: "text-delta",
-                                        id: textState.currentId,
-                                        delta: text
+                                        id: ts.currentId,
+                                        delta: chunk
                                     });
                                 }
-                                finishSeen = false;
-                            } else if (c.type === "finish") {
-                                finishSeen = true;
-                            } else {
-                                if (c.type === "tool-call" || c.type === "tool-result") {
-                                    finishSeen = false;
-                                }
-                                handleToolChunk(c);
                             }
                         }
-                    } else if (textStream) {
-                        // textStream-only fallback (agents with no tools or older Mastra)
-                        for await (const chunk of textStream) {
-                            if (chunk && textState.currentId) {
-                                fullOutput += chunk;
-                                writer.write({
-                                    type: "text-delta",
-                                    id: textState.currentId,
-                                    delta: chunk
-                                });
-                            }
+
+                        return gotContent;
+                    };
+
+                    // Attempt 0: consume the already-initialized stream
+                    hasReceivedContent = await consumeFullStream(
+                        activeStreamResult,
+                        writer,
+                        textState
+                    );
+
+                    // Retry loop: if the stream was empty, retry with backoff
+                    while (!hasReceivedContent && streamAttempt < MAX_EMPTY_RETRIES) {
+                        streamAttempt++;
+                        const delay = streamAttempt * 750;
+                        console.warn(
+                            `[Agent Chat] Empty stream detected for agent "${id}" — ` +
+                                `retry ${streamAttempt}/${MAX_EMPTY_RETRIES} after ${delay}ms`
+                        );
+                        await new Promise((r) => setTimeout(r, delay));
+
+                        try {
+                            activeResponseStream = await agent.stream(streamInput, streamOptions);
+                            activeStreamResult = activeResponseStream as unknown as StreamResult;
+                            hasReceivedContent = await consumeFullStream(
+                                activeStreamResult,
+                                writer,
+                                textState
+                            );
+                        } catch (retryError) {
+                            console.error(
+                                `[Agent Chat] Retry ${streamAttempt} stream init failed:`,
+                                retryError instanceof Error ? retryError.message : retryError
+                            );
+                            break;
                         }
+                    }
+
+                    // Graceful degradation: if all retries exhausted and still empty,
+                    // send a recovery message so the user never sees a blank response
+                    if (!hasReceivedContent && toolCalls.length === 0) {
+                        const recoveryMsg =
+                            "I wasn't able to generate a response to your message. " +
+                            "This can happen with very short inputs \u2014 could you rephrase " +
+                            "or provide more context? If the issue persists, please try again.";
+
+                        if (textState.currentId) {
+                            writer.write({
+                                type: "text-delta",
+                                id: textState.currentId,
+                                delta: recoveryMsg
+                            });
+                        }
+                        fullOutput = recoveryMsg;
+                        console.warn(
+                            `[Agent Chat] All ${MAX_EMPTY_RETRIES + 1} attempts produced ` +
+                                `empty response for agent "${id}" — sent recovery message`
+                        );
                     }
 
                     // Close any remaining open text block
@@ -748,11 +826,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
                     // Snapshot values needed by post-stream work (closures)
                     const capturedRun = run;
-                    const capturedStreamResult = streamResult;
+                    const capturedStreamResult = activeStreamResult;
                     const capturedToolCalls = [...toolCalls];
                     const capturedFullOutput = fullOutput;
                     const capturedExecutionSteps = [...executionSteps];
                     const capturedStepCounter = stepCounter;
+                    const capturedHasReceivedContent = hasReceivedContent;
+                    const capturedStreamAttempt = streamAttempt;
 
                     // Fire-and-forget: run recording, usage tracking, evaluations
                     // This does NOT block the stream from closing.
@@ -841,11 +921,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                                     : modelOverride?.name || record?.modelName || "unknown";
 
                                 if (
-                                    !capturedFullOutput &&
+                                    !capturedHasReceivedContent &&
                                     capturedToolCalls.length === 0 &&
                                     promptTokens === 0 &&
                                     completionTokens === 0
                                 ) {
+                                    // Enhanced diagnostics for zero-token failures
                                     console.error(
                                         `[Agent Chat] ZERO-TOKEN FAILURE for run ${capturedRun.runId}:`,
                                         JSON.stringify({
@@ -853,15 +934,46 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                                             model: `${actualModelProvider}/${actualModelName}`,
                                             threadId: userThreadId,
                                             inputLength: lastUserMessage?.length ?? 0,
+                                            instructionsLength: mergedInstructions?.length ?? 0,
+                                            instructionsHash: instructionsHash ?? "n/a",
+                                            versionId: record?.version ?? "n/a",
                                             hasFullStream: !!capturedStreamResult?.fullStream,
                                             hasTextStream: !!capturedStreamResult?.textStream,
                                             usageResolved: !!usage,
-                                            stepsCount: capturedExecutionSteps.length
+                                            stepsCount: capturedExecutionSteps.length,
+                                            retryAttempts: capturedStreamAttempt,
+                                            memoryEnabled: record?.memoryEnabled ?? false,
+                                            toolCount: toolCalls.length,
+                                            modelConfig: record?.modelConfig ?? null,
+                                            recoveryMessageSent: !!capturedFullOutput,
+                                            readinessIssues: toolHealth?.readinessIssues ?? []
                                         })
                                     );
-                                    await capturedRun.fail(
-                                        "Empty response: agent produced no output, no tool calls, and zero tokens"
-                                    );
+
+                                    // If recovery message was sent, record as completed (user got a response)
+                                    if (capturedFullOutput) {
+                                        await capturedRun.complete({
+                                            output: capturedFullOutput,
+                                            modelProvider: actualModelProvider,
+                                            modelName: actualModelName,
+                                            promptTokens,
+                                            completionTokens,
+                                            costUsd: 0,
+                                            steps: [
+                                                ...capturedExecutionSteps,
+                                                {
+                                                    step: capturedStepCounter + 2,
+                                                    type: "response" as const,
+                                                    content: `[Recovery] Empty response after ${capturedStreamAttempt + 1} attempt(s). Sent recovery message.`,
+                                                    timestamp: new Date().toISOString()
+                                                }
+                                            ]
+                                        });
+                                    } else {
+                                        await capturedRun.fail(
+                                            "Empty response: agent produced no output, no tool calls, and zero tokens"
+                                        );
+                                    }
                                 } else {
                                     await capturedRun.complete({
                                         output: capturedFullOutput,

@@ -289,6 +289,145 @@ function resolveToolLabel(toolCall: ToolCall): string {
     return resolved || "Tool Call";
 }
 
+// --- Subcomponents ---
+
+function RunTableRow({
+    run,
+    isSelected,
+    onClick
+}: {
+    run: Run;
+    isSelected: boolean;
+    onClick: () => void;
+}) {
+    return (
+        <TableRow
+            onClick={onClick}
+            className={`cursor-pointer transition-colors ${
+                isSelected ? "bg-primary/5" : "hover:bg-muted/50"
+            }`}
+        >
+            <TableCell>
+                <Badge variant={getStatusBadgeVariant(run.status)}>{run.status}</Badge>
+            </TableCell>
+            <TableCell className="max-w-[120px] truncate text-xs">
+                {run.instanceName ? (
+                    <span className="text-foreground font-medium">{run.instanceName}</span>
+                ) : (
+                    <span className="text-muted-foreground">Direct</span>
+                )}
+            </TableCell>
+            <TableCell>
+                {run.source ? (
+                    <span
+                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${getSourceBadgeColor(run.source)}`}
+                    >
+                        {run.source}
+                    </span>
+                ) : (
+                    <span className="text-muted-foreground text-xs">-</span>
+                )}
+            </TableCell>
+            <TableCell className="max-w-[120px] truncate text-xs">
+                {formatModelLabel(run.modelName, run.modelProvider)}
+            </TableCell>
+            <TableCell className="max-w-[200px] truncate">
+                <span className="text-sm">{run.inputText}</span>
+            </TableCell>
+            <TableCell className="text-right font-mono text-xs">
+                {run.durationMs ? formatLatency(run.durationMs) : "-"}
+            </TableCell>
+            <TableCell className="text-right font-mono text-xs">
+                {run.toolCallCount || "-"}
+            </TableCell>
+            <TableCell className="text-right font-mono text-xs">
+                {formatTokens(run.totalTokens)}
+            </TableCell>
+            <TableCell className="text-right font-mono text-xs">
+                {formatCost(run.costUsd)}
+            </TableCell>
+            <TableCell className="text-muted-foreground text-right text-xs">
+                {formatRelativeTime(run.startedAt)}
+            </TableCell>
+        </TableRow>
+    );
+}
+
+function ThreadGroupRows({
+    group,
+    selectedRun,
+    onRunClick
+}: {
+    group: {
+        threadId: string | null;
+        label: string;
+        runs: Run[];
+        totalTokens: number;
+        totalCost: number;
+        totalDuration: number;
+    };
+    selectedRun: Run | null;
+    onRunClick: (run: Run) => void;
+}) {
+    const [expanded, setExpanded] = useState(group.runs.length === 1);
+    const isSingleRun = group.runs.length === 1;
+
+    if (isSingleRun) {
+        return (
+            <RunTableRow
+                run={group.runs[0]}
+                isSelected={selectedRun?.id === group.runs[0].id}
+                onClick={() => onRunClick(group.runs[0])}
+            />
+        );
+    }
+
+    return (
+        <>
+            <TableRow
+                className="bg-muted/30 hover:bg-muted/50 cursor-pointer border-t"
+                onClick={() => setExpanded(!expanded)}
+            >
+                <TableCell colSpan={5}>
+                    <div className="flex items-center gap-2">
+                        <HugeiconsIcon
+                            icon={expanded ? icons["chevron-down"]! : icons["arrow-right"]!}
+                            className="size-4"
+                        />
+                        <HugeiconsIcon icon={icons.messages!} className="size-4" />
+                        <span className="text-sm font-medium">{group.label}</span>
+                        <span className="text-muted-foreground text-xs">
+                            {group.runs[0].inputText.slice(0, 80)}
+                        </span>
+                    </div>
+                </TableCell>
+                <TableCell className="text-right font-mono text-xs">
+                    {formatLatency(group.totalDuration)}
+                </TableCell>
+                <TableCell className="text-right font-mono text-xs">-</TableCell>
+                <TableCell className="text-right font-mono text-xs">
+                    {formatTokens(group.totalTokens)}
+                </TableCell>
+                <TableCell className="text-right font-mono text-xs">
+                    {formatCost(group.totalCost)}
+                </TableCell>
+                <TableCell className="text-muted-foreground text-right text-xs">
+                    {formatRelativeTime(group.runs[0].startedAt)}
+                </TableCell>
+            </TableRow>
+            {expanded &&
+                group.runs.map((run) => (
+                    <RunTableRow
+                        key={run.id}
+                        run={run}
+                        isSelected={selectedRun?.id === run.id}
+                        onClick={() => onRunClick(run)}
+                    />
+                ))}
+        </>
+    );
+}
+
 // --- Component ---
 
 export default function RunsPage() {
@@ -311,6 +450,7 @@ export default function RunsPage() {
     const [searchQuery, setSearchQuery] = useState("");
     const [sortKey, setSortKey] = useState("startedAt");
     const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+    const [groupByThread, setGroupByThread] = useState(false);
 
     const fetchRuns = useCallback(async () => {
         try {
@@ -450,6 +590,27 @@ export default function RunsPage() {
         return sorted;
     }, [runs, sortKey, sortDirection]);
 
+    const threadGroups = useMemo(() => {
+        if (!groupByThread) return null;
+        const groups = new Map<string, Run[]>();
+        for (const run of sortedRuns) {
+            const key = run.threadId || `standalone-${run.id}`;
+            const list = groups.get(key) || [];
+            list.push(run);
+            groups.set(key, list);
+        }
+        return Array.from(groups.entries()).map(([threadId, threadRuns]) => ({
+            threadId: threadId.startsWith("standalone-") ? null : threadId,
+            label: threadId.startsWith("standalone-")
+                ? threadRuns[0].inputText.slice(0, 60)
+                : `Thread (${threadRuns.length} runs)`,
+            runs: threadRuns,
+            totalTokens: threadRuns.reduce((s, r) => s + (r.totalTokens || 0), 0),
+            totalCost: threadRuns.reduce((s, r) => s + (r.costUsd || 0), 0),
+            totalDuration: threadRuns.reduce((s, r) => s + (r.durationMs || 0), 0)
+        }));
+    }, [sortedRuns, groupByThread]);
+
     const feedbackList = useMemo(() => {
         const feedback = runDetail?.feedback;
         if (!feedback) return [];
@@ -546,6 +707,14 @@ export default function RunsPage() {
                         <SelectItem value="simulation">Simulation</SelectItem>
                     </SelectContent>
                 </Select>
+                <Button
+                    variant={groupByThread ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setGroupByThread(!groupByThread)}
+                >
+                    <HugeiconsIcon icon={icons.messages!} className="mr-1.5 size-4" />
+                    {groupByThread ? "Grouped by Thread" : "Group by Thread"}
+                </Button>
             </div>
 
             {/* Main Layout: Full-width Table */}
@@ -602,70 +771,23 @@ export default function RunsPage() {
                                             </p>
                                         </TableCell>
                                     </TableRow>
+                                ) : groupByThread && threadGroups ? (
+                                    threadGroups.map((group) => (
+                                        <ThreadGroupRows
+                                            key={group.threadId || group.runs[0].id}
+                                            group={group}
+                                            selectedRun={selectedRun}
+                                            onRunClick={handleRunClick}
+                                        />
+                                    ))
                                 ) : (
                                     sortedRuns.map((run) => (
-                                        <TableRow
+                                        <RunTableRow
                                             key={run.id}
+                                            run={run}
+                                            isSelected={selectedRun?.id === run.id}
                                             onClick={() => handleRunClick(run)}
-                                            className={`cursor-pointer transition-colors ${
-                                                selectedRun?.id === run.id
-                                                    ? "bg-primary/5"
-                                                    : "hover:bg-muted/50"
-                                            }`}
-                                        >
-                                            <TableCell>
-                                                <Badge variant={getStatusBadgeVariant(run.status)}>
-                                                    {run.status}
-                                                </Badge>
-                                            </TableCell>
-                                            <TableCell className="max-w-[120px] truncate text-xs">
-                                                {run.instanceName ? (
-                                                    <span className="text-foreground font-medium">
-                                                        {run.instanceName}
-                                                    </span>
-                                                ) : (
-                                                    <span className="text-muted-foreground">
-                                                        Direct
-                                                    </span>
-                                                )}
-                                            </TableCell>
-                                            <TableCell>
-                                                {run.source ? (
-                                                    <span
-                                                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${getSourceBadgeColor(run.source)}`}
-                                                    >
-                                                        {run.source}
-                                                    </span>
-                                                ) : (
-                                                    <span className="text-muted-foreground text-xs">
-                                                        -
-                                                    </span>
-                                                )}
-                                            </TableCell>
-                                            <TableCell className="max-w-[120px] truncate text-xs">
-                                                {formatModelLabel(run.modelName, run.modelProvider)}
-                                            </TableCell>
-                                            <TableCell className="max-w-[200px] truncate">
-                                                <span className="text-sm">{run.inputText}</span>
-                                            </TableCell>
-                                            <TableCell className="text-right font-mono text-xs">
-                                                {run.durationMs
-                                                    ? formatLatency(run.durationMs)
-                                                    : "-"}
-                                            </TableCell>
-                                            <TableCell className="text-right font-mono text-xs">
-                                                {run.toolCallCount || "-"}
-                                            </TableCell>
-                                            <TableCell className="text-right font-mono text-xs">
-                                                {formatTokens(run.totalTokens)}
-                                            </TableCell>
-                                            <TableCell className="text-right font-mono text-xs">
-                                                {formatCost(run.costUsd)}
-                                            </TableCell>
-                                            <TableCell className="text-muted-foreground text-right text-xs">
-                                                {formatRelativeTime(run.startedAt)}
-                                            </TableCell>
-                                        </TableRow>
+                                        />
                                     ))
                                 )}
                             </TableBody>

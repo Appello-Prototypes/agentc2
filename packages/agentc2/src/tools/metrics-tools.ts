@@ -832,3 +832,38 @@ export const auditLogsListTool = createTool({
         });
     }
 });
+
+export const conversationListTool = createTool({
+    id: "conversation-list",
+    description:
+        "List conversation threads grouped by threadId. Shows run count, turn count, tokens, cost, and time range per thread.",
+    inputSchema: z.object({
+        agentId: z.string().optional().describe("Filter by agent ID"),
+        agentSlug: z.string().optional().describe("Filter by agent slug"),
+        source: z.string().optional().describe("Filter by source channel"),
+        from: z.string().optional().describe("Start date (ISO)"),
+        to: z.string().optional().describe("End date (ISO)"),
+        search: z.string().optional().describe("Search within thread content"),
+        limit: z.number().optional().describe("Max threads to return (default 30)"),
+        offset: z.number().optional().describe("Pagination offset")
+    }),
+    outputSchema: baseOutputSchema,
+    execute: async ({ agentId, agentSlug, source, from, to, search, limit, offset }) => {
+        return callInternalApi("/api/threads", {
+            query: { agentId, agentSlug, source, from, to, search, limit, offset }
+        });
+    }
+});
+
+export const conversationGetTool = createTool({
+    id: "conversation-get",
+    description:
+        "Get a complete conversation thread by threadId with all runs, turns, inputs, outputs, tool calls, tokens, and costs.",
+    inputSchema: z.object({
+        threadId: z.string().describe("The thread ID to retrieve")
+    }),
+    outputSchema: baseOutputSchema,
+    execute: async ({ threadId }) => {
+        return callInternalApi(`/api/threads/${encodeURIComponent(threadId)}`);
+    }
+});

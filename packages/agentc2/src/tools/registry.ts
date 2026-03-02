@@ -199,7 +199,9 @@ import {
     liveRunsTool,
     liveMetricsTool,
     liveStatsTool,
-    auditLogsListTool
+    auditLogsListTool,
+    conversationListTool,
+    conversationGetTool
 } from "./metrics-tools";
 import {
     bimQueryTool,
@@ -613,6 +615,8 @@ export const toolCategoryMap: Record<string, string> = {
     "live-metrics": "Monitoring & Metrics",
     "live-stats": "Monitoring & Metrics",
     "audit-logs-list": "Monitoring & Metrics",
+    "conversation-list": "Monitoring & Metrics",
+    "conversation-get": "Monitoring & Metrics",
 
     // Integrations
     "integration-import-mcp-json": "Integrations",
@@ -1323,6 +1327,8 @@ export const toolRegistry: Record<string, any> = {
     "live-metrics": liveMetricsTool,
     "live-stats": liveStatsTool,
     "audit-logs-list": auditLogsListTool,
+    "conversation-list": conversationListTool,
+    "conversation-get": conversationGetTool,
 
     // Tool introspection
     "tool-registry-list": toolRegistryListTool,

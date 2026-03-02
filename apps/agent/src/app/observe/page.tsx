@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { HugeiconsIcon, Tabs, TabsContent, TabsList, TabsTrigger, icons } from "@repo/ui";
 import { LiveRunsContent, ObservabilityDashboard } from "@/app/live/page";
 import { ActivityLogTab } from "@/app/triggers/page";
+import { ConversationsListContent } from "@/components/ConversationsListContent";
 
 function ObservePageClient() {
     const searchParams = useSearchParams();
@@ -50,6 +51,10 @@ function ObservePageClient() {
                             <HugeiconsIcon icon={icons.activity!} className="mr-1.5 size-4" />
                             Runs
                         </TabsTrigger>
+                        <TabsTrigger value="conversations">
+                            <HugeiconsIcon icon={icons.messages!} className="mr-1.5 size-4" />
+                            Conversations
+                        </TabsTrigger>
                         <TabsTrigger value="triggers">
                             <HugeiconsIcon icon={icons["play-circle"]!} className="mr-1.5 size-4" />
                             Triggers
@@ -62,6 +67,10 @@ function ObservePageClient() {
 
                     <TabsContent value="dashboard" className="mt-0">
                         <ObservabilityDashboard />
+                    </TabsContent>
+
+                    <TabsContent value="conversations" className="mt-0">
+                        <ConversationsListContent />
                     </TabsContent>
 
                     <TabsContent value="triggers" className="mt-0">

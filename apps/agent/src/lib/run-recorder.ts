@@ -989,6 +989,22 @@ function buildTurnMethods(
                     completedAt: new Date()
                 }
             });
+
+            // Fix: also update the AgentTrace so it doesn't stay stuck at "RUNNING"
+            const traceRecord = await tx.agentTrace.findFirst({
+                where: { runId },
+                select: { id: true }
+            });
+            if (traceRecord) {
+                await tx.agentTrace.update({
+                    where: { id: traceRecord.id },
+                    data: {
+                        status: "FAILED",
+                        outputText: `Error: ${errorMessage}`,
+                        durationMs
+                    }
+                });
+            }
         });
 
         console.error(`[RunRecorder] Turn ${turnIndex} of run ${runId} failed: ${errorMessage}`);
