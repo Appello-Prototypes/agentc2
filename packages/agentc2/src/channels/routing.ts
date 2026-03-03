@@ -99,13 +99,13 @@ export function parseRouting(message: IncomingMessage, config: RoutingConfig): R
 export function getDefaultAgentSlug(channel: ChannelType): string {
     switch (channel) {
         case "whatsapp":
-            return process.env.WHATSAPP_DEFAULT_AGENT_SLUG || "mcp-agent";
+            return process.env.WHATSAPP_DEFAULT_AGENT_SLUG || "bigjim2";
         case "telegram":
-            return process.env.TELEGRAM_DEFAULT_AGENT_SLUG || "mcp-agent";
+            return process.env.TELEGRAM_DEFAULT_AGENT_SLUG || "bigjim2";
         case "voice":
-            return process.env.VOICE_DEFAULT_AGENT_SLUG || "mcp-agent";
+            return process.env.VOICE_DEFAULT_AGENT_SLUG || "bigjim2";
         default:
-            return "mcp-agent";
+            return "bigjim2";
     }
 }
 

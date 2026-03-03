@@ -1624,7 +1624,7 @@ export default function UnifiedChatPage() {
                 <BudgetExceededCard
                     key={index}
                     data={part.data}
-                    agentSlug={selectedAgentSlug || "workspace-concierge"}
+                    agentSlug={selectedAgentSlug || "bigjim2"}
                 />
             );
         }

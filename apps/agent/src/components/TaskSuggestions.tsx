@@ -199,10 +199,10 @@ async function buildSuggestionsFromPlatform(apiBase: string): Promise<Suggestion
 
     // Determine concierge agent (for meta-action routing)
     const conciergeSlug =
+        agents.find((a) => a.slug === "bigjim2" && a.isActive)?.slug ||
         agents.find((a) => a.slug === "workspace-concierge" && a.isActive)?.slug ||
-        agents.find((a) => a.slug === "assistant" && a.isActive)?.slug ||
         agents.find((a) => a.isActive)?.slug ||
-        "assistant";
+        "bigjim2";
 
     // ── Tier 1: Agent-derived cards (USER > SYSTEM > DEMO priority) ────
     const activeAgents = agents.filter((a) => a.isActive);

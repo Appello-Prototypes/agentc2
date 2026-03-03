@@ -3,8 +3,35 @@
 import { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
 import { getApiBase } from "@/lib/utils";
-import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from "@repo/ui";
-import { ArrowLeftIcon, PackageIcon, StarIcon, DownloadIcon, SendIcon } from "lucide-react";
+import {
+    Badge,
+    Button,
+    Card,
+    CardContent,
+    CardHeader,
+    CardTitle,
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+    Label,
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+    Switch
+} from "@repo/ui";
+import {
+    ArrowLeftIcon,
+    PackageIcon,
+    StarIcon,
+    DownloadIcon,
+    SendIcon,
+    AlertTriangleIcon
+} from "lucide-react";
 
 interface PlaybookDetail {
     id: string;
@@ -38,12 +65,32 @@ interface PlaybookDetail {
     }>;
 }
 
+type EntryPointType = "agent" | "workflow" | "network";
+
+interface EntityOption {
+    id: string;
+    slug: string;
+    name: string;
+}
+
 export default function PlaybookManagePage(props: { params: Promise<{ slug: string }> }) {
     const { slug } = use(props.params);
     const router = useRouter();
     const [playbook, setPlaybook] = useState<PlaybookDetail | null>(null);
     const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState(false);
+
+    // Package dialog state
+    const [packageOpen, setPackageOpen] = useState(false);
+    const [packageLoading, setPackageLoading] = useState(false);
+    const [packageError, setPackageError] = useState<string | null>(null);
+    const [packageWarnings, setPackageWarnings] = useState<string[]>([]);
+    const [entryType, setEntryType] = useState<EntryPointType>("agent");
+    const [entryId, setEntryId] = useState("");
+    const [includeSkills, setIncludeSkills] = useState(true);
+    const [includeDocuments, setIncludeDocuments] = useState(true);
+    const [entities, setEntities] = useState<EntityOption[]>([]);
+    const [entitiesLoading, setEntitiesLoading] = useState(false);
 
     useEffect(() => {
         async function fetchPlaybook() {
@@ -59,6 +106,75 @@ export default function PlaybookManagePage(props: { params: Promise<{ slug: stri
         }
         fetchPlaybook();
     }, [slug]);
+
+    useEffect(() => {
+        if (!packageOpen) return;
+        setEntryId("");
+        setEntitiesLoading(true);
+        const endpoint =
+            entryType === "agent"
+                ? "/api/agents"
+                : entryType === "workflow"
+                  ? "/api/workflows"
+                  : "/api/networks";
+
+        fetch(`${getApiBase()}${endpoint}`)
+            .then((res) => res.json())
+            .then((data) => {
+                const items =
+                    entryType === "agent"
+                        ? (data.agents ?? [])
+                        : entryType === "workflow"
+                          ? (data.workflows ?? [])
+                          : (data.networks ?? []);
+                setEntities(
+                    items.map((item: { id: string; slug: string; name: string }) => ({
+                        id: item.id,
+                        slug: item.slug,
+                        name: item.name
+                    }))
+                );
+            })
+            .catch(() => setEntities([]))
+            .finally(() => setEntitiesLoading(false));
+    }, [entryType, packageOpen]);
+
+    async function handlePackage() {
+        if (!entryId) return;
+        setPackageLoading(true);
+        setPackageError(null);
+        setPackageWarnings([]);
+        try {
+            const body: Record<string, unknown> = {
+                includeSkills,
+                includeDocuments
+            };
+            if (entryType === "agent") body.entryAgentId = entryId;
+            else if (entryType === "workflow") body.entryWorkflowId = entryId;
+            else body.entryNetworkId = entryId;
+
+            const res = await fetch(`${getApiBase()}/api/playbooks/${slug}/package`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(body)
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                throw new Error(data.error || "Packaging failed");
+            }
+            if (data.warnings?.length > 0) {
+                setPackageWarnings(data.warnings);
+            }
+            setPlaybook(data.playbook);
+            if (!data.warnings?.length) {
+                setPackageOpen(false);
+            }
+        } catch (err) {
+            setPackageError(err instanceof Error ? err.message : "Packaging failed");
+        } finally {
+            setPackageLoading(false);
+        }
+    }
 
     async function handlePublish() {
         if (!playbook) return;
@@ -125,12 +241,28 @@ export default function PlaybookManagePage(props: { params: Promise<{ slug: stri
                     )}
                 </div>
                 <div className="flex gap-2">
-                    {playbook.status === "DRAFT" && playbook.components.length > 0 && (
-                        <Button onClick={handlePublish} disabled={actionLoading}>
-                            <SendIcon className="mr-2 h-4 w-4" />
-                            Submit for Review
+                    {playbook.status === "DRAFT" && (
+                        <Button
+                            variant="outline"
+                            onClick={() => {
+                                setPackageError(null);
+                                setPackageWarnings([]);
+                                setPackageOpen(true);
+                            }}
+                            disabled={actionLoading}
+                        >
+                            <PackageIcon className="mr-2 h-4 w-4" />
+                            Package
                         </Button>
                     )}
+                    {playbook.status === "DRAFT" &&
+                        playbook.components.length > 0 &&
+                        playbook.versions.length > 0 && (
+                            <Button onClick={handlePublish} disabled={actionLoading}>
+                                <SendIcon className="mr-2 h-4 w-4" />
+                                Submit for Review
+                            </Button>
+                        )}
                 </div>
             </div>
 
@@ -293,6 +425,118 @@ export default function PlaybookManagePage(props: { params: Promise<{ slug: stri
                     )}
                 </div>
             </div>
+
+            <Dialog open={packageOpen} onOpenChange={setPackageOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Package Playbook</DialogTitle>
+                        <DialogDescription>
+                            Select an entry point to snapshot your agent system into this playbook.
+                            All dependencies (skills, documents, sub-agents) will be included
+                            automatically.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-4 py-2">
+                        <div className="space-y-2">
+                            <Label>Entry Point Type</Label>
+                            <div className="flex gap-2">
+                                {(["agent", "workflow", "network"] as const).map((type) => (
+                                    <Button
+                                        key={type}
+                                        variant={entryType === type ? "default" : "outline"}
+                                        size="sm"
+                                        onClick={() => setEntryType(type)}
+                                    >
+                                        {type.charAt(0).toUpperCase() + type.slice(1)}
+                                    </Button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label>
+                                Select {entryType.charAt(0).toUpperCase() + entryType.slice(1)}
+                            </Label>
+                            {entitiesLoading ? (
+                                <div className="text-muted-foreground text-sm">Loading...</div>
+                            ) : entities.length === 0 ? (
+                                <div className="text-muted-foreground text-sm">
+                                    No {entryType}s found in your workspace.
+                                </div>
+                            ) : (
+                                <Select value={entryId} onValueChange={(v) => setEntryId(v ?? "")}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder={`Choose a ${entryType}...`} />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {entities.map((entity) => (
+                                            <SelectItem key={entity.id} value={entity.id}>
+                                                {entity.name}{" "}
+                                                <span className="text-muted-foreground">
+                                                    ({entity.slug})
+                                                </span>
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            )}
+                        </div>
+
+                        <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                                <Label htmlFor="include-skills">Include Skills</Label>
+                                <Switch
+                                    id="include-skills"
+                                    checked={includeSkills}
+                                    onCheckedChange={setIncludeSkills}
+                                />
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <Label htmlFor="include-documents">Include Documents</Label>
+                                <Switch
+                                    id="include-documents"
+                                    checked={includeDocuments}
+                                    onCheckedChange={setIncludeDocuments}
+                                />
+                            </div>
+                        </div>
+
+                        {packageError && (
+                            <div className="rounded-md bg-red-500/10 p-3 text-sm text-red-400">
+                                {packageError}
+                            </div>
+                        )}
+
+                        {packageWarnings.length > 0 && (
+                            <div className="space-y-1 rounded-md bg-yellow-500/10 p-3 text-sm text-yellow-400">
+                                <div className="flex items-center gap-1 font-medium">
+                                    <AlertTriangleIcon className="h-4 w-4" />
+                                    Packaging completed with warnings:
+                                </div>
+                                <ul className="list-inside list-disc space-y-0.5">
+                                    {packageWarnings.map((w, i) => (
+                                        <li key={i}>{w}</li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
+                    </div>
+
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() => setPackageOpen(false)}
+                            disabled={packageLoading}
+                        >
+                            Cancel
+                        </Button>
+                        <Button onClick={handlePackage} disabled={!entryId || packageLoading}>
+                            {packageLoading ? "Packaging..." : "Package"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

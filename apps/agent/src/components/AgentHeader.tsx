@@ -17,7 +17,8 @@ const navItems = [
             { label: "Networks", href: "/networks" },
             { label: "Skills", href: "/skills" },
             { label: "Campaigns", href: "/campaigns" },
-            { label: "Pulse", href: "/pulse" }
+            { label: "Pulse", href: "/pulse" },
+            { label: "Playbooks", href: "/playbooks" }
         ]
     },
     { label: "Command", href: "/command" },
