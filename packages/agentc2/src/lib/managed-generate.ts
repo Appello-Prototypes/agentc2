@@ -19,6 +19,7 @@
 import type { Agent } from "@mastra/core/agent";
 import type { LanguageModel } from "ai";
 import { generateText } from "ai";
+import { encodingForModel, type TiktokenModel } from "js-tiktoken";
 import { supportsAdaptiveThinking } from "../agents/model-config-types";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -75,10 +76,25 @@ interface ToolCallRecord {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-const CHARS_PER_TOKEN_ESTIMATE = 4;
+let _encoder: ReturnType<typeof encodingForModel> | null = null;
 
-function estimateTokens(text: string): number {
-    return Math.ceil(text.length / CHARS_PER_TOKEN_ESTIMATE);
+function getEncoder(): ReturnType<typeof encodingForModel> {
+    if (!_encoder) {
+        try {
+            _encoder = encodingForModel("gpt-4o" as TiktokenModel);
+        } catch {
+            _encoder = encodingForModel("gpt-4" as TiktokenModel);
+        }
+    }
+    return _encoder;
+}
+
+function countTokens(text: string): number {
+    try {
+        return getEncoder().encode(text).length;
+    } catch {
+        return Math.ceil(text.length / 4);
+    }
 }
 
 function preview(value: unknown, maxLen: number = 200): string {
@@ -300,8 +316,8 @@ export async function managedGenerate(
             anchorInterval
         );
 
-        // Estimate context size and enforce budget
-        const contextSize = estimateTokens(
+        // Measure context size and enforce budget
+        const contextSize = countTokens(
             stepInstructions + "\n" + windowedMessages.map((m) => m.content).join("\n")
         );
         if (contextSize > maxContextTokens) {
@@ -438,6 +454,45 @@ export async function managedGenerate(
                 toolResultParts.push(`Tool: ${toolName}\nResult: ${condensed}`);
             }
             messages.push({ role: "assistant", content: toolResultParts.join("\n---\n") });
+
+            // Detect failed tool calls and inject a diagnostic nudge
+            const failedTools = stepToolResults.filter((r: any) => {
+                const result = resolveToolResult(r);
+                const text = typeof result === "string" ? result : JSON.stringify(result ?? "");
+                return (
+                    text.includes("[TOOL BLOCKED]") ||
+                    text.includes('"error"') ||
+                    text.includes("Error:") ||
+                    text.includes("ECONNREFUSED") ||
+                    text.includes("permission denied")
+                );
+            });
+
+            if (failedTools.length > 0) {
+                const failedNames = stepToolCalls
+                    .filter((_: any, i: number) => {
+                        const result = resolveToolResult(stepToolResults[i]);
+                        const text =
+                            typeof result === "string" ? result : JSON.stringify(result ?? "");
+                        return (
+                            text.includes("[TOOL BLOCKED]") ||
+                            text.includes('"error"') ||
+                            text.includes("Error:") ||
+                            text.includes("ECONNREFUSED") ||
+                            text.includes("permission denied")
+                        );
+                    })
+                    .map((tc: any) => resolveToolName(tc) || "unknown");
+
+                messages.push({
+                    role: "user",
+                    content:
+                        `[System] ${failedNames.length} tool call(s) returned errors: ${failedNames.join(", ")}. ` +
+                        `Analyze the error messages above. If it's a permission or connection issue, ` +
+                        `do NOT retry the same tool — choose an alternative approach or inform the user. ` +
+                        `If the arguments were wrong, fix them and retry once.`
+                });
+            }
         }
 
         if (onStep) {

@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@repo/database";
 import { getServerTimezone } from "@/lib/timezone-server";
 import { formatDateTime } from "@/lib/timezone";
+import { TenantLifecycleActions } from "@/components/tenant-lifecycle-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +15,7 @@ export default async function TenantLifecyclePage({
 
     const org = await prisma.organization.findUnique({
         where: { slug: orgSlug },
-        select: { id: true, status: true }
+        select: { id: true, name: true, status: true }
     });
     if (!org) notFound();
 
@@ -30,28 +31,12 @@ export default async function TenantLifecyclePage({
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold">Lifecycle History</h2>
-                <div className="flex gap-2">
-                    {org.status === "active" && (
-                        <form action={`/admin/api/tenants/${org.id}/suspend`} method="POST">
-                            <button
-                                type="submit"
-                                className="rounded-md bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-500 hover:bg-red-500/20"
-                            >
-                                Suspend Tenant
-                            </button>
-                        </form>
-                    )}
-                    {org.status === "suspended" && (
-                        <form action={`/admin/api/tenants/${org.id}/reactivate`} method="POST">
-                            <button
-                                type="submit"
-                                className="rounded-md bg-green-500/10 px-3 py-1.5 text-xs font-medium text-green-500 hover:bg-green-500/20"
-                            >
-                                Reactivate Tenant
-                            </button>
-                        </form>
-                    )}
-                </div>
+                <TenantLifecycleActions
+                    orgId={org.id}
+                    orgName={org.name}
+                    status={org.status}
+                    variant="compact"
+                />
             </div>
 
             <div className="bg-card border-border overflow-hidden rounded-lg border">

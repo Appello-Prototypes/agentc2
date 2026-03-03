@@ -8,7 +8,9 @@ export type {
     CriterionResult,
     SkillAttribution,
     TurnEvaluation,
-    AarOutput
+    AarOutput,
+    FailureMode,
+    FailureModeType
 } from "./types";
 export {
     DEFAULT_SCORECARD_CRITERIA,

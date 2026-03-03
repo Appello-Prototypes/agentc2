@@ -5,6 +5,7 @@ export { sanitizeManifest, detectHardcodedUrls } from "./sanitizer";
 export { validateManifest, isValidManifest, playbookManifestSchema } from "./manifest";
 export { mapIntegrations } from "./integration-mapper";
 export { deployStarterKit } from "./starter-kit";
+export { buildBootPrompt } from "./boot-prompt";
 export type {
     PlaybookManifest,
     PackagePlaybookOptions,
@@ -18,5 +19,8 @@ export type {
     GuardrailSnapshot,
     TestCaseSnapshot,
     ScorecardSnapshot,
-    IntegrationMapping
+    IntegrationMapping,
+    BootTaskTemplate,
+    BootConfig,
+    RepackageMode
 } from "./types";

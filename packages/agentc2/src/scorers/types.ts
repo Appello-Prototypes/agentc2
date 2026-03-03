@@ -82,6 +82,27 @@ export interface AarImproveItem {
 }
 
 /**
+ * Diagnostic failure mode classification (mirrors FailureModeType enum in Prisma).
+ */
+export type FailureModeType =
+    | "TOOL_SELECTION_ERROR"
+    | "TOOL_ARGUMENT_ERROR"
+    | "CONTEXT_BLINDNESS"
+    | "INSTRUCTION_DRIFT"
+    | "HALLUCINATION"
+    | "SAFETY_VIOLATION"
+    | "ROUTING_ERROR"
+    | "INCOMPLETE_RESPONSE"
+    | "OVER_ELABORATION"
+    | "LOOP_DETECTED";
+
+export interface FailureMode {
+    type: FailureModeType;
+    evidence: string;
+    severity: "critical" | "major" | "minor";
+}
+
+/**
  * Structured After Action Review output from the auditor.
  */
 export interface AarOutput {
@@ -104,6 +125,7 @@ export interface Tier2Result {
     skillAttributions: SkillAttribution[] | null;
     turnEvaluations: TurnEvaluation[] | null;
     aar: AarOutput | null;
+    failureModes: FailureMode[];
 }
 
 /**

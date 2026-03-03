@@ -35,7 +35,9 @@ export async function POST(request: NextRequest, { params }: Params) {
             includeWorkflows: body.includeWorkflows,
             includeNetworks: body.includeNetworks,
             organizationId: authResult.context.organizationId,
-            userId: authResult.context.userId
+            userId: authResult.context.userId,
+            changelog: body.changelog,
+            mode: body.mode
         });
 
         return NextResponse.json(

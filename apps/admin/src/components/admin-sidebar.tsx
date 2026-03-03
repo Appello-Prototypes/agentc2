@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { AgentC2Logo } from "@repo/ui";
 import {
     LayoutDashboard,
     Building2,
@@ -10,7 +11,6 @@ import {
     Activity,
     FileText,
     Settings,
-    Shield,
     ClipboardList,
     Bug,
     Globe2,
@@ -40,9 +40,9 @@ export function AdminSidebar() {
 
     return (
         <aside className="bg-card border-border flex w-56 shrink-0 flex-col border-r">
-            <div className="border-border flex h-14 items-center border-b px-4">
-                <Shield className="text-primary mr-2 h-5 w-5" />
-                <span className="text-sm font-semibold">Admin Portal</span>
+            <div className="border-border flex h-14 items-center gap-2 border-b px-4">
+                <AgentC2Logo size={22} />
+                <span className="text-sm font-semibold">AgentC2 Admin</span>
             </div>
             <nav className="flex-1 space-y-0.5 p-2">
                 {navItems.map((item) => {

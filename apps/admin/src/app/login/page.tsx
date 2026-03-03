@@ -2,7 +2,7 @@
 
 import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Shield } from "lucide-react";
+import { AgentC2Logo } from "@repo/ui";
 
 function GoogleIcon({ className }: { className?: string }) {
     return (
@@ -96,8 +96,8 @@ function AdminLoginForm() {
     return (
         <div className="w-full max-w-sm space-y-6">
             <div className="text-center">
-                <Shield className="text-primary mx-auto h-10 w-10" />
-                <h1 className="mt-4 text-2xl font-bold">Admin Portal</h1>
+                <AgentC2Logo size={40} className="mx-auto" />
+                <h1 className="mt-4 text-2xl font-bold">AgentC2 Admin Portal</h1>
                 <p className="text-muted-foreground mt-1 text-sm">Internal access only</p>
             </div>
 

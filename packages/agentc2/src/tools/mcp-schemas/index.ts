@@ -34,6 +34,7 @@ import { searchToolDefinitions, searchToolRoutes } from "./search";
 import { sessionOpsToolDefinitions, sessionOpsToolRoutes } from "./session-ops";
 import { pulseToolDefinitions, pulseToolRoutes } from "./pulse";
 import { conversationToolDefinitions, conversationToolRoutes } from "./conversations";
+import { playbookToolDefinitions, playbookToolRoutes } from "./playbook";
 import type { McpToolDefinition, McpToolRoute } from "./types";
 
 export type { McpToolDefinition, McpToolRoute } from "./types";
@@ -75,7 +76,8 @@ export const mcpToolDefinitions: McpToolDefinition[] = [
     ...searchToolDefinitions,
     ...sessionOpsToolDefinitions,
     ...pulseToolDefinitions,
-    ...conversationToolDefinitions
+    ...conversationToolDefinitions,
+    ...playbookToolDefinitions
 ];
 
 export const mcpToolRoutes: McpToolRoute[] = [
@@ -114,5 +116,6 @@ export const mcpToolRoutes: McpToolRoute[] = [
     ...searchToolRoutes,
     ...sessionOpsToolRoutes,
     ...pulseToolRoutes,
-    ...conversationToolRoutes
+    ...conversationToolRoutes,
+    ...playbookToolRoutes
 ];

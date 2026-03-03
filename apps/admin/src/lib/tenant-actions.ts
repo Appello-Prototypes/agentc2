@@ -170,6 +170,71 @@ export async function reactivateTenant(orgId: string, performedBy: string) {
     return { previousStatus, updated };
 }
 
+export async function deactivateTenant(orgId: string, reason: string, performedBy: string) {
+    const org = await prisma.organization.findUnique({
+        where: { id: orgId },
+        select: { status: true }
+    });
+
+    if (!org) throw new Error("Organization not found");
+    if (org.status === "deactivated") throw new Error("Already deactivated");
+
+    const previousStatus = org.status;
+
+    const updated = await prisma.organization.update({
+        where: { id: orgId },
+        data: {
+            status: "deactivated",
+            deletedAt: new Date()
+        }
+    });
+
+    await prisma.tenantLifecycleEvent.create({
+        data: {
+            organizationId: orgId,
+            fromStatus: previousStatus,
+            toStatus: "deactivated",
+            reason,
+            performedBy,
+            metadata: { retentionDays: 30 }
+        }
+    });
+
+    return { previousStatus, updated };
+}
+
+export async function restoreTenant(orgId: string, performedBy: string) {
+    const org = await prisma.organization.findUnique({
+        where: { id: orgId },
+        select: { status: true }
+    });
+
+    if (!org) throw new Error("Organization not found");
+    if (org.status !== "deactivated") throw new Error("Only deactivated tenants can be restored");
+
+    const updated = await prisma.organization.update({
+        where: { id: orgId },
+        data: {
+            status: "active",
+            deletedAt: null,
+            suspendedAt: null,
+            suspendedReason: null
+        }
+    });
+
+    await prisma.tenantLifecycleEvent.create({
+        data: {
+            organizationId: orgId,
+            fromStatus: "deactivated",
+            toStatus: "active",
+            reason: "Restored by admin",
+            performedBy
+        }
+    });
+
+    return { previousStatus: "deactivated", updated };
+}
+
 export async function requestTenantDeletion(orgId: string, reason: string, performedBy: string) {
     const org = await prisma.organization.findUnique({
         where: { id: orgId },

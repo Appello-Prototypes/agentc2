@@ -29,6 +29,8 @@ export type AdminAuditAction =
     | "TENANT_UPDATE"
     | "TENANT_SUSPEND"
     | "TENANT_REACTIVATE"
+    | "TENANT_DEACTIVATE"
+    | "TENANT_RESTORE"
     | "TENANT_DELETE_REQUEST"
     | "TENANT_PURGE"
     // User management
@@ -41,6 +43,7 @@ export type AdminAuditAction =
     | "FLAG_UPDATE"
     | "FLAG_DELETE"
     | "FLAG_OVERRIDE_SET"
+    | "FLAG_OVERRIDE_UPDATE"
     | "FLAG_OVERRIDE_REMOVE"
     // Billing
     | "PLAN_CREATE"

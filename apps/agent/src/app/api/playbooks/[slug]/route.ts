@@ -31,13 +31,24 @@ export async function GET(_request: NextRequest, { params }: Params) {
                 },
                 versions: {
                     orderBy: { version: "desc" },
-                    take: 5,
+                    take: 20,
                     select: {
                         id: true,
                         version: true,
                         changelog: true,
                         manifest: true,
                         createdAt: true
+                    }
+                },
+                bootTasks: {
+                    orderBy: { sortOrder: "asc" },
+                    select: {
+                        id: true,
+                        title: true,
+                        description: true,
+                        priority: true,
+                        tags: true,
+                        sortOrder: true
                     }
                 },
                 reviews: {

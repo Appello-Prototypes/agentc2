@@ -740,6 +740,21 @@ enum GuardrailEventType {
     FLAGGED
 }
 
+// Failure Mode Type — diagnostic taxonomy for agent evaluation failures
+// Populated by the Tier 2 auditor during AAR analysis
+enum FailureModeType {
+    TOOL_SELECTION_ERROR // Called wrong tool or unnecessary tool
+    TOOL_ARGUMENT_ERROR // Correct tool, wrong parameters
+    CONTEXT_BLINDNESS // Ignored relevant context in conversation
+    INSTRUCTION_DRIFT // Deviated from system instructions
+    HALLUCINATION // Generated unsupported claims
+    SAFETY_VIOLATION // PII leak, prompt injection, etc.
+    ROUTING_ERROR // Multi-agent: routed to wrong sub-agent
+    INCOMPLETE_RESPONSE // Stopped before task was done
+    OVER_ELABORATION // Excessive output beyond what was asked
+    LOOP_DETECTED // Repeated same action without progress
+}
+
 // Agents - Database-backed agent configurations (Mastra-aligned)
 model Agent {
     id          String  @id @default(cuid())
@@ -811,6 +826,7 @@ model Agent {
     evaluations            AgentEvaluation[]
     feedback               AgentFeedback[]
     testCases              AgentTestCase[]
+    testSuites             TestSuite[]
     testRuns               AgentTestRun[]
     conversations          AgentConversation[]
     budgetPolicy           BudgetPolicy?
@@ -1688,6 +1704,9 @@ model AgentEvaluation {
     // AAR (After Action Review) structured output
     aarJson Json? // {what_should_have_happened, what_actually_happened, why_difference, sustain[], improve[]}
 
+    // Failure mode classification — auto-populated by the Tier 2 auditor
+    failureModes Json? // FailureMode[]: [{type, evidence, severity}] — see FailureModeType enum values
+
     // Re-evaluation support (feedback-triggered)
     reEvaluatedAt      DateTime? // When this evaluation was re-assessed with human feedback
     previousScoresJson Json? // Snapshot of scores before re-evaluation
@@ -1729,6 +1748,28 @@ model AgentFeedback {
     @@map("agent_feedback")
 }
 
+// Test Suite — groups test cases for versioning and batch execution
+model TestSuite {
+    id          String   @id @default(cuid())
+    agentId     String
+    agent       Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    tenantId    String?
+    name        String
+    description String?  @db.Text
+    version     Int      @default(1)
+    tags        String[] @default([])
+    createdBy   String?
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
+
+    // Relations
+    testCases AgentTestCase[]
+
+    @@index([agentId])
+    @@index([tenantId])
+    @@map("test_suite")
+}
+
 // Agent Test Case - Stored test cases
 model AgentTestCase {
     id             String   @id @default(cuid())
@@ -1743,11 +1784,25 @@ model AgentTestCase {
     createdAt      DateTime @default(now())
     updatedAt      DateTime @updatedAt
 
+    // Test suite grouping
+    suiteId String?
+    suite   TestSuite? @relation(fields: [suiteId], references: [id], onDelete: SetNull)
+
+    // Production dataset enrichment — auto-populated when a test case is
+    // created from a production run (e.g. from a low-scoring evaluation)
+    sourceRunId  String? // The AgentRun this test case was derived from
+    sourceScore  Float? // The evaluation score of the source run
+    failureModes Json? // FailureMode[] from the source evaluation
+    grade        String? // Human annotation: "pass" | "fail" | "partial"
+    annotationId String? // Link to an external annotation/review system
+    metadata     Json? // Arbitrary metadata for extensibility
+
     // Relations
     testRuns AgentTestRun[]
 
     @@index([agentId])
     @@index([tenantId])
+    @@index([suiteId])
     @@map("agent_test_case")
 }
 
@@ -5209,6 +5264,9 @@ model Playbook {
 
     requiredIntegrations String[]
 
+    bootDocument    String? @db.Text
+    autoBootEnabled Boolean @default(false)
+
     version  Int               @default(1)
     versions PlaybookVersion[]
 
@@ -5216,6 +5274,7 @@ model Playbook {
     purchases     PlaybookPurchase[]
     installations PlaybookInstallation[]
     reviews       PlaybookReview[]
+    bootTasks     PlaybookBootTask[]
 
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
@@ -5224,6 +5283,22 @@ model Playbook {
     @@index([status, category])
     @@index([category])
     @@map("playbook")
+}
+
+model PlaybookBootTask {
+    id          String   @id @default(cuid())
+    playbookId  String
+    playbook    Playbook @relation(fields: [playbookId], references: [id], onDelete: Cascade)
+    title       String
+    description String?  @db.Text
+    priority    Int      @default(5)
+    tags        String[]
+    sortOrder   Int      @default(0)
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
+
+    @@index([playbookId])
+    @@map("playbook_boot_task")
 }
 
 model PlaybookVersion {

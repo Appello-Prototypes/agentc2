@@ -104,6 +104,20 @@ import {
     playbookDeployTool
 } from "./playbook";
 import {
+    playbookListMineTool,
+    playbookGetFullTool,
+    playbookUpdateMetadataTool,
+    playbookGetBootDocumentTool,
+    playbookSetBootDocumentTool,
+    playbookAddBootTaskTool,
+    playbookListBootTasksTool,
+    playbookUpdateBootTaskTool,
+    playbookRemoveBootTaskTool,
+    playbookPackageTool,
+    playbookSubmitReviewTool,
+    playbookSetAutoBootTool
+} from "./playbook-publisher";
+import {
     communityListBoardsTool,
     communityCreateBoardTool,
     communityJoinBoardTool,
@@ -720,6 +734,20 @@ export const toolCategoryMap: Record<string, string> = {
     "playbook-list-installed": "Marketplace",
     "playbook-deploy": "Marketplace",
 
+    // Playbook Publishing
+    "playbook-list-mine": "Playbook Publishing",
+    "playbook-get-full": "Playbook Publishing",
+    "playbook-update-metadata": "Playbook Publishing",
+    "playbook-get-boot-document": "Playbook Publishing",
+    "playbook-set-boot-document": "Playbook Publishing",
+    "playbook-add-boot-task": "Playbook Publishing",
+    "playbook-list-boot-tasks": "Playbook Publishing",
+    "playbook-update-boot-task": "Playbook Publishing",
+    "playbook-remove-boot-task": "Playbook Publishing",
+    "playbook-package": "Playbook Publishing",
+    "playbook-submit-review": "Playbook Publishing",
+    "playbook-set-auto-boot": "Playbook Publishing",
+
     // Community
     "community-list-boards": "Community",
     "community-create-board": "Community",
@@ -797,7 +825,9 @@ export const toolCategoryOrder: string[] = [
     "File Storage",
     "MoltBook",
     "BIM",
-    "Support"
+    "Support",
+    "Marketplace",
+    "Playbook Publishing"
 ];
 
 // ---------------------------------------------------------------------------
@@ -806,9 +836,21 @@ export const toolCategoryOrder: string[] = [
 
 export type ToolBehaviorType = "query" | "mutation";
 
+/**
+ * Security-relevant capability flags for lethal trifecta detection.
+ * An agent with all three flags simultaneously presents elevated risk.
+ */
+export interface ToolCapabilities {
+    reads_private_data?: boolean;
+    ingests_untrusted?: boolean;
+    external_communication?: boolean;
+    code_execution?: boolean;
+}
+
 export interface ToolBehaviorMeta {
     behavior: ToolBehaviorType;
     outputContentPath?: string;
+    capabilities?: ToolCapabilities;
 }
 
 export const toolBehaviorMap: Record<string, ToolBehaviorMeta> = {
@@ -839,10 +881,19 @@ export const toolBehaviorMap: Record<string, ToolBehaviorMeta> = {
     "backlog-complete-task": { behavior: "mutation" },
 
     // Email & Calendar
-    "gmail-send-email": { behavior: "mutation" },
+    "gmail-send-email": {
+        behavior: "mutation",
+        capabilities: { external_communication: true }
+    },
     "gmail-archive-email": { behavior: "mutation" },
-    "gmail-draft-email": { behavior: "mutation" },
-    "outlook-mail-send-email": { behavior: "mutation" },
+    "gmail-draft-email": {
+        behavior: "mutation",
+        capabilities: { external_communication: true }
+    },
+    "outlook-mail-send-email": {
+        behavior: "mutation",
+        capabilities: { external_communication: true }
+    },
     "outlook-mail-archive-email": { behavior: "mutation" },
     "google-calendar-create-event": { behavior: "mutation" },
     "google-calendar-update-event": { behavior: "mutation" },
@@ -851,8 +902,14 @@ export const toolBehaviorMap: Record<string, ToolBehaviorMeta> = {
     "outlook-calendar-update-event": { behavior: "mutation" },
 
     // Communication
-    "teams-send-channel-message": { behavior: "mutation" },
-    "teams-send-chat-message": { behavior: "mutation" },
+    "teams-send-channel-message": {
+        behavior: "mutation",
+        capabilities: { external_communication: true }
+    },
+    "teams-send-chat-message": {
+        behavior: "mutation",
+        capabilities: { external_communication: true }
+    },
 
     // Agent Management
     "agent-create": { behavior: "mutation" },
@@ -907,7 +964,10 @@ export const toolBehaviorMap: Record<string, ToolBehaviorMeta> = {
     "sidekick-delete-schedule": { behavior: "mutation" },
 
     // RAG & Knowledge
-    "rag-ingest": { behavior: "mutation" },
+    "rag-ingest": {
+        behavior: "mutation",
+        capabilities: { ingests_untrusted: true }
+    },
     "rag-document-delete": { behavior: "mutation" },
 
     // Documents
@@ -995,6 +1055,16 @@ export const toolBehaviorMap: Record<string, ToolBehaviorMeta> = {
     // Playbook Marketplace
     "playbook-deploy": { behavior: "mutation" },
 
+    // Playbook Publishing
+    "playbook-update-metadata": { behavior: "mutation" },
+    "playbook-set-boot-document": { behavior: "mutation" },
+    "playbook-add-boot-task": { behavior: "mutation", outputContentPath: "task.title" },
+    "playbook-update-boot-task": { behavior: "mutation" },
+    "playbook-remove-boot-task": { behavior: "mutation" },
+    "playbook-package": { behavior: "mutation" },
+    "playbook-submit-review": { behavior: "mutation" },
+    "playbook-set-auto-boot": { behavior: "mutation" },
+
     // YouTube
     "youtube-ingest-to-knowledge": { behavior: "mutation" },
 
@@ -1015,6 +1085,74 @@ export const toolBehaviorMap: Record<string, ToolBehaviorMeta> = {
     "pulse-add-board": { behavior: "mutation" },
     "pulse-evaluate": { behavior: "mutation" }
 };
+
+/**
+ * Detect the "lethal trifecta": an agent that simultaneously has tools that
+ * (1) read private data, (2) ingest untrusted input, AND (3) communicate externally.
+ *
+ * Returns a warning string if detected, or null if safe.
+ * This is a warn-only check — it logs but does not block.
+ */
+export function detectLethalTrifecta(
+    toolIds: string[]
+): { warning: string; flags: string[] } | null {
+    let readsPrivate = false;
+    let ingestsUntrusted = false;
+    let communicatesExternally = false;
+    const flagged: string[] = [];
+
+    for (const toolId of toolIds) {
+        const meta = toolBehaviorMap[toolId];
+        if (!meta?.capabilities) continue;
+
+        if (meta.capabilities.reads_private_data) {
+            readsPrivate = true;
+            flagged.push(`${toolId}:reads_private_data`);
+        }
+        if (meta.capabilities.ingests_untrusted) {
+            ingestsUntrusted = true;
+            flagged.push(`${toolId}:ingests_untrusted`);
+        }
+        if (meta.capabilities.external_communication) {
+            communicatesExternally = true;
+            flagged.push(`${toolId}:external_communication`);
+        }
+    }
+
+    // Also detect from MCP tool naming patterns (unlisted tools)
+    for (const toolId of toolIds) {
+        if (!toolBehaviorMap[toolId]?.capabilities) {
+            if (
+                toolId.includes("hubspot") ||
+                toolId.includes("gdrive") ||
+                toolId.includes("dropbox")
+            ) {
+                readsPrivate = true;
+                flagged.push(`${toolId}:reads_private_data(inferred)`);
+            }
+            if (toolId.includes("firecrawl") || toolId.includes("playwright")) {
+                ingestsUntrusted = true;
+                flagged.push(`${toolId}:ingests_untrusted(inferred)`);
+            }
+            if (toolId.includes("slack") || toolId.includes("justcall")) {
+                communicatesExternally = true;
+                flagged.push(`${toolId}:external_communication(inferred)`);
+            }
+        }
+    }
+
+    if (readsPrivate && ingestsUntrusted && communicatesExternally) {
+        return {
+            warning:
+                `Lethal trifecta detected: agent has tools that read private data, ` +
+                `ingest untrusted input, AND communicate externally. ` +
+                `This combination enables data exfiltration via prompt injection.`,
+            flags: flagged
+        };
+    }
+
+    return null;
+}
 
 /**
  * Credential availability checks for tools that require external API keys.
@@ -1476,6 +1614,20 @@ export const toolRegistry: Record<string, any> = {
     "playbook-detail": playbookDetailTool,
     "playbook-list-installed": playbookListInstalledTool,
     "playbook-deploy": playbookDeployTool,
+
+    // Playbook Publishing tools
+    "playbook-list-mine": playbookListMineTool,
+    "playbook-get-full": playbookGetFullTool,
+    "playbook-update-metadata": playbookUpdateMetadataTool,
+    "playbook-get-boot-document": playbookGetBootDocumentTool,
+    "playbook-set-boot-document": playbookSetBootDocumentTool,
+    "playbook-add-boot-task": playbookAddBootTaskTool,
+    "playbook-list-boot-tasks": playbookListBootTasksTool,
+    "playbook-update-boot-task": playbookUpdateBootTaskTool,
+    "playbook-remove-boot-task": playbookRemoveBootTaskTool,
+    "playbook-package": playbookPackageTool,
+    "playbook-submit-review": playbookSubmitReviewTool,
+    "playbook-set-auto-boot": playbookSetAutoBootTool,
 
     // Community tools
     "community-list-boards": communityListBoardsTool,

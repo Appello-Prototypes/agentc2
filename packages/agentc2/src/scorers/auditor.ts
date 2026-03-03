@@ -9,7 +9,7 @@ import { openai } from "@ai-sdk/openai";
 import { generateObject } from "ai";
 import { z } from "zod";
 import { prisma } from "@repo/database";
-import type { EvalContext, ScorecardCriterion, Tier2Result, AarOutput } from "./types";
+import type { EvalContext, ScorecardCriterion, Tier2Result, AarOutput, FailureMode } from "./types";
 import { DEFAULT_SCORECARD_CRITERIA, computeWeightedScore } from "./types";
 
 /**
@@ -87,7 +87,29 @@ const AuditorOutputSchema = z.object({
                 .describe("Patterns to fix")
         })
         .optional()
-        .describe("After Action Review: structured sustain/improve recommendations")
+        .describe("After Action Review: structured sustain/improve recommendations"),
+    failure_modes: z
+        .array(
+            z.object({
+                type: z.enum([
+                    "TOOL_SELECTION_ERROR",
+                    "TOOL_ARGUMENT_ERROR",
+                    "CONTEXT_BLINDNESS",
+                    "INSTRUCTION_DRIFT",
+                    "HALLUCINATION",
+                    "SAFETY_VIOLATION",
+                    "ROUTING_ERROR",
+                    "INCOMPLETE_RESPONSE",
+                    "OVER_ELABORATION",
+                    "LOOP_DETECTED"
+                ]),
+                evidence: z.string().describe("Specific trace evidence for this failure mode"),
+                severity: z.enum(["critical", "major", "minor"])
+            })
+        )
+        .describe(
+            "Classified failure modes detected in the run. Empty array if no failures detected."
+        )
 });
 
 /**
@@ -115,6 +137,23 @@ In addition to scoring each criterion, you MUST conduct a structured After Actio
 
 Every evaluation MUST have at least one sustain and one improve item, even for high-scoring runs.
 If human feedback is provided, weigh it heavily -- the human is the ground truth.
+
+## Failure Mode Classification
+
+Classify any failures observed in the trace using this taxonomy:
+- TOOL_SELECTION_ERROR: Called the wrong tool or an unnecessary tool
+- TOOL_ARGUMENT_ERROR: Correct tool, wrong parameters
+- CONTEXT_BLINDNESS: Ignored relevant context already in the conversation
+- INSTRUCTION_DRIFT: Deviated from system instructions
+- HALLUCINATION: Generated claims not supported by tool results or context
+- SAFETY_VIOLATION: PII leakage, prompt injection bypass, credential exposure
+- ROUTING_ERROR: Multi-agent: routed to wrong sub-agent
+- INCOMPLETE_RESPONSE: Stopped before the task was fully completed
+- OVER_ELABORATION: Produced excessive output beyond what was asked
+- LOOP_DETECTED: Repeated the same action without making progress
+
+For each failure mode, cite specific trace evidence and assign severity: critical (causes task failure), major (degrades quality), minor (cosmetic/suboptimal).
+Return an empty array if no failure modes are detected.
 
 OUTPUT FORMAT: JSON matching the provided schema exactly.`;
 
@@ -331,6 +370,13 @@ export async function runTier2Auditor(context: EvalContext): Promise<Tier2Result
           }
         : null;
 
+    // Build failure modes
+    const failureModes: FailureMode[] = (auditorOutput.failure_modes || []).map((fm) => ({
+        type: fm.type,
+        evidence: fm.evidence,
+        severity: fm.severity
+    }));
+
     return {
         scoresJson,
         feedbackJson,
@@ -339,6 +385,7 @@ export async function runTier2Auditor(context: EvalContext): Promise<Tier2Result
         confidenceScore: auditorOutput.confidence,
         skillAttributions,
         turnEvaluations,
-        aar
+        aar,
+        failureModes
     };
 }

@@ -22,7 +22,8 @@ import type {
     Tier1Result,
     AarOutput,
     SkillAttribution,
-    TurnEvaluation
+    TurnEvaluation,
+    FailureMode
 } from "./types";
 import { computeWeightedScore, DEFAULT_SCORECARD_CRITERIA } from "./types";
 import { runTier1Prescreen, shouldRunTier2 } from "./tier1";
@@ -65,7 +66,27 @@ const BulkAnalysisSchema = z.object({
             })
         )
         .nullable()
-        .describe("Only for multi-turn conversations if evaluateTurns is enabled")
+        .describe("Only for multi-turn conversations if evaluateTurns is enabled"),
+    failure_modes: z
+        .array(
+            z.object({
+                type: z.enum([
+                    "TOOL_SELECTION_ERROR",
+                    "TOOL_ARGUMENT_ERROR",
+                    "CONTEXT_BLINDNESS",
+                    "INSTRUCTION_DRIFT",
+                    "HALLUCINATION",
+                    "SAFETY_VIOLATION",
+                    "ROUTING_ERROR",
+                    "INCOMPLETE_RESPONSE",
+                    "OVER_ELABORATION",
+                    "LOOP_DETECTED"
+                ]),
+                evidence: z.string().describe("Specific trace evidence for this failure mode"),
+                severity: z.enum(["critical", "major", "minor"])
+            })
+        )
+        .describe("Classified failure modes detected in the run. Empty array if no failures.")
 });
 
 type BulkAnalysis = z.infer<typeof BulkAnalysisSchema>;
@@ -306,6 +327,22 @@ async function buildBulkAuditorPrompt(
         }
     }
 
+    parts.push(`## Failure Mode Classification`);
+    parts.push(
+        `Classify any failures using this taxonomy (return empty array if none):\n` +
+            `- TOOL_SELECTION_ERROR: Called wrong/unnecessary tool\n` +
+            `- TOOL_ARGUMENT_ERROR: Correct tool, wrong parameters\n` +
+            `- CONTEXT_BLINDNESS: Ignored relevant context in conversation\n` +
+            `- INSTRUCTION_DRIFT: Deviated from system instructions\n` +
+            `- HALLUCINATION: Claims not supported by tool results or context\n` +
+            `- SAFETY_VIOLATION: PII leak, prompt injection bypass, credential exposure\n` +
+            `- ROUTING_ERROR: Routed to wrong sub-agent\n` +
+            `- INCOMPLETE_RESPONSE: Stopped before task fully completed\n` +
+            `- OVER_ELABORATION: Excessive output beyond what was asked\n` +
+            `- LOOP_DETECTED: Repeated same action without progress\n\n` +
+            `Severity: critical (causes task failure), major (degrades quality), minor (suboptimal).`
+    );
+
     return parts.join("\n\n");
 }
 
@@ -439,6 +476,7 @@ export interface ScorerResults {
         confidenceScore: number;
         skillAttributions: SkillAttribution[] | null;
         turnEvaluations: TurnEvaluation[] | null;
+        failureModes: FailureMode[];
     } | null;
     prebuilt: Record<string, { score: number; reason?: string }>;
     tier: "heuristic" | "full";
@@ -565,7 +603,12 @@ export async function runAllScorers(context: EvalContext): Promise<ScorerResults
                       score: te.score,
                       feedback: te.feedback
                   }))
-                : null
+                : null,
+            failureModes: (analysis.failure_modes || []).map((fm) => ({
+                type: fm.type,
+                evidence: fm.evidence,
+                severity: fm.severity
+            }))
         },
         prebuilt: prebuiltResults,
         tier: "full"

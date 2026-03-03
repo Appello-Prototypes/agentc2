@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@repo/database";
 import { TenantEditForm } from "@/components/tenant-edit-form";
-import { TenantDeleteButton } from "@/components/tenant-delete-button";
+import { TenantLifecycleActions } from "@/components/tenant-lifecycle-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -111,18 +111,13 @@ export default async function TenantOverviewPage({
                 </dl>
             </div>
 
-            {/* Danger zone */}
+            {/* Lifecycle actions */}
             <div className="bg-card border-border rounded-lg border p-4">
-                <h2 className="mb-3 text-sm font-semibold">Danger Zone</h2>
-                <div className="flex items-center justify-between">
-                    <div>
-                        <p className="text-sm font-medium">Delete this tenant</p>
-                        <p className="text-muted-foreground text-xs">
-                            Deactivates the tenant and marks it for deletion after 30 days
-                        </p>
-                    </div>
-                    <TenantDeleteButton orgId={org.id} orgName={org.name} status={org.status} />
-                </div>
+                <h2 className="mb-1 text-sm font-semibold">Tenant Lifecycle</h2>
+                <p className="text-muted-foreground mb-3 text-xs">
+                    Manage the operational status of this tenant. All changes are logged.
+                </p>
+                <TenantLifecycleActions orgId={org.id} orgName={org.name} status={org.status} />
             </div>
         </div>
     );

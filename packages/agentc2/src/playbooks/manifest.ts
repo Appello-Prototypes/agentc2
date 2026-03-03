@@ -152,6 +152,20 @@ const campaignTemplateSnapshotSchema = z.object({
     timeoutMinutes: z.number().nullable()
 });
 
+const bootTaskTemplateSchema = z.object({
+    title: z.string(),
+    description: z.string().optional(),
+    priority: z.number(),
+    tags: z.array(z.string()),
+    sortOrder: z.number()
+});
+
+const bootConfigSchema = z.object({
+    bootDocument: z.string().optional(),
+    structuralTasks: z.array(bootTaskTemplateSchema),
+    autoBootEnabled: z.boolean()
+});
+
 export const playbookManifestSchema = z.object({
     version: z.string(),
     agents: z.array(agentSnapshotSchema),
@@ -167,7 +181,8 @@ export const playbookManifestSchema = z.object({
     entryPoint: z.object({
         type: z.enum(["agent", "workflow", "network"]),
         slug: z.string()
-    })
+    }),
+    bootConfig: bootConfigSchema.optional()
 });
 
 export function validateManifest(manifest: unknown): PlaybookManifest {

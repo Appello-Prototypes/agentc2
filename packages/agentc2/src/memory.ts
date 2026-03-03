@@ -23,10 +23,8 @@ function getMemory(): Memory {
             vector,
             embedder: new ModelRouterEmbeddingModel("openai/text-embedding-3-small"),
             options: {
-                // Automatically generate titles for threads
                 generateTitle: true,
-                // Number of recent messages to include
-                lastMessages: 10,
+                lastMessages: 40,
                 // Enable working memory for user context persistence
                 workingMemory: {
                     enabled: true,

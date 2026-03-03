@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ThemeProvider } from "@repo/ui";
 import { TimezoneProvider } from "@/lib/timezone-context";
 import { getServerTimezone } from "@/lib/timezone-server";
 
@@ -6,10 +7,10 @@ import "@/styles/globals.css";
 
 export const metadata: Metadata = {
     title: {
-        default: "Admin Portal",
-        template: "%s | Admin Portal"
+        default: "AgentC2 Admin Portal",
+        template: "%s | AgentC2 Admin"
     },
-    description: "Internal administration portal for platform management."
+    description: "AgentC2 administration portal for platform management."
 };
 
 export default async function RootLayout({
@@ -22,7 +23,14 @@ export default async function RootLayout({
     return (
         <html lang="en" suppressHydrationWarning>
             <body className="h-dvh overflow-hidden">
-                <TimezoneProvider initialTimezone={timezone}>{children}</TimezoneProvider>
+                <ThemeProvider
+                    attribute="class"
+                    defaultTheme="system"
+                    enableSystem
+                    disableTransitionOnChange
+                >
+                    <TimezoneProvider initialTimezone={timezone}>{children}</TimezoneProvider>
+                </ThemeProvider>
             </body>
         </html>
     );

@@ -22,6 +22,8 @@ export type AdminAction =
     | "tenant:update"
     | "tenant:suspend"
     | "tenant:reactivate"
+    | "tenant:deactivate"
+    | "tenant:restore"
     | "tenant:delete"
     // User management
     | "user:list"
@@ -88,6 +90,8 @@ const ACTION_MIN_ROLE: Record<AdminAction, AdminRole> = {
     "tenant:update": "platform_admin",
     "tenant:suspend": "platform_admin",
     "tenant:reactivate": "platform_admin",
+    "tenant:deactivate": "platform_admin",
+    "tenant:restore": "platform_admin",
     "tenant:delete": "super_admin",
 
     // User management

@@ -1131,7 +1131,10 @@ export const feedbackReEvaluationFunction = inngest.createFunction(
                             : undefined,
                         turnEvaluations: tier2Result.turnEvaluations
                             ? (tier2Result.turnEvaluations as unknown as Prisma.InputJsonValue)
-                            : undefined
+                            : undefined,
+                        failureModes: tier2Result.failureModes?.length
+                            ? (tier2Result.failureModes as unknown as Prisma.InputJsonValue)
+                            : ([] as unknown as Prisma.InputJsonValue)
                     }
                 });
             } else {
@@ -1149,6 +1152,9 @@ export const feedbackReEvaluationFunction = inngest.createFunction(
                         auditorModel: context.agent.scorecard?.auditorModel ?? "gpt-4o-mini",
                         aarJson: tier2Result.aar
                             ? (tier2Result.aar as unknown as Prisma.InputJsonValue)
+                            : Prisma.JsonNull,
+                        failureModes: tier2Result.failureModes?.length
+                            ? (tier2Result.failureModes as unknown as Prisma.InputJsonValue)
                             : Prisma.JsonNull
                     }
                 });
@@ -1555,6 +1561,11 @@ export const runEvaluationFunction = inngest.createFunction(
                         isFull && scorerResults.scorecard!.turnEvaluations
                             ? (scorerResults.scorecard!
                                   .turnEvaluations as unknown as Prisma.InputJsonValue)
+                            : Prisma.JsonNull,
+                    failureModes:
+                        isFull && scorerResults.scorecard!.failureModes?.length
+                            ? (scorerResults.scorecard!
+                                  .failureModes as unknown as Prisma.InputJsonValue)
                             : Prisma.JsonNull,
                     traceContextJson: {
                         toolCallCount: context.toolCalls?.length ?? 0,
@@ -9363,7 +9374,7 @@ export const playbookDeployFunction = inngest.createFunction(
         retries: 1
     },
     { event: "playbook/deploy" },
-    async ({ event }) => {
+    async ({ event, step }) => {
         const {
             installationId,
             playbookId,
@@ -9377,14 +9388,27 @@ export const playbookDeployFunction = inngest.createFunction(
         const { deployPlaybook } = await import("@repo/agentc2");
 
         try {
-            await deployPlaybook({
-                playbookId,
-                versionNumber,
-                targetOrgId,
-                targetWorkspaceId,
-                userId,
-                purchaseId: event.data.purchaseId
+            const result = await step.run("deploy-components", async () => {
+                return deployPlaybook({
+                    playbookId,
+                    versionNumber,
+                    targetOrgId,
+                    targetWorkspaceId,
+                    userId,
+                    purchaseId: event.data.purchaseId
+                });
             });
+
+            if (result?.bootMetadata?.autoBootEnabled && result?.bootMetadata?.entryAgentSlug) {
+                await step.sendEvent("emit-boot-event", {
+                    name: "playbook/boot",
+                    data: {
+                        installationId,
+                        entryAgentSlug: result.bootMetadata.entryAgentSlug,
+                        bootDocumentId: result.bootMetadata.bootDocumentId
+                    }
+                });
+            }
 
             return { success: true, installationId };
         } catch (error) {
@@ -9399,6 +9423,121 @@ export const playbookDeployFunction = inngest.createFunction(
                 }
             });
             throw error;
+        }
+    }
+);
+
+export const playbookBootFunction = inngest.createFunction(
+    {
+        id: "playbook-boot",
+        retries: 1
+    },
+    { event: "playbook/boot" },
+    async ({ event }) => {
+        const { installationId, entryAgentSlug } = event.data;
+
+        const { prisma } = await import("@repo/database");
+        const { agentResolver, buildBootPrompt } = await import("@repo/agentc2");
+
+        try {
+            const installation = await prisma.playbookInstallation.findUnique({
+                where: { id: installationId },
+                include: {
+                    playbook: { select: { name: true, slug: true } }
+                }
+            });
+
+            if (!installation || !entryAgentSlug) {
+                console.warn("[playbook/boot] Missing installation or agent slug");
+                return { success: false, reason: "missing-data" };
+            }
+
+            const hydrated = await agentResolver.resolve({ slug: entryAgentSlug });
+
+            const bootMessage = buildBootPrompt({
+                agentName: entryAgentSlug,
+                playbookName: installation.playbook.name,
+                playbookSlug: installation.playbook.slug
+            });
+
+            const result = await hydrated.agent.generate(bootMessage);
+
+            await prisma.playbookInstallation.update({
+                where: { id: installationId },
+                data: {
+                    testResults: {
+                        bootCompleted: true,
+                        bootTimestamp: new Date().toISOString(),
+                        bootSummary:
+                            typeof result.text === "string"
+                                ? result.text.slice(0, 2000)
+                                : "Boot completed"
+                    }
+                }
+            });
+
+            return { success: true, installationId };
+        } catch (error) {
+            console.error("[playbook/boot] Failed:", error);
+            await prisma.playbookInstallation.update({
+                where: { id: installationId },
+                data: {
+                    testResults: {
+                        bootCompleted: false,
+                        bootError: error instanceof Error ? error.message : "Unknown boot error"
+                    }
+                }
+            });
+            return { success: false, error: String(error) };
+        }
+    }
+);
+
+export const playbookVersionPublishedFunction = inngest.createFunction(
+    {
+        id: "playbook-version-published",
+        retries: 1
+    },
+    { event: "playbook/version-published" },
+    async ({ event }) => {
+        const { playbookId, version, changelog } = event.data;
+
+        const { prisma } = await import("@repo/database");
+
+        try {
+            const activeInstallations = await prisma.playbookInstallation.findMany({
+                where: {
+                    playbookId,
+                    status: "ACTIVE"
+                },
+                select: {
+                    id: true,
+                    targetOrgId: true,
+                    versionInstalled: true
+                }
+            });
+
+            for (const install of activeInstallations) {
+                await prisma.playbookInstallation.update({
+                    where: { id: install.id },
+                    data: {
+                        testResults: {
+                            updateAvailable: true,
+                            latestVersion: version,
+                            changelog: changelog ?? null
+                        }
+                    }
+                });
+            }
+
+            return {
+                success: true,
+                notifiedInstallations: activeInstallations.length,
+                version
+            };
+        } catch (error) {
+            console.error("[playbook/version-published] Failed:", error);
+            return { success: false, error: String(error) };
         }
     }
 );
@@ -9965,6 +10104,8 @@ export const inngestFunctions = [
     securityMonitorFunction,
     // Playbook Marketplace
     playbookDeployFunction,
+    playbookBootFunction,
+    playbookVersionPublishedFunction,
     playbookTrustScoreRecalculationFunction,
     // Community Heartbeat
     communityHeartbeatFunction,

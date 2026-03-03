@@ -10,7 +10,10 @@ import type {
     NetworkSnapshot,
     GuardrailSnapshot,
     TestCaseSnapshot,
-    ScorecardSnapshot
+    ScorecardSnapshot,
+    BootConfig,
+    BootTaskTemplate,
+    RepackageMode
 } from "./types";
 import { sanitizeManifest, detectHardcodedUrls } from "./sanitizer";
 import { validateManifest } from "./manifest";
@@ -268,6 +271,7 @@ interface ManifestBuildOptions {
     includeWorkflows?: string[];
     includeNetworks?: string[];
     organizationId: string;
+    playbookId?: string;
 }
 
 interface ManifestBuildResult {
@@ -410,6 +414,31 @@ async function buildManifest(opts: ManifestBuildOptions): Promise<ManifestBuildR
         .filter((a) => a.scorecard)
         .map((a) => a.scorecard!);
 
+    let bootConfig: BootConfig | undefined;
+    if (opts.playbookId) {
+        const playbook = await prisma.playbook.findUnique({
+            where: { id: opts.playbookId },
+            select: { bootDocument: true, autoBootEnabled: true }
+        });
+        const bootTasks = await prisma.playbookBootTask.findMany({
+            where: { playbookId: opts.playbookId },
+            orderBy: { sortOrder: "asc" }
+        });
+        bootConfig = {
+            bootDocument: playbook?.bootDocument ?? undefined,
+            structuralTasks: bootTasks.map(
+                (t): BootTaskTemplate => ({
+                    title: t.title,
+                    description: t.description ?? undefined,
+                    priority: t.priority,
+                    tags: t.tags,
+                    sortOrder: t.sortOrder
+                })
+            ),
+            autoBootEnabled: playbook?.autoBootEnabled ?? false
+        };
+    }
+
     const rawManifest: PlaybookManifest = {
         version: "1.0",
         agents: allAgentSnapshots,
@@ -422,7 +451,8 @@ async function buildManifest(opts: ManifestBuildOptions): Promise<ManifestBuildR
         testCases: allTestCases,
         scorecards: allScorecards,
         requiredIntegrations: Array.from(requiredIntegrations),
-        entryPoint: entryPoint!
+        entryPoint: entryPoint!,
+        bootConfig
     };
 
     const { manifest: sanitizedManifest, warnings: sanitizeWarnings } = sanitizeManifest(
@@ -589,17 +619,73 @@ export interface RepackagePlaybookOptions {
     includeNetworks?: string[];
     organizationId: string;
     userId: string;
+    changelog?: string;
+    mode?: RepackageMode;
 }
 
 export async function repackagePlaybook(opts: RepackagePlaybookOptions) {
-    const { manifest, warnings, requiredIntegrations, processedAgentIds, processedSkillIds } =
-        await buildManifest(opts);
+    const mode = opts.mode ?? "full";
+
+    const latestVersion = await prisma.playbookVersion.findFirst({
+        where: { playbookId: opts.playbookId },
+        orderBy: { version: "desc" }
+    });
+    const previousManifest = latestVersion?.manifest
+        ? (latestVersion.manifest as unknown as PlaybookManifest)
+        : null;
+
+    let manifest: PlaybookManifest;
+    let warnings: string[] = [];
+    let requiredIntegrations: string[] = [];
+    let processedAgentIds = new Set<string>();
+    let processedSkillIds = new Set<string>();
+
+    if (mode === "boot-only" && previousManifest) {
+        // Keep components from previous version, only update bootConfig
+        const playbook = await prisma.playbook.findUnique({
+            where: { id: opts.playbookId },
+            select: { bootDocument: true, autoBootEnabled: true }
+        });
+        const bootTasks = await prisma.playbookBootTask.findMany({
+            where: { playbookId: opts.playbookId },
+            orderBy: { sortOrder: "asc" }
+        });
+        manifest = {
+            ...previousManifest,
+            bootConfig: {
+                bootDocument: playbook?.bootDocument ?? undefined,
+                structuralTasks: bootTasks.map(
+                    (t): BootTaskTemplate => ({
+                        title: t.title,
+                        description: t.description ?? undefined,
+                        priority: t.priority,
+                        tags: t.tags,
+                        sortOrder: t.sortOrder
+                    })
+                ),
+                autoBootEnabled: playbook?.autoBootEnabled ?? false
+            }
+        };
+        requiredIntegrations = previousManifest.requiredIntegrations;
+    } else if (mode === "components-only" && previousManifest) {
+        // Re-snapshot components but preserve bootConfig
+        const result = await buildManifest({ ...opts, playbookId: opts.playbookId });
+        manifest = { ...result.manifest, bootConfig: previousManifest.bootConfig };
+        warnings = result.warnings;
+        requiredIntegrations = result.requiredIntegrations;
+        processedAgentIds = result.processedAgentIds;
+        processedSkillIds = result.processedSkillIds;
+    } else {
+        // Full re-snapshot (default)
+        const result = await buildManifest({ ...opts, playbookId: opts.playbookId });
+        manifest = result.manifest;
+        warnings = result.warnings;
+        requiredIntegrations = result.requiredIntegrations;
+        processedAgentIds = result.processedAgentIds;
+        processedSkillIds = result.processedSkillIds;
+    }
 
     const playbook = await prisma.$transaction(async (tx) => {
-        const latestVersion = await tx.playbookVersion.findFirst({
-            where: { playbookId: opts.playbookId },
-            orderBy: { version: "desc" }
-        });
         const nextVersion = (latestVersion?.version ?? 0) + 1;
 
         await tx.playbookVersion.create({
@@ -607,20 +693,23 @@ export async function repackagePlaybook(opts: RepackagePlaybookOptions) {
                 playbookId: opts.playbookId,
                 version: nextVersion,
                 manifest: manifest as unknown as Record<string, unknown>,
+                changelog: opts.changelog ?? null,
                 createdBy: opts.userId
             }
         });
 
-        await tx.playbookComponent.deleteMany({ where: { playbookId: opts.playbookId } });
+        if (mode !== "boot-only") {
+            await tx.playbookComponent.deleteMany({ where: { playbookId: opts.playbookId } });
 
-        const componentData = buildComponentData(
-            opts.playbookId,
-            manifest,
-            processedAgentIds,
-            processedSkillIds
-        );
-        if (componentData.length > 0) {
-            await tx.playbookComponent.createMany({ data: componentData });
+            const componentData = buildComponentData(
+                opts.playbookId,
+                manifest,
+                processedAgentIds,
+                processedSkillIds
+            );
+            if (componentData.length > 0) {
+                await tx.playbookComponent.createMany({ data: componentData });
+            }
         }
 
         const pb = await tx.playbook.update({

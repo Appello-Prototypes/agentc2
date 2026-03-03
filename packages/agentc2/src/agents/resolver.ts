@@ -17,9 +17,16 @@ import {
     getToolsByNamesAsync,
     getAllMcpTools,
     toolRegistry,
-    toolCredentialChecks
+    toolCredentialChecks,
+    detectLethalTrifecta
 } from "../tools/registry";
 import { TOOL_OAUTH_REQUIREMENTS } from "../tools/oauth-requirements";
+import { TokenLimiter, ToolCallFilter } from "@mastra/core/processors";
+import { wrapToolsWithPermissionGuard } from "../security/tool-execution-guard";
+import {
+    createInputGuardrailProcessor,
+    createOutputGuardrailProcessor
+} from "../processors/guardrail-processors";
 
 import { getThreadSkillState } from "../skills/thread-state";
 import { recordActivity } from "../activity/service";
@@ -824,9 +831,54 @@ export class AgentResolver {
             model = resolvedModel ?? `${record.modelProvider}/${modelName}`;
         }
 
+        // --- Tool Permission Guard ---
+        // Wrap each tool's execute() with checkToolPermission + checkEgressPermission
+        if (Object.keys(tools).length > 0) {
+            const guardResult = wrapToolsWithPermissionGuard(
+                tools,
+                record.id,
+                organizationId || undefined
+            );
+            if (guardResult.toolsGuarded > 0) {
+                console.log(
+                    `[AgentResolver] Permission guard applied to ${guardResult.toolsGuarded} tools for "${record.slug}"`
+                );
+            }
+
+            // Lethal trifecta detection (warn only)
+            const trifecta = detectLethalTrifecta(Object.keys(tools));
+            if (trifecta) {
+                console.warn(
+                    `[AgentResolver] SECURITY WARNING for "${record.slug}": ${trifecta.warning}\n` +
+                        `  Flagged tools: ${trifecta.flags.join(", ")}`
+                );
+                recordActivity({
+                    type: "ALERT_RAISED",
+                    agentId: record.id,
+                    agentSlug: record.slug,
+                    summary: `Lethal trifecta detected: ${record.slug}`,
+                    detail: trifecta.warning,
+                    status: "warning",
+                    source: "security",
+                    tenantId: record.tenantId || undefined,
+                    metadata: { flags: trifecta.flags }
+                });
+            }
+        }
+
         const defaultOptions = this.buildDefaultOptions(record);
 
         const workflows = this.loadWorkflows(record.workflows);
+
+        // --- Mastra Processors ---
+        // Wire guardrail processors + memory processors at the Agent level
+        const tenantId = organizationId || record.tenantId || undefined;
+        const inputProcessors = [createInputGuardrailProcessor(record.id, tenantId)];
+        const outputProcessors = [
+            createOutputGuardrailProcessor(record.id, tenantId),
+            new ToolCallFilter(),
+            new TokenLimiter(12_000)
+        ];
 
         // Create agent - using any to bypass strict typing issues with Mastra's Agent constructor
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -834,7 +886,9 @@ export class AgentResolver {
             id: record.id,
             name: record.name,
             instructions: finalInstructions,
-            model
+            model,
+            inputProcessors,
+            outputProcessors
         };
 
         // Add optional fields

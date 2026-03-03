@@ -223,21 +223,29 @@ export async function deployPlaybook(opts: DeployPlaybookOptions) {
             });
             createdAgentIds.push(agent.id);
 
-            // Seed backlog tasks from snapshot
-            if (agentSnapshot.backlogTasks && agentSnapshot.backlogTasks.length > 0) {
+            // Seed backlog tasks: prefer bootConfig.structuralTasks, fall back to legacy snapshot
+            const bootTasks = manifest.bootConfig?.structuralTasks ?? [];
+            const legacyTasks = agentSnapshot.backlogTasks ?? [];
+            const tasksToSeed = bootTasks.length > 0 ? bootTasks : legacyTasks;
+
+            if (tasksToSeed.length > 0) {
                 const backlog = await prisma.backlog.create({
                     data: { agentId: agent.id }
                 });
-                for (const task of agentSnapshot.backlogTasks) {
+                for (const task of tasksToSeed) {
                     await prisma.backlogTask.create({
                         data: {
                             backlogId: backlog.id,
                             title: task.title,
-                            description: task.description,
+                            description:
+                                task.description ?? ("status" in task ? undefined : undefined),
                             priority: task.priority,
-                            status: (task.status as "PENDING" | "IN_PROGRESS") ?? "PENDING",
+                            status: "PENDING",
                             tags: task.tags,
-                            contextJson: jsonOrUndefined(task.metadata)
+                            contextJson:
+                                "metadata" in task
+                                    ? jsonOrUndefined((task as { metadata?: unknown }).metadata)
+                                    : undefined
                         }
                     });
                 }
@@ -398,6 +406,38 @@ export async function deployPlaybook(opts: DeployPlaybookOptions) {
             createdCampaignIds.push(campaign.id);
         }
 
+        // 7. Create boot document and embed into RAG
+        let bootDocumentId: string | undefined;
+        if (manifest.bootConfig?.bootDocument) {
+            const bootDocSlug = resolveSlug("boot-runbook", existingDocSlugs);
+            existingDocSlugs.add(bootDocSlug);
+            const bootDoc = await prisma.document.create({
+                data: {
+                    slug: bootDocSlug,
+                    name: `Boot Runbook - ${playbook.name}`,
+                    description: `Boot runbook for playbook: ${playbook.name}`,
+                    content: manifest.bootConfig.bootDocument,
+                    contentType: "text/markdown",
+                    category: "boot-runbook",
+                    tags: ["playbook-boot", playbook.slug],
+                    workspaceId: opts.targetWorkspaceId,
+                    organizationId: opts.targetOrgId,
+                    version: 1
+                }
+            });
+            createdDocumentIds.push(bootDoc.id);
+            bootDocumentId = bootDoc.id;
+
+            try {
+                await reembedDocument(bootDoc.id);
+            } catch (embedError) {
+                console.warn(
+                    `[deployPlaybook] Failed to embed boot doc ${bootDocSlug}:`,
+                    embedError
+                );
+            }
+        }
+
         await prisma.playbookInstallation.update({
             where: { id: installation.id },
             data: {
@@ -416,7 +456,19 @@ export async function deployPlaybook(opts: DeployPlaybookOptions) {
             data: { installCount: { increment: 1 } }
         });
 
-        return installation;
+        const entryAgentSlug =
+            manifest.entryPoint.type === "agent"
+                ? (agentSlugMap.get(manifest.entryPoint.slug) ?? manifest.entryPoint.slug)
+                : undefined;
+
+        return {
+            ...installation,
+            bootMetadata: {
+                autoBootEnabled: manifest.bootConfig?.autoBootEnabled ?? false,
+                entryAgentSlug,
+                bootDocumentId
+            }
+        };
     } catch (error) {
         await prisma.playbookInstallation.update({
             where: { id: installation.id },

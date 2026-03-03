@@ -419,6 +419,20 @@ export const inngest = new Inngest({
                 purchaseId?: string;
             };
         };
+        "playbook/boot": {
+            data: {
+                installationId: string;
+                entryAgentSlug: string;
+                bootDocumentId?: string;
+            };
+        };
+        "playbook/version-published": {
+            data: {
+                playbookId: string;
+                version: number;
+                changelog?: string;
+            };
+        };
         // Community Heartbeat Events
         "community/heartbeat.agent": {
             data: {

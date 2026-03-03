@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { MoreHorizontal, Eye, Pause, Play, Loader2 } from "lucide-react";
+import { MoreHorizontal, Eye, Pause, Play, Power, RotateCcw, Loader2 } from "lucide-react";
 
 interface TenantRowActionsProps {
     orgId: string;
@@ -14,33 +14,23 @@ export function TenantRowActions({ orgId, orgSlug, status }: TenantRowActionsPro
     const router = useRouter();
     const [open, setOpen] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [confirmAction, setConfirmAction] = useState<string | null>(null);
 
-    const canSuspend = status === "active" || status === "trial";
+    const canSuspend = status === "active" || status === "trial" || status === "past_due";
     const canReactivate = status === "suspended";
+    const canDeactivate = status !== "deactivated";
+    const canRestore = status === "deactivated";
 
-    const handleSuspend = async () => {
+    const executeAction = async (endpoint: string) => {
         setOpen(false);
+        setConfirmAction(null);
         setLoading(true);
         try {
-            const res = await fetch(`/admin/api/tenants/${orgId}/suspend`, {
+            const res = await fetch(`/admin/api/tenants/${orgId}/${endpoint}`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ reason: "Suspended via admin tenants list" })
-            });
-            if (res.ok) router.refresh();
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleReactivate = async () => {
-        setOpen(false);
-        setLoading(true);
-        try {
-            const res = await fetch(`/admin/api/tenants/${orgId}/reactivate`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({})
+                body: JSON.stringify({ reason: `Via admin tenants list` }),
+                credentials: "include"
             });
             if (res.ok) router.refresh();
         } finally {
@@ -78,11 +68,11 @@ export function TenantRowActions({ orgId, orgSlug, status }: TenantRowActionsPro
                             <>
                                 <div className="border-border my-1 border-t" />
                                 <button
-                                    onClick={handleSuspend}
-                                    className="hover:bg-accent flex w-full items-center gap-2 px-3 py-2 text-xs text-red-600 dark:text-red-400"
+                                    onClick={() => executeAction("suspend")}
+                                    className="hover:bg-accent flex w-full items-center gap-2 px-3 py-2 text-xs text-yellow-600 dark:text-yellow-400"
                                 >
                                     <Pause className="h-3.5 w-3.5" />
-                                    Suspend Tenant
+                                    Suspend
                                 </button>
                             </>
                         )}
@@ -91,12 +81,60 @@ export function TenantRowActions({ orgId, orgSlug, status }: TenantRowActionsPro
                             <>
                                 <div className="border-border my-1 border-t" />
                                 <button
-                                    onClick={handleReactivate}
+                                    onClick={() => executeAction("reactivate")}
                                     className="hover:bg-accent flex w-full items-center gap-2 px-3 py-2 text-xs text-green-600 dark:text-green-400"
                                 >
                                     <Play className="h-3.5 w-3.5" />
-                                    Reactivate Tenant
+                                    Reactivate
                                 </button>
+                            </>
+                        )}
+
+                        {canRestore && (
+                            <>
+                                <div className="border-border my-1 border-t" />
+                                <button
+                                    onClick={() => executeAction("restore")}
+                                    className="hover:bg-accent flex w-full items-center gap-2 px-3 py-2 text-xs text-blue-600 dark:text-blue-400"
+                                >
+                                    <RotateCcw className="h-3.5 w-3.5" />
+                                    Restore
+                                </button>
+                            </>
+                        )}
+
+                        {canDeactivate && (
+                            <>
+                                <div className="border-border my-1 border-t" />
+                                {confirmAction === "deactivate" ? (
+                                    <div className="space-y-1 px-3 py-2">
+                                        <p className="text-xs font-medium text-red-600 dark:text-red-400">
+                                            Confirm deactivation?
+                                        </p>
+                                        <div className="flex gap-1">
+                                            <button
+                                                onClick={() => executeAction("deactivate")}
+                                                className="rounded bg-red-600 px-2 py-1 text-xs text-white hover:bg-red-700"
+                                            >
+                                                Yes
+                                            </button>
+                                            <button
+                                                onClick={() => setConfirmAction(null)}
+                                                className="hover:bg-accent rounded px-2 py-1 text-xs"
+                                            >
+                                                No
+                                            </button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <button
+                                        onClick={() => setConfirmAction("deactivate")}
+                                        className="hover:bg-accent flex w-full items-center gap-2 px-3 py-2 text-xs text-red-600 dark:text-red-400"
+                                    >
+                                        <Power className="h-3.5 w-3.5" />
+                                        Deactivate
+                                    </button>
+                                )}
                             </>
                         )}
                     </div>

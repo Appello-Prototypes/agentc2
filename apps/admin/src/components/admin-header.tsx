@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { LogOut, Globe } from "lucide-react";
 import { useTimezone } from "@/lib/timezone-context";
 import { TIMEZONE_OPTIONS } from "@/lib/timezone";
+import { ThemeToggle } from "./theme-toggle";
 
 export function AdminHeader({ adminName, adminRole }: { adminName?: string; adminRole?: string }) {
     const router = useRouter();
@@ -19,7 +20,7 @@ export function AdminHeader({ adminName, adminRole }: { adminName?: string; admi
 
     return (
         <header className="bg-card border-border flex h-14 items-center justify-between border-b px-6">
-            <div className="text-muted-foreground text-sm">Admin Console</div>
+            <div className="text-muted-foreground text-sm">AgentC2 Admin Portal</div>
             <div className="flex items-center gap-4">
                 <div className="flex items-center gap-1.5">
                     <Globe className="text-muted-foreground h-3.5 w-3.5" />
@@ -45,6 +46,7 @@ export function AdminHeader({ adminName, adminRole }: { adminName?: string; admi
                         )}
                     </span>
                 )}
+                <ThemeToggle />
                 <button
                     onClick={handleLogout}
                     className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-sm transition-colors"

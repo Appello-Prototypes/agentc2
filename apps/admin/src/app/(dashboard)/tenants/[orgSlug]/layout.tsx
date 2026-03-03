@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@repo/database";
 import { Users, Bot, Plug, BarChart3, FileText, Flag, History, CreditCard } from "lucide-react";
+import { DeactivatedBanner } from "@/components/deactivated-banner";
 
 export default async function TenantDetailLayout({
     children,
@@ -14,7 +15,7 @@ export default async function TenantDetailLayout({
 
     const org = await prisma.organization.findUnique({
         where: { slug: orgSlug },
-        select: { id: true, name: true, slug: true, status: true }
+        select: { id: true, name: true, slug: true, status: true, deletedAt: true }
     });
 
     if (!org) {
@@ -41,8 +42,23 @@ export default async function TenantDetailLayout({
         { href: `/tenants/${orgSlug}/lifecycle`, label: "Lifecycle", icon: History }
     ];
 
+    const purgeDate =
+        org.status === "deactivated" && org.deletedAt
+            ? new Date(org.deletedAt.getTime() + 30 * 24 * 60 * 60 * 1000)
+            : null;
+
     return (
         <div className="space-y-4">
+            {/* Deactivated banner */}
+            {org.status === "deactivated" && (
+                <DeactivatedBanner
+                    orgId={org.id}
+                    orgName={org.name}
+                    deletedAt={org.deletedAt?.toISOString() ?? null}
+                    purgeDate={purgeDate?.toISOString() ?? null}
+                />
+            )}
+
             {/* Tenant context bar */}
             <div className="flex items-center gap-3">
                 <Link

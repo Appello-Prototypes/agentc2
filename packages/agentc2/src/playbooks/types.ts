@@ -149,6 +149,22 @@ export interface CampaignTemplateSnapshot {
     timeoutMinutes: number | null;
 }
 
+export interface BootTaskTemplate {
+    title: string;
+    description?: string;
+    priority: number;
+    tags: string[];
+    sortOrder: number;
+}
+
+export interface BootConfig {
+    bootDocument?: string;
+    structuralTasks: BootTaskTemplate[];
+    autoBootEnabled: boolean;
+}
+
+export type RepackageMode = "full" | "components-only" | "boot-only";
+
 export interface PlaybookManifest {
     version: string;
     agents: AgentSnapshot[];
@@ -162,6 +178,7 @@ export interface PlaybookManifest {
     scorecards: ScorecardSnapshot[];
     requiredIntegrations: string[];
     entryPoint: { type: "agent" | "workflow" | "network"; slug: string };
+    bootConfig?: BootConfig;
 }
 
 export interface PackagePlaybookOptions {

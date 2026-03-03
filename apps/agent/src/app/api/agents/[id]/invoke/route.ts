@@ -197,14 +197,40 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             );
         }
 
-        // Check policies
+        // Approval queue: instead of hard-blocking, create an ApprovalRequest
+        // and return 202 so the caller can poll for the decision.
         if (record.requiresApproval) {
+            const approval = await prisma.approvalRequest.create({
+                data: {
+                    organizationId: authResult.context.organizationId,
+                    workspaceId: record.workspaceId,
+                    agentId: record.id,
+                    sourceType: "invoke",
+                    sourceId: idempotencyKey || undefined,
+                    requestedBy: authResult.context.userId,
+                    status: "pending",
+                    payloadJson: {
+                        input,
+                        context,
+                        mode,
+                        maxStepsOverride,
+                        timeout,
+                        triggerId,
+                        instanceId: body.instanceId
+                    }
+                }
+            });
+
             return NextResponse.json(
                 {
-                    success: false,
-                    error: "Agent requires approval for invocation"
+                    success: true,
+                    status: "pending_approval",
+                    approval_id: approval.id,
+                    message:
+                        "This agent requires approval before invocation. Your request has been queued.",
+                    poll_url: `/api/approvals/${approval.id}`
                 },
-                { status: 403 }
+                { status: 202 }
             );
         }
 

@@ -116,6 +116,8 @@ export type {
     SkillAttribution,
     TurnEvaluation,
     AarOutput,
+    FailureMode,
+    FailureModeType,
     ScorecardTemplateDefinition,
     ScorerResults
 } from "./scorers";
@@ -149,7 +151,7 @@ export {
     getAllMcpTools,
     invalidateMcpToolsCacheForOrg
 } from "./tools";
-export type { ToolInfo, ToolBehaviorType, ToolBehaviorMeta } from "./tools";
+export type { ToolInfo, ToolBehaviorType, ToolBehaviorMeta, ToolCapabilities } from "./tools";
 
 // Outlook Mail tools
 export {
@@ -493,7 +495,8 @@ export {
     isValidManifest,
     playbookManifestSchema,
     mapIntegrations,
-    deployStarterKit
+    deployStarterKit,
+    buildBootPrompt
 } from "./playbooks";
 export type {
     PlaybookManifest,
@@ -508,7 +511,10 @@ export type {
     GuardrailSnapshot,
     TestCaseSnapshot,
     ScorecardSnapshot,
-    IntegrationMapping
+    IntegrationMapping,
+    BootTaskTemplate,
+    BootConfig,
+    RepackageMode
 } from "./playbooks";
 
 // Re-export useful types from @mastra/core
