@@ -91,7 +91,7 @@ export function AgentInspector({ config, onChange }: AgentInspectorProps) {
                 <Input
                     type="number"
                     min={1}
-                    max={50}
+                    max={500}
                     value={maxSteps}
                     onChange={(e) =>
                         onChange({ ...config, maxSteps: parseInt(e.target.value) || 10 })

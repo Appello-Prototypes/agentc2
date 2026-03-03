@@ -28,17 +28,104 @@ export const modelConfigSchema: JsonSchema = {
                 }
             ]
         },
+        anthropic: {
+            type: "object",
+            description:
+                "Anthropic-specific provider options (claude-sonnet-4-6, claude-opus-4-6, etc.)",
+            properties: {
+                thinking: {
+                    type: "object",
+                    properties: {
+                        type: { type: "string", enum: ["enabled", "adaptive", "disabled"] },
+                        budgetTokens: { type: "number" }
+                    }
+                },
+                effort: { type: "string", enum: ["max", "high", "medium", "low"] },
+                speed: { type: "string", enum: ["fast", "standard"] },
+                cacheControl: {
+                    type: "object",
+                    properties: {
+                        type: { type: "string", enum: ["ephemeral"] },
+                        ttl: { type: "string" }
+                    }
+                },
+                sendReasoning: { type: "boolean" },
+                contextManagement: {
+                    type: "object",
+                    description:
+                        "Context management for automatic context window management. Uses AI SDK types: clear_01 and compact_20260112.",
+                    properties: {
+                        edits: {
+                            type: "array",
+                            items: {
+                                type: "object",
+                                properties: {
+                                    type: {
+                                        type: "string",
+                                        enum: ["clear_01", "compact_20260112"]
+                                    },
+                                    trigger: {
+                                        type: "object",
+                                        properties: {
+                                            type: { type: "string", enum: ["input_tokens"] },
+                                            value: { type: "number" }
+                                        }
+                                    },
+                                    keep: {
+                                        oneOf: [
+                                            {
+                                                type: "object",
+                                                properties: {
+                                                    type: {
+                                                        type: "string",
+                                                        enum: ["thinking_turns"]
+                                                    },
+                                                    value: { type: "number" }
+                                                }
+                                            },
+                                            { type: "string", enum: ["all"] }
+                                        ]
+                                    },
+                                    instructions: { type: "string" }
+                                },
+                                required: ["type"]
+                            }
+                        }
+                    }
+                }
+            },
+            additionalProperties: true
+        },
+        openai: {
+            type: "object",
+            description: "OpenAI-specific provider options (gpt-4o, o3, o4-mini, etc.)",
+            properties: {
+                parallelToolCalls: { type: "boolean" },
+                reasoningEffort: { type: "string", enum: ["low", "medium", "high"] },
+                structuredOutputMode: { type: "string", enum: ["auto", "strict", "compatible"] }
+            },
+            additionalProperties: true
+        },
         thinking: {
             type: "object",
+            description: "(Deprecated) Use anthropic.thinking instead",
             properties: {
                 type: { type: "string", enum: ["enabled", "disabled"] },
                 budget_tokens: { type: "number" }
             }
         },
-        parallelToolCalls: { type: "boolean" },
-        reasoningEffort: { type: "string", enum: ["low", "medium", "high"] },
+        parallelToolCalls: {
+            type: "boolean",
+            description: "(Deprecated) Use openai.parallelToolCalls instead"
+        },
+        reasoningEffort: {
+            type: "string",
+            enum: ["low", "medium", "high"],
+            description: "(Deprecated) Use openai.reasoningEffort instead"
+        },
         cacheControl: {
             type: "object",
+            description: "(Deprecated) Use anthropic.cacheControl instead",
             properties: { type: { type: "string", enum: ["ephemeral"] } }
         }
     },
@@ -132,8 +219,23 @@ export const agentCreateInputSchema: JsonSchema = {
         temperature: { type: "number" },
         maxTokens: { type: "number" },
         modelConfig: modelConfigSchema,
-        extendedThinking: { type: "boolean" },
-        thinkingBudget: { type: "number" },
+        extendedThinking: {
+            type: "boolean",
+            description: "(Deprecated) Use adaptiveThinking for Sonnet 4.6/Opus 4.6"
+        },
+        thinkingBudget: {
+            type: "number",
+            description: "(Deprecated) Only used with extendedThinking"
+        },
+        adaptiveThinking: {
+            type: "boolean",
+            description: "Enable Anthropic adaptive thinking (recommended for Sonnet 4.6/Opus 4.6)"
+        },
+        thinkingEffort: {
+            type: "string",
+            enum: ["max", "high", "medium", "low"],
+            description: "Anthropic thinking effort level (used with adaptiveThinking)"
+        },
         parallelToolCalls: { type: "boolean" },
         reasoningEffort: { type: "string", enum: ["low", "medium", "high"] },
         cacheControl: { type: "boolean" },

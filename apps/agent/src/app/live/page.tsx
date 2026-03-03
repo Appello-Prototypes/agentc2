@@ -270,6 +270,7 @@ export function LiveRunsContent() {
     const [runCounts, setRunCounts] = useState<RunCounts | null>(null);
     const [runsLoading, setRunsLoading] = useState(false);
     const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
+    const [fetchError, setFetchError] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState("");
     const [kindFilter, setKindFilter] = useState("all");
     const [sourceFilter, setSourceFilter] = useState("all");
@@ -334,6 +335,11 @@ export function LiveRunsContent() {
                 params.set("to", rangeTo.toISOString());
             }
             const res = await fetch(`${getApiBase()}/api/live/metrics?${params.toString()}`);
+            if (!res.ok) {
+                console.error(`[LiveMetrics] API returned ${res.status}`);
+                setFetchError(`Metrics API returned ${res.status}`);
+                return;
+            }
             const data = await res.json();
             if (data.success) {
                 setMetrics(data);
@@ -379,8 +385,16 @@ export function LiveRunsContent() {
                 params.set("to", rangeTo.toISOString());
             }
             const res = await fetch(`${getApiBase()}/api/live/runs?${params.toString()}`);
+            if (!res.ok) {
+                const errBody = await res.text().catch(() => "");
+                const msg = `Runs API returned ${res.status}: ${errBody.slice(0, 200)}`;
+                console.error("[LiveRuns]", msg);
+                setFetchError(msg);
+                return;
+            }
             const data = await res.json();
             if (data.success) {
+                setFetchError(null);
                 setRuns(data.runs);
                 setRunCounts(data.counts);
                 setLastUpdatedAt(new Date());
@@ -393,9 +407,13 @@ export function LiveRunsContent() {
                 if (data.counts) {
                     setTotalFilteredCount(data.counts.total ?? 0);
                 }
+            } else {
+                setFetchError(data.error || "API returned success: false");
             }
         } catch (error) {
-            console.error("Failed to fetch runs:", error);
+            const msg = error instanceof Error ? error.message : String(error);
+            console.error("Failed to fetch runs:", msg);
+            setFetchError(msg);
         } finally {
             setRunsLoading(false);
         }
@@ -1240,12 +1258,26 @@ export function LiveRunsContent() {
                             </div>
                         ) : runs.length === 0 ? (
                             <div className="py-12 text-center">
-                                <p className="text-muted-foreground text-lg">
-                                    No runs match the current filters
-                                </p>
-                                <p className="text-muted-foreground mt-2 text-sm">
-                                    Adjust filters or broaden the time range to see more runs
-                                </p>
+                                {fetchError ? (
+                                    <>
+                                        <p className="text-destructive text-lg">
+                                            Failed to load runs
+                                        </p>
+                                        <p className="text-destructive/70 mx-auto mt-2 max-w-md font-mono text-xs wrap-break-word">
+                                            {fetchError}
+                                        </p>
+                                    </>
+                                ) : (
+                                    <>
+                                        <p className="text-muted-foreground text-lg">
+                                            No runs match the current filters
+                                        </p>
+                                        <p className="text-muted-foreground mt-2 text-sm">
+                                            Adjust filters or broaden the time range to see more
+                                            runs
+                                        </p>
+                                    </>
+                                )}
                             </div>
                         ) : (
                             <>
@@ -1669,6 +1701,7 @@ export function ObservabilityDashboard() {
     const [agentBreakdown, setAgentBreakdown] = useState<AgentBreakdownRow[]>([]);
     const [timeRange, setTimeRange] = useState("30d");
     const [runTypeFilter, setRunTypeFilter] = useState("PROD");
+    const [dashboardError, setDashboardError] = useState<string | null>(null);
 
     const { from: rangeFrom, to: rangeTo } = useMemo(() => {
         return getDateRange(timeRange);
@@ -1706,9 +1739,17 @@ export function ObservabilityDashboard() {
                 fetch(`${getApiBase()}/api/live/filters?${params.toString()}`),
                 fetch(`${getApiBase()}/api/live/metrics/timeseries?${tsParams.toString()}`)
             ]);
+            if (!metricsRes.ok || !filtersRes.ok || !tsRes.ok) {
+                const statuses = [metricsRes.status, filtersRes.status, tsRes.status];
+                const msg = `Dashboard APIs returned: metrics=${statuses[0]}, filters=${statuses[1]}, timeseries=${statuses[2]}`;
+                console.error("[Dashboard]", msg);
+                setDashboardError(msg);
+                return;
+            }
             const metricsData = await metricsRes.json();
             const filtersData = await filtersRes.json();
             const tsData = await tsRes.json();
+            setDashboardError(null);
             if (metricsData.success) setMetrics(metricsData);
             if (filtersData.success) setFilters(filtersData.filters);
             if (tsData.success) {
@@ -1716,7 +1757,9 @@ export function ObservabilityDashboard() {
                 setAgentBreakdown(tsData.agentBreakdown || []);
             }
         } catch (error) {
-            console.error("Failed to fetch dashboard data:", error);
+            const msg = error instanceof Error ? error.message : String(error);
+            console.error("Failed to fetch dashboard data:", msg);
+            setDashboardError(msg);
         }
     }, [runTypeFilter, rangeFrom, rangeTo, bucketCount]);
 
@@ -1782,6 +1825,16 @@ export function ObservabilityDashboard() {
 
     return (
         <div className="space-y-6">
+            {dashboardError && (
+                <div className="border-destructive/50 bg-destructive/10 rounded-md border px-4 py-3">
+                    <p className="text-destructive text-sm font-medium">
+                        Failed to load dashboard data
+                    </p>
+                    <p className="text-destructive/70 mt-1 font-mono text-xs wrap-break-word">
+                        {dashboardError}
+                    </p>
+                </div>
+            )}
             {/* Controls */}
             <div className="flex items-center gap-3">
                 <Select value={timeRange} onValueChange={(v) => v && setTimeRange(v)}>

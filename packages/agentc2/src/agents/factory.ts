@@ -18,6 +18,7 @@ import {
     getAvailableModelsAsync as registryGetAvailableModelsAsync
 } from "./model-registry";
 import type { RequestContext } from "./resolver";
+import type { ModelConfig, AnthropicProviderConfig } from "./model-config-types";
 
 /**
  * Memory configuration from database
@@ -36,22 +37,8 @@ export interface MemoryConfig {
     };
 }
 
-/**
- * Model configuration from database
- */
-export interface ModelConfig {
-    reasoning?: { type: "enabled" | "disabled" };
-    toolChoice?: "auto" | "required" | "none" | { type: "tool"; toolName: string };
-    // Anthropic extended thinking configuration
-    thinking?: {
-        type: "enabled" | "disabled";
-        budget_tokens?: number;
-    };
-    // OpenAI / Anthropic provider options
-    parallelToolCalls?: boolean;
-    reasoningEffort?: "low" | "medium" | "high";
-    cacheControl?: { type: "ephemeral" };
-}
+// ModelConfig re-exported from model-config-types for backward compatibility
+export type { ModelConfig } from "./model-config-types";
 
 /**
  * Stored agent configuration from database (enhanced)
@@ -136,7 +123,10 @@ function buildMemory(config?: MemoryConfig | null): Memory {
 }
 
 /**
- * Build provider-specific default options from modelConfig
+ * Build provider-specific default options from modelConfig.
+ *
+ * Supports provider-keyed format (anthropic: {}, openai: {}) with
+ * backward-compatible fallback to deprecated flat fields.
  */
 function buildDefaultOptions(config: StoredAgentConfig): object | undefined {
     const modelConfig = config.modelConfig;
@@ -154,13 +144,23 @@ function buildDefaultOptions(config: StoredAgentConfig): object | undefined {
     }
 
     if (config.modelProvider === "openai") {
+        const oaiCfg = modelConfig.openai ?? {};
         const openaiOptions: Record<string, unknown> = {};
-        if (modelConfig.parallelToolCalls !== undefined) {
-            openaiOptions.parallelToolCalls = modelConfig.parallelToolCalls;
+
+        const parallelToolCalls = oaiCfg.parallelToolCalls ?? modelConfig.parallelToolCalls;
+        if (parallelToolCalls !== undefined) {
+            openaiOptions.parallelToolCalls = parallelToolCalls;
         }
-        if (modelConfig.reasoningEffort) {
-            openaiOptions.reasoningEffort = modelConfig.reasoningEffort;
+
+        const reasoningEffort = oaiCfg.reasoningEffort ?? modelConfig.reasoningEffort;
+        if (reasoningEffort) {
+            openaiOptions.reasoningEffort = reasoningEffort;
         }
+
+        if (oaiCfg.structuredOutputMode) {
+            openaiOptions.structuredOutputMode = oaiCfg.structuredOutputMode;
+        }
+
         if (Object.keys(openaiOptions).length > 0) {
             options.providerOptions = {
                 ...options.providerOptions,
@@ -170,9 +170,14 @@ function buildDefaultOptions(config: StoredAgentConfig): object | undefined {
     }
 
     if (config.modelProvider === "anthropic") {
+        const anthCfg: AnthropicProviderConfig = modelConfig.anthropic ?? {};
         const anthropicOptions: Record<string, unknown> = {};
-        if (modelConfig.thinking?.type === "enabled") {
-            const thinkingConfig = modelConfig.thinking as Record<string, unknown>;
+
+        const thinking = anthCfg.thinking ?? modelConfig.thinking;
+        if (thinking?.type === "adaptive") {
+            anthropicOptions.thinking = { type: "adaptive" };
+        } else if (thinking?.type === "enabled") {
+            const thinkingConfig = thinking as Record<string, unknown>;
             const budgetTokens =
                 (thinkingConfig.budgetTokens as number) ||
                 (thinkingConfig.budget_tokens as number) ||
@@ -181,13 +186,38 @@ function buildDefaultOptions(config: StoredAgentConfig): object | undefined {
                 type: "enabled",
                 budgetTokens
             };
+            if (config.maxTokens && config.maxTokens <= budgetTokens) {
+                const adjustedMaxTokens = budgetTokens + 8192;
+                console.warn(
+                    `[Agent Factory] Agent "${config.slug}": maxTokens (${config.maxTokens}) <= thinking.budgetTokens (${budgetTokens}). ` +
+                        `Adjusting maxTokens to ${adjustedMaxTokens} for Anthropic compatibility.`
+                );
+                options.maxTokens = adjustedMaxTokens;
+            }
         }
-        if (modelConfig.cacheControl) {
+
+        if (anthCfg.effort) {
+            anthropicOptions.effort = anthCfg.effort;
+        }
+
+        if (anthCfg.speed) {
+            anthropicOptions.speed = anthCfg.speed;
+        }
+
+        if (anthCfg.sendReasoning !== undefined) {
+            anthropicOptions.sendReasoning = anthCfg.sendReasoning;
+        }
+
+        if (anthCfg.contextManagement) {
+            anthropicOptions.contextManagement = anthCfg.contextManagement;
+        }
+
+        const cacheControl = anthCfg.cacheControl ?? modelConfig.cacheControl;
+        if (cacheControl) {
             anthropicOptions.cacheControl =
-                typeof modelConfig.cacheControl === "string"
-                    ? { type: modelConfig.cacheControl }
-                    : modelConfig.cacheControl;
+                typeof cacheControl === "string" ? { type: cacheControl } : cacheControl;
         }
+
         if (Object.keys(anthropicOptions).length > 0) {
             options.providerOptions = {
                 ...options.providerOptions,

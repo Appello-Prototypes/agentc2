@@ -86,7 +86,10 @@ import {
     AlertTriangleIcon,
     ArrowUpCircleIcon,
     PhoneIcon,
-    PhoneOffIcon
+    PhoneOffIcon,
+    ExternalLinkIcon,
+    BugIcon,
+    ChevronRightIcon
 } from "lucide-react";
 import { AgentSelector, getDefaultAgentSlug, type AgentInfo } from "@/components/AgentSelector";
 import { TaskSuggestions } from "@/components/TaskSuggestions";
@@ -830,6 +833,141 @@ function ChatInputActions({ setInputMode }: { setInputMode: (mode: InputMode) =>
     );
 }
 
+// ─── Debug Info Bar ──────────────────────────────────────────────────────────
+
+function DebugInfoBar({
+    threadId,
+    runId,
+    agentSlug,
+    turnIndex
+}: {
+    threadId: string;
+    runId: string | null;
+    agentSlug: string;
+    turnIndex: number | null;
+}) {
+    const [expanded, setExpanded] = useState(false);
+    const [copiedField, setCopiedField] = useState<string | null>(null);
+
+    const copyToClipboard = useCallback((value: string, field: string) => {
+        navigator.clipboard.writeText(value);
+        setCopiedField(field);
+        setTimeout(() => setCopiedField(null), 1500);
+    }, []);
+
+    const observeRunUrl = runId ? `/observe?tab=runs&search=${runId}` : null;
+    const observeThreadUrl = `/observe?tab=conversations&search=${threadId}`;
+
+    return (
+        <div className="bg-muted/30 border-b px-4">
+            <button
+                onClick={() => setExpanded((v) => !v)}
+                className="text-muted-foreground hover:text-foreground flex w-full items-center gap-1.5 py-1 text-[11px] transition-colors"
+            >
+                <BugIcon className="size-3 shrink-0 opacity-60" />
+                <span className="font-medium">Debug</span>
+                <ChevronRightIcon
+                    className={`size-3 shrink-0 transition-transform ${expanded ? "rotate-90" : ""}`}
+                />
+                {!expanded && (
+                    <span className="text-muted-foreground/70 ml-1 truncate font-mono">
+                        {runId ? `run:${runId.slice(-8)}` : "no run yet"} &middot; thread:
+                        {threadId.slice(-8)}
+                    </span>
+                )}
+            </button>
+            {expanded && (
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pb-1.5 text-[11px]">
+                    {/* Thread ID */}
+                    <span className="text-muted-foreground flex items-center gap-1">
+                        <span className="opacity-60">Thread:</span>
+                        <code className="bg-muted rounded px-1 py-0.5 font-mono">{threadId}</code>
+                        <button
+                            onClick={() => copyToClipboard(threadId, "thread")}
+                            className="text-muted-foreground hover:text-foreground p-0.5"
+                            title="Copy thread ID"
+                        >
+                            {copiedField === "thread" ? (
+                                <CheckIcon className="size-3 text-green-500" />
+                            ) : (
+                                <CopyIcon className="size-3" />
+                            )}
+                        </button>
+                        <a
+                            href={observeThreadUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-primary hover:text-primary/80 p-0.5"
+                            title="View conversation in Observe"
+                        >
+                            <ExternalLinkIcon className="size-3" />
+                        </a>
+                    </span>
+
+                    {/* Run ID */}
+                    <span className="text-muted-foreground flex items-center gap-1">
+                        <span className="opacity-60">Run:</span>
+                        {runId ? (
+                            <>
+                                <code className="bg-muted rounded px-1 py-0.5 font-mono">
+                                    {runId}
+                                </code>
+                                <button
+                                    onClick={() => copyToClipboard(runId, "run")}
+                                    className="text-muted-foreground hover:text-foreground p-0.5"
+                                    title="Copy run ID"
+                                >
+                                    {copiedField === "run" ? (
+                                        <CheckIcon className="size-3 text-green-500" />
+                                    ) : (
+                                        <CopyIcon className="size-3" />
+                                    )}
+                                </button>
+                                {observeRunUrl && (
+                                    <a
+                                        href={observeRunUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-primary hover:text-primary/80 p-0.5"
+                                        title="View run in Observe"
+                                    >
+                                        <ExternalLinkIcon className="size-3" />
+                                    </a>
+                                )}
+                            </>
+                        ) : (
+                            <span className="text-muted-foreground/50 italic">pending...</span>
+                        )}
+                    </span>
+
+                    {/* Turn Index */}
+                    {turnIndex !== null && (
+                        <span className="text-muted-foreground flex items-center gap-1">
+                            <span className="opacity-60">Turn:</span>
+                            <code className="bg-muted rounded px-1 py-0.5 font-mono">
+                                {turnIndex}
+                            </code>
+                        </span>
+                    )}
+
+                    {/* Agent Slug */}
+                    <span className="text-muted-foreground flex items-center gap-1">
+                        <span className="opacity-60">Agent:</span>
+                        <a
+                            href={`/agents/${agentSlug}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-primary hover:text-primary/80 font-mono"
+                        >
+                            {agentSlug}
+                        </a>
+                    </span>
+                </div>
+            )}
+        </div>
+    );
+}
+
 // ─── Main component ──────────────────────────────────────────────────────────
 
 export default function UnifiedChatPage() {
@@ -845,6 +983,7 @@ export default function UnifiedChatPage() {
     );
     const [threadId, setThreadId] = useState<string>(() => `chat-${Date.now()}`);
     const [currentRunId, setCurrentRunId] = useState<string | null>(null);
+    const [currentTurnIndex, setCurrentTurnIndex] = useState<number | null>(null);
     const [agentName, setAgentName] = useState<string>("");
     const [showSuggestions, setShowSuggestions] = useState(true);
     const [questionAnswers, setQuestionAnswers] = useState<Record<string, Record<string, string>>>(
@@ -946,23 +1085,30 @@ export default function UnifiedChatPage() {
         return tools;
     }, [submitStatus, messages]);
 
-    // Extract runId from the first assistant message's data-run-metadata part.
-    // This persists the runId so subsequent messages are added as turns to the same conversation run.
-    // The setState call inside useEffect is intentional here -- we need to sync stream-derived
-    // metadata into component state for use in the transport body.
+    // Extract runId and turnIndex from assistant messages' data-run-metadata parts.
+    // runId is set once (first metadata) and reused for subsequent turns.
+    // turnIndex is updated on every new metadata to reflect the latest turn.
     useEffect(() => {
-        if (currentRunId) return; // Already have a runId
+        let latestTurnIndex: number | null = null;
         for (const message of messages) {
             if (message.role !== "assistant") continue;
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             for (const part of (message.parts || []) as any[]) {
                 if (part.type === "data-run-metadata" && part.data?.runId) {
-                    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: sync stream-derived metadata into state
-                    setCurrentRunId(part.data.runId);
-                    updateConversationRunId(threadId, part.data.runId);
-                    return;
+                    if (!currentRunId) {
+                        // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: sync stream-derived metadata into state
+                        setCurrentRunId(part.data.runId);
+                        updateConversationRunId(threadId, part.data.runId);
+                    }
+                    if (part.data.turnIndex !== undefined) {
+                        latestTurnIndex = part.data.turnIndex;
+                    }
                 }
             }
+        }
+        if (latestTurnIndex !== null) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: sync turn metadata
+            setCurrentTurnIndex(latestTurnIndex);
         }
     }, [messages, currentRunId, threadId]);
 
@@ -998,6 +1144,7 @@ export default function UnifiedChatPage() {
                     );
                 }
                 setCurrentRunId(null);
+                setCurrentTurnIndex(null);
 
                 if (hasMessagesRef.current) {
                     // Mid-conversation: start fresh thread for new agent, insert divider
@@ -1061,6 +1208,7 @@ export default function UnifiedChatPage() {
             }).catch((e) => console.warn("[Chat] Failed to finalize run:", e));
         }
         setCurrentRunId(null);
+        setCurrentTurnIndex(null);
         setMessages([]);
         setThreadId(`chat-${selectedAgentSlug}-${Date.now()}`);
         setQuestionAnswers({});
@@ -1594,6 +1742,14 @@ export default function UnifiedChatPage() {
                         New conversation
                     </Button>
                 </div>
+
+                {/* Debug info bar */}
+                <DebugInfoBar
+                    threadId={threadId}
+                    runId={currentRunId}
+                    agentSlug={selectedAgentSlug}
+                    turnIndex={currentTurnIndex}
+                />
 
                 {/* Messages */}
                 <div className="min-h-0 flex-1">

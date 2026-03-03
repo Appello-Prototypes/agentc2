@@ -4,7 +4,7 @@ export const chatMessageSchema = z.object({
     message: z.string().min(1).max(100000),
     threadId: z.string().optional(),
     context: z.record(z.unknown()).optional(),
-    maxSteps: z.number().int().min(1).max(100).optional(),
+    maxSteps: z.number().int().min(1).max(500).optional(),
     tools: z.array(z.string()).optional(),
     environment: z.string().max(50).optional()
 });

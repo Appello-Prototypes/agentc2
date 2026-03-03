@@ -1766,7 +1766,7 @@ export default function ConfigurePage() {
                                         <input
                                             type="range"
                                             min="1"
-                                            max="20"
+                                            max="200"
                                             value={formData.maxSteps || 5}
                                             onChange={(e) =>
                                                 handleChange("maxSteps", parseInt(e.target.value))
@@ -1813,7 +1813,7 @@ export default function ConfigurePage() {
                                                 <input
                                                     type="range"
                                                     min="1024"
-                                                    max="32000"
+                                                    max="128000"
                                                     step="1024"
                                                     value={thinkingBudget}
                                                     onChange={(e) => {

@@ -145,7 +145,7 @@ export async function buildNetworkAgent(networkId: string) {
     const tools: Record<string, any> = {};
 
     const toolIds = network.primitives
-        .filter((primitive) => primitive.primitiveType === "tool" && primitive.toolId)
+        .filter((primitive) => primitive.primitiveType.toLowerCase() === "tool" && primitive.toolId)
         .map((primitive) => primitive.toolId as string);
     const organizationId = network.workspace?.organizationId || null;
     const resolvedTools =
@@ -161,7 +161,7 @@ export async function buildNetworkAgent(networkId: string) {
 
     for (const primitive of network.primitives) {
         try {
-            if (primitive.primitiveType === "agent" && primitive.agentId) {
+            if (primitive.primitiveType.toLowerCase() === "agent" && primitive.agentId) {
                 const { agent, record } = await agentResolver.resolve({
                     id: primitive.agentId,
                     fallbackToSystem: true,
@@ -170,7 +170,7 @@ export async function buildNetworkAgent(networkId: string) {
                 const key = record?.slug || primitive.agentId;
                 agents[key] = agent;
             }
-            if (primitive.primitiveType === "workflow" && primitive.workflowId) {
+            if (primitive.primitiveType.toLowerCase() === "workflow" && primitive.workflowId) {
                 const wrapper = (await buildWorkflowWrapper(
                     primitive.workflowId,
                     requestContext
@@ -185,7 +185,7 @@ export async function buildNetworkAgent(networkId: string) {
                     );
                 }
             }
-            if (primitive.primitiveType === "tool" && primitive.toolId) {
+            if (primitive.primitiveType.toLowerCase() === "tool" && primitive.toolId) {
                 const tool = resolvedTools[primitive.toolId];
                 if (tool) {
                     tools[primitive.toolId] = tool;

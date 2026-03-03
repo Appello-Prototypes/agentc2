@@ -148,7 +148,7 @@ export interface ExecutionStep {
     /** Step number */
     step: number;
     /** Step type */
-    type: "thinking" | "tool_call" | "tool_result" | "response";
+    type: "thinking" | "tool_call" | "tool_result" | "response" | "step_usage";
     /** Content/description */
     content: string;
     /** Timestamp */

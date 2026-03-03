@@ -24,7 +24,8 @@ function getPgVector(): PgVector {
 
         global.pgVector = new PgVector({
             id: "mastra-vector",
-            connectionString: process.env.DATABASE_URL
+            connectionString: process.env.DATABASE_URL,
+            ssl: { rejectUnauthorized: false }
         });
     }
 

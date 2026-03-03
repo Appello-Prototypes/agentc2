@@ -431,6 +431,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                     anchorInterval: (contextCfg?.anchorInterval as number) ?? 10,
                     maxTokens: record.maxTokens ?? undefined,
                     modelProvider: record.modelProvider,
+                    modelName: record.modelName,
                     compressionModel: compressionModel ?? undefined,
                     isReasoningModel
                 });

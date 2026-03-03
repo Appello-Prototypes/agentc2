@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { AgentBrand } from "@/components/AgentBrand";
 import { SignInForm } from "@/components/auth/sign-in-form";
 import { auth } from "@repo/auth";
@@ -40,7 +41,9 @@ export default async function LoginPage() {
                 </div>
 
                 <div className="mt-8">
-                    <SignInForm />
+                    <Suspense>
+                        <SignInForm />
+                    </Suspense>
                 </div>
             </div>
         </div>

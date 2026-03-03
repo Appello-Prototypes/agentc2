@@ -72,7 +72,7 @@ export const agentCreateSchema = z.object({
     modelName: z.string().min(1).max(255),
     temperature: z.number().min(0).max(2).optional(),
     maxTokens: z.number().int().positive().optional().nullable(),
-    maxSteps: z.number().int().min(1).max(100).optional(),
+    maxSteps: z.number().int().min(1).max(500).optional(),
     memoryEnabled: z.boolean().optional(),
     memoryConfig: memoryConfigSchema,
     modelConfig: modelConfigSchema,

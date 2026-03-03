@@ -122,7 +122,13 @@ export const networkExecuteTool = createTool({
         resourceId
     }) => {
         const network = await prisma.network.findFirst({
-            where: { OR: [{ slug: networkSlug }, { id: networkSlug }] },
+            where: {
+                OR: [
+                    { slug: networkSlug },
+                    { id: networkSlug },
+                    { name: { equals: networkSlug, mode: "insensitive" } }
+                ]
+            },
             include: { workspace: { select: { environment: true } } }
         });
 
@@ -267,7 +273,13 @@ export const networkListRunsTool = createTool({
     }),
     execute: async ({ networkSlug, limit, status, environment, triggerType, from, to, search }) => {
         const network = await prisma.network.findFirst({
-            where: { OR: [{ slug: networkSlug }, { id: networkSlug }] }
+            where: {
+                OR: [
+                    { slug: networkSlug },
+                    { id: networkSlug },
+                    { name: { equals: networkSlug, mode: "insensitive" } }
+                ]
+            }
         });
 
         if (!network) {
@@ -353,7 +365,13 @@ export const networkGetRunTool = createTool({
     }),
     execute: async ({ networkSlug, runId }) => {
         const network = await prisma.network.findFirst({
-            where: { OR: [{ slug: networkSlug }, { id: networkSlug }] }
+            where: {
+                OR: [
+                    { slug: networkSlug },
+                    { id: networkSlug },
+                    { name: { equals: networkSlug, mode: "insensitive" } }
+                ]
+            }
         });
 
         if (!network) {

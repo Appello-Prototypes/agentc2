@@ -89,6 +89,7 @@ export function AppTopBar({
                             return (
                                 <DropdownMenu key={item.href}>
                                     <DropdownMenuTrigger
+                                        nativeButton={false}
                                         render={
                                             <span
                                                 role="button"

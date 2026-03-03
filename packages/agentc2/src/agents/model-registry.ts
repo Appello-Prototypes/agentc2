@@ -31,6 +31,7 @@ export interface ModelCapabilities {
     chat: boolean;
     vision: boolean;
     extendedThinking: boolean;
+    adaptiveThinking?: boolean;
     parallelToolCalls: boolean;
     functionCalling: boolean;
     streaming: boolean;
@@ -217,17 +218,17 @@ function isSnapshotVariant(modelId: string): boolean {
 // This metadata provides pricing, capabilities, and category.
 
 const ANTHROPIC_MODEL_METADATA: Record<string, Partial<ModelMetadata>> = {
-    // Claude 4.x family
+    // Claude 4.x family (supports adaptive thinking via 4.6 aliases)
     "claude-opus-4-20250514": {
         category: "flagship",
-        capabilities: { vision: true, extendedThinking: true },
+        capabilities: { vision: true, extendedThinking: true, adaptiveThinking: true },
         contextWindow: 200000,
         pricing: { inputPer1M: 15.0, outputPer1M: 75.0 },
         sortOrder: 10
     },
     "claude-sonnet-4-20250514": {
         category: "flagship",
-        capabilities: { vision: true, extendedThinking: true },
+        capabilities: { vision: true, extendedThinking: true, adaptiveThinking: true },
         contextWindow: 200000,
         pricing: { inputPer1M: 3.0, outputPer1M: 15.0 },
         sortOrder: 11
@@ -235,14 +236,14 @@ const ANTHROPIC_MODEL_METADATA: Record<string, Partial<ModelMetadata>> = {
     // Claude 4.5 family
     "claude-opus-4-5-20251101": {
         category: "flagship",
-        capabilities: { vision: true, extendedThinking: true },
+        capabilities: { vision: true, extendedThinking: true, adaptiveThinking: true },
         contextWindow: 200000,
         pricing: { inputPer1M: 15.0, outputPer1M: 75.0 },
         sortOrder: 5
     },
     "claude-sonnet-4-5-20250929": {
         category: "flagship",
-        capabilities: { vision: true, extendedThinking: true },
+        capabilities: { vision: true, extendedThinking: true, adaptiveThinking: true },
         contextWindow: 200000,
         pricing: { inputPer1M: 3.0, outputPer1M: 15.0 },
         sortOrder: 6

@@ -454,6 +454,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                             ? { thread: threadId, resource: resourceId }
                             : undefined,
                     modelProvider: record.modelProvider,
+                    modelName: record.modelName,
                     compressionModel: compressionModel ?? undefined,
                     isReasoningModel,
                     onStep: async (stepNum, summary) => {
@@ -544,9 +545,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 );
 
                 if (skillActivated && orphanedTools.length > 0) {
-                    const orphanedNames = orphanedTools
-                        .map((t) => t.toolKey)
-                        .join(", ");
+                    const orphanedNames = orphanedTools.map((t) => t.toolKey).join(", ");
                     console.warn(
                         `[Agent Invoke] ${orphanedTools.length} orphaned tool call(s) after skill activation (${orphanedNames}). Re-resolving agent…`
                     );
@@ -555,8 +554,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                         const reResolved = await agentResolver.resolve({
                             slug: id,
                             requestContext: context,
-                            threadId:
-                                context?.threadId || context?.thread?.id,
+                            threadId: context?.threadId || context?.thread?.id,
                             modelOverride: routedModelOverride
                         });
                         currentAgent = reResolved.agent;
@@ -572,32 +570,23 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                         );
                         const retryText = retryResponse.text;
                         if (retryText) {
-                            responseText =
-                                (responseText || "") + "\n" + retryText;
+                            responseText = (responseText || "") + "\n" + retryText;
                         }
                         const retryUsage = extractTokenUsage(retryResponse);
                         if (retryUsage && usage) {
                             usage = {
-                                promptTokens:
-                                    usage.promptTokens +
-                                    retryUsage.promptTokens,
+                                promptTokens: usage.promptTokens + retryUsage.promptTokens,
                                 completionTokens:
-                                    usage.completionTokens +
-                                    retryUsage.completionTokens,
-                                totalTokens:
-                                    usage.totalTokens +
-                                    retryUsage.totalTokens
+                                    usage.completionTokens + retryUsage.completionTokens,
+                                totalTokens: usage.totalTokens + retryUsage.totalTokens
                             };
                         }
-                        const retryToolCalls =
-                            extractToolCalls(retryResponse);
+                        const retryToolCalls = extractToolCalls(retryResponse);
                         toolCalls = [...toolCalls, ...retryToolCalls];
                     } catch (retryErr) {
                         console.error(
                             `[Agent Invoke] Re-resolve/retry failed:`,
-                            retryErr instanceof Error
-                                ? retryErr.message
-                                : retryErr
+                            retryErr instanceof Error ? retryErr.message : retryErr
                         );
                     }
                 }

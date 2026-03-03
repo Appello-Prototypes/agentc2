@@ -79,6 +79,7 @@ export function ConversationsListContent({ agentSlug }: { agentSlug?: string }) 
     const [sourceFilter, setSourceFilter] = useState("all");
     const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
     const [total, setTotal] = useState(0);
+    const [fetchError, setFetchError] = useState<string | null>(null);
 
     const fetchThreads = useCallback(async () => {
         setLoading(true);
@@ -90,13 +91,25 @@ export function ConversationsListContent({ agentSlug }: { agentSlug?: string }) 
             p.set("limit", "50");
 
             const res = await fetch(`${getApiBase()}/api/threads?${p.toString()}`);
+            if (!res.ok) {
+                const errBody = await res.text().catch(() => "");
+                const msg = `Threads API returned ${res.status}: ${errBody.slice(0, 200)}`;
+                console.error("[Conversations]", msg);
+                setFetchError(msg);
+                return;
+            }
             const data = await res.json();
             if (data.success) {
+                setFetchError(null);
                 setThreads(data.threads);
                 setTotal(data.total);
+            } else {
+                setFetchError(data.error || "API returned success: false");
             }
         } catch (error) {
-            console.error("Failed to fetch threads:", error);
+            const msg = error instanceof Error ? error.message : String(error);
+            console.error("Failed to fetch threads:", msg);
+            setFetchError(msg);
         } finally {
             setLoading(false);
         }
@@ -179,9 +192,20 @@ export function ConversationsListContent({ agentSlug }: { agentSlug?: string }) 
                                 {threads.length === 0 ? (
                                     <TableRow>
                                         <TableCell colSpan={10} className="py-12 text-center">
-                                            <p className="text-muted-foreground text-sm">
-                                                No conversation threads found
-                                            </p>
+                                            {fetchError ? (
+                                                <>
+                                                    <p className="text-destructive text-sm">
+                                                        Failed to load conversations
+                                                    </p>
+                                                    <p className="text-destructive/70 mx-auto mt-1 max-w-md font-mono text-xs wrap-break-word">
+                                                        {fetchError}
+                                                    </p>
+                                                </>
+                                            ) : (
+                                                <p className="text-muted-foreground text-sm">
+                                                    No conversation threads found
+                                                </p>
+                                            )}
                                         </TableCell>
                                     </TableRow>
                                 ) : (

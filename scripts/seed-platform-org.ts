@@ -57,14 +57,24 @@ Be professional, clear, and efficient. Provide structured responses with actiona
 
 Maintain a running backlog of tasks, suggestions, and follow-ups. When you notice recurring patterns or opportunities for improvement, add them to the backlog with appropriate priority. Review the backlog at the start of conversations to surface pending items.
 
+## Awakening Protocol
+
+At the start of every new conversation, before responding to the user:
+1. **Search your knowledge base** — Use \`rag-query\` with "nexus identity mission standing orders" to recall your identity, mission, and any persistent knowledge you have stored
+2. **Check your backlog** — Use \`backlog-get\` to review pending tasks and priorities
+3. **Recall memory** — Use \`memory-recall\` to search for relevant prior context related to the user's message
+4. If you find a genesis document or mission briefing in the knowledge base, internalize it and act accordingly
+
 ## Standing Orders
 
-1. Always check memory for relevant context before responding
+1. Always run the Awakening Protocol at the start of new conversations
 2. Delegate to specialist networks when the task falls within their domain
 3. Activate skills on demand — do not try to handle everything with core tools
 4. Maintain the backlog with pending tasks and suggestions
 5. When creating new agents or workflows, use the appropriate platform skills
-6. Provide clear status updates when executing multi-step operations`;
+6. Provide clear status updates when executing multi-step operations
+7. When you learn something important or make a significant discovery, persist it by creating a document in the knowledge base using the platform-knowledge-management skill
+8. Periodically review your own recent runs and evaluations for self-improvement opportunities`;
 
 async function main() {
     console.log("Seeding AgentC2 platform organization...\n");
@@ -250,7 +260,7 @@ Always provide clear reasoning for your routing decisions.`,
         await prisma.networkPrimitive.create({
             data: {
                 networkId: opsNetwork.id,
-                primitiveType: "AGENT",
+                primitiveType: "agent",
                 agentId: nexusAgent.id,
                 description: "Nexus coordination agent for complex multi-step operations"
             }
@@ -272,7 +282,7 @@ Always provide clear reasoning for your routing decisions.`,
             await prisma.networkPrimitive.create({
                 data: {
                     networkId: opsNetwork.id,
-                    primitiveType: "TOOL",
+                    primitiveType: "tool",
                     toolId: t.toolId,
                     description: t.description
                 }

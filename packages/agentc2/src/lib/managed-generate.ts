@@ -19,6 +19,7 @@
 import type { Agent } from "@mastra/core/agent";
 import type { LanguageModel } from "ai";
 import { generateText } from "ai";
+import { supportsAdaptiveThinking } from "../agents/model-config-types";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -39,6 +40,7 @@ export interface ManagedGenerateOptions {
     memory?: { thread: string; resource: string };
     onStep?: (step: number, summary: StepSummary) => void;
     modelProvider?: string;
+    modelName?: string;
     compressionModel?: LanguageModel;
     compressionThreshold?: number;
     isReasoningModel?: boolean;
@@ -224,6 +226,7 @@ export async function managedGenerate(
         memory,
         onStep,
         modelProvider,
+        modelName,
         compressionModel,
         compressionThreshold = 3000,
         isReasoningModel = false
@@ -344,11 +347,16 @@ export async function managedGenerate(
                     openai: { reasoningEffort: "high" }
                 };
             } else if (modelProvider === "anthropic") {
+                const useAdaptive = modelName && supportsAdaptiveThinking(modelName);
+                const thinkingConfig = useAdaptive
+                    ? { type: "adaptive" as const }
+                    : { type: "enabled" as const, budgetTokens: 10000 };
                 generateOptions.providerOptions = {
                     ...generateOptions.providerOptions,
                     anthropic: {
                         ...(generateOptions.providerOptions?.anthropic || {}),
-                        thinking: { type: "enabled", budgetTokens: 10000 }
+                        thinking: thinkingConfig,
+                        ...(useAdaptive ? { effort: "high" } : {})
                     }
                 };
             }

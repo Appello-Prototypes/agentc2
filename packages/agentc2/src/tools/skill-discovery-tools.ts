@@ -127,8 +127,7 @@ export const activateSkillTool = createTool({
     }),
     outputSchema: baseOutputSchema,
     execute: async ({ skillSlugs, threadId, agentId }, execContext) => {
-        const effectiveThreadId =
-            threadId || (execContext as Record<string, unknown>)?.threadId;
+        const effectiveThreadId = threadId || (execContext as Record<string, unknown>)?.threadId;
         if (!effectiveThreadId) {
             console.warn(
                 `[activate-skill] No threadId from LLM args or execution context — skills will NOT persist across turns`
@@ -160,8 +159,7 @@ export const listActiveSkillsTool = createTool({
     }),
     outputSchema: baseOutputSchema,
     execute: async ({ threadId }, execContext) => {
-        const effectiveThreadId =
-            threadId || (execContext as Record<string, unknown>)?.threadId;
+        const effectiveThreadId = threadId || (execContext as Record<string, unknown>)?.threadId;
         if (!effectiveThreadId) {
             return {
                 success: true,

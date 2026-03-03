@@ -151,6 +151,7 @@ export function SignInForm() {
                     <FieldLabel htmlFor="email">Email</FieldLabel>
                     <Input
                         id="email"
+                        name="email"
                         type="email"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
@@ -164,6 +165,7 @@ export function SignInForm() {
                     <FieldLabel htmlFor="password">Password</FieldLabel>
                     <Input
                         id="password"
+                        name="password"
                         type="password"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}

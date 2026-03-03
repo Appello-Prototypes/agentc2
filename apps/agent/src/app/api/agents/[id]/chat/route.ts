@@ -63,6 +63,17 @@ type StreamChunk = {
     delta?: string;
     content?: string;
     value?: unknown;
+    reason?: unknown;
+    source?: unknown;
+    sourceType?: string;
+    url?: string;
+    title?: string;
+    file?: unknown;
+    argsTextDelta?: string;
+    usage?: Record<string, unknown>;
+    finishReason?: string;
+    providerMetadata?: unknown;
+    input?: unknown;
 };
 
 type UsageLike = {
@@ -421,7 +432,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         // Build execution steps for time-travel debugging
         type ExecutionStep = {
             step: number;
-            type: "thinking" | "tool_call" | "tool_result" | "response";
+            type: "thinking" | "tool_call" | "tool_result" | "response" | "step_usage";
             content: string;
             timestamp: string;
             durationMs?: number;
@@ -477,6 +488,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 resource: resourceId
             }
         };
+
+        // Memory diagnostic: log thread/resource used and whether agent has memory
+        const hasMemory = Boolean(
+            agent && "memory" in agent && (agent as Record<string, unknown>).memory
+        );
+        console.log(
+            `[Agent Chat] Memory context: thread=${userThreadId}, resource=${resourceId}, agentHasMemory=${hasMemory}, agent=${id}`
+        );
 
         const tStream = performance.now();
         let responseStream;
@@ -758,6 +777,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                         const fs = sr.fullStream;
                         const txs = sr.textStream;
                         let gotContent = false;
+                        let reasoningBuffer = "";
 
                         if (fs) {
                             const fsIterator = (
@@ -790,7 +810,31 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
                                 const c = normalizeChunk(result.value);
 
-                                if (c.type === "text-delta") {
+                                if (c.type === "error") {
+                                    const errPayload = c.payload ?? (c as Record<string, unknown>);
+                                    const errObj = errPayload.error;
+                                    const errMsg =
+                                        errObj &&
+                                        typeof errObj === "object" &&
+                                        "message" in (errObj as Record<string, unknown>)
+                                            ? String((errObj as Record<string, unknown>).message)
+                                            : typeof errObj === "string"
+                                              ? errObj
+                                              : JSON.stringify(errObj ?? c).substring(0, 500);
+                                    console.error(
+                                        `[Agent Chat] Stream error chunk for agent "${id}":`,
+                                        errMsg
+                                    );
+                                    if (ts.currentId) {
+                                        w.write({
+                                            type: "text-delta",
+                                            id: ts.currentId,
+                                            delta: `Error: ${errMsg}`
+                                        });
+                                        gotContent = true;
+                                    }
+                                    finishSeen = true;
+                                } else if (c.type === "text-delta") {
                                     const text =
                                         (typeof c.payload?.text === "string" && c.payload.text) ||
                                         (typeof c.textDelta === "string" && c.textDelta) ||
@@ -807,6 +851,83 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                                             id: ts.currentId,
                                             delta: text
                                         });
+                                    }
+                                    finishSeen = false;
+                                } else if (
+                                    c.type === "reasoning-delta" ||
+                                    c.type === "reasoning-start" ||
+                                    c.type === "reasoning-end"
+                                ) {
+                                    gotContent = true;
+                                    finishSeen = false;
+                                    if (
+                                        c.type === "reasoning-delta" &&
+                                        typeof (c as Record<string, unknown>).text === "string"
+                                    ) {
+                                        reasoningBuffer += (c as Record<string, unknown>)
+                                            .text as string;
+                                    }
+                                    if (c.type === "reasoning-end" && reasoningBuffer) {
+                                        stepCounter++;
+                                        executionSteps.push({
+                                            step: stepCounter,
+                                            type: "thinking",
+                                            content: reasoningBuffer.substring(0, 2000),
+                                            timestamp: new Date().toISOString()
+                                        });
+                                        reasoningBuffer = "";
+                                    }
+                                } else if (c.type === "reasoning-part-finish") {
+                                    gotContent = true;
+                                    finishSeen = false;
+                                } else if (c.type === "abort") {
+                                    console.warn(
+                                        `[Agent Chat] Stream aborted for agent "${id}":`,
+                                        c.reason ?? "no reason"
+                                    );
+                                    finishSeen = true;
+                                } else if (c.type === "source") {
+                                    gotContent = true;
+                                    finishSeen = false;
+                                } else if (c.type === "file") {
+                                    gotContent = true;
+                                    finishSeen = false;
+                                } else if (
+                                    c.type === "tool-call-streaming-start" ||
+                                    c.type === "tool-call-delta"
+                                ) {
+                                    gotContent = true;
+                                    finishSeen = false;
+                                } else if (c.type === "finish-step") {
+                                    const usage =
+                                        c.usage ??
+                                        (c.payload as Record<string, unknown> | undefined)?.usage;
+                                    if (usage && typeof usage === "object") {
+                                        const u = usage as Record<string, unknown>;
+                                        stepCounter++;
+                                        executionSteps.push({
+                                            step: stepCounter,
+                                            type: "step_usage",
+                                            content: `Tokens: ${u.totalTokens ?? "?"} (in: ${u.inputTokens ?? "?"}, out: ${u.outputTokens ?? "?"})`,
+                                            timestamp: new Date().toISOString()
+                                        });
+                                    }
+                                    finishSeen = false;
+                                } else if (
+                                    c.type === "start" ||
+                                    c.type === "start-step" ||
+                                    c.type === "text-start" ||
+                                    c.type === "text-end" ||
+                                    c.type === "tool-input-start" ||
+                                    c.type === "tool-input-delta" ||
+                                    c.type === "tool-input-end"
+                                ) {
+                                    if (
+                                        c.type === "tool-input-start" ||
+                                        c.type === "tool-input-delta" ||
+                                        c.type === "tool-input-end"
+                                    ) {
+                                        gotContent = true;
                                     }
                                     finishSeen = false;
                                 } else if (c.type === "finish") {

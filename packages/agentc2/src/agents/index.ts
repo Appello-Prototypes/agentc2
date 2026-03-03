@@ -23,6 +23,15 @@ export {
 } from "./factory";
 export type { StoredAgentConfig } from "./factory";
 
+// Provider-aware model configuration types
+export { supportsAdaptiveThinking } from "./model-config-types";
+export type {
+    ModelConfig,
+    AnthropicProviderConfig,
+    OpenAIProviderConfig,
+    AnthropicThinkingConfig
+} from "./model-config-types";
+
 // Model registry — centralized, API-driven model information
 export {
     getModelsForApi,

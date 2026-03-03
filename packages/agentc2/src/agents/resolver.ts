@@ -26,6 +26,7 @@ import { recordActivity } from "../activity/service";
 import { budgetEnforcement } from "../budget";
 import { resolveModelForOrg } from "./model-provider";
 import { resolveModelAlias } from "./model-registry";
+import type { ModelConfig, AnthropicProviderConfig } from "./model-config-types";
 
 // Use Prisma namespace for types
 type AgentRecord = Prisma.AgentGetPayload<{
@@ -197,21 +198,7 @@ interface MemoryConfig {
     maxWorkingMemoryChars?: number;
 }
 
-/**
- * Model configuration from database
- */
-interface ModelConfig {
-    reasoning?: { type: "enabled" | "disabled" };
-    toolChoice?: "auto" | "required" | "none" | { type: "tool"; toolName: string };
-    thinking?: {
-        type: "enabled" | "disabled";
-        budget_tokens?: number;
-        budgetTokens?: number;
-    };
-    parallelToolCalls?: boolean;
-    reasoningEffort?: "low" | "medium" | "high";
-    cacheControl?: string | { type: "ephemeral" };
-}
+// ModelConfig imported from ./model-config-types
 
 /**
  * Structured error thrown when an agent's monthly spend exceeds its hard budget limit.
@@ -666,6 +653,38 @@ export class AgentResolver {
             );
         }
 
+        // --- Thread Context Binding ---
+        // Inject threadId into tools that need session context to function correctly.
+        // This must run after all tools are merged (registry, MCP, skill, meta) because
+        // these tools can be loaded as regular AgentTool records.
+        if (threadId) {
+            const contextBoundToolIds = ["activate-skill", "list-active-skills", "memory-recall"];
+            for (const toolId of contextBoundToolIds) {
+                if (tools[toolId]) {
+                    const originalExecute = tools[toolId].execute;
+                    tools[toolId] = {
+                        ...tools[toolId],
+                        execute: (
+                            input: Record<string, unknown>,
+                            execCtx: Record<string, unknown>
+                        ) => {
+                            return originalExecute(
+                                {
+                                    ...input,
+                                    threadId: input.threadId || threadId,
+                                    agentId: input.agentId || record.slug
+                                },
+                                execCtx
+                            );
+                        }
+                    };
+                    console.log(
+                        `[AgentResolver] Bound threadId to "${toolId}" for thread ${threadId.substring(0, 30)}…`
+                    );
+                }
+            }
+        }
+
         // --- Tool Health Check ---
         // Compare loaded tools against what was expected from AgentTool + SkillTool records
         const loadedToolNames = new Set(Object.keys(tools));
@@ -1041,6 +1060,7 @@ export class AgentResolver {
         }> = [];
 
         const activatedSet = new Set(threadActivatedSlugs || []);
+        const loadedSkillSlugs = new Set<string>();
 
         for (const agentSkill of agentSkills) {
             const { skill } = agentSkill;
@@ -1093,6 +1113,7 @@ export class AgentResolver {
                     skillToolIds.push(st.toolId);
                     skillToolMapping[st.toolId] = skill.slug;
                 }
+                loadedSkillSlugs.add(skill.slug);
             } else {
                 // Discoverable: only include manifest (description) for meta-tool discovery
                 discoverableSkillManifests.push({
@@ -1100,6 +1121,52 @@ export class AgentResolver {
                     name: skill.name,
                     description: skill.description || skill.instructions.slice(0, 200)
                 });
+                loadedSkillSlugs.add(skill.slug);
+            }
+        }
+
+        // Load thread-activated skills not already in this agent's AgentSkill records.
+        // This handles the case where a user activates a skill via activate-skill that
+        // exists in the platform but isn't directly linked to this agent.
+        const unlinkedSlugs = [...activatedSet].filter((s) => !loadedSkillSlugs.has(s));
+        if (unlinkedSlugs.length > 0) {
+            const unlinkedSkills = await prisma.skill.findMany({
+                where: { slug: { in: unlinkedSlugs } },
+                include: {
+                    documents: {
+                        include: {
+                            document: { select: { id: true, slug: true, name: true } }
+                        }
+                    },
+                    tools: true
+                }
+            });
+            for (const skill of unlinkedSkills) {
+                activeSkills.push({
+                    skillId: skill.id,
+                    skillSlug: skill.slug,
+                    skillVersion: skill.version
+                });
+                skillInstructions += `\n\n## Skill: ${skill.name}\n${skill.instructions}`;
+                if (skill.examples) {
+                    skillInstructions += `\n\n### Examples:\n${skill.examples}`;
+                }
+                if (skill.documents.length > 0) {
+                    skillInstructions += `\n\n### Associated Knowledge Base Documents:`;
+                    for (const sd of skill.documents) {
+                        const roleSuffix = sd.role ? ` (${sd.role})` : "";
+                        skillInstructions += `\n- ${sd.document.name}${roleSuffix}`;
+                        skillDocumentIds.push(sd.documentId);
+                    }
+                }
+                for (const st of skill.tools) {
+                    skillToolIds.push(st.toolId);
+                    skillToolMapping[st.toolId] = skill.slug;
+                }
+                console.log(
+                    `[AgentResolver] Loaded thread-activated skill "${skill.slug}" ` +
+                        `(${skill.tools.length} tools) — not in agent's AgentSkill records`
+                );
             }
         }
 
@@ -1426,7 +1493,12 @@ export class AgentResolver {
     }
 
     /**
-     * Build provider-specific default options from modelConfig
+     * Build provider-specific default options from modelConfig.
+     *
+     * Supports two formats:
+     *   1. Provider-keyed (new): { anthropic: { thinking: { type: "adaptive" }, effort: "high" }, openai: { ... } }
+     *   2. Flat (deprecated):    { thinking: { type: "enabled", budgetTokens: 10000 }, parallelToolCalls: true }
+     * Provider-keyed values take precedence; flat fields are used as fallback for backward compatibility.
      */
     private buildDefaultOptions(record: AgentRecordWithTools): object | undefined {
         const modelConfig = record.modelConfig as ModelConfig | null;
@@ -1444,13 +1516,23 @@ export class AgentResolver {
         }
 
         if (record.modelProvider === "openai") {
+            const oaiCfg = modelConfig.openai ?? {};
             const openaiOptions: Record<string, unknown> = {};
-            if (modelConfig.parallelToolCalls !== undefined) {
-                openaiOptions.parallelToolCalls = modelConfig.parallelToolCalls;
+
+            const parallelToolCalls = oaiCfg.parallelToolCalls ?? modelConfig.parallelToolCalls;
+            if (parallelToolCalls !== undefined) {
+                openaiOptions.parallelToolCalls = parallelToolCalls;
             }
-            if (modelConfig.reasoningEffort) {
-                openaiOptions.reasoningEffort = modelConfig.reasoningEffort;
+
+            const reasoningEffort = oaiCfg.reasoningEffort ?? modelConfig.reasoningEffort;
+            if (reasoningEffort) {
+                openaiOptions.reasoningEffort = reasoningEffort;
             }
+
+            if (oaiCfg.structuredOutputMode) {
+                openaiOptions.structuredOutputMode = oaiCfg.structuredOutputMode;
+            }
+
             if (Object.keys(openaiOptions).length > 0) {
                 options.providerOptions = {
                     ...options.providerOptions,
@@ -1460,9 +1542,14 @@ export class AgentResolver {
         }
 
         if (record.modelProvider === "anthropic") {
+            const anthCfg: AnthropicProviderConfig = modelConfig.anthropic ?? {};
             const anthropicOptions: Record<string, unknown> = {};
-            if (modelConfig.thinking?.type === "enabled") {
-                const thinkingConfig = modelConfig.thinking as Record<string, unknown>;
+
+            const thinking = anthCfg.thinking ?? modelConfig.thinking;
+            if (thinking?.type === "adaptive") {
+                anthropicOptions.thinking = { type: "adaptive" };
+            } else if (thinking?.type === "enabled") {
+                const thinkingConfig = thinking as Record<string, unknown>;
                 const budgetTokens =
                     (thinkingConfig.budgetTokens as number) ||
                     (thinkingConfig.budget_tokens as number) ||
@@ -1471,13 +1558,43 @@ export class AgentResolver {
                     type: "enabled",
                     budgetTokens
                 };
+                // Anthropic requires max_tokens > thinking.budgetTokens.
+                const agentMaxTokens = (record as Record<string, unknown>).maxTokens as
+                    | number
+                    | null
+                    | undefined;
+                if (agentMaxTokens && agentMaxTokens <= budgetTokens) {
+                    const adjustedMaxTokens = budgetTokens + 8192;
+                    console.warn(
+                        `[AgentResolver] Agent "${record.slug}": maxTokens (${agentMaxTokens}) <= thinking.budgetTokens (${budgetTokens}). ` +
+                            `Adjusting maxTokens to ${adjustedMaxTokens} for Anthropic compatibility.`
+                    );
+                    options.maxTokens = adjustedMaxTokens;
+                }
             }
-            if (modelConfig.cacheControl) {
+
+            if (anthCfg.effort) {
+                anthropicOptions.effort = anthCfg.effort;
+            }
+
+            if (anthCfg.speed) {
+                anthropicOptions.speed = anthCfg.speed;
+            }
+
+            if (anthCfg.sendReasoning !== undefined) {
+                anthropicOptions.sendReasoning = anthCfg.sendReasoning;
+            }
+
+            if (anthCfg.contextManagement) {
+                anthropicOptions.contextManagement = anthCfg.contextManagement;
+            }
+
+            const cacheControl = anthCfg.cacheControl ?? modelConfig.cacheControl;
+            if (cacheControl) {
                 anthropicOptions.cacheControl =
-                    typeof modelConfig.cacheControl === "string"
-                        ? { type: modelConfig.cacheControl }
-                        : modelConfig.cacheControl;
+                    typeof cacheControl === "string" ? { type: cacheControl } : cacheControl;
             }
+
             if (Object.keys(anthropicOptions).length > 0) {
                 options.providerOptions = {
                     ...options.providerOptions,

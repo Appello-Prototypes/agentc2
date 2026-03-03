@@ -31,6 +31,8 @@ const agentCreateSchema = z
         modelConfig: z.record(z.any()).optional().nullable(),
         extendedThinking: z.boolean().optional(),
         thinkingBudget: z.number().optional(),
+        adaptiveThinking: z.boolean().optional(),
+        thinkingEffort: z.enum(["max", "high", "medium", "low"]).optional(),
         parallelToolCalls: z.boolean().optional(),
         reasoningEffort: z.enum(["low", "medium", "high"]).optional(),
         cacheControl: z.boolean().optional(),
@@ -129,6 +131,8 @@ const buildModelConfig = (
     overrides: {
         extendedThinking?: boolean;
         thinkingBudget?: number;
+        adaptiveThinking?: boolean;
+        thinkingEffort?: "max" | "high" | "medium" | "low";
         parallelToolCalls?: boolean;
         reasoningEffort?: "low" | "medium" | "high";
         cacheControl?: boolean;
@@ -138,7 +142,20 @@ const buildModelConfig = (
 ) => {
     const config = { ...(baseConfig || {}) } as Record<string, unknown>;
 
-    if (overrides.extendedThinking !== undefined) {
+    if (overrides.adaptiveThinking !== undefined) {
+        const anthCfg = (config.anthropic as Record<string, unknown>) ?? {};
+        if (overrides.adaptiveThinking) {
+            anthCfg.thinking = { type: "adaptive" };
+            if (overrides.thinkingEffort) {
+                anthCfg.effort = overrides.thinkingEffort;
+            }
+        } else {
+            delete anthCfg.thinking;
+            delete anthCfg.effort;
+        }
+        config.anthropic = Object.keys(anthCfg).length > 0 ? anthCfg : undefined;
+        delete config.thinking;
+    } else if (overrides.extendedThinking !== undefined) {
         if (overrides.extendedThinking) {
             config.thinking = {
                 type: "enabled",
@@ -147,6 +164,12 @@ const buildModelConfig = (
         } else {
             delete config.thinking;
         }
+    }
+
+    if (overrides.thinkingEffort !== undefined && overrides.adaptiveThinking === undefined) {
+        const anthCfg = (config.anthropic as Record<string, unknown>) ?? {};
+        anthCfg.effort = overrides.thinkingEffort;
+        config.anthropic = anthCfg;
     }
 
     if (overrides.parallelToolCalls !== undefined) {
@@ -238,6 +261,8 @@ export const agentCreateTool = createTool({
         const modelConfig = buildModelConfig(input.modelConfig || null, {
             extendedThinking: input.extendedThinking,
             thinkingBudget: input.thinkingBudget,
+            adaptiveThinking: input.adaptiveThinking,
+            thinkingEffort: input.thinkingEffort,
             parallelToolCalls: input.parallelToolCalls,
             reasoningEffort: input.reasoningEffort,
             cacheControl: input.cacheControl,
@@ -415,6 +440,8 @@ export const agentUpdateTool = createTool({
         const modelConfig = buildModelConfig(modelConfigBase, {
             extendedThinking: payload.extendedThinking,
             thinkingBudget: payload.thinkingBudget,
+            adaptiveThinking: payload.adaptiveThinking,
+            thinkingEffort: payload.thinkingEffort,
             parallelToolCalls: payload.parallelToolCalls,
             reasoningEffort: payload.reasoningEffort,
             cacheControl: payload.cacheControl,
