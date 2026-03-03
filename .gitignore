@@ -69,6 +69,7 @@ packages/database/node_modules/.prisma
 .caddy.pid
 caddy.log
 data/
+!apps/frontend/src/data/
 
 # Storybook
 packages/ui/storybook-static
