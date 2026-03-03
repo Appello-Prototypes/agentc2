@@ -17,6 +17,7 @@ import {
     MoreHorizontal,
     UserCheck
 } from "lucide-react";
+import { useTimezone } from "@/lib/timezone-context";
 
 // ── Types ────────────────────────────────────────────────────────────────
 
@@ -48,6 +49,7 @@ interface WaitlistTableProps {
 
 export function WaitlistTable({ entries, statusStyles, signupBaseUrl }: WaitlistTableProps) {
     const router = useRouter();
+    const { formatDate, formatDateTime } = useTimezone();
     const [selected, setSelected] = useState<Set<string>>(new Set());
     const [loading, setLoading] = useState(false);
     const [loadingAction, setLoadingAction] = useState<string | null>(null);
@@ -483,7 +485,7 @@ export function WaitlistTable({ entries, statusStyles, signupBaseUrl }: Waitlist
                                             {hasRegistered && (
                                                 <span
                                                     className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400"
-                                                    title={`Signed up on ${new Date(entry.registeredAt!).toLocaleDateString()}`}
+                                                    title={`Signed up on ${formatDate(entry.registeredAt!)}`}
                                                 >
                                                     <UserCheck className="h-3 w-3" />
                                                     signed up
@@ -492,11 +494,7 @@ export function WaitlistTable({ entries, statusStyles, signupBaseUrl }: Waitlist
                                         </div>
                                     </td>
                                     <td className="text-muted-foreground px-4 py-3 text-xs">
-                                        {new Date(entry.createdAt).toLocaleDateString()}{" "}
-                                        {new Date(entry.createdAt).toLocaleTimeString([], {
-                                            hour: "2-digit",
-                                            minute: "2-digit"
-                                        })}
+                                        {formatDateTime(entry.createdAt)}
                                     </td>
                                     <td className="px-4 py-3 text-right">
                                         {isRowLoading ? (

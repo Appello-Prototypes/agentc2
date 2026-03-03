@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { TimezoneProvider } from "@/lib/timezone-context";
+import { getServerTimezone } from "@/lib/timezone-server";
 
 import "@/styles/globals.css";
 
@@ -10,14 +12,18 @@ export const metadata: Metadata = {
     description: "Internal administration portal for platform management."
 };
 
-export default function RootLayout({
+export default async function RootLayout({
     children
 }: Readonly<{
     children: React.ReactNode;
 }>) {
+    const timezone = await getServerTimezone();
+
     return (
         <html lang="en" suppressHydrationWarning>
-            <body className="h-dvh overflow-hidden">{children}</body>
+            <body className="h-dvh overflow-hidden">
+                <TimezoneProvider initialTimezone={timezone}>{children}</TimezoneProvider>
+            </body>
         </html>
     );
 }

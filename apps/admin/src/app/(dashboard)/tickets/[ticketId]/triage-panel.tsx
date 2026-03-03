@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { X, Plus } from "lucide-react";
+import { useTimezone } from "@/lib/timezone-context";
 
 interface TriageTicket {
     id: string;
@@ -45,6 +46,7 @@ export function TicketTriagePanel({
     adminUsers: AdminUser[];
 }) {
     const router = useRouter();
+    const { formatDateTime } = useTimezone();
     const [saving, setSaving] = useState(false);
     const [status, setStatus] = useState(ticket.status);
     const [priority, setPriority] = useState(ticket.priority);
@@ -354,29 +356,29 @@ export function TicketTriagePanel({
                     <div className="space-y-1 text-xs">
                         <div className="flex justify-between">
                             <span className="text-muted-foreground">Created</span>
-                            <span>{new Date(ticket.createdAt).toLocaleString()}</span>
+                            <span>{formatDateTime(ticket.createdAt)}</span>
                         </div>
                         {ticket.triagedAt && (
                             <div className="flex justify-between">
                                 <span className="text-muted-foreground">Triaged</span>
-                                <span>{new Date(ticket.triagedAt).toLocaleString()}</span>
+                                <span>{formatDateTime(ticket.triagedAt)}</span>
                             </div>
                         )}
                         {ticket.resolvedAt && (
                             <div className="flex justify-between">
                                 <span className="text-muted-foreground">Resolved</span>
-                                <span>{new Date(ticket.resolvedAt).toLocaleString()}</span>
+                                <span>{formatDateTime(ticket.resolvedAt)}</span>
                             </div>
                         )}
                         {ticket.closedAt && (
                             <div className="flex justify-between">
                                 <span className="text-muted-foreground">Closed</span>
-                                <span>{new Date(ticket.closedAt).toLocaleString()}</span>
+                                <span>{formatDateTime(ticket.closedAt)}</span>
                             </div>
                         )}
                         <div className="flex justify-between">
                             <span className="text-muted-foreground">Updated</span>
-                            <span>{new Date(ticket.updatedAt).toLocaleString()}</span>
+                            <span>{formatDateTime(ticket.updatedAt)}</span>
                         </div>
                     </div>
                 </div>

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { UserPlus, MoreVertical, Copy, Check, X } from "lucide-react";
+import { useTimezone } from "@/lib/timezone-context";
 
 interface TenantMember {
     id: string;
@@ -33,6 +34,7 @@ export function TenantUsersManager({
     initialMembers: TenantMember[];
 }) {
     const router = useRouter();
+    const { formatDate } = useTimezone();
     const [showAddDialog, setShowAddDialog] = useState(false);
     const [editingMember, setEditingMember] = useState<TenantMember | null>(null);
     const [createdPassword, setCreatedPassword] = useState<string | null>(null);
@@ -82,7 +84,7 @@ export function TenantUsersManager({
                                     />
                                 </td>
                                 <td className="text-muted-foreground px-4 py-2 text-xs">
-                                    {new Date(member.createdAt).toLocaleDateString()}
+                                    {formatDate(member.createdAt)}
                                 </td>
                                 <td className="px-4 py-2 text-right">
                                     <div className="relative inline-block">

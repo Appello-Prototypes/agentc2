@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@repo/database";
+import { getServerTimezone } from "@/lib/timezone-server";
+import { formatDateTime } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +17,8 @@ export default async function TenantAuditLogPage({
         select: { id: true }
     });
     if (!org) notFound();
+
+    const tz = await getServerTimezone();
 
     // Get tenant audit logs (from the customer-facing audit log table)
     const logs = await prisma.auditLog.findMany({
@@ -47,7 +51,7 @@ export default async function TenantAuditLogPage({
                                     {log.actorId?.substring(0, 8) || "system"}
                                 </td>
                                 <td className="text-muted-foreground px-4 py-2 text-xs">
-                                    {log.createdAt.toISOString()}
+                                    {formatDateTime(log.createdAt, tz)}
                                 </td>
                             </tr>
                         ))}

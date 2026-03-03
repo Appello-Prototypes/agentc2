@@ -6,6 +6,8 @@ import { TicketTriagePanel } from "./triage-panel";
 import { TicketCommentForm } from "./comment-form";
 import { EditableTitle, EditableDescription, EditableType } from "./edit-fields";
 import { DeleteTicketButton } from "./delete-button";
+import { getServerTimezone } from "@/lib/timezone-server";
+import { formatDate, formatDateTime } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +29,8 @@ export default async function TicketDetailPage({
     });
 
     if (!ticket) notFound();
+
+    const tz = await getServerTimezone();
 
     const adminUsers = await prisma.adminUser.findMany({
         where: { isActive: true },
@@ -79,7 +83,7 @@ export default async function TicketDetailPage({
                         >
                             {ticket.organization.name}
                         </Link>{" "}
-                        on {ticket.createdAt.toLocaleDateString()}
+                        on {formatDate(ticket.createdAt, tz)}
                     </p>
                 </div>
             </div>
@@ -145,7 +149,7 @@ export default async function TicketDetailPage({
                                                 )}
                                             </div>
                                             <span className="text-muted-foreground text-xs">
-                                                {comment.createdAt.toLocaleString()}
+                                                {formatDateTime(comment.createdAt, tz)}
                                             </span>
                                         </div>
                                         <p className="text-sm whitespace-pre-wrap">

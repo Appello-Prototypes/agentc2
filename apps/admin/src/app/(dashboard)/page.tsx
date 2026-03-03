@@ -3,6 +3,8 @@ import { prisma } from "@repo/database";
 import { DollarSign, TrendingUp, TrendingDown, ArrowUpRight } from "lucide-react";
 import { RevenueSparkChart, TenantStatusChart } from "./dashboard-charts";
 import type { MonthlyRevenue, TenantStatusData } from "./dashboard-charts";
+import { getServerTimezone } from "@/lib/timezone-server";
+import { formatDateLong, formatRelativeTime } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +32,7 @@ function monthLabel(key: string): string {
 }
 
 export default async function DashboardPage() {
+    const tz = await getServerTimezone();
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
@@ -181,14 +184,7 @@ export default async function DashboardPage() {
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <h1 className="text-2xl font-bold">Platform Dashboard</h1>
-                <span className="text-muted-foreground text-sm">
-                    {now.toLocaleDateString("en-US", {
-                        weekday: "long",
-                        month: "long",
-                        day: "numeric",
-                        year: "numeric"
-                    })}
-                </span>
+                <span className="text-muted-foreground text-sm">{formatDateLong(now, tz)}</span>
             </div>
 
             {/* ── Primary KPI Cards ──────────────────────────────────────── */}
@@ -366,7 +362,7 @@ export default async function DashboardPage() {
                                             {log.entityType}
                                         </td>
                                         <td className="text-muted-foreground px-3 py-2 text-xs">
-                                            {formatRelativeTime(log.createdAt)}
+                                            {formatRelativeTime(log.createdAt, tz)}
                                         </td>
                                     </tr>
                                 ))}
@@ -491,17 +487,3 @@ function ActionBadge({ action }: { action: string }) {
 }
 
 // ─── Relative time formatter ─────────────────────────────────────────────────
-
-function formatRelativeTime(date: Date): string {
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMin = Math.floor(diffMs / 60000);
-    const diffHr = Math.floor(diffMin / 60);
-    const diffDay = Math.floor(diffHr / 24);
-
-    if (diffMin < 1) return "just now";
-    if (diffMin < 60) return `${diffMin}m ago`;
-    if (diffHr < 24) return `${diffHr}h ago`;
-    if (diffDay < 7) return `${diffDay}d ago`;
-    return date.toLocaleDateString();
-}

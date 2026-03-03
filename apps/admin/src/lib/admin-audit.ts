@@ -59,6 +59,8 @@ export type AdminAuditAction =
     | "TICKET_CREATE"
     | "TICKET_UPDATE"
     | "TICKET_DELETE"
+    | "TICKET_BULK_UPDATE"
+    | "TICKET_BULK_DELETE"
     // Playbook marketplace
     | "PLAYBOOK_APPROVE"
     | "PLAYBOOK_REJECT"
@@ -73,7 +75,11 @@ export type AdminAuditAction =
     | "ADMIN_USER_UPDATE"
     | "ADMIN_USER_DEACTIVATE"
     | "ADMIN_LOGIN"
-    | "ADMIN_LOGOUT";
+    | "ADMIN_LOGOUT"
+    // Platform integrations
+    | "INTEGRATION_CONFIGURE"
+    | "INTEGRATION_DISCONNECT"
+    | "INTEGRATION_TEST";
 
 export interface AdminAuditLogOptions {
     adminUserId: string;

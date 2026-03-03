@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { KeyRound, Plus, Copy, Check, XCircle, Link as LinkIcon, Loader2 } from "lucide-react";
+import { useTimezone } from "@/lib/timezone-context";
 
 // ── Types ────────────────────────────────────────────────────────────────
 
@@ -28,6 +29,7 @@ export function PlatformInviteManager({
     initialInvites,
     signupBaseUrl
 }: PlatformInviteManagerProps) {
+    const { formatDate } = useTimezone();
     const [invites, setInvites] = useState<PlatformInvite[]>(initialInvites);
     const [showForm, setShowForm] = useState(false);
     const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -364,7 +366,7 @@ export function PlatformInviteManager({
                                         </span>
                                     </td>
                                     <td className="text-muted-foreground px-4 py-3 text-xs">
-                                        {new Date(invite.createdAt).toLocaleDateString()}
+                                        {formatDate(invite.createdAt)}
                                     </td>
                                     <td className="px-4 py-3 text-right">
                                         {invite.isActive && (

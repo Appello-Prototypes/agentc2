@@ -1,5 +1,7 @@
 import { prisma } from "@repo/database";
 import { TrendingUp, TrendingDown, DollarSign, Users, ArrowUpRight } from "lucide-react";
+import { getServerTimezone } from "@/lib/timezone-server";
+import { formatDate } from "@/lib/timezone";
 import {
     RevenueTrendChart,
     MarginTrendChart,
@@ -34,6 +36,7 @@ function monthLabel(key: string): string {
 }
 
 export default async function FinancialsPage() {
+    const tz = await getServerTimezone();
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
@@ -220,6 +223,7 @@ export default async function FinancialsPage() {
                 <h1 className="text-2xl font-bold">Financials</h1>
                 <span className="text-muted-foreground text-sm">
                     {now.toLocaleDateString("en-US", {
+                        timeZone: tz,
                         month: "long",
                         year: "numeric"
                     })}
@@ -416,7 +420,7 @@ export default async function FinancialsPage() {
                                                 ${sub.overageAccruedUsd.toFixed(2)}
                                             </td>
                                             <td className="text-muted-foreground px-3 py-2 text-xs">
-                                                {sub.currentPeriodEnd.toLocaleDateString()}
+                                                {formatDate(sub.currentPeriodEnd, tz)}
                                             </td>
                                         </tr>
                                     ))

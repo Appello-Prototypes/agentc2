@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@repo/database";
+import { getServerTimezone } from "@/lib/timezone-server";
+import { formatDateTime } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +17,8 @@ export default async function TenantLifecyclePage({
         select: { id: true, status: true }
     });
     if (!org) notFound();
+
+    const tz = await getServerTimezone();
 
     const events = await prisma.tenantLifecycleEvent.findMany({
         where: { organizationId: org.id },
@@ -77,7 +81,7 @@ export default async function TenantLifecyclePage({
                                     {event.performedBy?.substring(0, 8) || "system"}
                                 </td>
                                 <td className="text-muted-foreground px-4 py-2 text-xs">
-                                    {event.createdAt.toISOString()}
+                                    {formatDateTime(event.createdAt, tz)}
                                 </td>
                             </tr>
                         ))}

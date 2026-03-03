@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma, Prisma } from "@repo/database";
-import { Search, TicketIcon, Plus } from "lucide-react";
+import { Search, Plus } from "lucide-react";
+import { TicketsTable } from "./tickets-table";
 
 export const dynamic = "force-dynamic";
 
@@ -40,8 +41,7 @@ export default async function TicketsPage({
     if (type) where.type = type as Prisma.EnumTicketTypeFilter;
     if (priority) where.priority = priority as Prisma.EnumTicketPriorityFilter;
 
-    // KPIs
-    const [tickets, total, kpis] = await Promise.all([
+    const [tickets, total, kpis, adminUsers] = await Promise.all([
         prisma.supportTicket.findMany({
             where,
             orderBy: { createdAt: "desc" },
@@ -64,7 +64,12 @@ export default async function TicketsPage({
             prisma.supportTicket.count({
                 where: { priority: { in: ["CRITICAL", "HIGH"] } }
             })
-        ])
+        ]),
+        prisma.adminUser.findMany({
+            where: { isActive: true },
+            select: { id: true, name: true },
+            orderBy: { name: "asc" }
+        })
     ]);
 
     const [openCount, bugCount, featureCount, urgentCount] = kpis;
@@ -81,6 +86,21 @@ export default async function TicketsPage({
         }
         return `/tickets?${p.toString()}`;
     }
+
+    const serializedTickets = tickets.map((t) => ({
+        id: t.id,
+        ticketNumber: t.ticketNumber,
+        title: t.title,
+        type: t.type,
+        status: t.status,
+        priority: t.priority,
+        assignedToId: t.assignedToId,
+        createdAt: t.createdAt.toISOString(),
+        organization: t.organization,
+        submittedBy: t.submittedBy,
+        assignedTo: t.assignedTo,
+        _count: t._count
+    }));
 
     return (
         <div className="space-y-6">
@@ -162,91 +182,8 @@ export default async function TicketsPage({
                 ))}
             </div>
 
-            {/* Table */}
-            <div className="bg-card border-border overflow-hidden rounded-lg border">
-                <table className="w-full text-sm">
-                    <thead>
-                        <tr className="border-border border-b">
-                            <th className="px-4 py-3 text-left font-medium">#</th>
-                            <th className="px-4 py-3 text-left font-medium">Type</th>
-                            <th className="px-4 py-3 text-left font-medium">Title</th>
-                            <th className="px-4 py-3 text-left font-medium">Organization</th>
-                            <th className="px-4 py-3 text-left font-medium">Submitter</th>
-                            <th className="px-4 py-3 text-left font-medium">Priority</th>
-                            <th className="px-4 py-3 text-left font-medium">Status</th>
-                            <th className="px-4 py-3 text-left font-medium">Assigned</th>
-                            <th className="px-4 py-3 text-left font-medium">Created</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {tickets.map((ticket) => (
-                            <tr
-                                key={ticket.id}
-                                className="border-border hover:bg-accent/50 border-b transition-colors last:border-0"
-                            >
-                                <td className="px-4 py-3">
-                                    <Link
-                                        href={`/tickets/${ticket.id}`}
-                                        className="font-mono text-xs font-medium hover:underline"
-                                    >
-                                        #{ticket.ticketNumber}
-                                    </Link>
-                                </td>
-                                <td className="px-4 py-3">
-                                    <TypeBadge type={ticket.type} />
-                                </td>
-                                <td className="max-w-xs px-4 py-3">
-                                    <Link
-                                        href={`/tickets/${ticket.id}`}
-                                        className="line-clamp-1 font-medium hover:underline"
-                                    >
-                                        {ticket.title}
-                                    </Link>
-                                    {ticket._count.comments > 0 && (
-                                        <span className="text-muted-foreground ml-2 text-xs">
-                                            ({ticket._count.comments} comments)
-                                        </span>
-                                    )}
-                                </td>
-                                <td className="px-4 py-3">
-                                    <span className="text-xs">{ticket.organization.name}</span>
-                                </td>
-                                <td className="px-4 py-3">
-                                    <span className="text-xs">{ticket.submittedBy.name}</span>
-                                    <div className="text-muted-foreground text-xs">
-                                        {ticket.submittedBy.email}
-                                    </div>
-                                </td>
-                                <td className="px-4 py-3">
-                                    <PriorityBadge priority={ticket.priority} />
-                                </td>
-                                <td className="px-4 py-3">
-                                    <StatusBadge status={ticket.status} />
-                                </td>
-                                <td className="px-4 py-3">
-                                    <span className="text-muted-foreground text-xs">
-                                        {ticket.assignedTo?.name ?? "Unassigned"}
-                                    </span>
-                                </td>
-                                <td className="text-muted-foreground px-4 py-3 text-xs">
-                                    {ticket.createdAt.toLocaleDateString()}
-                                </td>
-                            </tr>
-                        ))}
-                        {tickets.length === 0 && (
-                            <tr>
-                                <td
-                                    colSpan={9}
-                                    className="text-muted-foreground px-4 py-8 text-center"
-                                >
-                                    <TicketIcon className="mx-auto mb-2 h-8 w-8 opacity-50" />
-                                    No tickets found
-                                </td>
-                            </tr>
-                        )}
-                    </tbody>
-                </table>
-            </div>
+            {/* Table with bulk edit */}
+            <TicketsTable tickets={serializedTickets} adminUsers={adminUsers} />
 
             {/* Pagination */}
             {totalPages > 1 && (
@@ -281,56 +218,6 @@ function formatLabel(s: string) {
         .replace(/_/g, " ")
         .toLowerCase()
         .replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-function TypeBadge({ type }: { type: string }) {
-    const colors: Record<string, string> = {
-        BUG: "bg-red-500/10 text-red-500",
-        FEATURE_REQUEST: "bg-purple-500/10 text-purple-500",
-        IMPROVEMENT: "bg-blue-500/10 text-blue-500",
-        QUESTION: "bg-gray-500/10 text-gray-500"
-    };
-    return (
-        <span
-            className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${colors[type] || "bg-gray-500/10 text-gray-500"}`}
-        >
-            {formatLabel(type)}
-        </span>
-    );
-}
-
-function PriorityBadge({ priority }: { priority: string }) {
-    const colors: Record<string, string> = {
-        CRITICAL: "bg-red-500/10 text-red-500",
-        HIGH: "bg-orange-500/10 text-orange-500",
-        MEDIUM: "bg-yellow-500/10 text-yellow-500",
-        LOW: "bg-green-500/10 text-green-500"
-    };
-    return (
-        <span
-            className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${colors[priority] || "bg-gray-500/10 text-gray-500"}`}
-        >
-            {formatLabel(priority)}
-        </span>
-    );
-}
-
-function StatusBadge({ status }: { status: string }) {
-    const colors: Record<string, string> = {
-        NEW: "bg-blue-500/10 text-blue-500",
-        TRIAGED: "bg-indigo-500/10 text-indigo-500",
-        IN_PROGRESS: "bg-yellow-500/10 text-yellow-500",
-        WAITING_ON_CUSTOMER: "bg-orange-500/10 text-orange-500",
-        RESOLVED: "bg-green-500/10 text-green-500",
-        CLOSED: "bg-gray-500/10 text-gray-500"
-    };
-    return (
-        <span
-            className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${colors[status] || "bg-gray-500/10 text-gray-500"}`}
-        >
-            {formatLabel(status)}
-        </span>
-    );
 }
 
 function FilterLink({ href, label, active }: { href: string; label: string; active: boolean }) {

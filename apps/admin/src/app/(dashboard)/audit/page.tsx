@@ -1,5 +1,7 @@
 import { prisma, Prisma } from "@repo/database";
 import { FileText } from "lucide-react";
+import { getServerTimezone } from "@/lib/timezone-server";
+import { formatDateTime } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +24,8 @@ export default async function AuditLogPage({
     const where: Prisma.AdminAuditLogWhereInput = {};
     if (action) where.action = action;
     if (entityType) where.entityType = entityType;
+
+    const tz = await getServerTimezone();
 
     const [logs, total] = await Promise.all([
         prisma.adminAuditLog.findMany({
@@ -107,7 +111,7 @@ export default async function AuditLogPage({
                                     {log.ipAddress}
                                 </td>
                                 <td className="text-muted-foreground px-4 py-3 text-xs">
-                                    {log.createdAt.toISOString()}
+                                    {formatDateTime(log.createdAt, tz)}
                                 </td>
                             </tr>
                         ))}

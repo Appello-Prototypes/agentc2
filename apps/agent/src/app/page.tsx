@@ -34,7 +34,7 @@ const DEFAULT_EMBED_CONFIG: EmbedConfig = {
  */
 export default async function RootPage() {
     const agent = await prisma.agent.findFirst({
-        where: { slug: "welcome-v2", visibility: "PUBLIC", isActive: true },
+        where: { slug: { startsWith: "welcome-v2" }, visibility: "PUBLIC", isActive: true },
         select: {
             slug: true,
             name: true,

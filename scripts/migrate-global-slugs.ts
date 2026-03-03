@@ -22,9 +22,8 @@
  *   bun run scripts/migrate-global-slugs.ts --apply  # actually rename slugs
  */
 
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "../packages/database/src/index";
 
-const prisma = new PrismaClient();
 const dryRun = !process.argv.includes("--apply");
 
 type SlugRenameMap = Map<string, Map<string, string>>; // modelType -> oldSlug -> newSlug
@@ -630,9 +629,7 @@ async function main() {
     console.log(`   JSON updates: ${jsonUpdates}`);
 }
 
-main()
-    .catch((err) => {
-        console.error("Migration failed:", err);
-        process.exit(1);
-    })
-    .finally(() => prisma.$disconnect());
+main().catch((err) => {
+    console.error("Migration failed:", err);
+    process.exit(1);
+});

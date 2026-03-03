@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@repo/database";
+import { getServerTimezone } from "@/lib/timezone-server";
+import { formatDateTime } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +19,8 @@ export default async function UserDetailPage({ params }: { params: Promise<{ use
     });
 
     if (!user) notFound();
+
+    const tz = await getServerTimezone();
 
     // User has no memberships relation — look them up separately
     const userMemberships = await prisma.membership.findMany({
@@ -61,10 +65,10 @@ export default async function UserDetailPage({ params }: { params: Promise<{ use
                     <dd>{user.email}</dd>
 
                     <dt className="text-muted-foreground">Created</dt>
-                    <dd>{user.createdAt.toISOString()}</dd>
+                    <dd>{formatDateTime(user.createdAt, tz)}</dd>
 
                     <dt className="text-muted-foreground">Updated</dt>
-                    <dd>{user.updatedAt.toISOString()}</dd>
+                    <dd>{formatDateTime(user.updatedAt, tz)}</dd>
 
                     <dt className="text-muted-foreground">Email Verified</dt>
                     <dd>{user.emailVerified ? "Yes" : "No"}</dd>
@@ -127,10 +131,10 @@ export default async function UserDetailPage({ params }: { params: Promise<{ use
                                         {s.ipAddress || "—"}
                                     </td>
                                     <td className="text-muted-foreground px-4 py-2 text-xs">
-                                        {s.expiresAt.toISOString()}
+                                        {formatDateTime(s.expiresAt, tz)}
                                     </td>
                                     <td className="text-muted-foreground px-4 py-2 text-xs">
-                                        {s.createdAt.toISOString()}
+                                        {formatDateTime(s.createdAt, tz)}
                                     </td>
                                 </tr>
                             ))}

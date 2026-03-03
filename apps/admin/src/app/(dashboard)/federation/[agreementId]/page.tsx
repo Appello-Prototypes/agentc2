@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { prisma } from "@repo/database";
+import { getServerTimezone } from "@/lib/timezone-server";
+import { formatDateTime } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +37,8 @@ export default async function AgreementDetailPage({
     });
 
     if (!agreement) notFound();
+
+    const tz = await getServerTimezone();
 
     const [msgAgg, lastMsg, conversations] = await Promise.all([
         prisma.federationMessage.aggregate({
@@ -104,7 +108,7 @@ export default async function AgreementDetailPage({
                 />
                 <StatCard
                     label="Last Activity"
-                    value={lastMsg ? lastMsg.createdAt.toISOString().slice(0, 16) : "—"}
+                    value={lastMsg ? formatDateTime(lastMsg.createdAt, tz) : "—"}
                     small
                 />
             </div>
@@ -247,7 +251,7 @@ export default async function AgreementDetailPage({
                                         </td>
                                         <td className="text-muted-foreground px-4 py-2 text-xs">
                                             {conv._max.createdAt
-                                                ? conv._max.createdAt.toISOString()
+                                                ? formatDateTime(conv._max.createdAt, tz)
                                                 : "—"}
                                         </td>
                                         <td className="px-4 py-2">

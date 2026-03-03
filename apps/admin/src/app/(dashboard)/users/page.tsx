@@ -2,6 +2,8 @@ import Link from "next/link";
 import { prisma, Prisma } from "@repo/database";
 import { Search, Users as UsersIcon } from "lucide-react";
 import { ImpersonateButton } from "@/components/impersonate-button";
+import { getServerTimezone } from "@/lib/timezone-server";
+import { formatDate } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +25,8 @@ export default async function UsersPage({
             { email: { contains: search, mode: "insensitive" } }
         ];
     }
+
+    const tz = await getServerTimezone();
 
     const [users, total] = await Promise.all([
         prisma.user.findMany({
@@ -119,7 +123,7 @@ export default async function UsersPage({
                                         </div>
                                     </td>
                                     <td className="text-muted-foreground px-4 py-3 text-xs">
-                                        {user.createdAt.toLocaleDateString()}
+                                        {formatDate(user.createdAt, tz)}
                                     </td>
                                     <td className="px-4 py-3 text-right">
                                         <ImpersonateButton

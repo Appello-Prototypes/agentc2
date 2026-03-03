@@ -22,10 +22,9 @@ export default async function HomePage() {
         redirect("/workspace");
     }
 
-    // Fetch the welcome agent's public token for the embed
     const welcomeAgent = await prisma.agent.findFirst({
-        where: { slug: "welcome" },
-        select: { publicToken: true, visibility: true }
+        where: { slug: { startsWith: "welcome" }, visibility: "PUBLIC", isActive: true },
+        select: { slug: true, publicToken: true, visibility: true }
     });
 
     const token = welcomeAgent?.visibility === "PUBLIC" ? welcomeAgent.publicToken : null;
@@ -75,7 +74,7 @@ export default async function HomePage() {
         <main className="relative h-dvh w-full bg-black">
             <h1 className="sr-only">AgentC2 AI Agent Orchestration Platform</h1>
             <iframe
-                src={`${agentBase}/embed/welcome?token=${token}&internal=true`}
+                src={`${agentBase}/embed/${welcomeAgent!.slug}?token=${token}&internal=true`}
                 className="h-full w-full border-0"
                 allow="clipboard-write"
             />

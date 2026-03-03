@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@repo/database";
+import { getServerTimezone } from "@/lib/timezone-server";
+import { formatDate } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +17,8 @@ export default async function TenantIntegrationsPage({
         select: { id: true }
     });
     if (!org) notFound();
+
+    const tz = await getServerTimezone();
 
     const connections = await prisma.integrationConnection.findMany({
         where: { organizationId: org.id },
@@ -50,7 +54,7 @@ export default async function TenantIntegrationsPage({
                                     {conn.scope || "—"}
                                 </td>
                                 <td className="text-muted-foreground px-4 py-2 text-xs">
-                                    {conn.createdAt.toLocaleDateString()}
+                                    {formatDate(conn.createdAt, tz)}
                                 </td>
                             </tr>
                         ))}

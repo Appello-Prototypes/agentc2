@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { UserPlus, MoreVertical, Copy, Check, X } from "lucide-react";
+import { useTimezone } from "@/lib/timezone-context";
 
 interface AdminUser {
     id: string;
@@ -35,6 +36,7 @@ export function AdminUsersManager({
     currentAdminId: string;
 }) {
     const router = useRouter();
+    const { formatDate } = useTimezone();
     const [showCreateDialog, setShowCreateDialog] = useState(false);
     const [editingAdmin, setEditingAdmin] = useState<AdminUser | null>(null);
     const [createdPassword, setCreatedPassword] = useState<string | null>(null);
@@ -93,9 +95,7 @@ export function AdminUsersManager({
                                     {admin.mfaEnabled ? "Enabled" : "—"}
                                 </td>
                                 <td className="text-muted-foreground px-4 py-3 text-xs">
-                                    {admin.lastLoginAt
-                                        ? new Date(admin.lastLoginAt).toLocaleDateString()
-                                        : "Never"}
+                                    {admin.lastLoginAt ? formatDate(admin.lastLoginAt) : "Never"}
                                 </td>
                                 <td className="px-4 py-3 text-right">
                                     {admin.id !== currentAdminId && (

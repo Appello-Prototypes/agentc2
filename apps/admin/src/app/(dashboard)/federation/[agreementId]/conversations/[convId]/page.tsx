@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ArrowLeft, Loader2 } from "lucide-react";
+import { useTimezone } from "@/lib/timezone-context";
 
 interface Org {
     id: string;
@@ -44,6 +45,7 @@ export default function ConversationViewerPage() {
         agreementId: string;
         convId: string;
     }>();
+    const { formatDateTime } = useTimezone();
     const [data, setData] = useState<ConversationData | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
@@ -149,7 +151,7 @@ export default function ConversationViewerPage() {
                                     </span>
                                 </div>
                                 <span className="text-muted-foreground text-xs">
-                                    {new Date(msg.createdAt).toLocaleString()}
+                                    {formatDateTime(msg.createdAt)}
                                 </span>
                             </div>
 

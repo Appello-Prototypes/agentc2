@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@repo/database";
+import { getServerTimezone } from "@/lib/timezone-server";
+import { formatDate, formatDateTime } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +17,8 @@ export default async function TenantBillingPage({
         select: { id: true, name: true, slug: true, status: true, stripeCustomerId: true }
     });
     if (!org) notFound();
+
+    const tz = await getServerTimezone();
 
     const [subscription, orgBudget, userBudgets, alerts] = await Promise.all([
         prisma.orgSubscription.findUnique({
@@ -151,11 +155,11 @@ export default async function TenantBillingPage({
                             <div className="text-muted-foreground text-xs">Period</div>
                             <div className="text-xs">
                                 {subscription.currentPeriodStart
-                                    ? new Date(subscription.currentPeriodStart).toLocaleDateString()
+                                    ? formatDate(new Date(subscription.currentPeriodStart), tz)
                                     : "—"}{" "}
                                 –{" "}
                                 {subscription.currentPeriodEnd
-                                    ? new Date(subscription.currentPeriodEnd).toLocaleDateString()
+                                    ? formatDate(new Date(subscription.currentPeriodEnd), tz)
                                     : "—"}
                             </div>
                         </div>
@@ -163,7 +167,7 @@ export default async function TenantBillingPage({
                             <div>
                                 <div className="text-muted-foreground text-xs">Canceled At</div>
                                 <div className="text-xs text-red-600">
-                                    {new Date(subscription.canceledAt).toLocaleDateString()}
+                                    {formatDate(new Date(subscription.canceledAt), tz)}
                                 </div>
                             </div>
                         )}
@@ -280,7 +284,7 @@ export default async function TenantBillingPage({
                                         {alert.level}
                                     </span>
                                     <span className="text-muted-foreground text-xs">
-                                        {new Date(alert.createdAt).toLocaleString()}
+                                        {formatDateTime(new Date(alert.createdAt), tz)}
                                     </span>
                                 </div>
                                 <p className="mt-1">{alert.message}</p>

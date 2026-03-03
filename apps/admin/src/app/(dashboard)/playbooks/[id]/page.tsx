@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { prisma } from "@repo/database";
 import { notFound } from "next/navigation";
+import { getServerTimezone } from "@/lib/timezone-server";
+import { formatDate } from "@/lib/timezone";
 import {
     ArrowLeftIcon,
     PackageIcon,
@@ -61,6 +63,8 @@ export default async function PlaybookDetailPage(props: { params: Promise<{ id: 
 
     if (!playbook) notFound();
 
+    const tz = await getServerTimezone();
+
     const latestManifest = playbook.versions[0]?.manifest as Record<string, unknown> | null;
     const entryComponent = playbook.components.find((c) => c.isEntryPoint);
 
@@ -104,7 +108,7 @@ export default async function PlaybookDetailPage(props: { params: Promise<{ id: 
                         </span>
                         <span className="flex items-center gap-1">
                             <CalendarIcon className="h-3.5 w-3.5" />
-                            Updated {playbook.updatedAt.toLocaleDateString()}
+                            Updated {formatDate(playbook.updatedAt, tz)}
                         </span>
                     </div>
                 </div>
@@ -207,7 +211,7 @@ export default async function PlaybookDetailPage(props: { params: Promise<{ id: 
                                                 v{v.version}
                                             </span>
                                             <span className="text-muted-foreground text-xs">
-                                                {v.createdAt.toLocaleDateString()}
+                                                {formatDate(v.createdAt, tz)}
                                             </span>
                                         </div>
                                         {v.changelog && (

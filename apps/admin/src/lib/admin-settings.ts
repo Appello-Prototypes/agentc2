@@ -3,7 +3,11 @@ import { prisma } from "@repo/database";
 export const ADMIN_SETTING_KEYS = {
     githubConnection: "github_connection",
     pipelineRepositories: "pipeline_repositories",
-    dispatchConfig: "dispatch_config"
+    dispatchConfig: "dispatch_config",
+    integrationSlack: "integration_slack",
+    integrationEmail: "integration_email",
+    integrationStripe: "integration_stripe",
+    integrationInngest: "integration_inngest"
 } as const;
 
 export type DispatchConfig = {
@@ -30,6 +34,26 @@ export type GitHubConnectionSetting = {
     connectedAt: string;
     accessToken: Record<string, unknown>;
 };
+
+export type IntegrationSettingValue = {
+    configuredAt: string;
+    configuredBy: string;
+    credentials: Record<string, unknown>;
+    metadata?: Record<string, unknown>;
+};
+
+export const INTEGRATION_PROVIDERS = ["slack", "email", "stripe", "inngest"] as const;
+export type IntegrationProvider = (typeof INTEGRATION_PROVIDERS)[number];
+
+export function integrationSettingKey(provider: IntegrationProvider): string {
+    const map: Record<IntegrationProvider, string> = {
+        slack: ADMIN_SETTING_KEYS.integrationSlack,
+        email: ADMIN_SETTING_KEYS.integrationEmail,
+        stripe: ADMIN_SETTING_KEYS.integrationStripe,
+        inngest: ADMIN_SETTING_KEYS.integrationInngest
+    };
+    return map[provider];
+}
 
 export async function getAdminSettingValue<T>(key: string): Promise<T | null> {
     const setting = await prisma.adminSetting.findUnique({

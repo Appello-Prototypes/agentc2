@@ -1,9 +1,13 @@
 import { prisma } from "@repo/database";
 import { Flag } from "lucide-react";
+import { getServerTimezone } from "@/lib/timezone-server";
+import { formatDate } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
 
 export default async function FlagsPage() {
+    const tz = await getServerTimezone();
+
     const flags = await prisma.featureFlag.findMany({
         orderBy: { key: "asc" },
         include: {
@@ -65,7 +69,7 @@ export default async function FlagsPage() {
                                     )}
                                 </td>
                                 <td className="text-muted-foreground px-4 py-3 text-xs">
-                                    {flag.updatedAt.toLocaleDateString()}
+                                    {formatDate(flag.updatedAt, tz)}
                                 </td>
                             </tr>
                         ))}

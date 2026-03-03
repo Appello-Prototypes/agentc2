@@ -1,10 +1,13 @@
 import Link from "next/link";
 import { Globe2 } from "lucide-react";
 import { prisma } from "@repo/database";
+import { getServerTimezone } from "@/lib/timezone-server";
+import { formatDateTime } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
 
 export default async function FederationDashboardPage() {
+    const tz = await getServerTimezone();
     const now = new Date();
     const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
@@ -143,7 +146,7 @@ export default async function FederationDashboardPage() {
                                         </td>
                                         <td className="text-muted-foreground px-4 py-2 text-xs">
                                             {lastActivityByAgreement[a.id]
-                                                ? lastActivityByAgreement[a.id]!.toISOString()
+                                                ? formatDateTime(lastActivityByAgreement[a.id]!, tz)
                                                 : "—"}
                                         </td>
                                         <td className="px-4 py-2 text-right font-mono text-xs">
@@ -200,7 +203,7 @@ export default async function FederationDashboardPage() {
                                             className="border-border border-b last:border-0"
                                         >
                                             <td className="text-muted-foreground px-4 py-2 text-xs">
-                                                {msg.createdAt.toISOString()}
+                                                {formatDateTime(msg.createdAt, tz)}
                                             </td>
                                             <td className="px-4 py-2 text-xs">
                                                 <span className="font-medium">{sourceOrg}</span> /{" "}
