@@ -59,6 +59,11 @@ export type AdminAuditAction =
     | "TICKET_CREATE"
     | "TICKET_UPDATE"
     | "TICKET_DELETE"
+    // Playbook marketplace
+    | "PLAYBOOK_APPROVE"
+    | "PLAYBOOK_REJECT"
+    | "PLAYBOOK_SUSPEND"
+    | "PLAYBOOK_REINSTATE"
     // Tenant member management
     | "TENANT_MEMBER_ADD"
     | "TENANT_MEMBER_UPDATE"

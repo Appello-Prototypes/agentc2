@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma, Prisma } from "@repo/database";
 import { Search, Users as UsersIcon } from "lucide-react";
+import { ImpersonateButton } from "@/components/impersonate-button";
 
 export const dynamic = "force-dynamic";
 
@@ -82,6 +83,7 @@ export default async function UsersPage({
                             <th className="px-4 py-3 text-left font-medium">Email</th>
                             <th className="px-4 py-3 text-left font-medium">Organizations</th>
                             <th className="px-4 py-3 text-left font-medium">Joined</th>
+                            <th className="px-4 py-3 text-right font-medium">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -119,13 +121,19 @@ export default async function UsersPage({
                                     <td className="text-muted-foreground px-4 py-3 text-xs">
                                         {user.createdAt.toLocaleDateString()}
                                     </td>
+                                    <td className="px-4 py-3 text-right">
+                                        <ImpersonateButton
+                                            userId={user.id}
+                                            userName={user.name || user.email}
+                                        />
+                                    </td>
                                 </tr>
                             );
                         })}
                         {users.length === 0 && (
                             <tr>
                                 <td
-                                    colSpan={4}
+                                    colSpan={5}
                                     className="text-muted-foreground px-4 py-8 text-center"
                                 >
                                     <UsersIcon className="mx-auto mb-2 h-8 w-8 opacity-50" />

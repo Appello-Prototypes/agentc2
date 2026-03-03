@@ -41,7 +41,29 @@ export async function POST(request: NextRequest, { params }: Params) {
 
         const updated = await prisma.playbook.update({
             where: { slug },
-            data: { status: "PENDING_REVIEW" }
+            data: { status: "PENDING_REVIEW" },
+            include: {
+                components: {
+                    orderBy: { sortOrder: "asc" },
+                    select: {
+                        id: true,
+                        componentType: true,
+                        sourceSlug: true,
+                        isEntryPoint: true,
+                        sortOrder: true
+                    }
+                },
+                versions: {
+                    orderBy: { version: "desc" },
+                    take: 5,
+                    select: {
+                        id: true,
+                        version: true,
+                        changelog: true,
+                        createdAt: true
+                    }
+                }
+            }
         });
 
         return NextResponse.json({ playbook: updated });
