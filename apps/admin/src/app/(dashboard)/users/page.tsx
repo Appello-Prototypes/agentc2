@@ -11,7 +11,6 @@ import {
 } from "lucide-react";
 import { UsersTable } from "@/components/users-table";
 import { getServerTimezone } from "@/lib/timezone-server";
-import { formatDate } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
 
@@ -237,11 +236,7 @@ export default async function UsersPage({
                     })}
                 </div>
 
-                <UsersTable
-                    users={tableUsers}
-                    tz={tz}
-                    formatDateFn={(dateStr: string) => formatDate(new Date(dateStr), tz)}
-                />
+                <UsersTable users={tableUsers} tz={tz} />
             </div>
 
             {/* Pagination */}

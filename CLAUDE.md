@@ -253,6 +253,12 @@ INNGEST_EVENT_KEY="..."       # Event publishing key
 INNGEST_SIGNING_KEY="..."     # Webhook verification key
 ```
 
+### Platform Identity
+
+```bash
+PLATFORM_ORG_SLUG="agentc2"   # Org slug with god-mode MCP access (default: "agentc2")
+```
+
 ### Feature Flags
 
 ```bash

@@ -161,6 +161,18 @@ async function hasRequiredToolAccess(
     return false;
 }
 
+let cachedPlatformOrgId: string | null | undefined;
+async function getPlatformOrgId(): Promise<string | null> {
+    if (cachedPlatformOrgId !== undefined) return cachedPlatformOrgId;
+    const slug = process.env.PLATFORM_ORG_SLUG || "agentc2";
+    const org = await prisma.organization.findUnique({
+        where: { slug },
+        select: { id: true }
+    });
+    cachedPlatformOrgId = org?.id ?? null;
+    return cachedPlatformOrgId;
+}
+
 /**
  * GET /api/mcp
  *
@@ -791,6 +803,19 @@ export async function POST(request: NextRequest) {
                 }
                 if (route.injectUser && userId && scopedParams.userId === undefined) {
                     scopedParams.userId = userId;
+                }
+
+                if ((route.enforceOrg || route.enforceUser) && organizationId) {
+                    const platformOrgId = await getPlatformOrgId();
+                    const isPlatform = organizationId === platformOrgId;
+                    if (!isPlatform) {
+                        if (route.enforceOrg) {
+                            scopedParams.organizationId = organizationId;
+                        }
+                        if (route.enforceUser && userId) {
+                            scopedParams.userId = userId;
+                        }
+                    }
                 }
 
                 if (route.applyDefaults) {

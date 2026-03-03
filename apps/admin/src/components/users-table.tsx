@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Snowflake, Play, Trash2, Loader2, X } from "lucide-react";
 import { UserRowActions } from "./user-row-actions";
 import { ImpersonateButton } from "./impersonate-button";
+import { formatDate } from "@/lib/timezone";
 
 interface UserRow {
     id: string;
@@ -23,12 +24,11 @@ interface UserRow {
 interface UsersTableProps {
     users: UserRow[];
     tz: string;
-    formatDateFn: (date: string) => string;
 }
 
 type BulkAction = "freeze" | "activate" | "delete";
 
-export function UsersTable({ users, formatDateFn }: UsersTableProps) {
+export function UsersTable({ users, tz }: UsersTableProps) {
     const router = useRouter();
     const [selected, setSelected] = useState<Set<string>>(new Set());
     const [bulkLoading, setBulkLoading] = useState(false);
@@ -234,7 +234,7 @@ export function UsersTable({ users, formatDateFn }: UsersTableProps) {
                                     </div>
                                 </td>
                                 <td className="text-muted-foreground px-4 py-3 text-xs">
-                                    {formatDateFn(user.createdAt)}
+                                    {formatDate(user.createdAt, tz)}
                                 </td>
                                 <td className="px-4 py-3">
                                     <div className="flex items-center justify-end gap-1">

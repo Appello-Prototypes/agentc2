@@ -27,6 +27,8 @@ export type RegistryToolRoute = {
     applyDefaults?: boolean;
     injectOrg?: boolean;
     injectUser?: boolean;
+    enforceOrg?: boolean;
+    enforceUser?: boolean;
 };
 
 export type CustomToolRoute = {
