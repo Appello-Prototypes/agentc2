@@ -165,7 +165,12 @@ export default function PlaybookManagePage(props: { params: Promise<{ slug: stri
             if (data.warnings?.length > 0) {
                 setPackageWarnings(data.warnings);
             }
-            setPlaybook(data.playbook);
+            // Refetch full playbook detail (API response lacks relations)
+            const detailRes = await fetch(`${getApiBase()}/api/playbooks/${slug}`);
+            if (detailRes.ok) {
+                const detailData = await detailRes.json();
+                setPlaybook(detailData.playbook);
+            }
             if (!data.warnings?.length) {
                 setPackageOpen(false);
             }
