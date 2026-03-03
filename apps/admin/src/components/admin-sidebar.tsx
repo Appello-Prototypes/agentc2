@@ -15,7 +15,8 @@ import {
     Bug,
     Globe2,
     CreditCard,
-    TrendingUp
+    TrendingUp,
+    PackageIcon
 } from "lucide-react";
 
 const navItems = [
@@ -24,6 +25,7 @@ const navItems = [
     { href: "/users", label: "Users", icon: Users },
     { href: "/financials", label: "Financials", icon: TrendingUp },
     { href: "/plans", label: "Plans & Pricing", icon: CreditCard },
+    { href: "/playbooks", label: "Playbooks", icon: PackageIcon },
     { href: "/tickets", label: "Tickets", icon: Bug },
     { href: "/waitlist", label: "Waitlist", icon: ClipboardList },
     { href: "/flags", label: "Feature Flags", icon: Flag },

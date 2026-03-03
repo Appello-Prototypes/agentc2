@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
-import { requireAdminAction, AdminAuthError, getAdminSession } from "@repo/admin-auth";
+import { requireAdminAction, AdminAuthError } from "@repo/admin-auth";
 import { adminAudit, getRequestContext } from "@/lib/admin-audit";
 
 type Params = { params: Promise<{ id: string }> };
@@ -14,9 +14,8 @@ const VALID_TRANSITIONS: Record<string, string[]> = {
 
 export async function PATCH(request: NextRequest, { params }: Params) {
     try {
-        await requireAdminAction(request, "playbook:review");
+        const session = await requireAdminAction(request, "playbook:review");
 
-        const session = await getAdminSession(request);
         const { id } = await params;
         const body = await request.json();
         const { status: newStatus, reason } = body;
@@ -63,7 +62,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
         const { ipAddress, userAgent } = getRequestContext(request);
 
         await adminAudit.log({
-            adminUserId: session?.adminUser?.id ?? "unknown",
+            adminUserId: session.adminUserId,
             action: auditAction as "PLAYBOOK_APPROVE",
             entityType: "Playbook",
             entityId: id,

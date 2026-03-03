@@ -63,7 +63,11 @@ export type AdminAction =
     | "admin:delete"
     // Federation
     | "federation:list"
-    | "federation:read";
+    | "federation:read"
+    // Playbook marketplace
+    | "playbook:list"
+    | "playbook:read"
+    | "playbook:review";
 
 const ROLE_HIERARCHY: Record<AdminRole, number> = {
     viewer: 0,
@@ -134,7 +138,12 @@ const ACTION_MIN_ROLE: Record<AdminAction, AdminRole> = {
 
     // Federation
     "federation:list": "viewer",
-    "federation:read": "support_agent"
+    "federation:read": "support_agent",
+
+    // Playbook marketplace
+    "playbook:list": "viewer",
+    "playbook:read": "viewer",
+    "playbook:review": "platform_admin"
 };
 
 /**
