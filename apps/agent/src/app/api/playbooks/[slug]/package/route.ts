@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/authz";
 import { prisma } from "@repo/database";
-import { packagePlaybook } from "@repo/agentc2";
+import { repackagePlaybook } from "@repo/agentc2";
 
 type Params = { params: Promise<{ slug: string }> };
 
 /**
  * POST /api/playbooks/[slug]/package
- * Package current agent system into a playbook version
+ * Snapshot agent system into a new playbook version
  */
 export async function POST(request: NextRequest, { params }: Params) {
     try {
@@ -25,15 +25,8 @@ export async function POST(request: NextRequest, { params }: Params) {
             return NextResponse.json({ error: "Not authorized" }, { status: 403 });
         }
 
-        const result = await packagePlaybook({
-            name: playbook.name,
-            slug: playbook.slug,
-            description: playbook.description,
-            category: playbook.category,
-            tags: playbook.tags,
-            tagline: playbook.tagline ?? undefined,
-            coverImageUrl: playbook.coverImageUrl ?? undefined,
-            iconUrl: playbook.iconUrl ?? undefined,
+        const result = await repackagePlaybook({
+            playbookId: playbook.id,
             entryAgentId: body.entryAgentId,
             entryNetworkId: body.entryNetworkId,
             entryWorkflowId: body.entryWorkflowId,
@@ -42,11 +35,7 @@ export async function POST(request: NextRequest, { params }: Params) {
             includeWorkflows: body.includeWorkflows,
             includeNetworks: body.includeNetworks,
             organizationId: authResult.context.organizationId,
-            userId: authResult.context.userId,
-            pricingModel: playbook.pricingModel as "FREE" | "ONE_TIME" | "SUBSCRIPTION" | "PER_USE",
-            priceUsd: playbook.priceUsd ?? undefined,
-            monthlyPriceUsd: playbook.monthlyPriceUsd ?? undefined,
-            perUsePriceUsd: playbook.perUsePriceUsd ?? undefined
+            userId: authResult.context.userId
         });
 
         return NextResponse.json(

@@ -484,6 +484,7 @@ export { cleanupOrgVectors } from "./tenant-lifecycle";
 // Playbook Marketplace
 export {
     packagePlaybook,
+    repackagePlaybook,
     deployPlaybook,
     uninstallPlaybook,
     sanitizeManifest,

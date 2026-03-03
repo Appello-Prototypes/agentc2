@@ -244,7 +244,26 @@ async function snapshotNetwork(networkId: string): Promise<{
     return { network, agentIds, workflowIds };
 }
 
-export async function packagePlaybook(opts: PackagePlaybookOptions) {
+interface ManifestBuildOptions {
+    entryAgentId?: string;
+    entryNetworkId?: string;
+    entryWorkflowId?: string;
+    includeSkills?: boolean;
+    includeDocuments?: boolean;
+    includeWorkflows?: string[];
+    includeNetworks?: string[];
+    organizationId: string;
+}
+
+interface ManifestBuildResult {
+    manifest: PlaybookManifest;
+    warnings: string[];
+    requiredIntegrations: string[];
+    processedAgentIds: Set<string>;
+    processedSkillIds: Set<string>;
+}
+
+async function buildManifest(opts: ManifestBuildOptions): Promise<ManifestBuildResult> {
     const allAgentSnapshots: AgentSnapshot[] = [];
     const allSkillSnapshots: SkillSnapshot[] = [];
     const allDocumentSnapshots: DocumentSnapshot[] = [];
@@ -300,7 +319,6 @@ export async function packagePlaybook(opts: PackagePlaybookOptions) {
         allDocumentSnapshots.push(doc);
     }
 
-    // Process entry point and walk the graph
     if (opts.entryNetworkId) {
         const { network, agentIds, workflowIds } = await snapshotNetwork(opts.entryNetworkId);
         allNetworkSnapshots.push(network);
@@ -323,13 +341,12 @@ export async function packagePlaybook(opts: PackagePlaybookOptions) {
         entryPoint = { type: "workflow", slug: wf.slug };
     } else if (opts.entryAgentId) {
         await processAgent(opts.entryAgentId);
-        const agent = allAgentSnapshots.find((a) => processedAgentIds.has(opts.entryAgentId!));
+        const agent = allAgentSnapshots.find(() => processedAgentIds.has(opts.entryAgentId!));
         entryPoint = { type: "agent", slug: agent!.slug };
     } else {
         throw new Error("Must provide entryAgentId, entryNetworkId, or entryWorkflowId");
     }
 
-    // Process additional workflows
     if (opts.includeWorkflows) {
         for (const wfId of opts.includeWorkflows) {
             if (!processedWorkflowIds.has(wfId)) {
@@ -339,7 +356,6 @@ export async function packagePlaybook(opts: PackagePlaybookOptions) {
         }
     }
 
-    // Process additional networks
     if (opts.includeNetworks) {
         for (const netId of opts.includeNetworks) {
             if (!processedNetworkIds.has(netId)) {
@@ -357,7 +373,6 @@ export async function packagePlaybook(opts: PackagePlaybookOptions) {
         }
     }
 
-    // Detect required integrations from tool references
     const requiredIntegrations = new Set<string>();
     for (const agent of allAgentSnapshots) {
         for (const tool of agent.tools) {
@@ -372,11 +387,9 @@ export async function packagePlaybook(opts: PackagePlaybookOptions) {
         }
     }
 
-    // Collect all guardrails, test cases, and scorecards
     const allGuardrails: GuardrailSnapshot[] = allAgentSnapshots
         .filter((a) => a.guardrail)
         .map((a) => a.guardrail!);
-
     const allTestCases: TestCaseSnapshot[] = allAgentSnapshots.flatMap((a) => a.testCases);
     const allScorecards: ScorecardSnapshot[] = allAgentSnapshots
         .filter((a) => a.scorecard)
@@ -397,22 +410,113 @@ export async function packagePlaybook(opts: PackagePlaybookOptions) {
         entryPoint: entryPoint!
     };
 
-    // Sanitize
     const { manifest: sanitizedManifest, warnings: sanitizeWarnings } = sanitizeManifest(
         rawManifest,
         opts.organizationId
     );
-
-    // Check for hardcoded URLs
     const urlWarnings = detectHardcodedUrls(sanitizedManifest);
-
-    // Validate manifest structure
     const validatedManifest = validateManifest(sanitizedManifest);
 
-    // Generate slug for the playbook
+    return {
+        manifest: validatedManifest,
+        warnings: [...sanitizeWarnings, ...urlWarnings],
+        requiredIntegrations: Array.from(requiredIntegrations),
+        processedAgentIds,
+        processedSkillIds
+    };
+}
+
+function buildComponentData(
+    playbookId: string,
+    manifest: PlaybookManifest,
+    processedAgentIds: Set<string>,
+    processedSkillIds: Set<string>
+) {
+    const componentData: Array<{
+        playbookId: string;
+        componentType: PlaybookComponentType;
+        sourceEntityId: string;
+        sourceSlug: string;
+        configSnapshot: Prisma.InputJsonValue;
+        isEntryPoint: boolean;
+        sortOrder: number;
+    }> = [];
+
+    let sortOrder = 0;
+    const agentIdArr = Array.from(processedAgentIds);
+    for (const agent of manifest.agents) {
+        componentData.push({
+            playbookId,
+            componentType: "AGENT",
+            sourceEntityId: agentIdArr[sortOrder] ?? agent.slug,
+            sourceSlug: agent.slug,
+            configSnapshot: { modelProvider: agent.modelProvider, modelName: agent.modelName },
+            isEntryPoint:
+                manifest.entryPoint.type === "agent" && manifest.entryPoint.slug === agent.slug,
+            sortOrder: sortOrder++
+        });
+    }
+    const skillIdArr = Array.from(processedSkillIds);
+    let skillIdx = 0;
+    for (const skill of manifest.skills) {
+        componentData.push({
+            playbookId,
+            componentType: "SKILL",
+            sourceEntityId: skillIdArr[skillIdx++] ?? skill.slug,
+            sourceSlug: skill.slug,
+            configSnapshot: { category: skill.category },
+            isEntryPoint: false,
+            sortOrder: sortOrder++
+        });
+    }
+    for (const doc of manifest.documents) {
+        componentData.push({
+            playbookId,
+            componentType: "DOCUMENT",
+            sourceEntityId: doc.slug,
+            sourceSlug: doc.slug,
+            configSnapshot: { contentType: doc.contentType },
+            isEntryPoint: false,
+            sortOrder: sortOrder++
+        });
+    }
+    for (const wf of manifest.workflows) {
+        componentData.push({
+            playbookId,
+            componentType: "WORKFLOW",
+            sourceEntityId: wf.slug,
+            sourceSlug: wf.slug,
+            configSnapshot: { maxSteps: wf.maxSteps },
+            isEntryPoint:
+                manifest.entryPoint.type === "workflow" && manifest.entryPoint.slug === wf.slug,
+            sortOrder: sortOrder++
+        });
+    }
+    for (const net of manifest.networks) {
+        componentData.push({
+            playbookId,
+            componentType: "NETWORK",
+            sourceEntityId: net.slug,
+            sourceSlug: net.slug,
+            configSnapshot: {
+                modelProvider: net.modelProvider,
+                primitiveCount: net.primitives.length
+            },
+            isEntryPoint:
+                manifest.entryPoint.type === "network" && manifest.entryPoint.slug === net.slug,
+            sortOrder: sortOrder++
+        });
+    }
+
+    return componentData;
+}
+
+export async function packagePlaybook(opts: PackagePlaybookOptions) {
+    const { manifest, warnings, requiredIntegrations, processedAgentIds, processedSkillIds } =
+        await buildManifest(opts);
+
     const slug = opts.slug.toLowerCase().replace(/[^a-z0-9-]/g, "-");
 
-    // Create playbook, components, and first version in a transaction
     const playbook = await prisma.$transaction(async (tx) => {
         const pb = await tx.playbook.create({
             data: {
@@ -430,94 +534,25 @@ export async function packagePlaybook(opts: PackagePlaybookOptions) {
                 priceUsd: opts.priceUsd ?? null,
                 monthlyPriceUsd: opts.monthlyPriceUsd ?? null,
                 perUsePriceUsd: opts.perUsePriceUsd ?? null,
-                requiredIntegrations: Array.from(requiredIntegrations)
+                requiredIntegrations
             }
         });
 
-        // Create version 1
         await tx.playbookVersion.create({
             data: {
                 playbookId: pb.id,
                 version: 1,
-                manifest: validatedManifest as unknown as Record<string, unknown>,
+                manifest: manifest as unknown as Record<string, unknown>,
                 createdBy: opts.userId
             }
         });
 
-        // Create component records
-        const componentData: Array<{
-            playbookId: string;
-            componentType: PlaybookComponentType;
-            sourceEntityId: string;
-            sourceSlug: string;
-            configSnapshot: Prisma.InputJsonValue;
-            isEntryPoint: boolean;
-            sortOrder: number;
-        }> = [];
-
-        let sortOrder = 0;
-        for (const agent of validatedManifest.agents) {
-            componentData.push({
-                playbookId: pb.id,
-                componentType: "AGENT",
-                sourceEntityId: Array.from(processedAgentIds)[sortOrder] ?? agent.slug,
-                sourceSlug: agent.slug,
-                configSnapshot: { modelProvider: agent.modelProvider, modelName: agent.modelName },
-                isEntryPoint: entryPoint!.type === "agent" && entryPoint!.slug === agent.slug,
-                sortOrder: sortOrder++
-            });
-        }
-        for (const skill of validatedManifest.skills) {
-            componentData.push({
-                playbookId: pb.id,
-                componentType: "SKILL",
-                sourceEntityId:
-                    Array.from(processedSkillIds)[
-                        componentData.length - allAgentSnapshots.length
-                    ] ?? skill.slug,
-                sourceSlug: skill.slug,
-                configSnapshot: { category: skill.category },
-                isEntryPoint: false,
-                sortOrder: sortOrder++
-            });
-        }
-        for (const doc of validatedManifest.documents) {
-            componentData.push({
-                playbookId: pb.id,
-                componentType: "DOCUMENT",
-                sourceEntityId: doc.slug,
-                sourceSlug: doc.slug,
-                configSnapshot: { contentType: doc.contentType },
-                isEntryPoint: false,
-                sortOrder: sortOrder++
-            });
-        }
-        for (const wf of validatedManifest.workflows) {
-            componentData.push({
-                playbookId: pb.id,
-                componentType: "WORKFLOW",
-                sourceEntityId: wf.slug,
-                sourceSlug: wf.slug,
-                configSnapshot: { maxSteps: wf.maxSteps },
-                isEntryPoint: entryPoint!.type === "workflow" && entryPoint!.slug === wf.slug,
-                sortOrder: sortOrder++
-            });
-        }
-        for (const net of validatedManifest.networks) {
-            componentData.push({
-                playbookId: pb.id,
-                componentType: "NETWORK",
-                sourceEntityId: net.slug,
-                sourceSlug: net.slug,
-                configSnapshot: {
-                    modelProvider: net.modelProvider,
-                    primitiveCount: net.primitives.length
-                },
-                isEntryPoint: entryPoint!.type === "network" && entryPoint!.slug === net.slug,
-                sortOrder: sortOrder++
-            });
-        }
-
+        const componentData = buildComponentData(
+            pb.id,
+            manifest,
+            processedAgentIds,
+            processedSkillIds
+        );
         if (componentData.length > 0) {
             await tx.playbookComponent.createMany({ data: componentData });
         }
@@ -525,9 +560,64 @@ export async function packagePlaybook(opts: PackagePlaybookOptions) {
         return pb;
     });
 
-    return {
-        playbook,
-        manifest: validatedManifest,
-        warnings: [...sanitizeWarnings, ...urlWarnings]
-    };
+    return { playbook, manifest, warnings };
+}
+
+export interface RepackagePlaybookOptions {
+    playbookId: string;
+    entryAgentId?: string;
+    entryNetworkId?: string;
+    entryWorkflowId?: string;
+    includeSkills?: boolean;
+    includeDocuments?: boolean;
+    includeWorkflows?: string[];
+    includeNetworks?: string[];
+    organizationId: string;
+    userId: string;
+}
+
+export async function repackagePlaybook(opts: RepackagePlaybookOptions) {
+    const { manifest, warnings, requiredIntegrations, processedAgentIds, processedSkillIds } =
+        await buildManifest(opts);
+
+    const playbook = await prisma.$transaction(async (tx) => {
+        const latestVersion = await tx.playbookVersion.findFirst({
+            where: { playbookId: opts.playbookId },
+            orderBy: { version: "desc" }
+        });
+        const nextVersion = (latestVersion?.version ?? 0) + 1;
+
+        await tx.playbookVersion.create({
+            data: {
+                playbookId: opts.playbookId,
+                version: nextVersion,
+                manifest: manifest as unknown as Record<string, unknown>,
+                createdBy: opts.userId
+            }
+        });
+
+        await tx.playbookComponent.deleteMany({ where: { playbookId: opts.playbookId } });
+
+        const componentData = buildComponentData(
+            opts.playbookId,
+            manifest,
+            processedAgentIds,
+            processedSkillIds
+        );
+        if (componentData.length > 0) {
+            await tx.playbookComponent.createMany({ data: componentData });
+        }
+
+        const pb = await tx.playbook.update({
+            where: { id: opts.playbookId },
+            data: {
+                version: nextVersion,
+                requiredIntegrations
+            }
+        });
+
+        return pb;
+    });
+
+    return { playbook, manifest, warnings };
 }

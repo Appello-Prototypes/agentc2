@@ -1,4 +1,5 @@
-export { packagePlaybook } from "./packager";
+export { packagePlaybook, repackagePlaybook } from "./packager";
+export type { RepackagePlaybookOptions } from "./packager";
 export { deployPlaybook, uninstallPlaybook } from "./deployer";
 export { sanitizeManifest, detectHardcodedUrls } from "./sanitizer";
 export { validateManifest, isValidManifest, playbookManifestSchema } from "./manifest";
