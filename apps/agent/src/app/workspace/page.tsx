@@ -13,6 +13,7 @@ import {
     generateTitleAsync,
     updateConversationStatus,
     updateConversationRunId,
+    setConversationScope,
     type ConversationMeta
 } from "@/lib/conversation-store";
 import {
@@ -974,6 +975,15 @@ export default function UnifiedChatPage() {
     const searchParams = useSearchParams();
     const { data: session } = useSession();
     const embedConfig = useEmbedConfig();
+
+    // Scope localStorage conversations by user so they don't leak across accounts
+    useEffect(() => {
+        if (session?.user?.id) {
+            setConversationScope(session.user.id);
+            setTitleVersion((v) => v + 1);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [session?.user?.id]);
 
     // In Mode 2 (agent), lock to the configured agent
     const lockedAgentSlug = embedConfig?.mode === "agent" ? embedConfig.agentSlug : undefined;

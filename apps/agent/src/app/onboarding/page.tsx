@@ -751,7 +751,7 @@ export default function OnboardingPage() {
                 // Redirect to the CoWork chat with the new agent
                 const agentSlug = result.agent?.slug;
                 if (agentSlug) {
-                    window.location.href = `/workspace/${agentSlug}?firstRun=true`;
+                    window.location.href = `/workspace?agent=${agentSlug}&firstRun=true`;
                 } else {
                     window.location.href = "/workspace";
                 }

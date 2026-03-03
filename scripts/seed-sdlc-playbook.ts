@@ -6,7 +6,8 @@
  * 2. SDLC Documents: coding-standards, architecture-overview, testing-procedures, deployment-runbook
  * 3. SDLC Agents: sdlc-planner, sdlc-auditor, sdlc-classifier, sdlc-reviewer
  *    (each with tools, scorecards, test cases, guardrails, memory config)
- * 4. SDLC Workflows: sdlc-standard, sdlc-bugfix, sdlc-feature
+ * 4. SDLC Workflows: sdlc-triage (entry), sdlc-bugfix, sdlc-feature
+ *    (sdlc-standard created as DEPRECATED for migration)
  * 5. Packages everything into the "SDLC Flywheel" playbook
  * 6. Publishes the playbook
  *
@@ -23,30 +24,30 @@ const orgSlug = (base: string) => `${base}-${ORG_SLUG}`;
 
 /* ─── Instructions ─────────────────────────────────────────────────── */
 
-const PLANNER_INSTRUCTIONS = `You are the SDLC Planner agent. You analyze codebases, develop implementation plans, and present development options for review.
+const PLANNER_INSTRUCTIONS = `You are the SDLC Planner agent. You create detailed implementation plans from codebase analysis provided by Cursor Cloud Agent.
 
 ## Responsibilities
-1. **Code Analysis**: Examine codebases to understand architecture, patterns, and relevant files
-2. **Development Options**: Generate multiple approaches for implementing changes, with pros/cons and risk assessments
-3. **Detailed Plans**: Create step-by-step implementation plans with file-level specificity
-4. **Revision Handling**: When feedback is provided from auditors or human reviewers, revise your output accordingly
+1. **Implementation Planning**: Create step-by-step implementation plans with file-level specificity from analysis output
+2. **Phased Delivery**: Break complex work into deliverable phases with clear milestones
+3. **Revision Handling**: When feedback is provided from auditors or human reviewers, revise your plan accordingly
 
 ## Output Standards
 - Always provide structured, numbered plans
 - Include file paths and estimated complexity for each step
 - Flag risks, dependencies, and potential breaking changes
-- When presenting options, include effort estimates and risk levels
+- Include effort estimates and risk levels
+- Specify test coverage needed for each change
 
-## Memory Usage
-You maintain memory across runs. Reference prior codebase knowledge, project conventions, and architectural patterns from previous interactions. Build on what you know rather than re-analyzing from scratch.`;
+## Context
+You receive codebase analysis from Cursor Cloud Agent (which has full repository access). Your job is to turn that analysis into a clear, actionable plan — not to re-analyze the codebase.`;
 
-const AUDITOR_INSTRUCTIONS = `You are the SDLC Auditor agent. You review plans, options, and code changes for quality, completeness, and potential issues.
+const AUDITOR_INSTRUCTIONS = `You are the SDLC Auditor agent. You review plans, analyses, and code changes for quality, completeness, and potential issues.
 
 ## Responsibilities
-1. **Option Audit**: Review proposed development options for feasibility, missed alternatives, and risk underestimation
-2. **Plan Audit**: Verify implementation plans are complete, correctly sequenced, and handle edge cases
-3. **Code Review**: Assess code changes against coding standards, architectural patterns, and best practices
-4. **Gap Detection**: Identify missing steps, untested scenarios, and potential regressions
+1. **Plan Audit**: Verify implementation plans are complete, correctly sequenced, and handle edge cases
+2. **Analysis Audit**: Verify root cause analyses correctly identify the issue with specific code references
+3. **Gap Detection**: Identify missing steps, untested scenarios, and potential regressions
+4. **Quality Gate**: Serve as the quality checkpoint before human review
 
 ## Output Format
 Always output structured JSON:
@@ -78,7 +79,8 @@ Always output structured JSON:
 - Always populate the issues array, even on PASS (use minor observations)
 - Always populate positives to acknowledge good work
 - The summary must reference the verdict and key reasoning
-- For NEEDS_REVISION, suggestedFix on each issue must be actionable and specific`;
+- For NEEDS_REVISION, suggestedFix on each issue must be actionable and specific
+- You receive all context through the prompt — audit what is presented, do not attempt to read external sources`;
 
 const CLASSIFIER_INSTRUCTIONS = `You are the SDLC Classifier agent. You analyze incoming tickets to determine type, priority, complexity, and routing.
 
@@ -86,7 +88,7 @@ const CLASSIFIER_INSTRUCTIONS = `You are the SDLC Classifier agent. You analyze 
 1. **Classification**: Categorize tickets as bug, feature, user_error, documentation, or infrastructure
 2. **Priority Assessment**: Determine urgency based on impact, affected users, and business context
 3. **Complexity Estimation**: Rate implementation complexity (trivial, low, medium, high, critical)
-4. **Cross-System Analysis**: Query connected systems (Jira, GitHub, HubSpot) for context
+4. **Routing**: Recommend the appropriate SDLC workflow based on classification
 
 ## Output Format
 Always output structured JSON:
@@ -95,7 +97,7 @@ Always output structured JSON:
     "priority": "trivial" | "low" | "medium" | "high" | "critical",
     "complexity": "trivial" | "low" | "medium" | "high" | "critical",
     "affectedAreas": ["area1", "area2"],
-    "suggestedRoute": "sdlc-standard" | "sdlc-bugfix" | "sdlc-feature",
+    "suggestedRoute": "sdlc-bugfix" | "sdlc-feature" | "sdlc-triage",
     "rationale": "Explanation of classification decision"
 }`;
 
@@ -447,9 +449,9 @@ async function main() {
             modelProvider: "openai",
             modelName: "gpt-4o",
             temperature: 0.3,
-            maxSteps: 5,
+            maxSteps: 3,
             skills: [orgSlug("ticket-triage")],
-            tools: ["memory-recall", "ticket-to-github-issue"],
+            tools: ["memory-recall"],
             scorecard: {
                 criteria: [
                     {
@@ -501,7 +503,7 @@ async function main() {
             modelProvider: "anthropic",
             modelName: "claude-sonnet-4-6",
             temperature: 0.5,
-            maxSteps: 10,
+            maxSteps: 5,
             skills: [orgSlug("code-analysis"), orgSlug("implementation-planning")],
             tools: ["memory-recall", "web-fetch"],
             scorecard: {
@@ -550,7 +552,7 @@ async function main() {
             modelProvider: "anthropic",
             modelName: "claude-sonnet-4-6",
             temperature: 0.3,
-            maxSteps: 8,
+            maxSteps: 3,
             skills: [orgSlug("audit-review"), orgSlug("code-analysis")],
             tools: ["memory-recall"],
             scorecard: {
@@ -599,7 +601,7 @@ async function main() {
             modelProvider: "anthropic",
             modelName: "claude-sonnet-4-6",
             temperature: 0.3,
-            maxSteps: 8,
+            maxSteps: 3,
             skills: [orgSlug("pr-review"), orgSlug("audit-review")],
             tools: ["memory-recall", "calculate-trust-score"],
             scorecard: {
@@ -642,10 +644,34 @@ async function main() {
         }
     ];
 
-    const memoryConfig = {
-        lastMessages: 20,
-        semanticRecall: { topK: 5, messageRange: 2 },
-        workingMemory: { enabled: true }
+    const memoryConfigs: Record<string, object> = {
+        classifier: {
+            lastMessages: 3,
+            semanticRecall: { topK: 2, messageRange: 1 },
+            workingMemory: { enabled: true }
+        },
+        planner: {
+            lastMessages: 5,
+            semanticRecall: { topK: 3, messageRange: 1 },
+            workingMemory: { enabled: true }
+        },
+        auditor: {
+            lastMessages: 3,
+            semanticRecall: false,
+            workingMemory: { enabled: true }
+        },
+        reviewer: {
+            lastMessages: 3,
+            semanticRecall: { topK: 2, messageRange: 1 },
+            workingMemory: { enabled: true }
+        }
+    };
+
+    const contextConfigs: Record<string, object> = {
+        classifier: { maxContextTokens: 8000, windowSize: 3 },
+        planner: { maxContextTokens: 30000, windowSize: 5 },
+        auditor: { maxContextTokens: 20000, windowSize: 3 },
+        reviewer: { maxContextTokens: 25000, windowSize: 3 }
     };
 
     const agents: Record<string, { id: string; slug: string }> = {};
@@ -654,6 +680,13 @@ async function main() {
             where: { slug: agentDef.slug }
         });
         if (!existing) {
+            const agentRole = agentDef.slug.includes("classifier")
+                ? "classifier"
+                : agentDef.slug.includes("planner")
+                  ? "planner"
+                  : agentDef.slug.includes("auditor")
+                    ? "auditor"
+                    : "reviewer";
             existing = await prisma.agent.create({
                 data: {
                     slug: agentDef.slug,
@@ -665,7 +698,8 @@ async function main() {
                     temperature: agentDef.temperature,
                     maxSteps: agentDef.maxSteps,
                     memoryEnabled: true,
-                    memoryConfig,
+                    memoryConfig: memoryConfigs[agentRole],
+                    contextConfig: contextConfigs[agentRole],
                     visibility: "ORGANIZATION",
                     workspaceId: workspace.id
                 }
@@ -736,7 +770,6 @@ async function main() {
 
     // ─── 5. Create Workflows ────────────────────────────────────────
 
-    // sdlc-standard: the full flywheel workflow with dowhile revision cycles
     const standardWorkflowDef = {
         steps: [
             {
@@ -751,7 +784,9 @@ async function main() {
                         repository: "{{input.repository}}",
                         labels: "{{input.labels}}",
                         sourceTicketId: "{{input.sourceTicketId}}",
-                        pipelineRunId: "{{input.pipelineRunId}}"
+                        pipelineRunId: "{{input.pipelineRunId}}",
+                        existingIssueUrl: "{{input.existingIssueUrl}}",
+                        existingIssueNumber: "{{input.existingIssueNumber}}"
                     }
                 }
             },
@@ -781,7 +816,7 @@ async function main() {
                                     type: "agent",
                                     name: "Create KB Article",
                                     config: {
-                                        agentSlug: "sdlc-planner",
+                                        agentSlug: orgSlug("sdlc-planner"),
                                         promptTemplate:
                                             "The ticket '{{input.title}}' was classified as a user error. Create a knowledge base article explaining the correct usage and common mistakes.\n\nDescription: {{input.description}}"
                                     }
@@ -791,86 +826,51 @@ async function main() {
                     ],
                     defaultBranch: [
                         {
-                            id: "analyze",
-                            type: "agent",
-                            name: "Analyze Codebase",
+                            id: "analyze-launch",
+                            type: "tool",
+                            name: "Launch Code Analysis",
                             config: {
-                                agentSlug: "sdlc-planner",
-                                promptTemplate:
-                                    "Analyze the codebase for this ticket:\n\nTitle: {{input.title}}\nDescription: {{input.description}}\nClassification: {{steps.classify.classification}}\nRepository: {{input.repository}}\n\nIdentify the relevant files, architecture patterns, and areas that need changes."
+                                toolId: "cursor-launch-agent",
+                                parameters: {
+                                    prompt: "You are performing a codebase analysis for a development ticket. Do NOT implement any changes — analysis only.\n\n## Ticket\n\nTitle: {{input.title}}\n\n{{input.description}}\n\nClassification: {{steps.classify.classification}} | Priority: {{steps.classify.priority}} | Complexity: {{steps.classify.complexity}}\nGitHub Issue: {{steps.intake.issueUrl}}\nRepository: {{input.repository}}\n\n## Your Task\n\n1. **Search the codebase** to find all code related to this ticket.\n2. **Architecture Analysis**: Identify the relevant architecture patterns, key files, and areas that need changes.\n3. **Impact Assessment**: What other parts of the system are affected?\n4. **Development Options**: Suggest 2-3 approaches with pros/cons and risk levels.\n\nOutput your complete analysis as a structured markdown document.",
+                                    repository: "https://github.com/{{input.repository}}"
+                                }
                             }
                         },
                         {
-                            id: "options-cycle",
-                            type: "dowhile",
-                            name: "Development Options Cycle",
+                            id: "analyze-wait",
+                            type: "tool",
+                            name: "Wait for Analysis",
                             config: {
-                                maxIterations: 3,
-                                conditionExpression:
-                                    "steps['options-review']?.approved !== true && steps['options-review']?.rejected !== true",
-                                steps: [
-                                    {
-                                        id: "options",
-                                        type: "agent",
-                                        name: "Generate Options",
-                                        config: {
-                                            agentSlug: orgSlug("sdlc-planner"),
-                                            promptTemplate:
-                                                "Based on the analysis:\n{{steps.analyze.text}}\n\nGenerate 2-3 development options with pros/cons and risk assessment.\n\n{{#if steps['options-audit']}}Previous audit feedback: {{steps['options-audit'].summary}}\nIssues to address: {{helpers.json(steps['options-audit'].issues)}}{{/if}}\n\n{{#if steps['options-review']}}Human feedback: {{steps['options-review'].feedback}}{{/if}}"
-                                        }
-                                    },
-                                    {
-                                        id: "options-audit",
-                                        type: "agent",
-                                        name: "Audit Options",
-                                        config: {
-                                            agentSlug: orgSlug("sdlc-auditor"),
-                                            promptTemplate:
-                                                "Audit these development options:\n\n{{steps.options.text}}\n\nCheck for: feasibility, missed alternatives, risk underestimation, completeness.",
-                                            outputFormat: "json"
-                                        }
-                                    },
-                                    {
-                                        id: "options-verdict-route",
-                                        type: "branch",
-                                        name: "Route by Audit Verdict",
-                                        config: {
-                                            branches: [
-                                                {
-                                                    id: "passed",
-                                                    condition:
-                                                        "steps['options-audit']?.verdict === 'PASS'",
-                                                    steps: [
-                                                        {
-                                                            id: "options-review",
-                                                            type: "human",
-                                                            name: "Review Options",
-                                                            config: {
-                                                                prompt: "The auditor has APPROVED the development options. Review and approve the preferred option, provide feedback for changes, or reject."
-                                                            }
-                                                        }
-                                                    ]
-                                                }
-                                            ],
-                                            defaultBranch: [
-                                                {
-                                                    id: "options-audit-notes",
-                                                    type: "tool",
-                                                    name: "Post Audit Feedback",
-                                                    config: {
-                                                        toolId: "github-add-issue-comment",
-                                                        parameters: {
-                                                            issueNumber:
-                                                                "{{ steps.intake.issueNumber || input.existingIssueNumber }}",
-                                                            repository: "{{ input.repository }}",
-                                                            body: "## SDLC Audit: Options Revision Required\n\n**Verdict:** {{ steps['options-audit'].verdict }}\n**Severity:** {{ steps['options-audit'].severity }}\n\n**Summary:** {{ steps['options-audit'].summary }}\n\n**Issues:**\n{{ helpers.json(steps['options-audit'].issues) }}\n\nRevised options will be generated automatically."
-                                                        }
-                                                    }
-                                                }
-                                            ]
-                                        }
-                                    }
-                                ]
+                                toolId: "cursor-poll-until-done",
+                                parameters: {
+                                    agentId: "{{steps['analyze-launch'].agentId}}",
+                                    maxWaitMinutes: 15
+                                }
+                            }
+                        },
+                        {
+                            id: "analyze-result",
+                            type: "tool",
+                            name: "Get Analysis Results",
+                            config: {
+                                toolId: "cursor-get-conversation",
+                                parameters: {
+                                    agentId: "{{steps['analyze-launch'].agentId}}"
+                                }
+                            }
+                        },
+                        {
+                            id: "post-analysis",
+                            type: "tool",
+                            name: "Post Analysis to Issue",
+                            config: {
+                                toolId: "github-add-issue-comment",
+                                parameters: {
+                                    body: "## Codebase Analysis\n\n_Performed by Cursor Cloud Agent with full codebase access._\n\n{{steps['analyze-wait'].summary}}\n\n---\n_Analysis completed in {{steps['analyze-wait'].durationMs}}ms | Agent: {{steps['analyze-launch'].agentId}}_",
+                                    repository: "{{input.repository}}",
+                                    issueNumber: "{{steps.intake.issueNumber}}"
+                                }
                             }
                         },
                         {
@@ -889,7 +889,7 @@ async function main() {
                                         config: {
                                             agentSlug: orgSlug("sdlc-planner"),
                                             promptTemplate:
-                                                "Create a detailed implementation plan based on the approved option.\n\nApproved option context: {{steps['options-cycle'].text}}\nCodebase analysis: {{steps.analyze.text}}\n\n{{#if steps['plan-audit']}}Previous audit feedback: {{steps['plan-audit'].summary}}\nIssues to address: {{helpers.json(steps['plan-audit'].issues)}}{{/if}}\n\n{{#if steps['plan-review']}}Human feedback: {{steps['plan-review'].feedback}}{{/if}}"
+                                                "Create a detailed implementation plan based on the codebase analysis.\n\nCodebase analysis (from Cursor Cloud Agent with full codebase access):\n{{steps['analyze-wait'].summary}}\n\nTicket: {{input.title}}\nClassification: {{steps.classify.classification}}\n\n{{#if steps['plan-audit']}}Previous audit feedback: {{steps['plan-audit'].summary}}\nIssues to address: {{helpers.json(steps['plan-audit'].issues)}}{{/if}}\n\n{{#if steps['plan-review']}}Human feedback: {{steps['plan-review'].feedback}}{{/if}}\n\nProvide a structured, numbered plan with file paths, estimated complexity, and risk assessment for each step."
                                         }
                                     },
                                     {
@@ -899,7 +899,7 @@ async function main() {
                                         config: {
                                             agentSlug: orgSlug("sdlc-auditor"),
                                             promptTemplate:
-                                                "Audit this implementation plan:\n\n{{steps.plan.text}}\n\nVerify: completeness, correct sequencing, edge case handling, testing coverage.",
+                                                "Audit this implementation plan:\n\n{{steps.plan.text}}\n\nOriginal analysis:\n{{steps['analyze-wait'].summary}}\n\nVerify: completeness, correct sequencing, edge case handling, testing coverage.",
                                             outputFormat: "json"
                                         }
                                     },
@@ -933,10 +933,10 @@ async function main() {
                                                     config: {
                                                         toolId: "github-add-issue-comment",
                                                         parameters: {
+                                                            body: "## SDLC Audit: Plan Revision Required\n\n**Verdict:** {{steps['plan-audit'].verdict}}\n**Severity:** {{steps['plan-audit'].severity}}\n\n**Summary:** {{steps['plan-audit'].summary}}\n\n**Issues:**\n{{helpers.json(steps['plan-audit'].issues)}}\n\nA revised plan will be generated automatically.",
+                                                            repository: "{{input.repository}}",
                                                             issueNumber:
-                                                                "{{ steps.intake.issueNumber || input.existingIssueNumber }}",
-                                                            repository: "{{ input.repository }}",
-                                                            body: "## SDLC Audit: Plan Revision Required\n\n**Verdict:** {{ steps['plan-audit'].verdict }}\n**Severity:** {{ steps['plan-audit'].severity }}\n\n**Summary:** {{ steps['plan-audit'].summary }}\n\n**Issues:**\n{{ helpers.json(steps['plan-audit'].issues) }}\n\nA revised plan will be generated automatically."
+                                                                "{{steps.intake.issueNumber}}"
                                                         }
                                                     }
                                                 }
@@ -947,57 +947,50 @@ async function main() {
                             }
                         },
                         {
-                            id: "code",
+                            id: "implement-launch",
                             type: "tool",
                             name: "Launch Coding Agent",
                             config: {
                                 toolId: "cursor-launch-agent",
                                 parameters: {
-                                    prompt: "{{steps.plan.text}}",
-                                    repository: "{{input.repository}}"
+                                    prompt: "Implement the following approved plan. Create a branch, make the changes, and push.\n\n## Ticket\nTitle: {{input.title}}\nGitHub Issue: {{steps.intake.issueUrl}}\n\n## Approved Implementation Plan\n{{steps.plan.text}}\n\n## Instructions\n1. Create a feature branch from main\n2. Implement the changes according to the approved plan\n3. Add or update tests as needed\n4. Run linting and type-checking to verify\n5. Commit with a conventional commit message\n6. Push the branch — do NOT create a PR or merge",
+                                    repository: "https://github.com/{{input.repository}}"
                                 }
                             }
                         },
                         {
-                            id: "build-verify",
+                            id: "implement-wait",
                             type: "tool",
-                            name: "Build Verification",
+                            name: "Wait for Implementation",
                             config: {
-                                toolId: "verify-branch",
+                                toolId: "cursor-poll-until-done",
                                 parameters: {
+                                    agentId: "{{steps['implement-launch'].agentId}}",
+                                    maxWaitMinutes: 30
+                                }
+                            }
+                        },
+                        {
+                            id: "create-pr",
+                            type: "tool",
+                            name: "Create Pull Request",
+                            config: {
+                                toolId: "github-create-pull-request",
+                                parameters: {
+                                    base: "main",
+                                    head: "{{steps['implement-wait'].branchName}}",
+                                    title: "{{input.title}}",
+                                    body: "## Summary\n\nResolves #{{steps.intake.issueNumber}}\n\nClassification: {{steps.classify.classification}} | Priority: {{steps.classify.priority}}\n\n## Analysis\n\n{{steps['analyze-wait'].summary}}\n\n## Implementation Plan\n\n{{steps.plan.text}}\n\n## Implementation\n\n{{steps['implement-wait'].summary}}\n\n---\n_Automated via AgentC2 SDLC Standard Pipeline_",
                                     repository: "{{input.repository}}"
                                 }
                             }
                         },
                         {
-                            id: "pr-cycle",
-                            type: "dowhile",
-                            name: "PR Review Cycle",
+                            id: "merge-review",
+                            type: "human",
+                            name: "Review PR on GitHub",
                             config: {
-                                maxIterations: 3,
-                                conditionExpression:
-                                    "steps['pr-approval']?.approved === false && !steps['pr-approval']?.rejected",
-                                steps: [
-                                    {
-                                        id: "pr-review",
-                                        type: "agent",
-                                        name: "PR Review",
-                                        config: {
-                                            agentSlug: orgSlug("sdlc-reviewer"),
-                                            promptTemplate:
-                                                "Review the pull request for this change:\n\nPlan: {{steps.plan.text}}\nBuild result: {{steps['build-verify']}}\n\n{{#if steps['pr-approval']}}Revision feedback: {{steps['pr-approval'].feedback}}{{/if}}\n\nProvide trust score and merge recommendation.",
-                                            outputFormat: "json"
-                                        }
-                                    },
-                                    {
-                                        id: "pr-approval",
-                                        type: "human",
-                                        name: "PR Approval",
-                                        config: {
-                                            prompt: "Review the PR assessment and trust score. Approve to merge, request changes, or reject."
-                                        }
-                                    }
-                                ]
+                                prompt: "A pull request has been created:\n\n{{steps['create-pr'].htmlUrl}}\n\nReview the code changes on GitHub. Approve to merge, or reject."
                             }
                         },
                         {
@@ -1007,18 +1000,9 @@ async function main() {
                             config: {
                                 toolId: "merge-pull-request",
                                 parameters: {
-                                    repository: "{{input.repository}}"
-                                }
-                            }
-                        },
-                        {
-                            id: "deploy",
-                            type: "tool",
-                            name: "Await Deploy",
-                            config: {
-                                toolId: "await-deploy",
-                                parameters: {
-                                    repository: "{{input.repository}}"
+                                    prNumber: "{{steps['create-pr'].prNumber}}",
+                                    repository: "{{input.repository}}",
+                                    mergeMethod: "squash"
                                 }
                             }
                         }
@@ -1040,48 +1024,79 @@ async function main() {
                         title: "{{input.title}}",
                         description: "{{input.description}}",
                         repository: "{{input.repository}}",
-                        labels: ["bug"]
+                        labels: ["bug"],
+                        sourceTicketId: "{{input.sourceTicketId}}",
+                        existingIssueUrl: "{{input.existingIssueUrl}}",
+                        existingIssueNumber: "{{input.existingIssueNumber}}"
                     }
                 }
             },
             {
-                id: "analyze",
-                type: "agent",
-                name: "Root Cause Analysis",
+                id: "analyze-launch",
+                type: "tool",
+                name: "Launch Code Analysis",
                 config: {
-                    agentSlug: "sdlc-planner",
-                    promptTemplate:
-                        "Perform root cause analysis for this bug:\n\nTitle: {{input.title}}\nDescription: {{input.description}}\nRepository: {{input.repository}}\n\nIdentify the root cause, affected files, and fix approach."
+                    toolId: "cursor-launch-agent",
+                    parameters: {
+                        prompt: "You are performing a root cause analysis for a bug report. Do NOT implement any fix — analysis and planning only.\n\n## Bug Report\n\nTitle: {{input.title}}\n\n{{input.description}}\n\nGitHub Issue: {{steps.intake.issueUrl}}\nRepository: {{input.repository}}\n\n## Your Task\n\n1. **Search the codebase** to find all code related to this bug. Use grep, semantic search, and file reading to thoroughly understand the relevant code.\n\n2. **Root Cause Analysis**: Identify the exact root cause with specific file paths, function names, and line numbers.\n\n3. **Impact Assessment**: What other parts of the system are affected?\n\n4. **Fix Plan**: Create a detailed, step-by-step fix plan:\n   - Specific files to modify and what changes to make\n   - Any new files or tests needed\n   - Risk assessment (low/medium/high)\n   - Estimated complexity\n\nOutput your complete analysis as a structured markdown document. Be thorough — your analysis will be reviewed by an auditor and a human before any code is written.",
+                        repository: "https://github.com/{{input.repository}}"
+                    }
                 }
             },
             {
-                id: "fix-cycle",
+                id: "analyze-wait",
+                type: "tool",
+                name: "Wait for Analysis",
+                config: {
+                    toolId: "cursor-poll-until-done",
+                    parameters: {
+                        agentId: "{{steps['analyze-launch'].agentId}}",
+                        maxWaitMinutes: 15
+                    }
+                }
+            },
+            {
+                id: "analyze-result",
+                type: "tool",
+                name: "Get Analysis Results",
+                config: {
+                    toolId: "cursor-get-conversation",
+                    parameters: {
+                        agentId: "{{steps['analyze-launch'].agentId}}"
+                    }
+                }
+            },
+            {
+                id: "post-analysis",
+                type: "tool",
+                name: "Post Analysis to Issue",
+                config: {
+                    toolId: "github-add-issue-comment",
+                    parameters: {
+                        body: "## Root Cause Analysis\n\n_Performed by Cursor Cloud Agent with full codebase access._\n\n{{steps['analyze-wait'].summary}}\n\n---\n_Analysis completed in {{steps['analyze-wait'].durationMs}}ms | Agent: {{steps['analyze-launch'].agentId}}_",
+                        repository: "{{input.repository}}",
+                        issueNumber: "{{steps.intake.issueNumber}}"
+                    }
+                }
+            },
+            {
+                id: "audit-cycle",
                 type: "dowhile",
-                name: "Fix & Review Cycle",
+                name: "Audit & Approval Cycle",
                 config: {
                     maxIterations: 3,
                     conditionExpression:
                         "steps['fix-review']?.approved !== true && steps['fix-review']?.rejected !== true",
                     steps: [
                         {
-                            id: "fix-plan",
-                            type: "agent",
-                            name: "Fix Plan",
-                            config: {
-                                agentSlug: "sdlc-planner",
-                                promptTemplate:
-                                    "Create a focused fix plan:\n\nRoot cause: {{steps.analyze.text}}\n\n{{#if steps['fix-audit']}}Previous audit feedback: {{steps['fix-audit'].summary}}\nIssues to address: {{helpers.json(steps['fix-audit'].issues)}}{{/if}}\n\n{{#if steps['fix-review']}}Human feedback: {{steps['fix-review'].feedback}}{{/if}}"
-                            }
-                        },
-                        {
                             id: "fix-audit",
                             type: "agent",
-                            name: "Audit Fix",
+                            name: "Audit Fix Plan",
                             config: {
-                                agentSlug: "sdlc-auditor",
+                                agentSlug: orgSlug("sdlc-auditor"),
+                                outputFormat: "json",
                                 promptTemplate:
-                                    "Audit this bugfix plan:\n\n{{steps['fix-plan'].text}}\n\nRoot cause: {{steps.analyze.text}}",
-                                outputFormat: "json"
+                                    "Audit this bugfix analysis and plan. It was produced by a Cursor Cloud Agent with full codebase access.\n\n## Analysis Summary\n{{steps['analyze-wait'].summary}}\n\n## Full Conversation\n{{json(steps['analyze-result'].messages)}}\n\n{{#if steps['fix-audit']}}## Previous Audit Issues\nYour previous audit found these issues: {{helpers.json(steps['fix-audit'].issues)}}\nVerify whether they have been addressed in the revised analysis.{{/if}}\n\n{{#if steps['fix-review']}}## Human Feedback\n{{steps['fix-review'].feedback}}{{/if}}\n\nEvaluate:\n- Is the root cause correctly identified with specific file paths and code references?\n- Is the fix plan complete and correctly sequenced?\n- Are edge cases and risks addressed?\n- Is test coverage planned?"
                             }
                         },
                         {
@@ -1099,7 +1114,7 @@ async function main() {
                                                 type: "human",
                                                 name: "Final Approval",
                                                 config: {
-                                                    prompt: "The auditor has APPROVED the fix plan. Review and approve to proceed with implementation, provide feedback for changes, or reject."
+                                                    prompt: "The auditor has APPROVED the analysis and fix plan. Review the code analysis (posted on the GitHub issue) and approve to proceed with implementation, provide feedback for changes, or reject."
                                                 }
                                             }
                                         ]
@@ -1113,10 +1128,9 @@ async function main() {
                                         config: {
                                             toolId: "github-add-issue-comment",
                                             parameters: {
-                                                issueNumber:
-                                                    "{{ steps.intake.issueNumber || input.existingIssueNumber }}",
-                                                repository: "{{ input.repository }}",
-                                                body: "## SDLC Audit: Revision Required\n\n**Verdict:** {{ steps['fix-audit'].verdict }}\n**Severity:** {{ steps['fix-audit'].severity }}\n\n**Summary:** {{ steps['fix-audit'].summary }}\n\n**Issues:**\n{{ helpers.json(steps['fix-audit'].issues) }}\n\nA revised plan will be generated automatically."
+                                                body: "## SDLC Audit: Revision Required\n\n**Verdict:** {{steps['fix-audit'].verdict}}\n**Severity:** {{steps['fix-audit'].severity}}\n\n**Summary:** {{steps['fix-audit'].summary}}\n\n**Issues:**\n{{helpers.json(steps['fix-audit'].issues)}}\n\n**Positives:**\n{{helpers.json(steps['fix-audit'].positives)}}\n\nA revised analysis will be generated automatically.",
+                                                repository: "{{input.repository}}",
+                                                issueNumber: "{{steps.intake.issueNumber}}"
                                             }
                                         }
                                     }
@@ -1127,32 +1141,63 @@ async function main() {
                 }
             },
             {
-                id: "code",
+                id: "implement-launch",
                 type: "tool",
                 name: "Implement Fix",
                 config: {
                     toolId: "cursor-launch-agent",
                     parameters: {
-                        prompt: "{{steps['fix-plan'].text}}",
+                        prompt: "Implement the following approved bugfix. Create a branch, make the changes, and push.\n\n## Bug\nTitle: {{input.title}}\nGitHub Issue: {{steps.intake.issueUrl}}\n\n## Approved Fix Plan\n{{steps['analyze-wait'].summary}}\n\n## Instructions\n1. Create a feature branch from main\n2. Implement the fix according to the approved plan\n3. Add or update tests as needed\n4. Run linting and type-checking to verify\n5. Commit with a conventional commit message: fix: <description>\n6. Push the branch — do NOT create a PR or merge",
+                        repository: "https://github.com/{{input.repository}}"
+                    }
+                }
+            },
+            {
+                id: "implement-wait",
+                type: "tool",
+                name: "Wait for Implementation",
+                config: {
+                    toolId: "cursor-poll-until-done",
+                    parameters: {
+                        agentId: "{{steps['implement-launch'].agentId}}",
+                        maxWaitMinutes: 30
+                    }
+                }
+            },
+            {
+                id: "create-pr",
+                type: "tool",
+                name: "Create Pull Request",
+                config: {
+                    toolId: "github-create-pull-request",
+                    parameters: {
+                        base: "main",
+                        head: "{{steps['implement-wait'].branchName}}",
+                        title: "fix: {{input.title}}",
+                        body: "## Summary\n\nFixes #{{steps.intake.issueNumber}}\n\n## Root Cause\n\n{{steps['analyze-wait'].summary}}\n\n## Implementation\n\n{{steps['implement-wait'].summary}}\n\n---\n_Automated via AgentC2 SDLC Bugfix Pipeline_",
                         repository: "{{input.repository}}"
                     }
                 }
             },
             {
-                id: "verify",
-                type: "tool",
-                name: "Verify Fix",
+                id: "merge-review",
+                type: "human",
+                name: "Review PR on GitHub",
                 config: {
-                    toolId: "verify-branch",
-                    parameters: { repository: "{{input.repository}}" }
+                    prompt: "A pull request has been created:\n\n{{steps['create-pr'].htmlUrl}}\n\nReview the code changes on GitHub. Approve to merge, or reject."
                 }
             },
             {
-                id: "merge-approval",
-                type: "human",
-                name: "Merge Approval",
+                id: "merge",
+                type: "tool",
+                name: "Merge PR",
                 config: {
-                    prompt: "The bugfix has been implemented and verified. Approve to merge."
+                    toolId: "merge-pull-request",
+                    parameters: {
+                        prNumber: "{{steps['create-pr'].prNumber}}",
+                        repository: "{{input.repository}}",
+                        mergeMethod: "squash"
+                    }
                 }
             }
         ]
@@ -1170,7 +1215,10 @@ async function main() {
                         title: "{{input.title}}",
                         description: "{{input.description}}",
                         repository: "{{input.repository}}",
-                        labels: ["feature"]
+                        labels: ["feature"],
+                        sourceTicketId: "{{input.sourceTicketId}}",
+                        existingIssueUrl: "{{input.existingIssueUrl}}",
+                        existingIssueNumber: "{{input.existingIssueNumber}}"
                     }
                 }
             },
@@ -1181,18 +1229,56 @@ async function main() {
                 config: {
                     agentSlug: orgSlug("sdlc-classifier"),
                     promptTemplate:
-                        "Analyze this feature request:\n\nTitle: {{input.title}}\nDescription: {{input.description}}\n\nAssess scope, complexity, and dependencies.",
+                        "Analyze this feature request:\n\nTitle: {{input.title}}\nDescription: {{input.description}}\n\nGitHub Issue: {{steps.intake.issueUrl}}\n\nAssess scope, complexity, dependencies, and affected areas.",
                     outputFormat: "json"
                 }
             },
             {
-                id: "design",
-                type: "agent",
-                name: "Technical Design",
+                id: "design-launch",
+                type: "tool",
+                name: "Launch Design Analysis",
                 config: {
-                    agentSlug: "sdlc-planner",
-                    promptTemplate:
-                        "Create a technical design for this feature:\n\nTitle: {{input.title}}\nDescription: {{input.description}}\nAnalysis: {{steps.classify}}\nRepository: {{input.repository}}\n\nInclude: architecture changes, new components, data model changes, API changes."
+                    toolId: "cursor-launch-agent",
+                    parameters: {
+                        prompt: "You are creating a technical design for a feature request. Do NOT implement anything — design and analysis only.\n\n## Feature Request\n\nTitle: {{input.title}}\n\n{{input.description}}\n\nScope: {{steps.classify.complexity}} | Priority: {{steps.classify.priority}}\nGitHub Issue: {{steps.intake.issueUrl}}\nRepository: {{input.repository}}\n\n## Your Task\n\n1. **Search the codebase** to understand the relevant architecture, patterns, and existing implementations.\n2. **Technical Design**: Create a comprehensive design document including architecture changes, new components, data model changes, API changes, and integration points.\n3. **Impact Assessment**: What existing functionality is affected? What are the risks?\n4. **Phased Approach**: Break the feature into deliverable phases with clear milestones.\n\nOutput your complete design as a structured markdown document.",
+                        repository: "https://github.com/{{input.repository}}"
+                    }
+                }
+            },
+            {
+                id: "design-wait",
+                type: "tool",
+                name: "Wait for Design",
+                config: {
+                    toolId: "cursor-poll-until-done",
+                    parameters: {
+                        agentId: "{{steps['design-launch'].agentId}}",
+                        maxWaitMinutes: 20
+                    }
+                }
+            },
+            {
+                id: "design-result",
+                type: "tool",
+                name: "Get Design Results",
+                config: {
+                    toolId: "cursor-get-conversation",
+                    parameters: {
+                        agentId: "{{steps['design-launch'].agentId}}"
+                    }
+                }
+            },
+            {
+                id: "post-design",
+                type: "tool",
+                name: "Post Design to Issue",
+                config: {
+                    toolId: "github-add-issue-comment",
+                    parameters: {
+                        body: "## Technical Design\n\n_Performed by Cursor Cloud Agent with full codebase access._\n\n{{steps['design-wait'].summary}}\n\n---\n_Design completed in {{steps['design-wait'].durationMs}}ms | Agent: {{steps['design-launch'].agentId}}_",
+                        repository: "{{input.repository}}",
+                        issueNumber: "{{steps.intake.issueNumber}}"
+                    }
                 }
             },
             {
@@ -1200,7 +1286,7 @@ async function main() {
                 type: "human",
                 name: "Design Review",
                 config: {
-                    prompt: "Review the technical design. Approve to proceed with implementation planning."
+                    prompt: "A technical design has been posted on the GitHub issue:\n\n{{steps.intake.issueUrl}}\n\nReview the design. Approve to proceed with implementation planning, provide feedback, or reject."
                 }
             },
             {
@@ -1217,9 +1303,9 @@ async function main() {
                             type: "agent",
                             name: "Phased Plan",
                             config: {
-                                agentSlug: "sdlc-planner",
+                                agentSlug: orgSlug("sdlc-planner"),
                                 promptTemplate:
-                                    "Create a phased implementation plan for this feature:\n\nDesign: {{steps.design.text}}\n\nBreak into deliverable phases with clear milestones.\n\n{{#if steps['feature-plan-audit']}}Previous audit feedback: {{steps['feature-plan-audit'].summary}}\nIssues to address: {{helpers.json(steps['feature-plan-audit'].issues)}}{{/if}}\n\n{{#if steps['feature-plan-review']}}Human feedback: {{steps['feature-plan-review'].feedback}}{{/if}}"
+                                    "Create a phased implementation plan for this feature.\n\nTechnical design (from Cursor Cloud Agent with full codebase access):\n{{steps['design-wait'].summary}}\n\nFeature: {{input.title}}\nScope: {{steps.classify.complexity}}\n\nBreak into deliverable phases with clear milestones, file paths, and estimated complexity.\n\n{{#if steps['feature-plan-audit']}}Previous audit feedback: {{steps['feature-plan-audit'].summary}}\nIssues to address: {{helpers.json(steps['feature-plan-audit'].issues)}}{{/if}}\n\n{{#if steps['feature-plan-review']}}Human feedback: {{steps['feature-plan-review'].feedback}}{{/if}}"
                             }
                         },
                         {
@@ -1227,9 +1313,9 @@ async function main() {
                             type: "agent",
                             name: "Audit Plan",
                             config: {
-                                agentSlug: "sdlc-auditor",
+                                agentSlug: orgSlug("sdlc-auditor"),
                                 promptTemplate:
-                                    "Audit this phased implementation plan:\n\n{{steps['feature-plan'].text}}",
+                                    "Audit this phased implementation plan:\n\n{{steps['feature-plan'].text}}\n\nOriginal design:\n{{steps['design-wait'].summary}}\n\nVerify: completeness, correct phasing, edge cases, testing coverage, risk assessment.",
                                 outputFormat: "json"
                             }
                         },
@@ -1263,10 +1349,9 @@ async function main() {
                                         config: {
                                             toolId: "github-add-issue-comment",
                                             parameters: {
-                                                issueNumber:
-                                                    "{{ steps.intake.issueNumber || input.existingIssueNumber }}",
-                                                repository: "{{ input.repository }}",
-                                                body: "## SDLC Audit: Plan Revision Required\n\n**Verdict:** {{ steps['feature-plan-audit'].verdict }}\n**Severity:** {{ steps['feature-plan-audit'].severity }}\n\n**Summary:** {{ steps['feature-plan-audit'].summary }}\n\n**Issues:**\n{{ helpers.json(steps['feature-plan-audit'].issues) }}\n\nA revised plan will be generated automatically."
+                                                body: "## SDLC Audit: Plan Revision Required\n\n**Verdict:** {{steps['feature-plan-audit'].verdict}}\n**Severity:** {{steps['feature-plan-audit'].severity}}\n\n**Summary:** {{steps['feature-plan-audit'].summary}}\n\n**Issues:**\n{{helpers.json(steps['feature-plan-audit'].issues)}}\n\nA revised plan will be generated automatically.",
+                                                repository: "{{input.repository}}",
+                                                issueNumber: "{{steps.intake.issueNumber}}"
                                             }
                                         }
                                     }
@@ -1277,55 +1362,50 @@ async function main() {
                 }
             },
             {
-                id: "code",
+                id: "implement-launch",
                 type: "tool",
                 name: "Implement Feature",
                 config: {
                     toolId: "cursor-launch-agent",
                     parameters: {
-                        prompt: "{{steps['feature-plan'].text}}",
+                        prompt: "Implement the following approved feature plan. Create a branch, make the changes, and push.\n\n## Feature\nTitle: {{input.title}}\nGitHub Issue: {{steps.intake.issueUrl}}\n\n## Approved Implementation Plan\n{{steps['feature-plan'].text}}\n\n## Instructions\n1. Create a feature branch from main\n2. Implement the feature according to the approved phased plan\n3. Add comprehensive tests\n4. Run linting and type-checking to verify\n5. Commit with conventional commit messages: feat: <description>\n6. Push the branch — do NOT create a PR or merge",
+                        repository: "https://github.com/{{input.repository}}"
+                    }
+                }
+            },
+            {
+                id: "implement-wait",
+                type: "tool",
+                name: "Wait for Implementation",
+                config: {
+                    toolId: "cursor-poll-until-done",
+                    parameters: {
+                        agentId: "{{steps['implement-launch'].agentId}}",
+                        maxWaitMinutes: 30
+                    }
+                }
+            },
+            {
+                id: "create-pr",
+                type: "tool",
+                name: "Create Pull Request",
+                config: {
+                    toolId: "github-create-pull-request",
+                    parameters: {
+                        base: "main",
+                        head: "{{steps['implement-wait'].branchName}}",
+                        title: "feat: {{input.title}}",
+                        body: "## Summary\n\nResolves #{{steps.intake.issueNumber}}\n\nScope: {{steps.classify.complexity}} | Priority: {{steps.classify.priority}}\n\n## Technical Design\n\n{{steps['design-wait'].summary}}\n\n## Implementation Plan\n\n{{steps['feature-plan'].text}}\n\n## Implementation\n\n{{steps['implement-wait'].summary}}\n\n---\n_Automated via AgentC2 SDLC Feature Pipeline_",
                         repository: "{{input.repository}}"
                     }
                 }
             },
             {
-                id: "verify",
-                type: "tool",
-                name: "Build & Test",
+                id: "merge-review",
+                type: "human",
+                name: "Review PR on GitHub",
                 config: {
-                    toolId: "verify-branch",
-                    parameters: { repository: "{{input.repository}}" }
-                }
-            },
-            {
-                id: "pr-cycle",
-                type: "dowhile",
-                name: "PR Review Cycle",
-                config: {
-                    maxIterations: 3,
-                    conditionExpression:
-                        "steps['feature-pr-approval']?.approved === false && !steps['feature-pr-approval']?.rejected",
-                    steps: [
-                        {
-                            id: "feature-pr-review",
-                            type: "agent",
-                            name: "PR Review",
-                            config: {
-                                agentSlug: "sdlc-reviewer",
-                                promptTemplate:
-                                    "Review the feature PR:\n\nPlan: {{steps['feature-plan'].text}}\nBuild: {{steps.verify}}\n\n{{#if steps['feature-pr-approval']}}Feedback: {{steps['feature-pr-approval'].feedback}}{{/if}}",
-                                outputFormat: "json"
-                            }
-                        },
-                        {
-                            id: "feature-pr-approval",
-                            type: "human",
-                            name: "PR Approval",
-                            config: {
-                                prompt: "Review the PR assessment. Approve to merge."
-                            }
-                        }
-                    ]
+                    prompt: "A pull request has been created:\n\n{{steps['create-pr'].htmlUrl}}\n\nReview the code changes on GitHub. Approve to merge, or reject."
                 }
             },
             {
@@ -1334,7 +1414,137 @@ async function main() {
                 name: "Merge PR",
                 config: {
                     toolId: "merge-pull-request",
-                    parameters: { repository: "{{input.repository}}" }
+                    parameters: {
+                        prNumber: "{{steps['create-pr'].prNumber}}",
+                        repository: "{{input.repository}}",
+                        mergeMethod: "squash"
+                    }
+                }
+            }
+        ]
+    };
+
+    const triageWorkflowDef = {
+        steps: [
+            {
+                id: "intake",
+                type: "tool",
+                name: "Create GitHub Issue",
+                config: {
+                    toolId: "ticket-to-github-issue",
+                    parameters: {
+                        title: "{{input.title}}",
+                        description: "{{input.description}}",
+                        repository: "{{input.repository}}",
+                        labels: "{{input.labels}}",
+                        sourceTicketId: "{{input.sourceTicketId}}",
+                        existingIssueUrl: "{{input.existingIssueUrl}}",
+                        existingIssueNumber: "{{input.existingIssueNumber}}"
+                    }
+                }
+            },
+            {
+                id: "classify",
+                type: "agent",
+                name: "Classify Ticket",
+                config: {
+                    agentSlug: orgSlug("sdlc-classifier"),
+                    outputFormat: "json",
+                    promptTemplate:
+                        "Classify this ticket:\n\nTitle: {{input.title}}\nDescription: {{input.description}}\n\nGitHub Issue: {{steps.intake.issueUrl}}\nRepository: {{input.repository}}\n\nProvide classification, priority, complexity, and suggested route."
+                }
+            },
+            {
+                id: "post-classification",
+                type: "tool",
+                name: "Post Classification to Issue",
+                config: {
+                    toolId: "github-add-issue-comment",
+                    parameters: {
+                        body: "## SDLC Triage\n\n**Classification:** {{steps.classify.classification}}\n**Priority:** {{steps.classify.priority}}\n**Complexity:** {{steps.classify.complexity}}\n**Route:** {{steps.classify.suggestedRoute}}\n\n**Rationale:** {{steps.classify.rationale}}\n\n**Affected Areas:** {{helpers.json(steps.classify.affectedAreas)}}\n\n---\n_Classified by sdlc-classifier-agentc2_",
+                        repository: "{{input.repository}}",
+                        issueNumber: "{{steps.intake.issueNumber}}"
+                    }
+                }
+            },
+            {
+                id: "route",
+                type: "branch",
+                name: "Route by Classification",
+                config: {
+                    branches: [
+                        {
+                            id: "bug-route",
+                            condition: "steps.classify?.classification === 'bug'",
+                            steps: [
+                                {
+                                    id: "run-bugfix",
+                                    type: "workflow",
+                                    name: "Execute Bugfix Workflow",
+                                    config: {
+                                        workflowId: orgSlug("sdlc-bugfix"),
+                                        input: {
+                                            title: "{{input.title}}",
+                                            description: "{{input.description}}",
+                                            repository: "{{input.repository}}",
+                                            labels: ["bug"],
+                                            sourceTicketId: "{{input.sourceTicketId}}",
+                                            existingIssueUrl: "{{steps.intake.issueUrl}}",
+                                            existingIssueNumber: "{{steps.intake.issueNumber}}"
+                                        }
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            id: "feature-route",
+                            condition: "steps.classify?.classification === 'feature'",
+                            steps: [
+                                {
+                                    id: "run-feature",
+                                    type: "workflow",
+                                    name: "Execute Feature Workflow",
+                                    config: {
+                                        workflowId: orgSlug("sdlc-feature"),
+                                        input: {
+                                            title: "{{input.title}}",
+                                            description: "{{input.description}}",
+                                            repository: "{{input.repository}}",
+                                            labels: ["feature"],
+                                            sourceTicketId: "{{input.sourceTicketId}}",
+                                            existingIssueUrl: "{{steps.intake.issueUrl}}",
+                                            existingIssueNumber: "{{steps.intake.issueNumber}}"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    ],
+                    defaultBranch: [
+                        {
+                            id: "kb-generate",
+                            type: "agent",
+                            name: "Generate KB Article",
+                            config: {
+                                agentSlug: orgSlug("sdlc-planner"),
+                                promptTemplate:
+                                    "The ticket '{{input.title}}' was classified as: {{steps.classify.classification}}\n\nThis is not a bug or feature request. Generate a knowledge base article or explanation that addresses the user's question/issue.\n\nDescription: {{input.description}}\n\nClassification rationale: {{steps.classify.rationale}}\n\nProvide a clear, helpful response that explains the correct usage, common mistakes, or relevant documentation."
+                            }
+                        },
+                        {
+                            id: "kb-post",
+                            type: "tool",
+                            name: "Post KB Article to Issue",
+                            config: {
+                                toolId: "github-add-issue-comment",
+                                parameters: {
+                                    body: "## Knowledge Base Response\n\n{{steps['kb-generate'].text}}\n\n---\n_Generated by sdlc-planner-agentc2 | Classification: {{steps.classify.classification}}_",
+                                    repository: "{{input.repository}}",
+                                    issueNumber: "{{steps.intake.issueNumber}}"
+                                }
+                            }
+                        }
+                    ]
                 }
             }
         ]
@@ -1361,6 +1571,14 @@ async function main() {
             pipelineRunId: {
                 type: "string",
                 description: "Pipeline run ID for linking"
+            },
+            existingIssueUrl: {
+                type: "string",
+                description: "Existing GitHub issue URL (skip creation)"
+            },
+            existingIssueNumber: {
+                type: "number",
+                description: "Existing GitHub issue number"
             }
         },
         required: ["title", "description", "repository"]
@@ -1368,25 +1586,40 @@ async function main() {
 
     const workflowDefs = [
         {
-            slug: orgSlug("sdlc-standard"),
-            name: "SDLC Standard",
+            slug: orgSlug("sdlc-triage"),
+            name: "SDLC Triage",
             description:
-                "Full SDLC workflow with classification, planning, revision cycles, coding, review, and deployment.",
-            definitionJson: standardWorkflowDef
+                "Single entry point for all SDLC tickets. Classifies incoming tickets and routes to the correct sub-workflow: bugfix (bugs), feature (features), or inline KB article (user/training issues).",
+            definitionJson: triageWorkflowDef,
+            isActive: true,
+            isPublished: true
         },
         {
             slug: orgSlug("sdlc-bugfix"),
             name: "SDLC Bugfix",
             description:
-                "Streamlined SDLC workflow for bug fixes: root cause analysis, fix planning, and deployment.",
-            definitionJson: bugfixWorkflowDef
+                "GitHub-centric SDLC bugfix workflow. AgentC2 orchestrates root cause analysis, audit cycles, implementation, PR creation, review, and merge.",
+            definitionJson: bugfixWorkflowDef,
+            isActive: true,
+            isPublished: true
         },
         {
             slug: orgSlug("sdlc-feature"),
             name: "SDLC Feature",
             description:
-                "Extended SDLC workflow for features: design, phased planning, implementation, and deployment.",
-            definitionJson: featureWorkflowDef
+                "GitHub-centric SDLC feature workflow. AgentC2 orchestrates design, phased planning (with audit revision cycles), implementation, PR review, and merge.",
+            definitionJson: featureWorkflowDef,
+            isActive: true,
+            isPublished: true
+        },
+        {
+            slug: orgSlug("sdlc-standard"),
+            name: "SDLC Standard [DEPRECATED]",
+            description:
+                "[DEPRECATED] Replaced by sdlc-triage which routes to sdlc-bugfix or sdlc-feature. Previously: GitHub-centric full SDLC workflow.",
+            definitionJson: standardWorkflowDef,
+            isActive: false,
+            isPublished: false
         }
     ];
 
@@ -1404,6 +1637,8 @@ async function main() {
                     definitionJson: wfDef.definitionJson,
                     inputSchemaJson: inputSchema,
                     maxSteps: 50,
+                    isActive: wfDef.isActive,
+                    isPublished: wfDef.isPublished,
                     workspaceId: workspace.id
                 }
             });
@@ -1419,7 +1654,6 @@ async function main() {
     const sdlcTriggerName = "SDLC GitHub Webhook";
     const existingTrigger = await prisma.agentTrigger.findFirst({
         where: {
-            workflowId: workflows[orgSlug("sdlc-standard")]!.id,
             entityType: "workflow",
             name: sdlcTriggerName
         }
@@ -1434,12 +1668,12 @@ async function main() {
         await prisma.agentTrigger.create({
             data: {
                 entityType: "workflow",
-                workflowId: workflows[orgSlug("sdlc-standard")]!.id,
+                workflowId: workflows[orgSlug("sdlc-triage")]!.id,
                 workspaceId: workspace.id,
                 name: sdlcTriggerName,
                 description:
-                    "Triggers SDLC workflows when a GitHub Issue is labeled. " +
-                    "Routes to sdlc-bugfix, sdlc-feature, or sdlc-standard based on issue labels.",
+                    "Triggers SDLC triage workflow when a GitHub Issue is labeled. " +
+                    "Triage classifies and routes to sdlc-bugfix, sdlc-feature, or handles inline.",
                 triggerType: "webhook",
                 webhookPath,
                 webhookSecret,
@@ -1450,11 +1684,6 @@ async function main() {
                 },
                 inputMapping: {
                     _config: {
-                        workflowRouting: {
-                            bug: orgSlug("sdlc-bugfix"),
-                            feature: orgSlug("sdlc-feature"),
-                            default: orgSlug("sdlc-standard")
-                        },
                         fieldMapping: {
                             title: "issue.title",
                             description: "issue.body",
@@ -1494,7 +1723,7 @@ async function main() {
                 "and deployment — all with human-in-the-loop controls.",
             category: "development",
             tags: ["sdlc", "development", "coding-pipeline", "autonomous", "flywheel"],
-            entryWorkflowId: workflows[orgSlug("sdlc-standard")].id,
+            entryWorkflowId: workflows[orgSlug("sdlc-triage")].id,
             includeWorkflows: [
                 workflows[orgSlug("sdlc-bugfix")].id,
                 workflows[orgSlug("sdlc-feature")].id
@@ -1527,9 +1756,9 @@ The SDLC Flywheel gives your organization an end-to-end autonomous software deve
 
 ### Workflows
 
-- **SDLC Standard** — Full lifecycle: classify → analyze → options (with revision) → plan (with revision) → code → review (with revision) → merge → deploy
-- **SDLC Bugfix** — Streamlined: root cause analysis → fix plan (with revision) → implement → verify → merge
-- **SDLC Feature** — Extended: design → phased plan (with revision) → implement → PR review (with revision) → merge
+- **SDLC Triage** (entry point) — Classify → route to bugfix, feature, or generate KB article for user/training issues
+- **SDLC Bugfix** — Root cause analysis (Cursor Cloud) → audit cycle → human approval → implement → PR → merge
+- **SDLC Feature** — Technical design (Cursor Cloud) → human design review → phased plan (with audit) → implement → PR → merge
 
 ### Skills & Knowledge
 

@@ -1797,28 +1797,35 @@ export class AgentResolver {
     /**
      * Check if an agent exists by slug (optionally within a workspace)
      */
-    async exists(slug: string, workspaceId?: string | null): Promise<boolean> {
+    async exists(
+        slug: string,
+        workspaceId?: string | null,
+        organizationId?: string | null
+    ): Promise<boolean> {
         const count = await prisma.agent.count({
             where: {
                 slug,
                 isActive: true,
-                ...(workspaceId ? { OR: [{ workspaceId }, { workspaceId: null }] } : {})
+                ...(workspaceId ? { OR: [{ workspaceId }, { workspaceId: null }] } : {}),
+                ...(organizationId ? { workspace: { organizationId } } : {})
             }
         });
         return count > 0;
     }
 
     /**
-     * Get an agent record by slug (without hydration, optionally workspace-scoped)
+     * Get an agent record by slug (without hydration, optionally workspace/org-scoped)
      */
     async getRecord(
         slug: string,
-        workspaceId?: string | null
+        workspaceId?: string | null,
+        organizationId?: string | null
     ): Promise<AgentRecordWithTools | null> {
         return prisma.agent.findFirst({
             where: {
                 slug,
-                ...(workspaceId ? { OR: [{ workspaceId }, { workspaceId: null }] } : {})
+                ...(workspaceId ? { OR: [{ workspaceId }, { workspaceId: null }] } : {}),
+                ...(organizationId ? { workspace: { organizationId } } : {})
             },
             include: { tools: true, workspace: { select: { organizationId: true } } }
         });
@@ -1982,7 +1989,12 @@ export async function resolveModelOverride(
     isReasoningModel?: boolean;
 }> {
     const routingRecord = await prisma.agent.findFirst({
-        where: { OR: [{ slug: agentIdOrSlug }, { id: agentIdOrSlug }] },
+        where: {
+            OR: [{ slug: agentIdOrSlug }, { id: agentIdOrSlug }],
+            ...(options?.organizationId
+                ? { workspace: { organizationId: options.organizationId } }
+                : {})
+        },
         select: {
             id: true,
             routingConfig: true,

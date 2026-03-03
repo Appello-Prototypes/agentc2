@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
+import { authenticateRequest } from "@/lib/api-auth";
 
 interface CausalNode {
     type: "campaign" | "mission" | "task" | "agentRun" | "trace";
@@ -20,6 +21,11 @@ interface CausalNode {
  */
 export async function GET(request: NextRequest) {
     try {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
         const { searchParams } = new URL(request.url);
         const campaignId = searchParams.get("campaignId");
 
@@ -30,8 +36,8 @@ export async function GET(request: NextRequest) {
             );
         }
 
-        const campaign = await prisma.campaign.findUnique({
-            where: { id: campaignId },
+        const campaign = await prisma.campaign.findFirst({
+            where: { id: campaignId, tenantId: authContext.organizationId },
             include: {
                 missions: {
                     orderBy: [{ sequence: "asc" }, { priority: "desc" }],

@@ -1,4 +1,4 @@
-import type { ComparisonData } from "@/components/website/comparison/comparison-page-template"
+import type { ComparisonData } from "@/components/website/comparison/comparison-page-template";
 
 export const copilotStudioData: ComparisonData = {
     slug: "copilot-studio",
@@ -9,8 +9,7 @@ export const copilotStudioData: ComparisonData = {
     tldr: {
         them: "Microsoft's low-code platform for building copilots within the Microsoft 365 and Power Platform ecosystem. Deep integration with Azure, Teams, Dynamics 365, and SharePoint.",
         us: "Ecosystem-agnostic agent operations platform that integrates with any tool, any model provider, and any channel — without locking you into a single vendor's cloud.",
-        difference:
-            "Copilot Studio is Microsoft's AI. AgentC2 is your AI."
+        difference: "Copilot Studio is Microsoft's AI. AgentC2 is your AI."
     },
     dimensions: [
         {
@@ -111,8 +110,7 @@ export const copilotStudioData: ComparisonData = {
             answer: "Yes. AgentC2 supports Microsoft integrations via native OAuth (Outlook Mail and Calendar via Graph API) and MCP tools. You get Microsoft integration without Microsoft lock-in."
         },
         {
-            question:
-                "Is Copilot Studio cheaper since it is included in some Microsoft licenses?",
+            question: "Is Copilot Studio cheaper since it is included in some Microsoft licenses?",
             answer: "Copilot Studio is included in some Microsoft 365 plans, but advanced features require separate licensing. AgentC2's pricing is transparent and usage-based. The total cost of ownership should account for vendor lock-in costs, model flexibility, and the engineering effort required to build non-Microsoft integrations in Copilot Studio."
         },
         {
@@ -120,14 +118,12 @@ export const copilotStudioData: ComparisonData = {
             answer: "Yes. Copilot topics, trigger phrases, and response logic can be mapped to AgentC2 agent instructions and tool configurations. The migration is primarily a configuration mapping exercise."
         },
         {
-            question:
-                "Does AgentC2 support Teams as a deployment channel?",
+            question: "Does AgentC2 support Teams as a deployment channel?",
             answer: "AgentC2 supports Slack, web chat, voice, API, embeddable widget, SMS, and email as built-in channels. Teams integration can be added via the Microsoft Bot Framework connector or a custom MCP tool."
         },
         {
-            question:
-                "Which platform has better enterprise security?",
+            question: "Which platform has better enterprise security?",
             answer: "Both platforms offer enterprise-grade security. Copilot Studio inherits Azure's compliance certifications. AgentC2 provides encrypted federation, role-based access, and comprehensive audit logging — plus the option to self-host for full data control."
         }
     ]
-}
+};

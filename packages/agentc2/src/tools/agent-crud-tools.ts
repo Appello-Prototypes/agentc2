@@ -44,6 +44,7 @@ const agentCreateSchema = z
             .optional(),
         memoryEnabled: z.boolean().optional(),
         memoryConfig: z.record(z.any()).optional().nullable(),
+        contextConfig: z.record(z.any()).optional().nullable(),
         maxSteps: z.number().optional(),
         subAgents: z.array(z.string()).optional(),
         workflows: z.array(z.string()).optional(),
@@ -211,6 +212,7 @@ const buildAgentSnapshot = (agent: {
     modelConfig: unknown;
     memoryEnabled: boolean;
     memoryConfig: unknown;
+    contextConfig: unknown;
     maxSteps: number | null;
     subAgents: string[];
     workflows: string[];
@@ -232,6 +234,7 @@ const buildAgentSnapshot = (agent: {
     modelConfig: agent.modelConfig,
     memoryEnabled: agent.memoryEnabled,
     memoryConfig: agent.memoryConfig,
+    contextConfig: agent.contextConfig,
     maxSteps: agent.maxSteps,
     subAgents: agent.subAgents,
     workflows: agent.workflows,
@@ -286,6 +289,10 @@ export const agentCreateTool = createTool({
                 memoryConfig:
                     input.memoryConfig !== undefined
                         ? (input.memoryConfig as Prisma.InputJsonValue)
+                        : Prisma.DbNull,
+                contextConfig:
+                    input.contextConfig !== undefined
+                        ? (input.contextConfig as Prisma.InputJsonValue)
                         : Prisma.DbNull,
                 maxSteps: input.maxSteps ?? 5,
                 subAgents: input.subAgents ?? [],
@@ -451,6 +458,8 @@ export const agentUpdateTool = createTool({
 
         const existingMemoryConfig = (existing.memoryConfig ??
             Prisma.DbNull) as Prisma.InputJsonValue;
+        const existingContextConfig = (existing.contextConfig ??
+            Prisma.DbNull) as Prisma.InputJsonValue;
         const existingMetadata = (existing.metadata ?? Prisma.DbNull) as Prisma.InputJsonValue;
 
         const updateData: Prisma.AgentUncheckedUpdateInput = {
@@ -468,6 +477,10 @@ export const agentUpdateTool = createTool({
                 payload.memoryConfig !== undefined
                     ? (payload.memoryConfig as Prisma.InputJsonValue)
                     : existingMemoryConfig,
+            contextConfig:
+                payload.contextConfig !== undefined
+                    ? (payload.contextConfig as Prisma.InputJsonValue)
+                    : existingContextConfig,
             maxSteps: payload.maxSteps ?? existing.maxSteps,
             subAgents: payload.subAgents ?? existing.subAgents,
             workflows: payload.workflows ?? existing.workflows,

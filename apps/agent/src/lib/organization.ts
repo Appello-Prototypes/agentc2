@@ -7,17 +7,29 @@ export async function getUserMembership(userId: string) {
     });
 }
 
-export async function getUserOrganizationId(userId: string) {
+export async function getUserOrganizationId(
+    userId: string,
+    preferredOrgId?: string | null
+): Promise<string | null> {
+    if (preferredOrgId) {
+        const verified = await prisma.membership.findUnique({
+            where: {
+                userId_organizationId: { userId, organizationId: preferredOrgId }
+            },
+            select: { organizationId: true }
+        });
+        if (verified) return verified.organizationId;
+    }
     const membership = await getUserMembership(userId);
     return membership?.organizationId ?? null;
 }
 
-export async function getDefaultWorkspaceIdForUser(userId: string) {
-    const membership = await getUserMembership(userId);
-    if (!membership) return null;
+export async function getDefaultWorkspaceIdForUser(userId: string, preferredOrgId?: string | null) {
+    const organizationId = await getUserOrganizationId(userId, preferredOrgId);
+    if (!organizationId) return null;
 
     const workspace = await prisma.workspace.findFirst({
-        where: { organizationId: membership.organizationId, isDefault: true },
+        where: { organizationId, isDefault: true },
         orderBy: { createdAt: "asc" }
     });
 

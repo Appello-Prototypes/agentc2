@@ -321,6 +321,7 @@ export async function POST(request: NextRequest) {
                     modelConfig,
                     memoryEnabled: body.memoryEnabled ?? body.memory ?? false,
                     memoryConfig: body.memoryConfig ?? Prisma.DbNull,
+                    contextConfig: body.contextConfig ?? Prisma.DbNull,
                     maxSteps: body.maxSteps ?? 5,
                     subAgents: body.subAgents || [],
                     workflows: body.workflows || [],

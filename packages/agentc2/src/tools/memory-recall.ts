@@ -41,6 +41,11 @@ export const memoryRecallTool = createTool({
     }),
     execute: async ({ query, threadId = "default", resourceId, organizationId, topK = 5 }) => {
         try {
+            if (!organizationId) {
+                console.warn(
+                    "[memory-recall] organizationId missing — thread isolation may be compromised"
+                );
+            }
             const effectiveThreadId =
                 organizationId && !threadId.includes(":")
                     ? `${organizationId}:${threadId}`

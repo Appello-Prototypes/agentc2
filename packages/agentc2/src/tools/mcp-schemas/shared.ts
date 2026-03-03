@@ -243,6 +243,12 @@ export const agentCreateInputSchema: JsonSchema = {
         reasoning: modelConfigProperties.reasoning,
         memoryEnabled: { type: "boolean" },
         memoryConfig: memoryConfigSchema,
+        contextConfig: {
+            type: "object",
+            description:
+                "Context window management config: {maxContextTokens, windowSize, toolResultCompression, providerContextEditing}",
+            additionalProperties: true
+        },
         maxSteps: { type: "number" },
         subAgents: { type: "array", items: { type: "string" } },
         workflows: { type: "array", items: { type: "string" } },

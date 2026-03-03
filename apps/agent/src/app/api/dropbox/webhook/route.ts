@@ -3,6 +3,7 @@ import { prisma, TriggerEventStatus } from "@repo/database";
 import { inngest } from "@/lib/inngest";
 import { getChangesSinceCursor } from "@/lib/dropbox";
 import { buildTriggerPayloadSnapshot, createTriggerEventRecord } from "@/lib/trigger-events";
+import { createHmac, timingSafeEqual } from "crypto";
 
 /**
  * GET /api/dropbox/webhook
@@ -35,7 +36,31 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
     try {
-        const body = (await request.json()) as {
+        const rawBody = await request.text();
+
+        const appSecret = process.env.DROPBOX_APP_SECRET;
+        if (appSecret) {
+            const signature = request.headers.get("x-dropbox-signature");
+            if (!signature) {
+                console.warn("[Dropbox Webhook] Missing X-Dropbox-Signature header");
+                return NextResponse.json(
+                    { success: false, error: "Missing signature" },
+                    { status: 403 }
+                );
+            }
+            const expected = createHmac("sha256", appSecret).update(rawBody).digest("hex");
+            const sigBuf = Buffer.from(signature, "hex");
+            const expBuf = Buffer.from(expected, "hex");
+            if (sigBuf.length !== expBuf.length || !timingSafeEqual(sigBuf, expBuf)) {
+                console.warn("[Dropbox Webhook] Invalid signature");
+                return NextResponse.json(
+                    { success: false, error: "Invalid signature" },
+                    { status: 403 }
+                );
+            }
+        }
+
+        const body = JSON.parse(rawBody) as {
             list_folder?: { accounts?: string[] };
             delta?: { users?: number[] };
         };

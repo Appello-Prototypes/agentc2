@@ -52,7 +52,11 @@ const workflowReadSchema = z.object({
             versions: z.boolean().optional(),
             runs: z.boolean().optional()
         })
+        .optional(),
+    organizationId: z
+        .string()
         .optional()
+        .describe("Organization ID for tenant-scoped access (auto-injected)")
 });
 
 const workflowUpdateSchema = z
@@ -62,13 +66,21 @@ const workflowUpdateSchema = z
         restoreVersion: z.number().optional(),
         versionDescription: z.string().optional(),
         createdBy: z.string().optional().nullable(),
-        data: workflowCreateSchema.partial().optional()
+        data: workflowCreateSchema.partial().optional(),
+        organizationId: z
+            .string()
+            .optional()
+            .describe("Organization ID for tenant-scoped access (auto-injected)")
     })
     .passthrough();
 
 const workflowDeleteSchema = z.object({
     workflowId: z.string(),
-    mode: z.enum(["delete", "archive"]).optional()
+    mode: z.enum(["delete", "archive"]).optional(),
+    organizationId: z
+        .string()
+        .optional()
+        .describe("Organization ID for tenant-scoped access (auto-injected)")
 });
 
 export const workflowCreateTool = createTool({
@@ -148,13 +160,16 @@ export const workflowReadTool = createTool({
         versions: z.array(z.any()).optional(),
         runs: z.array(z.any()).optional()
     }),
-    execute: async ({ workflowId, include }) => {
+    execute: async ({ workflowId, include, organizationId }) => {
         const includeConfig: Record<string, boolean> = {};
         if (include?.versions) includeConfig.versions = true;
         if (include?.runs) includeConfig.runs = true;
 
         const workflow = await prisma.workflow.findFirst({
-            where: { OR: [{ slug: workflowId }, { id: workflowId }] },
+            where: {
+                OR: [{ slug: workflowId }, { id: workflowId }],
+                ...(organizationId ? { workspace: { organizationId } } : {})
+            },
             include: includeConfig
         });
 
@@ -184,14 +199,18 @@ export const workflowUpdateTool = createTool({
         restoreVersion,
         versionDescription,
         createdBy,
-        data
+        data,
+        organizationId
     }) => {
         if (!data && !restoreVersionId && restoreVersion === undefined) {
             throw new Error("Update requires data or a restoreVersion value");
         }
 
         const existing = await prisma.workflow.findFirst({
-            where: { OR: [{ slug: workflowId }, { id: workflowId }] }
+            where: {
+                OR: [{ slug: workflowId }, { id: workflowId }],
+                ...(organizationId ? { workspace: { organizationId } } : {})
+            }
         });
 
         if (!existing) {
@@ -305,9 +324,12 @@ export const workflowDeleteTool = createTool({
         success: z.boolean(),
         message: z.string().optional()
     }),
-    execute: async ({ workflowId, mode }) => {
+    execute: async ({ workflowId, mode, organizationId }) => {
         const existing = await prisma.workflow.findFirst({
-            where: { OR: [{ slug: workflowId }, { id: workflowId }] }
+            where: {
+                OR: [{ slug: workflowId }, { id: workflowId }],
+                ...(organizationId ? { workspace: { organizationId } } : {})
+            }
         });
 
         if (!existing) {

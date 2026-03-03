@@ -53,6 +53,18 @@ interface RoutingConfig {
     budgetAware?: boolean;
 }
 
+interface ContextConfig {
+    maxContextTokens?: number;
+    toolResultCompression?: {
+        enabled?: boolean;
+        threshold?: number;
+    };
+    providerContextEditing?: {
+        clearThinking?: boolean;
+        clearToolUses?: boolean;
+    };
+}
+
 interface Agent {
     id: string;
     slug: string;
@@ -76,6 +88,7 @@ interface Agent {
     } | null;
     modelConfig?: ModelConfig | null;
     routingConfig?: RoutingConfig | null;
+    contextConfig?: ContextConfig | null;
     isActive: boolean;
     visibility: "PRIVATE" | "ORGANIZATION" | "PUBLIC";
     publicToken: string | null;
@@ -661,6 +674,7 @@ export default function ConfigurePage() {
                 memoryConfig: agentData.memoryConfig,
                 modelConfig: agentData.modelConfig,
                 routingConfig: agentData.routingConfig ?? null,
+                contextConfig: agentData.contextConfig ?? null,
                 isActive: agentData.isActive ?? true,
                 visibility: agentData.visibility ?? "PRIVATE",
                 publicToken: agentData.publicToken ?? null,
@@ -942,6 +956,7 @@ export default function ConfigurePage() {
                 memoryConfig: agentData.memoryConfig,
                 modelConfig: agentData.modelConfig,
                 routingConfig: agentData.routingConfig ?? null,
+                contextConfig: agentData.contextConfig ?? null,
                 isActive: agentData.isActive ?? true,
                 visibility: agentData.visibility ?? "PRIVATE",
                 publicToken: agentData.publicToken ?? null,
@@ -3336,6 +3351,173 @@ export default function ConfigurePage() {
                                             knowledge base with quality scores. Any agent with RAG
                                             access can search this agent&apos;s history.
                                         </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* Context Management Card */}
+                    <Card className="mt-4">
+                        <CardHeader>
+                            <CardTitle>Context Management</CardTitle>
+                            <CardDescription>
+                                Control how context is managed during multi-step runs to optimize
+                                cost and quality
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-6">
+                            <div className="space-y-2">
+                                <Label>
+                                    Max Context Tokens:{" "}
+                                    {formData.contextConfig?.maxContextTokens?.toLocaleString() ||
+                                        "50,000"}{" "}
+                                </Label>
+                                <input
+                                    type="range"
+                                    min="5000"
+                                    max="200000"
+                                    step="5000"
+                                    value={formData.contextConfig?.maxContextTokens || 50000}
+                                    onChange={(e) =>
+                                        handleChange("contextConfig", {
+                                            ...formData.contextConfig,
+                                            maxContextTokens: parseInt(e.target.value)
+                                        } as Agent["contextConfig"])
+                                    }
+                                    className="w-full"
+                                />
+                                <p className="text-muted-foreground text-xs">
+                                    Total token budget per run. Higher values allow longer
+                                    multi-step runs but increase cost.
+                                </p>
+                            </div>
+
+                            <div className="border-t pt-4">
+                                <Label className="mb-3 block text-sm font-medium">
+                                    Tool Result Compression
+                                </Label>
+                                <div className="bg-muted space-y-4 rounded-lg p-4">
+                                    <div className="flex items-center gap-4">
+                                        <Switch
+                                            checked={
+                                                formData.contextConfig?.toolResultCompression
+                                                    ?.enabled !== false
+                                            }
+                                            onCheckedChange={(checked) =>
+                                                handleChange("contextConfig", {
+                                                    ...formData.contextConfig,
+                                                    toolResultCompression: {
+                                                        ...formData.contextConfig
+                                                            ?.toolResultCompression,
+                                                        enabled: checked
+                                                    }
+                                                } as Agent["contextConfig"])
+                                            }
+                                        />
+                                        <div>
+                                            <Label>Compress verbose tool results</Label>
+                                            <p className="text-muted-foreground text-xs">
+                                                Automatically summarize large tool outputs using a
+                                                fast model to reduce context consumption
+                                            </p>
+                                        </div>
+                                    </div>
+                                    {formData.contextConfig?.toolResultCompression?.enabled !==
+                                        false && (
+                                        <div className="space-y-2">
+                                            <Label>
+                                                Compression Threshold:{" "}
+                                                {(
+                                                    formData.contextConfig?.toolResultCompression
+                                                        ?.threshold || 2000
+                                                ).toLocaleString()}{" "}
+                                                chars
+                                            </Label>
+                                            <input
+                                                type="range"
+                                                min="500"
+                                                max="10000"
+                                                step="500"
+                                                value={
+                                                    formData.contextConfig?.toolResultCompression
+                                                        ?.threshold || 2000
+                                                }
+                                                onChange={(e) =>
+                                                    handleChange("contextConfig", {
+                                                        ...formData.contextConfig,
+                                                        toolResultCompression: {
+                                                            ...formData.contextConfig
+                                                                ?.toolResultCompression,
+                                                            threshold: parseInt(e.target.value)
+                                                        }
+                                                    } as Agent["contextConfig"])
+                                                }
+                                                className="w-full"
+                                            />
+                                            <p className="text-muted-foreground text-xs">
+                                                Tool results exceeding this character count will be
+                                                summarized
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="border-t pt-4">
+                                <Label className="mb-3 block text-sm font-medium">
+                                    Provider Context Editing
+                                </Label>
+                                <div className="bg-muted space-y-3 rounded-lg p-4">
+                                    <div className="flex items-center gap-4">
+                                        <Switch
+                                            checked={
+                                                formData.contextConfig?.providerContextEditing
+                                                    ?.clearThinking !== false
+                                            }
+                                            onCheckedChange={(checked) =>
+                                                handleChange("contextConfig", {
+                                                    ...formData.contextConfig,
+                                                    providerContextEditing: {
+                                                        ...formData.contextConfig
+                                                            ?.providerContextEditing,
+                                                        clearThinking: checked
+                                                    }
+                                                } as Agent["contextConfig"])
+                                            }
+                                        />
+                                        <div>
+                                            <Label>Clear thinking blocks</Label>
+                                            <p className="text-muted-foreground text-xs">
+                                                Automatically strip extended thinking from prior
+                                                turns to prevent token leakage (Anthropic)
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-4">
+                                        <Switch
+                                            checked={
+                                                formData.contextConfig?.providerContextEditing
+                                                    ?.clearToolUses !== false
+                                            }
+                                            onCheckedChange={(checked) =>
+                                                handleChange("contextConfig", {
+                                                    ...formData.contextConfig,
+                                                    providerContextEditing: {
+                                                        ...formData.contextConfig
+                                                            ?.providerContextEditing,
+                                                        clearToolUses: checked
+                                                    }
+                                                } as Agent["contextConfig"])
+                                            }
+                                        />
+                                        <div>
+                                            <Label>Clear old tool results</Label>
+                                            <p className="text-muted-foreground text-xs">
+                                                Replace old tool results with placeholders to
+                                                preserve context space (Anthropic)
+                                            </p>
+                                        </div>
                                     </div>
                                 </div>
                             </div>

@@ -48,10 +48,19 @@ export const routingConfigSchema = z
 
 export const contextConfigSchema = z
     .object({
-        ragEnabled: z.boolean().optional(),
-        ragTopK: z.number().int().min(1).max(50).optional(),
-        ragMinScore: z.number().min(0).max(1).optional(),
-        documentIds: z.array(z.string()).optional()
+        maxContextTokens: z.number().int().min(1000).max(200000).optional(),
+        toolResultCompression: z
+            .object({
+                enabled: z.boolean().optional(),
+                threshold: z.number().int().min(100).max(50000).optional()
+            })
+            .optional(),
+        providerContextEditing: z
+            .object({
+                clearThinking: z.boolean().optional(),
+                clearToolUses: z.boolean().optional()
+            })
+            .optional()
     })
     .passthrough()
     .nullable()

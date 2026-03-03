@@ -14,6 +14,11 @@ vi.mock("@repo/database", () => ({
     }
 }));
 
+const mockAuthenticateRequest = vi.fn();
+vi.mock("@/lib/api-auth", () => ({
+    authenticateRequest: (...args: unknown[]) => mockAuthenticateRequest(...args)
+}));
+
 // Mock the output-actions dispatcher for test endpoint
 vi.mock("../../../apps/agent/src/lib/output-actions", () => ({
     executeOutputAction: vi.fn().mockResolvedValue({ success: true })
@@ -35,6 +40,11 @@ const mockOutputAction = {
 describe("Output Actions API", () => {
     beforeEach(() => {
         mockReset(prismaMock);
+        mockAuthenticateRequest.mockReset();
+        mockAuthenticateRequest.mockResolvedValue({
+            userId: "user-1",
+            organizationId: "org-1"
+        });
         vi.clearAllMocks();
     });
 
@@ -69,6 +79,8 @@ describe("Output Actions API", () => {
     it("POST rejects missing required fields", async () => {
         const { POST } =
             await import("../../../apps/agent/src/app/api/agents/[id]/output-actions/route");
+
+        prismaMock.agent.findFirst.mockResolvedValue(mockAgent as never);
 
         const request = createMockRequest("/api/agents/test-agent/output-actions", {
             method: "POST",

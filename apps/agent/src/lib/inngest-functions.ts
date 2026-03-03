@@ -785,7 +785,12 @@ export const evaluationCompletedFunction = inngest.createFunction(
 
             const agent = await prisma.agent.findUnique({
                 where: { id: run.agentId },
-                select: { slug: true, name: true, autoVectorize: true }
+                select: {
+                    slug: true,
+                    name: true,
+                    autoVectorize: true,
+                    workspace: { select: { organizationId: true } }
+                }
             });
             if (!agent?.autoVectorize) return;
 
@@ -802,6 +807,7 @@ export const evaluationCompletedFunction = inngest.createFunction(
                 const { ingestDocument } = await import("@repo/agentc2");
 
                 await ingestDocument(run.outputText, {
+                    organizationId: agent.workspace?.organizationId || undefined,
                     type: "markdown",
                     sourceId: `agent-output/${agent.slug}/${run.id}`,
                     sourceName: `${agent.name} - ${run.createdAt.toISOString().split("T")[0]}`,

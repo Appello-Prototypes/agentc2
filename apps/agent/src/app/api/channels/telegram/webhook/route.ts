@@ -127,8 +127,19 @@ export async function POST(request: NextRequest) {
                 return NextResponse.json({ ok: true });
             }
 
-            // Resolve agent
-            const { agent, record } = await agentResolver.resolve({ slug: agentSlug });
+            // Resolve org from channel integration connection
+            const telegramConnection = await prisma.integrationConnection.findFirst({
+                where: { provider: { key: "telegram-bot" }, isActive: true },
+                select: { organizationId: true }
+            });
+            const channelOrgId = telegramConnection?.organizationId;
+
+            const { agent, record } = await agentResolver.resolve({
+                slug: agentSlug,
+                requestContext: {
+                    tenantId: channelOrgId ?? undefined
+                }
+            });
             const agentId = record?.id || agentSlug;
 
             // Start recording the run

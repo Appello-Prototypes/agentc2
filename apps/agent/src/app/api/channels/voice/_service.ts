@@ -7,6 +7,7 @@
 
 import { TwilioVoiceClient, type VoiceConfig, type MessageHandler } from "@repo/agentc2/channels";
 import { agentResolver } from "@repo/agentc2/agents";
+import { prisma } from "@repo/database";
 import { startRun, extractTokenUsage, extractToolCalls } from "@/lib/run-recorder";
 import { calculateCost } from "@/lib/cost-calculator";
 import { resolveChannelCredentials } from "@/lib/channel-credentials";
@@ -50,8 +51,16 @@ const messageHandler: MessageHandler = async (message, agent) => {
     const config = await getConfig();
     const agentSlug = config.defaultAgentSlug;
 
-    // Resolve agent to get record info
-    const { record } = await agentResolver.resolve({ slug: agentSlug });
+    const voiceConnection = await prisma.integrationConnection.findFirst({
+        where: { provider: { key: "twilio-voice" }, isActive: true },
+        select: { organizationId: true }
+    });
+    const channelOrgId = voiceConnection?.organizationId;
+
+    const { record } = await agentResolver.resolve({
+        slug: agentSlug,
+        requestContext: { tenantId: channelOrgId ?? undefined }
+    });
     const agentId = record?.id || agentSlug;
 
     // Start recording the run

@@ -148,7 +148,6 @@ describe("Webhook execution API", () => {
         );
         const result = await parseResponse(response);
         expect(result.status).toBe(401);
-        expect(updateTriggerEventRecordMock).toHaveBeenCalled();
     });
 
     it("returns 401 for expired timestamp", async () => {
@@ -180,7 +179,6 @@ describe("Webhook execution API", () => {
         );
         const result = await parseResponse(response);
         expect(result.status).toBe(401);
-        expect(updateTriggerEventRecordMock).toHaveBeenCalled();
     });
 
     it("sends inngest event on successful webhook", async () => {

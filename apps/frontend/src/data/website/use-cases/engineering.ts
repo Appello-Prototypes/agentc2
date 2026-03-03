@@ -1,4 +1,4 @@
-import type { UseCaseData } from "@/components/website/use-case/use-case-page-template"
+import type { UseCaseData } from "@/components/website/use-case/use-case-page-template";
 
 export const engineeringData: UseCaseData = {
     slug: "engineering",
@@ -10,18 +10,18 @@ export const engineeringData: UseCaseData = {
         {
             title: "Ticket triage overhead",
             description:
-                "Engineers waste hours each sprint manually triaging bug reports, duplicating detection, and assigning priority. By the time a ticket is routed, the context is cold.",
+                "Engineers waste hours each sprint manually triaging bug reports, duplicating detection, and assigning priority. By the time a ticket is routed, the context is cold."
         },
         {
             title: "Slow code review cycles",
             description:
-                "PRs sit in review queues for days. Reviewers context-switch constantly, miss subtle issues, and leave drive-by approvals that let bugs through.",
+                "PRs sit in review queues for days. Reviewers context-switch constantly, miss subtle issues, and leave drive-by approvals that let bugs through."
         },
         {
             title: "Incident response chaos",
             description:
-                "When production breaks, engineers scramble to correlate logs, identify root causes, and coordinate fixes across teams — all under pressure with no standard playbook.",
-        },
+                "When production breaks, engineers scramble to correlate logs, identify root causes, and coordinate fixes across teams — all under pressure with no standard playbook."
+        }
     ],
     solution: {
         description:
@@ -32,8 +32,8 @@ export const engineeringData: UseCaseData = {
             "Dark Factory pipeline for autonomous task execution",
             "Incident correlation across logs, metrics, and recent deploys",
             "Sprint planning assistance based on velocity and capacity",
-            "Full audit trail of every automated engineering action",
-        ],
+            "Full audit trail of every automated engineering action"
+        ]
     },
     agentExamples: [
         {
@@ -42,7 +42,7 @@ export const engineeringData: UseCaseData = {
                 "Monitors incoming Jira tickets, detects duplicates, assigns priority and component labels, routes to the right team, and summarizes context for the assignee.",
             tools: ["Jira", "GitHub", "Slack"],
             channels: ["Slack", "Web"],
-            guardrails: ["No auto-close without confirmation"],
+            guardrails: ["No auto-close without confirmation"]
         },
         {
             name: "Dark Factory Pipeline",
@@ -50,10 +50,7 @@ export const engineeringData: UseCaseData = {
                 "Picks up approved tickets, generates implementation plans, writes code, runs tests, and opens PRs — all autonomously within guardrails defined by your team.",
             tools: ["GitHub", "Jira", "n8n"],
             channels: ["API", "Slack"],
-            guardrails: [
-                "Human approval before merge",
-                "Test coverage > 80%",
-            ],
+            guardrails: ["Human approval before merge", "Test coverage > 80%"]
         },
         {
             name: "PR Review Agent",
@@ -61,8 +58,8 @@ export const engineeringData: UseCaseData = {
                 "Reviews pull requests for security vulnerabilities, performance regressions, code style violations, and architectural concerns. Posts structured feedback as inline comments.",
             tools: ["GitHub", "Firecrawl", "RAG"],
             channels: ["GitHub", "Slack"],
-            guardrails: ["Advisory only — no auto-merge"],
-        },
+            guardrails: ["Advisory only — no auto-merge"]
+        }
     ],
     integrations: [
         "GitHub",
@@ -74,7 +71,7 @@ export const engineeringData: UseCaseData = {
         "Firecrawl",
         "Google Drive",
         "Confluence",
-        "GitLab",
+        "GitLab"
     ],
-    ctaTitle: "Ship faster with agents that handle the toil",
-}
+    ctaTitle: "Ship faster with agents that handle the toil"
+};

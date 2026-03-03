@@ -1,11 +1,10 @@
-import type { ComparisonData } from "@/components/website/comparison/comparison-page-template"
+import type { ComparisonData } from "@/components/website/comparison/comparison-page-template";
 
 export const relevanceAiData: ComparisonData = {
     slug: "relevance-ai",
     competitor: "Relevance AI",
     competitorUrl: "https://relevanceai.com",
-    heroSubtitle:
-        "No-code agent builder vs. full-stack agent operations — simplicity meets depth",
+    heroSubtitle: "No-code agent builder vs. full-stack agent operations — simplicity meets depth",
     tldr: {
         them: "No-code platform for building AI agents and multi-step tools. Relevance AI provides a visual builder for creating agents that execute tasks using LLM chains and integrations.",
         us: "Full-stack agent operations platform with code-first and UI-driven development, multi-tenant governance, voice agents, federation, and a Playbook Marketplace — built for teams that need both simplicity and production depth.",
@@ -111,13 +110,11 @@ export const relevanceAiData: ComparisonData = {
         "AgentC2 is built for teams that need the full agent operations stack: code-first development for complex logic, multi-agent orchestration, enterprise governance, multi-channel deployment (including voice), cross-organization federation, and a marketplace. If your AI strategy goes beyond a single no-code agent, AgentC2 provides the platform to scale.",
     faqs: [
         {
-            question:
-                "Is AgentC2 harder to use than Relevance AI for non-technical users?",
+            question: "Is AgentC2 harder to use than Relevance AI for non-technical users?",
             answer: "AgentC2 provides a full admin UI for no-code agent creation and management. Non-technical users can create agents, assign tools, configure instructions, and deploy to channels — all through the UI. The difference is that AgentC2 also supports code-first development for complex scenarios."
         },
         {
-            question:
-                "Does Relevance AI support multi-agent systems?",
+            question: "Does Relevance AI support multi-agent systems?",
             answer: "Relevance AI supports sequential multi-step tool execution within a single agent. AgentC2 provides true multi-agent orchestration with Networks (routing between specialized agents), Campaigns (parallel fan-out), and human approval gates."
         },
         {
@@ -125,14 +122,12 @@ export const relevanceAiData: ComparisonData = {
             answer: "Yes. Agent instructions, tool configurations, and workflow logic from Relevance AI can be recreated in AgentC2's admin UI or code. The main effort is mapping Relevance AI's tool steps to AgentC2's MCP tools and native tool registry."
         },
         {
-            question:
-                "Which platform has better AI model support?",
+            question: "Which platform has better AI model support?",
             answer: "Both platforms support major model providers. AgentC2's advantage is model-agnostic flexibility — you can switch models per agent without platform constraints, and use the Vercel AI SDK for standardized model access."
         },
         {
-            question:
-                "Does AgentC2 have a credit-based pricing model like Relevance AI?",
+            question: "Does AgentC2 have a credit-based pricing model like Relevance AI?",
             answer: "No. AgentC2 uses transparent usage-based pricing. You pay for model tokens consumed plus platform features. There is no credit abstraction — you see the direct cost of every agent action."
         }
     ]
-}
+};

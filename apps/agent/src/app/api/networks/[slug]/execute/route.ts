@@ -6,12 +6,18 @@ import { refreshNetworkMetrics } from "@/lib/metrics";
 import { resolveRunEnvironment, resolveRunTriggerType } from "@/lib/run-metadata";
 import { createTriggerEventRecord } from "@/lib/trigger-events";
 import { processNetworkStreamWithSubRuns } from "@/lib/network-stream-processor";
+import { authenticateRequest } from "@/lib/api-auth";
 
 export async function POST(
     request: NextRequest,
     { params }: { params: Promise<{ slug: string }> }
 ) {
     try {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
         const { slug } = await params;
         const body = await request.json();
         const message = body.message || body.input;
@@ -24,7 +30,10 @@ export async function POST(
         }
 
         const network = await prisma.network.findFirst({
-            where: { OR: [{ slug }, { id: slug }] },
+            where: {
+                OR: [{ slug }, { id: slug }],
+                workspace: { organizationId: authContext.organizationId }
+            },
             include: { workspace: { select: { environment: true, organizationId: true } } }
         });
 

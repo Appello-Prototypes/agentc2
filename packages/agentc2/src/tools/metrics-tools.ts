@@ -8,9 +8,12 @@ function percentile(sorted: number[], p: number) {
     return sorted[Math.max(0, Math.min(index, sorted.length - 1))];
 }
 
-async function resolveAgent(agentId: string) {
+async function resolveAgent(agentId: string, organizationId?: string) {
     return prisma.agent.findFirst({
-        where: { OR: [{ slug: agentId }, { id: agentId }] }
+        where: {
+            OR: [{ slug: agentId }, { id: agentId }],
+            ...(organizationId ? { workspace: { organizationId } } : {})
+        }
     });
 }
 
@@ -69,7 +72,11 @@ export const metricsLiveSummaryTool = createTool({
     inputSchema: z.object({
         runType: z.string().optional(),
         from: z.string().optional(),
-        to: z.string().optional()
+        to: z.string().optional(),
+        organizationId: z
+            .string()
+            .optional()
+            .describe("Organization ID for tenant-scoped access (auto-injected)")
     }),
     outputSchema: z.object({
         success: z.boolean(),
@@ -79,8 +86,10 @@ export const metricsLiveSummaryTool = createTool({
         perAgent: z.array(z.any()),
         modelUsage: z.array(z.any())
     }),
-    execute: async ({ runType, from, to }) => {
-        const baseWhere: Prisma.AgentRunWhereInput = {};
+    execute: async ({ runType, from, to, organizationId }) => {
+        const baseWhere: Prisma.AgentRunWhereInput = {
+            ...(organizationId ? { agent: { workspace: { organizationId } } } : {})
+        };
         const startedAtFilter: Prisma.DateTimeFilter = {};
 
         if (runType && runType.toLowerCase() !== "all") {
@@ -300,7 +309,11 @@ export const metricsAgentAnalyticsTool = createTool({
     inputSchema: z.object({
         agentId: z.string(),
         from: z.string().optional(),
-        to: z.string().optional()
+        to: z.string().optional(),
+        organizationId: z
+            .string()
+            .optional()
+            .describe("Organization ID for tenant-scoped access (auto-injected)")
     }),
     outputSchema: z.object({
         success: z.boolean(),
@@ -312,8 +325,8 @@ export const metricsAgentAnalyticsTool = createTool({
         models: z.array(z.any()),
         dateRange: z.record(z.any())
     }),
-    execute: async ({ agentId, from, to }) => {
-        const agent = await resolveAgent(agentId);
+    execute: async ({ agentId, from, to, organizationId }) => {
+        const agent = await resolveAgent(agentId, organizationId);
         if (!agent) {
             throw new Error(`Agent '${agentId}' not found`);
         }
@@ -539,7 +552,11 @@ export const metricsAgentRunsTool = createTool({
         cursor: z.string().optional(),
         triggerId: z.string().optional(),
         limit: z.number().optional(),
-        source: z.string().optional()
+        source: z.string().optional(),
+        organizationId: z
+            .string()
+            .optional()
+            .describe("Organization ID for tenant-scoped access (auto-injected)")
     }),
     outputSchema: z.object({
         success: z.boolean(),
@@ -547,8 +564,19 @@ export const metricsAgentRunsTool = createTool({
         hasMore: z.boolean(),
         total: z.number()
     }),
-    execute: async ({ agentId, status, search, from, to, cursor, triggerId, limit, source }) => {
-        const agent = await resolveAgent(agentId);
+    execute: async ({
+        agentId,
+        status,
+        search,
+        from,
+        to,
+        cursor,
+        triggerId,
+        limit,
+        source,
+        organizationId
+    }) => {
+        const agent = await resolveAgent(agentId, organizationId);
         if (!agent) {
             throw new Error(`Agent '${agentId}' not found`);
         }
@@ -671,15 +699,22 @@ export const metricsWorkflowDailyTool = createTool({
     description: "Get daily workflow metrics for the last N days.",
     inputSchema: z.object({
         workflowSlug: z.string(),
-        days: z.number().optional()
+        days: z.number().optional(),
+        organizationId: z
+            .string()
+            .optional()
+            .describe("Organization ID for tenant-scoped access (auto-injected)")
     }),
     outputSchema: z.object({
         success: z.boolean(),
         metrics: z.array(z.any())
     }),
-    execute: async ({ workflowSlug, days }) => {
+    execute: async ({ workflowSlug, days, organizationId }) => {
         const workflow = await prisma.workflow.findFirst({
-            where: { OR: [{ slug: workflowSlug }, { id: workflowSlug }] }
+            where: {
+                OR: [{ slug: workflowSlug }, { id: workflowSlug }],
+                ...(organizationId ? { workspace: { organizationId } } : {})
+            }
         });
         if (!workflow) {
             throw new Error(`Workflow '${workflowSlug}' not found`);
@@ -706,15 +741,22 @@ export const metricsNetworkDailyTool = createTool({
     description: "Get daily network metrics for the last N days.",
     inputSchema: z.object({
         networkSlug: z.string(),
-        days: z.number().optional()
+        days: z.number().optional(),
+        organizationId: z
+            .string()
+            .optional()
+            .describe("Organization ID for tenant-scoped access (auto-injected)")
     }),
     outputSchema: z.object({
         success: z.boolean(),
         metrics: z.array(z.any())
     }),
-    execute: async ({ networkSlug, days }) => {
+    execute: async ({ networkSlug, days, organizationId }) => {
         const network = await prisma.network.findFirst({
-            where: { OR: [{ slug: networkSlug }, { id: networkSlug }] }
+            where: {
+                OR: [{ slug: networkSlug }, { id: networkSlug }],
+                ...(organizationId ? { workspace: { organizationId } } : {})
+            }
         });
         if (!network) {
             throw new Error(`Network '${networkSlug}' not found`);

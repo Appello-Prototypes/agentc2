@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { auth } from "@repo/auth";
 import { prisma } from "@repo/database";
 import { authenticateRequest } from "@/lib/api-auth";
+import { getUserOrganizationId } from "@/lib/organization";
 
 /**
  * GET /api/vectors/[documentId]
@@ -21,16 +22,24 @@ export async function GET(
     try {
         const apiAuth = await authenticateRequest(request);
         let userId = apiAuth?.userId;
+        let organizationId = apiAuth?.organizationId;
 
         if (!userId) {
             const session = await auth.api.getSession({
                 headers: await headers()
             });
             userId = session?.user?.id;
+            if (userId && !organizationId) {
+                organizationId = (await getUserOrganizationId(userId)) ?? undefined;
+            }
         }
 
         if (!userId) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
+
+        if (!organizationId) {
+            return NextResponse.json({ error: "Organization context required" }, { status: 403 });
         }
 
         const { documentId } = await params;
@@ -44,10 +53,10 @@ export async function GET(
         );
         const offset = (page - 1) * pageSize;
 
-        // Count total chunks for this document
         const countResult = await prisma.$queryRawUnsafe<[{ cnt: bigint }]>(
-            `SELECT count(*) as cnt FROM rag_documents WHERE metadata->>'documentId' = $1`,
-            decodedDocId
+            `SELECT count(*) as cnt FROM rag_documents WHERE metadata->>'documentId' = $1 AND metadata->>'organizationId' = $2`,
+            decodedDocId,
+            organizationId
         );
         const totalChunks = Number(countResult[0]?.cnt || 0);
 
@@ -68,12 +77,13 @@ export async function GET(
                 ((replace(replace(embedding::text, '[', '{'), ']', '}'))::float8[])[1:10] as vector_preview,
                 array_length((replace(replace(embedding::text, '[', '{'), ']', '}'))::float8[], 1) as vector_dims
             FROM rag_documents
-            WHERE metadata->>'documentId' = $1
+            WHERE metadata->>'documentId' = $1 AND metadata->>'organizationId' = $4
             ORDER BY (metadata->>'chunkIndex')::int ASC NULLS LAST
             LIMIT $2 OFFSET $3`,
             decodedDocId,
             pageSize,
-            offset
+            offset,
+            organizationId
         );
 
         // Get summary info
@@ -89,13 +99,14 @@ export async function GET(
                 MIN(metadata->>'ingestedAt') as first_ingested,
                 MAX(metadata->>'ingestedAt') as last_ingested
             FROM rag_documents
-            WHERE metadata->>'documentId' = $1`,
-            decodedDocId
+            WHERE metadata->>'documentId' = $1 AND metadata->>'organizationId' = $2`,
+            decodedDocId,
+            organizationId
         );
 
         // Check if there's a managed Document record
         const managedDoc = await prisma.document.findFirst({
-            where: { slug: decodedDocId },
+            where: { slug: decodedDocId, organizationId },
             select: { id: true, slug: true, name: true }
         });
 

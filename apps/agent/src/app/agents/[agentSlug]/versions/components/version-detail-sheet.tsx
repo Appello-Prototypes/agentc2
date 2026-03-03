@@ -52,6 +52,7 @@ export function VersionDetailSheet({
 
     const memoryConfig = version.snapshot?.memoryConfig as Record<string, unknown> | undefined;
     const modelConfig = version.snapshot?.modelConfig as Record<string, unknown> | undefined;
+    const contextConfig = version.snapshot?.contextConfig as Record<string, unknown> | undefined;
 
     const handleCopyConfig = () => {
         const config = {
@@ -239,6 +240,74 @@ export function VersionDetailSheet({
                                 </div>
                             )}
                         </div>
+
+                        {contextConfig && Object.keys(contextConfig).length > 0 && (
+                            <div>
+                                <h4 className="mb-2 text-sm font-medium">Context Management</h4>
+                                <div className="grid grid-cols-2 gap-2">
+                                    {contextConfig.maxContextTokens !== undefined && (
+                                        <div className="bg-muted rounded-lg p-2">
+                                            <p className="text-muted-foreground text-[10px]">
+                                                Max Context Tokens
+                                            </p>
+                                            <p className="text-sm font-medium">
+                                                {Number(
+                                                    contextConfig.maxContextTokens
+                                                ).toLocaleString()}
+                                            </p>
+                                        </div>
+                                    )}
+                                    {typeof contextConfig.toolResultCompression === "object" &&
+                                        contextConfig.toolResultCompression !== null && (
+                                            <div className="bg-muted rounded-lg p-2">
+                                                <p className="text-muted-foreground text-[10px]">
+                                                    Tool Compression
+                                                </p>
+                                                <p className="text-sm font-medium">
+                                                    {(
+                                                        contextConfig.toolResultCompression as Record<
+                                                            string,
+                                                            unknown
+                                                        >
+                                                    )?.enabled !== false
+                                                        ? "Enabled"
+                                                        : "Disabled"}
+                                                </p>
+                                            </div>
+                                        )}
+                                    {typeof contextConfig.providerContextEditing === "object" &&
+                                        contextConfig.providerContextEditing !== null && (
+                                            <div className="bg-muted col-span-2 rounded-lg p-2">
+                                                <p className="text-muted-foreground text-[10px]">
+                                                    Provider Context Editing
+                                                </p>
+                                                <p className="text-sm font-medium">
+                                                    {[
+                                                        (
+                                                            contextConfig.providerContextEditing as Record<
+                                                                string,
+                                                                unknown
+                                                            >
+                                                        )?.clearThinking !== false
+                                                            ? "Clear Thinking"
+                                                            : null,
+                                                        (
+                                                            contextConfig.providerContextEditing as Record<
+                                                                string,
+                                                                unknown
+                                                            >
+                                                        )?.clearToolUses !== false
+                                                            ? "Clear Tool Uses"
+                                                            : null
+                                                    ]
+                                                        .filter(Boolean)
+                                                        .join(", ") || "Disabled"}
+                                                </p>
+                                            </div>
+                                        )}
+                                </div>
+                            </div>
+                        )}
                     </TabsContent>
 
                     {/* Tools Tab */}

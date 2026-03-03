@@ -1,9 +1,16 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
+import { authenticateRequest } from "@/lib/api-auth";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
     try {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
         const models = await prisma.bimModel.findMany({
+            where: { workspace: { organizationId: authContext.organizationId } },
             orderBy: { createdAt: "desc" },
             include: { _count: { select: { versions: true } } }
         });

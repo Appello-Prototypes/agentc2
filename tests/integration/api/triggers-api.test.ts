@@ -11,6 +11,11 @@ vi.mock("@repo/database", () => ({
     prisma: prismaMock
 }));
 
+const mockAuthenticateRequest = vi.fn();
+vi.mock("@/lib/api-auth", () => ({
+    authenticateRequest: (...args: unknown[]) => mockAuthenticateRequest(...args)
+}));
+
 vi.mock("@repo/auth", () => ({
     auth: {
         api: {
@@ -23,12 +28,21 @@ vi.mock("@/lib/organization", () => ({
     getUserOrganizationId: getUserOrganizationIdMock
 }));
 
+vi.mock("next/headers", () => ({
+    headers: vi.fn().mockResolvedValue(new Headers())
+}));
+
 describe("Triggers API", () => {
     beforeEach(() => {
         mockReset(prismaMock);
-        vi.clearAllMocks();
+        mockAuthenticateRequest.mockReset();
+        mockAuthenticateRequest.mockResolvedValue({
+            userId: "user-1",
+            organizationId: "org-1"
+        });
         getSessionMock.mockResolvedValue({ user: { id: "user-1" } });
         getUserOrganizationIdMock.mockResolvedValue("org-1");
+        vi.clearAllMocks();
     });
 
     it("lists triggers and omits webhook secrets", async () => {
@@ -67,7 +81,10 @@ describe("Triggers API", () => {
         await parseResponse(response);
         expect(prismaMock.agentTrigger.findMany).toHaveBeenCalledWith(
             expect.objectContaining({
-                where: { triggerType: "webhook" }
+                where: expect.objectContaining({
+                    triggerType: "webhook",
+                    agent: { workspace: { organizationId: "org-1" } }
+                })
             })
         );
     });

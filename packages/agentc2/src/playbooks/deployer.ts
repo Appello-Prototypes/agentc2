@@ -18,6 +18,37 @@ function generateUniqueSlug(baseSlug: string, existingSlugs: Set<string>): strin
     return `${baseSlug}-${counter}`;
 }
 
+/**
+ * Recursively walk a workflow definitionJson and remap slug references
+ * so deployed workflows point to deployed agents/workflows instead of
+ * the publisher's original slugs.
+ */
+function remapDefinitionSlugs(
+    definition: unknown,
+    agentSlugMap: Map<string, string>,
+    workflowSlugMap: Map<string, string>
+): unknown {
+    if (definition === null || definition === undefined) return definition;
+    if (Array.isArray(definition)) {
+        return definition.map((item) => remapDefinitionSlugs(item, agentSlugMap, workflowSlugMap));
+    }
+    if (typeof definition === "object") {
+        const obj = definition as Record<string, unknown>;
+        const result: Record<string, unknown> = {};
+        for (const [key, value] of Object.entries(obj)) {
+            if (key === "agentSlug" && typeof value === "string") {
+                result[key] = agentSlugMap.get(value) ?? value;
+            } else if (key === "workflowId" && typeof value === "string") {
+                result[key] = workflowSlugMap.get(value) ?? value;
+            } else {
+                result[key] = remapDefinitionSlugs(value, agentSlugMap, workflowSlugMap);
+            }
+        }
+        return result;
+    }
+    return definition;
+}
+
 export async function deployPlaybook(opts: DeployPlaybookOptions) {
     const playbook = await prisma.playbook.findUniqueOrThrow({
         where: { id: opts.playbookId }
@@ -72,7 +103,6 @@ export async function deployPlaybook(opts: DeployPlaybookOptions) {
             return generateUniqueSlug(orgSuffixed, existingSlugs);
         };
 
-        const agentSlugMap = new Map<string, string>();
         const createdAgentIds: string[] = [];
         const createdSkillIds: string[] = [];
         const createdDocumentIds: string[] = [];
@@ -99,6 +129,23 @@ export async function deployPlaybook(opts: DeployPlaybookOptions) {
             wfs.forEach((w) => existingWfSlugs.add(w.slug));
             nets.forEach((n) => existingNetSlugs.add(n.slug));
             campaigns.forEach((c) => existingCampaignSlugs.add(c.slug));
+        }
+
+        // Pre-compute slug maps so cross-references (subAgents, workflows,
+        // definitionJson) can be remapped to the deployed slugs.
+        const agentSlugMap = new Map<string, string>();
+        for (const agentSnapshot of manifest.agents) {
+            const orgSuffixed = `${agentSnapshot.slug}-${targetOrg.slug}`;
+            const deployedSlug = generateUniqueSlug(orgSuffixed, existingAgentSlugs);
+            existingAgentSlugs.add(deployedSlug);
+            agentSlugMap.set(agentSnapshot.slug, deployedSlug);
+        }
+
+        const workflowSlugMap = new Map<string, string>();
+        for (const wfSnapshot of manifest.workflows) {
+            const wfSlug = resolveSlug(wfSnapshot.slug, existingWfSlugs);
+            existingWfSlugs.add(wfSlug);
+            workflowSlugMap.set(wfSnapshot.slug, wfSlug);
         }
 
         // 1. Create documents
@@ -177,10 +224,14 @@ export async function deployPlaybook(opts: DeployPlaybookOptions) {
 
         // 3. Create agents
         for (const agentSnapshot of manifest.agents) {
-            const orgSuffixed = `${agentSnapshot.slug}-${targetOrg.slug}`;
-            const deployedSlug = generateUniqueSlug(orgSuffixed, existingAgentSlugs);
-            existingAgentSlugs.add(deployedSlug);
-            agentSlugMap.set(agentSnapshot.slug, deployedSlug);
+            const deployedSlug = agentSlugMap.get(agentSnapshot.slug)!;
+
+            const remappedSubAgents = (agentSnapshot.subAgents ?? []).map(
+                (s) => agentSlugMap.get(s) ?? s
+            );
+            const remappedWorkflows = (agentSnapshot.workflows ?? []).map(
+                (w) => workflowSlugMap.get(w) ?? w
+            );
 
             const agentMeta = (agentSnapshot.metadata as Record<string, unknown>) ?? {};
             const agent = await prisma.agent.create({
@@ -197,8 +248,8 @@ export async function deployPlaybook(opts: DeployPlaybookOptions) {
                     modelConfig: jsonOrUndefined(agentSnapshot.modelConfig),
                     routingConfig: jsonOrUndefined(agentSnapshot.routingConfig),
                     contextConfig: jsonOrUndefined(agentSnapshot.contextConfig),
-                    subAgents: agentSnapshot.subAgents,
-                    workflows: agentSnapshot.workflows,
+                    subAgents: remappedSubAgents,
+                    workflows: remappedWorkflows,
                     memoryEnabled: agentSnapshot.memoryEnabled,
                     memoryConfig: jsonOrUndefined(agentSnapshot.memoryConfig),
                     maxSteps: agentSnapshot.maxSteps,
@@ -306,17 +357,21 @@ export async function deployPlaybook(opts: DeployPlaybookOptions) {
             }
         }
 
-        // 4. Create workflows
+        // 4. Create workflows (with remapped agent/workflow slugs in definitionJson)
         const workflowSlugToId = new Map<string, string>();
         for (const wfSnapshot of manifest.workflows) {
-            const wfSlug = resolveSlug(wfSnapshot.slug, existingWfSlugs);
-            existingWfSlugs.add(wfSlug);
+            const wfSlug = workflowSlugMap.get(wfSnapshot.slug)!;
+            const remappedDefinition = remapDefinitionSlugs(
+                wfSnapshot.definitionJson,
+                agentSlugMap,
+                workflowSlugMap
+            );
             const wf = await prisma.workflow.create({
                 data: {
                     slug: wfSlug,
                     name: wfSnapshot.name,
                     description: wfSnapshot.description,
-                    definitionJson: wfSnapshot.definitionJson as Prisma.InputJsonValue,
+                    definitionJson: remappedDefinition as Prisma.InputJsonValue,
                     inputSchemaJson: jsonOrUndefined(wfSnapshot.inputSchemaJson),
                     outputSchemaJson: jsonOrUndefined(wfSnapshot.outputSchemaJson),
                     maxSteps: wfSnapshot.maxSteps,

@@ -1,11 +1,10 @@
-import type { ComparisonData } from "@/components/website/comparison/comparison-page-template"
+import type { ComparisonData } from "@/components/website/comparison/comparison-page-template";
 
 export const mastraData: ComparisonData = {
     slug: "mastra",
     competitor: "Mastra",
     competitorUrl: "https://mastra.ai",
-    heroSubtitle:
-        "Open-source framework vs. production platform — built on Mastra, beyond Mastra",
+    heroSubtitle: "Open-source framework vs. production platform — built on Mastra, beyond Mastra",
     tldr: {
         them: "An excellent open-source TypeScript framework for building AI agents, workflows, and RAG pipelines. Mastra provides the core primitives — agent, tool, workflow, memory — that developers compose in code.",
         us: "A production platform built on top of Mastra that adds everything the framework does not: multi-tenant governance, an admin UI, a marketplace, voice agents, multi-channel deployment, federation, and operational tooling.",
@@ -128,19 +127,16 @@ export const mastraData: ComparisonData = {
             answer: "We are committed to the Mastra ecosystem. Improvements we make to core primitives are contributed upstream. AgentC2 extends Mastra — it does not compete with it."
         },
         {
-            question:
-                "Can I start with Mastra and migrate to AgentC2 later?",
+            question: "Can I start with Mastra and migrate to AgentC2 later?",
             answer: "Yes, and this is a natural path. Start with Mastra for prototyping and development. When you need multi-tenancy, governance, channels, and operational tooling, AgentC2 provides the platform layer — and your Mastra agent code transfers with minimal changes."
         },
         {
-            question:
-                "Do I still need to know Mastra to use AgentC2?",
+            question: "Do I still need to know Mastra to use AgentC2?",
             answer: "No. AgentC2's admin UI lets you create and manage agents without knowing Mastra internals. For custom tool development and advanced workflows, familiarity with Mastra's TypeScript primitives is helpful but not required."
         },
         {
-            question:
-                "Is Mastra free and AgentC2 paid?",
+            question: "Is Mastra free and AgentC2 paid?",
             answer: "Mastra is open-source and free. AgentC2 offers a free tier for getting started, with paid plans for production features like advanced governance, federation, and marketplace access. You always have the option to build on Mastra directly if you prefer the framework approach."
         }
     ]
-}
+};

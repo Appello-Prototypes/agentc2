@@ -815,6 +815,27 @@ export async function POST(request: NextRequest) {
                         if (route.enforceUser && userId) {
                             scopedParams.userId = userId;
                         }
+                    } else {
+                        prisma.auditLog
+                            .create({
+                                data: {
+                                    entityType: "mcp_tool",
+                                    entityId: route.name,
+                                    action: "platform_org_bypass",
+                                    actorId: userId,
+                                    metadata: {
+                                        toolName: route.name,
+                                        enforcedFields: [
+                                            route.enforceOrg && "org",
+                                            route.enforceUser && "user"
+                                        ].filter(Boolean),
+                                        targetOrg: scopedParams.organizationId ?? null
+                                    }
+                                }
+                            })
+                            .catch((e: unknown) =>
+                                console.warn("[MCP] Failed to write platform bypass audit log:", e)
+                            );
                     }
                 }
 

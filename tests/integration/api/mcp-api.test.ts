@@ -20,9 +20,44 @@ vi.mock("@repo/auth", () => ({
     }
 }));
 
+vi.mock("next/headers", () => ({
+    headers: vi.fn().mockResolvedValue(new Headers())
+}));
+
 vi.mock("@/lib/organization", () => ({
     getUserOrganizationId: getUserOrganizationIdMock,
     getDefaultWorkspaceIdForUser: getDefaultWorkspaceIdForUserMock
+}));
+
+vi.mock("@repo/agentc2/tools", () => ({
+    mcpToolDefinitions: [],
+    mcpToolRoutes: [],
+    getToolByName: vi.fn()
+}));
+
+vi.mock("@/lib/mcp-oauth", () => ({
+    validateAccessToken: vi.fn().mockReturnValue(null)
+}));
+
+vi.mock("@/lib/api-key-hash", () => ({
+    validateStoredApiKey: vi.fn().mockReturnValue(false)
+}));
+
+vi.mock("@/lib/rate-limit", () => ({
+    checkRateLimit: vi.fn().mockReturnValue({ allowed: true })
+}));
+
+vi.mock("@/lib/security/http-security", () => ({
+    enforceCsrf: vi.fn().mockReturnValue({}),
+    getCorsHeaders: vi.fn().mockReturnValue({})
+}));
+
+vi.mock("@/lib/security/rate-limit-policy", () => ({
+    RATE_LIMIT_POLICIES: { mcp: { windowMs: 60000, max: 100 } }
+}));
+
+vi.mock("@/lib/security/access-matrix", () => ({
+    resolveRequiredToolAccess: vi.fn().mockReturnValue("public")
 }));
 
 describe("MCP Gateway API", () => {
@@ -40,6 +75,7 @@ describe("MCP Gateway API", () => {
 
     it("should list active workflow and network tools", async () => {
         const { GET } = await import("../../../apps/agent/src/app/api/mcp/route");
+        prismaMock.agentInstance.findMany.mockResolvedValue([] as never);
         prismaMock.agent.findMany.mockResolvedValue([
             {
                 id: "agent-1",

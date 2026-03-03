@@ -1,4 +1,4 @@
-import type { ComparisonData } from "@/components/website/comparison/comparison-page-template"
+import type { ComparisonData } from "@/components/website/comparison/comparison-page-template";
 
 export const n8nData: ComparisonData = {
     slug: "n8n",
@@ -9,8 +9,7 @@ export const n8nData: ComparisonData = {
     tldr: {
         them: "Open-source workflow automation platform. n8n connects apps with trigger-action flows, adding AI nodes for LLM calls within deterministic pipelines.",
         us: "AI-native agent operations platform where autonomous agents reason, plan, and act — with workflows as one orchestration primitive among many.",
-        difference:
-            "n8n automates tasks. AgentC2 deploys agents that think."
+        difference: "n8n automates tasks. AgentC2 deploys agents that think."
     },
     dimensions: [
         {
@@ -119,19 +118,16 @@ export const n8nData: ComparisonData = {
             answer: "n8n offers AI nodes for LLM calls, embeddings, and vector store operations. However, the AI operates within the workflow's deterministic flow — it does not control execution. AgentC2 agents autonomously decide their execution path."
         },
         {
-            question:
-                "Is AgentC2 harder to set up than n8n?",
+            question: "Is AgentC2 harder to set up than n8n?",
             answer: "AgentC2 provides an admin UI for no-code agent creation, similar to n8n's visual builder. For simple automations, n8n may be faster to set up. For AI agent deployments, AgentC2 is purpose-built and requires less custom integration."
         },
         {
-            question:
-                "Can AgentC2 replace all my n8n workflows?",
+            question: "Can AgentC2 replace all my n8n workflows?",
             answer: "AgentC2 is not a general-purpose automation tool — it is an AI agent platform. Simple data-sync workflows are better served by n8n. Complex, judgment-heavy processes benefit from AgentC2's agent-native approach. Many teams use both."
         },
         {
-            question:
-                "Which has more integrations?",
+            question: "Which has more integrations?",
             answer: "n8n has 400+ native integrations. AgentC2 connects to external tools via MCP servers, which provide a growing ecosystem. For tools without an MCP server, AgentC2 agents can call any REST API as a custom tool."
         }
     ]
-}
+};

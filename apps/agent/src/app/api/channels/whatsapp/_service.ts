@@ -52,8 +52,16 @@ async function executeAgentWithRecording(
     sessionId: string,
     userId: string
 ): Promise<string> {
-    // Resolve the agent
-    const { agent, record } = await agentResolver.resolve({ slug: agentSlug });
+    const whatsappConnection = await prisma.integrationConnection.findFirst({
+        where: { provider: { key: "whatsapp-web" }, isActive: true },
+        select: { organizationId: true }
+    });
+    const channelOrgId = whatsappConnection?.organizationId;
+
+    const { agent, record } = await agentResolver.resolve({
+        slug: agentSlug,
+        requestContext: { tenantId: channelOrgId ?? undefined }
+    });
     const agentId = record?.id || agentSlug;
 
     // Start recording the run

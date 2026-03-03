@@ -30,12 +30,20 @@ export async function recommendSkills(
         agentId?: string;
         maxResults?: number;
         excludeAttached?: boolean;
+        organizationId?: string;
     }
 ): Promise<SkillRecommendation[]> {
     const maxResults = options?.maxResults || 10;
 
-    // Get all available skills
     const allSkills = await prisma.skill.findMany({
+        where: options?.organizationId
+            ? {
+                  OR: [
+                      { workspace: { organizationId: options.organizationId } },
+                      { workspaceId: null }
+                  ]
+              }
+            : {},
         select: {
             id: true,
             slug: true,

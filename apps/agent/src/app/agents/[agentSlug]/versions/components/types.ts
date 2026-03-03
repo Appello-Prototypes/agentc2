@@ -10,6 +10,7 @@ export interface VersionSnapshot {
     modelConfig?: Record<string, unknown>;
     memoryEnabled?: boolean;
     memoryConfig?: Record<string, unknown>;
+    contextConfig?: Record<string, unknown>;
     maxSteps?: number;
     scorers?: string[];
     tools?: Array<{ toolId: string; config?: Record<string, unknown> }>;

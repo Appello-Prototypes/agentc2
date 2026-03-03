@@ -14,9 +14,19 @@ vi.mock("@repo/database", () => ({
     }
 }));
 
+const mockAuthenticateRequest = vi.fn();
+vi.mock("@/lib/api-auth", () => ({
+    authenticateRequest: (...args: unknown[]) => mockAuthenticateRequest(...args)
+}));
+
 describe("Schedules API", () => {
     beforeEach(() => {
         mockReset(prismaMock);
+        mockAuthenticateRequest.mockReset();
+        mockAuthenticateRequest.mockResolvedValue({
+            userId: "user-1",
+            organizationId: "org-1"
+        });
         vi.clearAllMocks();
     });
 
@@ -24,6 +34,9 @@ describe("Schedules API", () => {
         const { POST: createSchedule } =
             await import("../../../apps/agent/src/app/api/agents/[id]/schedules/route");
         prismaMock.agent.findFirst.mockResolvedValue(mockAgent as never);
+        prismaMock.agent.findUnique.mockResolvedValue({
+            workspaceId: "workspace-1"
+        } as never);
         prismaMock.agentSchedule.create.mockResolvedValue({
             id: "schedule-1",
             name: "Daily Run",
@@ -58,6 +71,7 @@ describe("Schedules API", () => {
     it("returns 400 for missing cronExpr", async () => {
         const { POST: createSchedule } =
             await import("../../../apps/agent/src/app/api/agents/[id]/schedules/route");
+        prismaMock.agent.findFirst.mockResolvedValue(mockAgent as never);
         const request = createMockRequest("/api/agents/test-agent/schedules", {
             method: "POST",
             body: { name: "Daily Run" }

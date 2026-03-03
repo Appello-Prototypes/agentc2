@@ -837,6 +837,9 @@ const WORKSPACE_TOOL_IDS = new Set([
     "list-workspace-files"
 ]);
 
+// Any tool that accesses org-scoped data MUST be listed here so that
+// bindWorkspaceContext() auto-injects organizationId at agent hydration time.
+// Forgetting to add a tool here is a cross-tenant data leak vector.
 const ORG_SCOPED_TOOL_IDS = new Set([
     "rag-query",
     "rag-ingest",
@@ -849,7 +852,28 @@ const ORG_SCOPED_TOOL_IDS = new Set([
     "memory-recall",
     "youtube-get-transcript",
     "youtube-analyze-video",
-    "youtube-ingest-to-knowledge"
+    "youtube-ingest-to-knowledge",
+    "network-execute",
+    "network-list-runs",
+    "network-get-run",
+    "network-metrics",
+    "network-versions",
+    "network-stats",
+    "workflow-create",
+    "workflow-read",
+    "workflow-update",
+    "workflow-delete",
+    "metrics-agent-analytics",
+    "metrics-agent-runs",
+    "metrics-live-summary",
+    "metrics-workflow-daily",
+    "metrics-network-daily",
+    "live-runs",
+    "live-metrics",
+    "live-stats",
+    "audit-logs-list",
+    "conversation-list",
+    "conversation-get"
 ]);
 
 /**

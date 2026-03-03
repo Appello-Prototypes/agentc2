@@ -102,7 +102,11 @@ export const networkExecuteTool = createTool({
             .optional()
             .describe("Trigger type (manual, api, scheduled, webhook, tool, test, retry)"),
         threadId: z.string().optional().describe("Optional thread ID"),
-        resourceId: z.string().optional().describe("Optional resource ID")
+        resourceId: z.string().optional().describe("Optional resource ID"),
+        organizationId: z
+            .string()
+            .optional()
+            .describe("Organization ID for tenant-scoped access (auto-injected)")
     }),
     outputSchema: z.object({
         success: z.boolean(),
@@ -119,7 +123,8 @@ export const networkExecuteTool = createTool({
         environment,
         triggerType,
         threadId,
-        resourceId
+        resourceId,
+        organizationId
     }) => {
         const network = await prisma.network.findFirst({
             where: {
@@ -127,7 +132,8 @@ export const networkExecuteTool = createTool({
                     { slug: networkSlug },
                     { id: networkSlug },
                     { name: { equals: networkSlug, mode: "insensitive" } }
-                ]
+                ],
+                ...(organizationId ? { workspace: { organizationId } } : {})
             },
             include: { workspace: { select: { environment: true } } }
         });
@@ -265,20 +271,35 @@ export const networkListRunsTool = createTool({
         triggerType: z.string().optional().describe("Trigger type filter"),
         from: z.string().optional().describe("Start ISO timestamp"),
         to: z.string().optional().describe("End ISO timestamp"),
-        search: z.string().optional().describe("Search run ID or text")
+        search: z.string().optional().describe("Search run ID or text"),
+        organizationId: z
+            .string()
+            .optional()
+            .describe("Organization ID for tenant-scoped access (auto-injected)")
     }),
     outputSchema: z.object({
         success: z.boolean(),
         runs: z.array(z.any())
     }),
-    execute: async ({ networkSlug, limit, status, environment, triggerType, from, to, search }) => {
+    execute: async ({
+        networkSlug,
+        limit,
+        status,
+        environment,
+        triggerType,
+        from,
+        to,
+        search,
+        organizationId
+    }) => {
         const network = await prisma.network.findFirst({
             where: {
                 OR: [
                     { slug: networkSlug },
                     { id: networkSlug },
                     { name: { equals: networkSlug, mode: "insensitive" } }
-                ]
+                ],
+                ...(organizationId ? { workspace: { organizationId } } : {})
             }
         });
 
@@ -357,20 +378,25 @@ export const networkGetRunTool = createTool({
     description: "Fetch network run details including steps.",
     inputSchema: z.object({
         networkSlug: z.string().describe("Network slug or ID"),
-        runId: z.string().describe("Run ID")
+        runId: z.string().describe("Run ID"),
+        organizationId: z
+            .string()
+            .optional()
+            .describe("Organization ID for tenant-scoped access (auto-injected)")
     }),
     outputSchema: z.object({
         success: z.boolean(),
         run: z.any()
     }),
-    execute: async ({ networkSlug, runId }) => {
+    execute: async ({ networkSlug, runId, organizationId }) => {
         const network = await prisma.network.findFirst({
             where: {
                 OR: [
                     { slug: networkSlug },
                     { id: networkSlug },
                     { name: { equals: networkSlug, mode: "insensitive" } }
-                ]
+                ],
+                ...(organizationId ? { workspace: { organizationId } } : {})
             }
         });
 

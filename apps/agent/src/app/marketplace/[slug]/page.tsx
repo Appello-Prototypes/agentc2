@@ -20,11 +20,18 @@ import {
     DownloadIcon,
     ShieldCheckIcon,
     PackageIcon,
-    MessageSquareIcon
+    MessageSquareIcon,
+    RocketIcon,
+    FileTextIcon,
+    BookOpenIcon,
+    ZapIcon
 } from "lucide-react";
 
 import { PlaybookHero } from "@/components/marketplace/PlaybookHero";
 import { AgentProfileCard } from "@/components/marketplace/AgentProfileCard";
+import { SkillProfileCard } from "@/components/marketplace/SkillProfileCard";
+import { BootTasksCard } from "@/components/marketplace/BootTasksCard";
+import { DocumentCard } from "@/components/marketplace/DocumentCard";
 import { NetworkTopologyPreview } from "@/components/marketplace/NetworkTopologyPreview";
 import { WorkflowStepFlow } from "@/components/marketplace/WorkflowStepFlow";
 import { CampaignCard } from "@/components/marketplace/CampaignCard";
@@ -85,12 +92,32 @@ interface ManifestData {
         modelProvider: string;
         modelName: string;
         temperature: number | null;
+        maxTokens: number | null;
+        modelConfig: unknown;
         memoryEnabled: boolean;
         memoryConfig: unknown;
         maxSteps: number | null;
         tools: Array<{ toolId: string; config: unknown }>;
         skills: string[];
         metadata: unknown;
+    }>;
+    skills?: Array<{
+        slug: string;
+        name: string;
+        description: string | null;
+        instructions: string;
+        category: string | null;
+        tags: string[];
+        tools: Array<{ toolId: string }>;
+        documents: string[];
+    }>;
+    documents?: Array<{
+        slug: string;
+        name: string;
+        description: string | null;
+        contentType: string;
+        category: string | null;
+        tags: string[];
     }>;
     networks?: Array<{
         slug: string;
@@ -122,6 +149,17 @@ interface ManifestData {
         restraints: string[];
         requireApproval: boolean;
     }>;
+    bootConfig?: {
+        bootDocument?: string;
+        structuralTasks: Array<{
+            title: string;
+            description?: string;
+            priority: number;
+            tags: string[];
+            sortOrder: number;
+        }>;
+        autoBootEnabled: boolean;
+    };
 }
 
 // ── Page ─────────────────────────────────────────────────────────────────
@@ -176,12 +214,20 @@ export default function MarketplaceDetailPage(props: { params: Promise<{ slug: s
     const entryPointSlug = manifest?.entryPoint?.slug;
 
     const agents = manifest?.agents ?? [];
+    const skills = manifest?.skills ?? [];
+    const documents = manifest?.documents ?? [];
     const networks = manifest?.networks ?? [];
     const workflows = manifest?.workflows ?? [];
     const campaigns = manifest?.campaignTemplates ?? [];
+    const bootConfig = manifest?.bootConfig;
+    const bootTasks = bootConfig?.structuralTasks ?? [];
 
     const hasComponents =
-        agents.length > 0 || networks.length > 0 || workflows.length > 0 || campaigns.length > 0;
+        agents.length > 0 ||
+        skills.length > 0 ||
+        networks.length > 0 ||
+        workflows.length > 0 ||
+        campaigns.length > 0;
 
     return (
         <div className="mx-auto max-w-6xl px-6 py-8">
@@ -253,6 +299,40 @@ export default function MarketplaceDetailPage(props: { params: Promise<{ slug: s
                                             isEntryPoint={agent.slug === entryPointSlug}
                                         />
                                     ))}
+
+                                    {skills.length > 0 && (
+                                        <div className="space-y-3">
+                                            <h3 className="text-muted-foreground flex items-center gap-2 text-xs font-medium tracking-wide uppercase">
+                                                <ZapIcon className="h-3.5 w-3.5" />
+                                                Skills ({skills.length})
+                                            </h3>
+                                            {skills.map((skill) => (
+                                                <SkillProfileCard
+                                                    key={skill.slug}
+                                                    snapshot={skill}
+                                                />
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {documents.length > 0 && (
+                                        <div className="space-y-3">
+                                            <h3 className="text-muted-foreground flex items-center gap-2 text-xs font-medium tracking-wide uppercase">
+                                                <FileTextIcon className="h-3.5 w-3.5" />
+                                                Documents ({documents.length})
+                                            </h3>
+                                            {documents.map((doc) => (
+                                                <DocumentCard key={doc.slug} snapshot={doc} />
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {bootTasks.length > 0 && (
+                                        <BootTasksCard
+                                            tasks={bootTasks}
+                                            autoBootEnabled={bootConfig?.autoBootEnabled ?? false}
+                                        />
+                                    )}
 
                                     {networks.map((network) => (
                                         <NetworkTopologyPreview

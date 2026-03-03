@@ -1,8 +1,9 @@
 import { createHash } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@repo/database";
 import { ingestBimElementsToRag, ingestBimModel, uploadBimObject } from "@repo/agentc2/bim";
 import { inngest } from "@/lib/inngest";
-import { getDefaultWorkspaceIdForUser } from "@/lib/organization";
+import { getDefaultWorkspaceIdForUser, getUserOrganizationId } from "@/lib/organization";
 import { getDemoSession } from "@/lib/standalone-auth";
 
 const MAX_BIM_UPLOAD_BYTES = 50 * 1024 * 1024; // 50MB
@@ -88,6 +89,20 @@ export async function POST(request: NextRequest) {
             const adapterInput = parseJsonField(formData.get("adapterInput"));
             const ingestToRag = (formData.get("ingestToRag") as string | null) === "true";
             let resolvedWorkspaceId = workspaceId;
+
+            const userOrgId = await getUserOrganizationId(session.user.id);
+            if (resolvedWorkspaceId && userOrgId) {
+                const ws = await prisma.workspace.findFirst({
+                    where: { id: resolvedWorkspaceId, organizationId: userOrgId }
+                });
+                if (!ws) {
+                    return NextResponse.json(
+                        { error: "Workspace not found or access denied" },
+                        { status: 403 }
+                    );
+                }
+            }
+
             if (!resolvedWorkspaceId) {
                 resolvedWorkspaceId = await getDefaultWorkspaceIdForUser(session.user.id);
             }
@@ -95,7 +110,8 @@ export async function POST(request: NextRequest) {
             const buffer = Buffer.from(await file.arrayBuffer());
             const checksum = createHash("sha256").update(buffer).digest("hex");
 
-            const uploadKey = `bim/${Date.now()}_${sanitizeFilename(file.name)}`;
+            const orgPrefix = userOrgId || "unknown";
+            const uploadKey = `bim/${orgPrefix}/${Date.now()}_${sanitizeFilename(file.name)}`;
             const uploadResult = await uploadBimObject({
                 key: uploadKey,
                 body: buffer,

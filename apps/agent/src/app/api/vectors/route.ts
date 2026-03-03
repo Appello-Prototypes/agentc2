@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { auth } from "@repo/auth";
 import { prisma } from "@repo/database";
 import { authenticateRequest } from "@/lib/api-auth";
+import { getUserOrganizationId } from "@/lib/organization";
 
 interface VectorGroup {
     documentId: string;
@@ -30,16 +31,24 @@ export async function GET(request: NextRequest) {
     try {
         const apiAuth = await authenticateRequest(request);
         let userId = apiAuth?.userId;
+        let organizationId = apiAuth?.organizationId;
 
         if (!userId) {
             const session = await auth.api.getSession({
                 headers: await headers()
             });
             userId = session?.user?.id;
+            if (userId && !organizationId) {
+                organizationId = (await getUserOrganizationId(userId)) ?? undefined;
+            }
         }
 
         if (!userId) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
+
+        if (!organizationId) {
+            return NextResponse.json({ error: "Organization context required" }, { status: 403 });
         }
 
         const { searchParams } = new URL(request.url);
@@ -52,19 +61,21 @@ export async function GET(request: NextRequest) {
         const orphansOnly = searchParams.get("orphansOnly") === "true";
         const offset = (page - 1) * pageSize;
 
+        const orgFilter = `AND metadata->>'organizationId' = $${search ? 2 : 1}`;
         const searchCondition = search
             ? `AND (metadata->>'documentId' ILIKE $1 OR metadata->>'sourceName' ILIKE $1)`
             : "";
         const searchParam = search ? `%${search}%` : null;
 
-        // Get grouped vector entries
         const countQuery = searchParam
             ? prisma.$queryRawUnsafe<[{ cnt: bigint }]>(
-                  `SELECT count(DISTINCT metadata->>'documentId') as cnt FROM rag_documents WHERE metadata->>'documentId' IS NOT NULL ${searchCondition}`,
-                  searchParam
+                  `SELECT count(DISTINCT metadata->>'documentId') as cnt FROM rag_documents WHERE metadata->>'documentId' IS NOT NULL ${searchCondition} ${orgFilter}`,
+                  searchParam,
+                  organizationId
               )
             : prisma.$queryRawUnsafe<[{ cnt: bigint }]>(
-                  `SELECT count(DISTINCT metadata->>'documentId') as cnt FROM rag_documents WHERE metadata->>'documentId' IS NOT NULL`
+                  `SELECT count(DISTINCT metadata->>'documentId') as cnt FROM rag_documents WHERE metadata->>'documentId' IS NOT NULL ${orgFilter}`,
+                  organizationId
               );
 
         const groupsQuery = searchParam
@@ -86,11 +97,12 @@ export async function GET(request: NextRequest) {
                       MAX(metadata->>'ingestedAt') as last_ingested,
                       (array_agg(LEFT(metadata->>'text', 200) ORDER BY (metadata->>'chunkIndex')::int))[1] as sample_text
                   FROM rag_documents
-                  WHERE metadata->>'documentId' IS NOT NULL ${searchCondition}
+                  WHERE metadata->>'documentId' IS NOT NULL ${searchCondition} ${orgFilter}
                   GROUP BY metadata->>'documentId'
                   ORDER BY MAX(metadata->>'ingestedAt') DESC NULLS LAST
                   LIMIT ${pageSize} OFFSET ${offset}`,
-                  searchParam
+                  searchParam,
+                  organizationId
               )
             : prisma.$queryRawUnsafe<
                   Array<{
@@ -110,22 +122,22 @@ export async function GET(request: NextRequest) {
                       MAX(metadata->>'ingestedAt') as last_ingested,
                       (array_agg(LEFT(metadata->>'text', 200) ORDER BY (metadata->>'chunkIndex')::int))[1] as sample_text
                   FROM rag_documents
-                  WHERE metadata->>'documentId' IS NOT NULL
+                  WHERE metadata->>'documentId' IS NOT NULL ${orgFilter}
                   GROUP BY metadata->>'documentId'
                   ORDER BY MAX(metadata->>'ingestedAt') DESC NULLS LAST
-                  LIMIT ${pageSize} OFFSET ${offset}`
+                  LIMIT ${pageSize} OFFSET ${offset}`,
+                  organizationId
               );
 
         const [countResult, rawGroups] = await Promise.all([countQuery, groupsQuery]);
 
         const totalGroups = Number(countResult[0]?.cnt || 0);
 
-        // Check which documentIds have a corresponding Document record
         const documentIds = rawGroups.map((g) => g.document_id);
         const existingDocs =
             documentIds.length > 0
                 ? await prisma.document.findMany({
-                      where: { slug: { in: documentIds } },
+                      where: { slug: { in: documentIds }, organizationId },
                       select: { slug: true }
                   })
                 : [];

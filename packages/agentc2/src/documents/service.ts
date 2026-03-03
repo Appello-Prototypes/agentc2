@@ -195,9 +195,12 @@ export async function createDocument(input: CreateDocumentInput) {
 /**
  * Resolve a document ID or slug to the internal CUID.
  */
-async function resolveDocumentId(idOrSlug: string): Promise<string> {
+async function resolveDocumentId(idOrSlug: string, organizationId?: string): Promise<string> {
     const doc = await prisma.document.findFirst({
-        where: { OR: [{ id: idOrSlug }, { slug: idOrSlug }] },
+        where: {
+            OR: [{ id: idOrSlug }, { slug: idOrSlug }],
+            ...(organizationId ? { organizationId } : {})
+        },
         select: { id: true }
     });
     if (!doc) throw new Error(`Document not found: ${idOrSlug}`);
@@ -231,8 +234,9 @@ export async function updateDocument(idOrSlug: string, input: UpdateDocumentInpu
         // Delete old vectors
         await ragDelete(existing.slug);
 
-        // Re-ingest with new content
+        const ragOrgId = existing.organizationId || undefined;
         const ragResult = await ragIngest(input.content!, {
+            organizationId: ragOrgId,
             type: (input.contentType || existing.contentType) as DocumentType,
             sourceId: existing.slug,
             sourceName: input.name || existing.name,

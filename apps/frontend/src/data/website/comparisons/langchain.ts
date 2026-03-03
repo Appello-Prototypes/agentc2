@@ -1,11 +1,10 @@
-import type { ComparisonData } from "@/components/website/comparison/comparison-page-template"
+import type { ComparisonData } from "@/components/website/comparison/comparison-page-template";
 
 export const langchainData: ComparisonData = {
     slug: "langchain",
     competitor: "LangChain",
     competitorUrl: "https://langchain.com",
-    heroSubtitle:
-        "Framework vs. Platform — why the gap between library and production matters",
+    heroSubtitle: "Framework vs. Platform — why the gap between library and production matters",
     tldr: {
         them: "Python-first developer framework for building LLM applications. LangChain provides composable abstractions — chains, agents, retrievers — that developers wire together in code.",
         us: "TypeScript-native production platform with full UI, multi-tenant governance, marketplace, and multi-channel deployment. AgentC2 ships agents to production without a DevOps team.",
@@ -123,24 +122,20 @@ export const langchainData: ComparisonData = {
             answer: "AgentC2 is built on the Mastra framework and uses the Vercel AI SDK for model interactions. While it does not natively import LangChain chains, any LangChain agent can be wrapped as an MCP tool or API endpoint and called from within an AgentC2 network."
         },
         {
-            question:
-                "Is AgentC2 only for TypeScript developers?",
+            question: "Is AgentC2 only for TypeScript developers?",
             answer: "AgentC2 is TypeScript-native, but non-developers can build and manage agents through the admin UI without writing code. The platform supports both code-first and UI-driven workflows."
         },
         {
-            question:
-                "How does AgentC2 compare to LangSmith for observability?",
+            question: "How does AgentC2 compare to LangSmith for observability?",
             answer: "AgentC2 includes built-in observability — run logs, eval scores, token usage, and error tracking — without a separate product or billing. LangSmith is a standalone observability product that adds cost and integration complexity."
         },
         {
-            question:
-                "Does AgentC2 support the same number of model providers?",
+            question: "Does AgentC2 support the same number of model providers?",
             answer: "AgentC2 supports OpenAI, Anthropic, and any provider compatible with the Vercel AI SDK. LangChain supports a broader set of model integrations, but AgentC2 covers the providers used by the vast majority of production deployments."
         },
         {
-            question:
-                "Can I migrate from LangChain to AgentC2 incrementally?",
+            question: "Can I migrate from LangChain to AgentC2 incrementally?",
             answer: "Yes. You can expose existing LangChain agents as API endpoints and call them from AgentC2 via MCP tools. Over time, you can rebuild agents natively inside AgentC2 to gain full governance, marketplace, and multi-channel benefits."
         }
     ]
-}
+};

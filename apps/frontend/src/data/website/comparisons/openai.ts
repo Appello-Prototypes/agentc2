@@ -1,11 +1,10 @@
-import type { ComparisonData } from "@/components/website/comparison/comparison-page-template"
+import type { ComparisonData } from "@/components/website/comparison/comparison-page-template";
 
 export const openaiData: ComparisonData = {
     slug: "openai",
     competitor: "OpenAI",
     competitorUrl: "https://openai.com",
-    heroSubtitle:
-        "Model provider vs. agent operations platform — intelligence is not enough",
+    heroSubtitle: "Model provider vs. agent operations platform — intelligence is not enough",
     tldr: {
         them: "The leading AI model provider. OpenAI offers GPT-4o, the Assistants API, and the Responses API — world-class intelligence accessible through API endpoints.",
         us: "An agent operations platform that uses OpenAI (and other providers) as its intelligence layer — adding orchestration, governance, multi-channel deployment, and enterprise operations on top.",
@@ -115,8 +114,7 @@ export const openaiData: ComparisonData = {
             answer: "Yes. OpenAI is one of AgentC2's supported model providers. You can configure any agent to use GPT-4o, GPT-4o-mini, or other OpenAI models — alongside Anthropic Claude models. The platform is model-agnostic."
         },
         {
-            question:
-                "How is AgentC2 different from OpenAI's Assistants API?",
+            question: "How is AgentC2 different from OpenAI's Assistants API?",
             answer: "The Assistants API provides a single-agent conversation with tool use and file retrieval. AgentC2 provides multi-agent orchestration, multi-channel deployment, enterprise governance, a marketplace, and continuous learning — the full operational layer that the Assistants API does not cover."
         },
         {
@@ -124,14 +122,12 @@ export const openaiData: ComparisonData = {
             answer: "GPTs are proprietary to the ChatGPT interface and cannot be directly imported. However, you can recreate any GPT's instructions, tool configuration, and behavior as an AgentC2 agent with the added benefits of governance, multi-channel deployment, and orchestration."
         },
         {
-            question:
-                "Is AgentC2 more expensive than using OpenAI directly?",
+            question: "Is AgentC2 more expensive than using OpenAI directly?",
             answer: "AgentC2 adds platform value on top of model costs. You still pay OpenAI for API usage, and AgentC2's platform features — governance, channels, marketplace, learning — reduce operational costs that would otherwise require custom engineering."
         },
         {
-            question:
-                "Does AgentC2 support OpenAI's Realtime API for voice?",
+            question: "Does AgentC2 support OpenAI's Realtime API for voice?",
             answer: "Yes. AgentC2 supports both OpenAI Realtime API and ElevenLabs for voice agents, giving you flexibility in voice quality, latency, and cost."
         }
     ]
-}
+};

@@ -1092,6 +1092,7 @@ async function processMessage(
             slug,
             requestContext: {
                 userId,
+                tenantId: installation?.organizationId ?? instanceBinding?.organizationId,
                 metadata: requestMetadata
             },
             threadId: memoryThread,

@@ -199,6 +199,11 @@ model Organization {
     // Embed Partners
     embedPartners EmbedPartner[]
 
+    // Channel models (tenant boundary)
+    channelSessions    ChannelSession[]
+    channelCredentials ChannelCredentials[]
+    voiceCallLogs      VoiceCallLog[]
+
     @@index([slug])
     @@index([status])
     @@map("organization")
@@ -773,7 +778,7 @@ model Agent {
     maxTokens     Int?
     modelConfig   Json? // Provider-specific: {reasoning: {type: "enabled"}, toolChoice: "auto"}
     routingConfig Json? // {mode: "locked"|"auto", fastModel: {provider, name}, escalationModel: {provider, name}, confidenceThreshold: 0.7, budgetAware: true}
-    contextConfig Json? // {maxContextTokens: 50000, windowSize: 5, anchorInstructions: true, anchorInterval: 10}
+    contextConfig Json? // {maxContextTokens: 50000, toolResultCompression: {enabled, threshold}, providerContextEditing: {clearThinking, clearToolUses}}
 
     // Tool configuration (junction table)
     tools AgentTool[]
@@ -1370,51 +1375,60 @@ model StoredAgent {
 
 // Channel Session - Tracks conversations per channel/user
 model ChannelSession {
-    id         String   @id @default(cuid())
-    channel    String // "whatsapp" | "telegram" | "voice"
-    channelId  String // Phone number, chat ID, or call SID
-    agentSlug  String // Which agent handles this conversation
-    metadata   Json? // Channel-specific data (e.g., username, group info)
-    lastActive DateTime @default(now())
-    createdAt  DateTime @default(now())
+    id             String        @id @default(cuid())
+    channel        String // "whatsapp" | "telegram" | "voice"
+    channelId      String // Phone number, chat ID, or call SID
+    agentSlug      String // Which agent handles this conversation
+    organizationId String? // Tenant boundary
+    organization   Organization? @relation(fields: [organizationId], references: [id])
+    metadata       Json? // Channel-specific data (e.g., username, group info)
+    lastActive     DateTime      @default(now())
+    createdAt      DateTime      @default(now())
 
     @@unique([channel, channelId])
     @@index([channel])
     @@index([agentSlug])
+    @@index([organizationId])
     @@map("channel_session")
 }
 
 // Channel Credentials - Stores encrypted credentials for each channel
 model ChannelCredentials {
-    id          String   @id @default(cuid())
-    channel     String   @unique // "whatsapp" | "telegram" | "voice"
-    credentials Json // Encrypted credentials (WhatsApp session, bot tokens, etc.)
-    isActive    Boolean  @default(true)
-    updatedAt   DateTime @updatedAt
+    id             String        @id @default(cuid())
+    channel        String        @unique // "whatsapp" | "telegram" | "voice"
+    credentials    Json // Encrypted credentials (WhatsApp session, bot tokens, etc.)
+    isActive       Boolean       @default(true)
+    organizationId String? // Tenant boundary
+    organization   Organization? @relation(fields: [organizationId], references: [id])
+    updatedAt      DateTime      @updatedAt
 
+    @@index([organizationId])
     @@map("channel_credentials")
 }
 
 // Voice Call Log - Tracks voice call history
 model VoiceCallLog {
-    id           String    @id @default(cuid())
-    callSid      String    @unique // Twilio call SID
-    direction    String // "inbound" | "outbound"
-    fromNumber   String
-    toNumber     String
-    agentSlug    String?
-    status       String // "ringing" | "in-progress" | "completed" | "failed" | "busy" | "no-answer"
-    duration     Int? // Duration in seconds
-    recordingUrl String?
-    transcript   String?   @db.Text
-    metadata     Json?
-    startedAt    DateTime  @default(now())
-    endedAt      DateTime?
-    createdAt    DateTime  @default(now())
+    id             String        @id @default(cuid())
+    callSid        String        @unique // Twilio call SID
+    direction      String // "inbound" | "outbound"
+    fromNumber     String
+    toNumber       String
+    agentSlug      String?
+    organizationId String? // Tenant boundary
+    organization   Organization? @relation(fields: [organizationId], references: [id])
+    status         String // "ringing" | "in-progress" | "completed" | "failed" | "busy" | "no-answer"
+    duration       Int? // Duration in seconds
+    recordingUrl   String?
+    transcript     String?       @db.Text
+    metadata       Json?
+    startedAt      DateTime      @default(now())
+    endedAt        DateTime?
+    createdAt      DateTime      @default(now())
 
     @@index([fromNumber])
     @@index([toNumber])
     @@index([agentSlug])
+    @@index([organizationId])
     @@map("voice_call_log")
 }
 

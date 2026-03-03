@@ -59,6 +59,25 @@ export const githubCreatePullRequestTool = createTool({
         const { owner, repo } = parseRepoOwnerName(repository);
         const footer = buildSignatureFooter({ workflowSlug, runId, stepId, agentSlug });
 
+        const existingRes = await githubFetch(
+            `/repos/${owner}/${repo}/pulls?head=${owner}:${head}&state=open&base=${base || "main"}`,
+            token
+        );
+        if (existingRes.ok) {
+            const existing = (await existingRes.json()) as Array<{
+                number: number;
+                url: string;
+                html_url: string;
+            }>;
+            if (existing.length > 0) {
+                return {
+                    prNumber: existing[0].number,
+                    prUrl: existing[0].url,
+                    htmlUrl: existing[0].html_url
+                };
+            }
+        }
+
         const response = await githubFetch(`/repos/${owner}/${repo}/pulls`, token, {
             method: "POST",
             body: JSON.stringify({

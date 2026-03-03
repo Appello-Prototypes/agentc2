@@ -248,6 +248,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             if (body.routingConfig !== undefined) updateData.routingConfig = body.routingConfig;
             if (body.memoryEnabled !== undefined) updateData.memoryEnabled = body.memoryEnabled;
             if (body.memoryConfig !== undefined) updateData.memoryConfig = body.memoryConfig;
+            if (body.contextConfig !== undefined) updateData.contextConfig = body.contextConfig;
             if (body.maxSteps !== undefined) updateData.maxSteps = body.maxSteps;
             if (body.visibility !== undefined) {
                 updateData.visibility = body.visibility;
@@ -316,6 +317,12 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
                 !jsonEqual(body.memoryConfig, existing.memoryConfig)
             ) {
                 changes.push("Updated memory configuration");
+            }
+            if (
+                body.contextConfig !== undefined &&
+                !jsonEqual(body.contextConfig, existing.contextConfig)
+            ) {
+                changes.push("Updated context management configuration");
             }
             if (body.subAgents !== undefined) {
                 const existingSubAgents = existing.subAgents || [];
@@ -472,6 +479,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
                     routingConfig: existing.routingConfig,
                     memoryEnabled: existing.memoryEnabled,
                     memoryConfig: existing.memoryConfig,
+                    contextConfig: existing.contextConfig,
                     maxSteps: existing.maxSteps,
                     subAgents: existing.subAgents,
                     workflows: existing.workflows,

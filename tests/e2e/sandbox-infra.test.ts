@@ -47,9 +47,14 @@ vi.mock("fs/promises", async () => {
         writeFile: vi.fn().mockResolvedValue(undefined),
         readFile: vi.fn().mockResolvedValue("file content"),
         stat: vi.fn().mockResolvedValue({ size: 123, isFile: () => true }),
-        readdir: vi.fn().mockResolvedValue([])
+        readdir: vi.fn().mockResolvedValue([]),
+        realpath: vi.fn().mockImplementation((p: string) => Promise.resolve(p)),
+        lstat: vi.fn().mockRejectedValue(Object.assign(new Error("ENOENT"), { code: "ENOENT" }))
     };
 });
+
+vi.stubEnv("SANDBOX_ALLOW_UNSANDBOXED_FALLBACK", "true");
+vi.stubEnv("NODE_ENV", "test");
 
 describe("Sandbox Tools", () => {
     beforeEach(() => {

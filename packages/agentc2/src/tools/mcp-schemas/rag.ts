@@ -87,8 +87,8 @@ export const ragToolDefinitions: McpToolDefinition[] = [
 ];
 
 export const ragToolRoutes: McpToolRoute[] = [
-    { kind: "registry", name: "rag-query" },
-    { kind: "registry", name: "rag-ingest", applyDefaults: true },
-    { kind: "registry", name: "rag-documents-list" },
-    { kind: "registry", name: "rag-document-delete" }
+    { kind: "registry", name: "rag-query", injectOrg: true },
+    { kind: "registry", name: "rag-ingest", applyDefaults: true, injectOrg: true },
+    { kind: "registry", name: "rag-documents-list", injectOrg: true },
+    { kind: "registry", name: "rag-document-delete", injectOrg: true }
 ];

@@ -6,9 +6,27 @@
  * Cap at 50 conversations with LRU eviction.
  */
 
-const STORAGE_KEY = "cowork-conversations";
-const META_KEY = "cowork-conversation-meta";
+const BASE_STORAGE_KEY = "cowork-conversations";
+const BASE_META_KEY = "cowork-conversation-meta";
 const MAX_CONVERSATIONS = 50;
+
+let _scopePrefix = "";
+
+/**
+ * Scope all localStorage keys by a user/org identifier so conversations
+ * don't leak across accounts sharing the same browser.
+ */
+export function setConversationScope(scopeId: string): void {
+    _scopePrefix = scopeId ? `${scopeId}:` : "";
+}
+
+function storageKey(): string {
+    return `${_scopePrefix}${BASE_STORAGE_KEY}`;
+}
+
+function metaKey(): string {
+    return `${_scopePrefix}${BASE_META_KEY}`;
+}
 
 export type ConversationStatus = "idle" | "running" | "completed";
 
@@ -33,7 +51,7 @@ type SerializedMessage = any;
  */
 export function listConversations(): ConversationMeta[] {
     try {
-        const raw = localStorage.getItem(META_KEY);
+        const raw = localStorage.getItem(metaKey());
         if (!raw) return [];
         const metas: ConversationMeta[] = JSON.parse(raw);
         return metas.sort(
@@ -50,7 +68,7 @@ export function listConversations(): ConversationMeta[] {
 export function saveConversation(meta: ConversationMeta, messages: SerializedMessage[]): void {
     try {
         // Save messages
-        localStorage.setItem(`${STORAGE_KEY}:${meta.id}`, JSON.stringify(messages));
+        localStorage.setItem(`${storageKey()}:${meta.id}`, JSON.stringify(messages));
 
         // Update metadata
         const metas = listConversations();
@@ -66,11 +84,11 @@ export function saveConversation(meta: ConversationMeta, messages: SerializedMes
         while (metas.length > MAX_CONVERSATIONS) {
             const removed = metas.pop();
             if (removed) {
-                localStorage.removeItem(`${STORAGE_KEY}:${removed.id}`);
+                localStorage.removeItem(`${storageKey()}:${removed.id}`);
             }
         }
 
-        localStorage.setItem(META_KEY, JSON.stringify(metas));
+        localStorage.setItem(metaKey(), JSON.stringify(metas));
     } catch {
         // localStorage full or unavailable
     }
@@ -86,7 +104,7 @@ export function loadConversation(id: string): {
     try {
         const metas = listConversations();
         const meta = metas.find((m) => m.id === id) || null;
-        const raw = localStorage.getItem(`${STORAGE_KEY}:${id}`);
+        const raw = localStorage.getItem(`${storageKey()}:${id}`);
         const messages = raw ? JSON.parse(raw) : [];
         return { meta, messages };
     } catch {
@@ -99,9 +117,9 @@ export function loadConversation(id: string): {
  */
 export function deleteConversation(id: string): void {
     try {
-        localStorage.removeItem(`${STORAGE_KEY}:${id}`);
+        localStorage.removeItem(`${storageKey()}:${id}`);
         const metas = listConversations().filter((m) => m.id !== id);
-        localStorage.setItem(META_KEY, JSON.stringify(metas));
+        localStorage.setItem(metaKey(), JSON.stringify(metas));
     } catch {
         // ignore
     }
@@ -116,7 +134,7 @@ export function updateConversationTitle(id: string, title: string): void {
         const meta = metas.find((m) => m.id === id);
         if (meta) {
             meta.title = title;
-            localStorage.setItem(META_KEY, JSON.stringify(metas));
+            localStorage.setItem(metaKey(), JSON.stringify(metas));
         }
     } catch {
         // ignore
@@ -132,7 +150,7 @@ export function updateConversationStatus(id: string, status: ConversationStatus)
         const meta = metas.find((m) => m.id === id);
         if (meta) {
             meta.status = status;
-            localStorage.setItem(META_KEY, JSON.stringify(metas));
+            localStorage.setItem(metaKey(), JSON.stringify(metas));
         }
     } catch {
         // ignore
@@ -148,7 +166,7 @@ export function updateConversationRunId(id: string, runId: string | null): void 
         const meta = metas.find((m) => m.id === id);
         if (meta) {
             meta.runId = runId ?? undefined;
-            localStorage.setItem(META_KEY, JSON.stringify(metas));
+            localStorage.setItem(metaKey(), JSON.stringify(metas));
         }
     } catch {
         // ignore

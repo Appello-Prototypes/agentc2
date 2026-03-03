@@ -1,4 +1,4 @@
-import type { UseCaseData } from "@/components/website/use-case/use-case-page-template"
+import type { UseCaseData } from "@/components/website/use-case/use-case-page-template";
 
 export const salesData: UseCaseData = {
     slug: "sales",
@@ -10,18 +10,18 @@ export const salesData: UseCaseData = {
         {
             title: "Manual CRM hygiene",
             description:
-                "Reps spend 30% of their time updating Salesforce and HubSpot instead of selling. Data decays, stages go stale, and forecasts become guesswork.",
+                "Reps spend 30% of their time updating Salesforce and HubSpot instead of selling. Data decays, stages go stale, and forecasts become guesswork."
         },
         {
             title: "Shallow prospect research",
             description:
-                "Generic outreach gets ignored. Reps lack the time to research every prospect's tech stack, recent funding, and competitive landscape before first contact.",
+                "Generic outreach gets ignored. Reps lack the time to research every prospect's tech stack, recent funding, and competitive landscape before first contact."
         },
         {
             title: "Handoff and follow-up gaps",
             description:
-                "Leads fall through the cracks between SDR qualification, AE handoff, and post-demo follow-up. No system enforces the sequence end-to-end.",
-        },
+                "Leads fall through the cracks between SDR qualification, AE handoff, and post-demo follow-up. No system enforces the sequence end-to-end."
+        }
     ],
     solution: {
         description:
@@ -32,8 +32,8 @@ export const salesData: UseCaseData = {
             "Multi-channel outreach via email, Slack, and SMS",
             "Budget guardrails to cap AI spend per deal stage",
             "Real-time deal-risk scoring with escalation to managers",
-            "Full audit trail of every agent action for compliance",
-        ],
+            "Full audit trail of every agent action for compliance"
+        ]
     },
     agentExamples: [
         {
@@ -42,14 +42,14 @@ export const salesData: UseCaseData = {
                 "Monitors deal stages in HubSpot, flags stale opportunities, auto-updates fields based on meeting outcomes, and alerts reps when deals need attention.",
             tools: ["HubSpot", "Slack", "Gmail"],
             channels: ["Slack", "Web"],
-            guardrails: ["No deal deletion", "Manager approval > $50k"],
+            guardrails: ["No deal deletion", "Manager approval > $50k"]
         },
         {
             name: "Research Agent",
             description:
                 "Scrapes prospect websites, LinkedIn, and news to build comprehensive company profiles and personalized talking points before every call.",
             tools: ["Firecrawl", "Google Drive", "HubSpot"],
-            channels: ["Web", "API"],
+            channels: ["Web", "API"]
         },
         {
             name: "Outreach Coordinator",
@@ -57,8 +57,8 @@ export const salesData: UseCaseData = {
                 "Sequences multi-touch outreach across email and Slack, personalizes messaging from research data, and adapts cadence based on engagement signals.",
             tools: ["Gmail", "HubSpot", "Slack"],
             channels: ["Email", "Slack"],
-            guardrails: ["Max 3 touches/week", "Opt-out compliance"],
-        },
+            guardrails: ["Max 3 touches/week", "Opt-out compliance"]
+        }
     ],
     integrations: [
         "HubSpot",
@@ -70,7 +70,7 @@ export const salesData: UseCaseData = {
         "Firecrawl",
         "Google Drive",
         "Jira",
-        "Fathom",
+        "Fathom"
     ],
-    ctaTitle: "Turn your sales team into a revenue machine",
-}
+    ctaTitle: "Turn your sales team into a revenue machine"
+};

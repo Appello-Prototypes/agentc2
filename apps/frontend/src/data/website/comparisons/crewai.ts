@@ -1,4 +1,4 @@
-import type { ComparisonData } from "@/components/website/comparison/comparison-page-template"
+import type { ComparisonData } from "@/components/website/comparison/comparison-page-template";
 
 export const crewaiData: ComparisonData = {
     slug: "crewai",
@@ -111,29 +111,24 @@ export const crewaiData: ComparisonData = {
         "AgentC2 is built for teams that need to deploy, govern, and scale multi-agent systems in production. If you need TypeScript-native development, enterprise governance, multi-channel deployment, voice capabilities, a marketplace, and continuous learning — AgentC2 provides the complete platform that frameworks cannot.",
     faqs: [
         {
-            question:
-                "Can I recreate CrewAI's role-playing pattern in AgentC2?",
+            question: "Can I recreate CrewAI's role-playing pattern in AgentC2?",
             answer: "Yes. AgentC2 agents support rich instruction templates that can include role descriptions, goals, and context — without the token overhead of mandatory backstory fields. You get the same collaboration patterns with leaner prompts."
         },
         {
-            question:
-                "Is CrewAI's multi-agent approach better than AgentC2's?",
+            question: "Is CrewAI's multi-agent approach better than AgentC2's?",
             answer: "CrewAI's sequential and hierarchical processes cover common patterns well. AgentC2's Networks and Campaigns support those same patterns plus parallel execution, conditional routing, human approval gates, and cross-organization federation."
         },
         {
-            question:
-                "Does AgentC2 support CrewAI's tool-sharing between agents?",
+            question: "Does AgentC2 support CrewAI's tool-sharing between agents?",
             answer: "AgentC2 tools are registered in a central tool registry and can be assigned to any agent. Agents in a network share tool access by default, with scoping controls to restrict sensitive tools."
         },
         {
-            question:
-                "Which is easier to learn for a beginner?",
+            question: "Which is easier to learn for a beginner?",
             answer: "CrewAI has a smaller API surface and a clear mental model (roles, goals, tasks). AgentC2 has more features but provides an admin UI for no-code agent creation, making it accessible to both developers and non-technical operators."
         },
         {
-            question:
-                "Can I migrate from CrewAI to AgentC2?",
+            question: "Can I migrate from CrewAI to AgentC2?",
             answer: "Yes. Agent instructions, tool configurations, and orchestration patterns from CrewAI can be mapped to AgentC2 agents, tool registries, and networks. The main work is translating Python agent definitions to AgentC2's TypeScript or UI-based configuration."
         }
     ]
-}
+};

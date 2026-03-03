@@ -32,9 +32,19 @@ vi.mock("@repo/database", () => ({
     }
 }));
 
+const mockAuthenticateRequest = vi.fn();
+vi.mock("@/lib/api-auth", () => ({
+    authenticateRequest: (...args: unknown[]) => mockAuthenticateRequest(...args)
+}));
+
 describe("Networks API", () => {
     beforeEach(() => {
         mockReset(prismaMock);
+        mockAuthenticateRequest.mockReset();
+        mockAuthenticateRequest.mockResolvedValue({
+            userId: "user-1",
+            organizationId: "org-1"
+        });
         vi.clearAllMocks();
     });
 

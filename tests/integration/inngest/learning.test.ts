@@ -38,13 +38,13 @@ describe("Learning Inngest Functions", () => {
 
     describe("Signal Detector Configuration", () => {
         it("should use signal threshold from config", () => {
-            expect(SIGNAL_THRESHOLDS.signalCount).toBe(5);
+            expect(SIGNAL_THRESHOLDS.signalCount).toBe(10);
             expect(SIGNAL_THRESHOLDS.signalWindowMinutes).toBe(60);
         });
 
         it("should use schedule from config", () => {
             expect(SCHEDULE_CONFIG.cronExpression).toBe("0 */6 * * *");
-            expect(SCHEDULE_CONFIG.minHoursBetweenSessions).toBe(4);
+            expect(SCHEDULE_CONFIG.minHoursBetweenSessions).toBe(8);
         });
     });
 

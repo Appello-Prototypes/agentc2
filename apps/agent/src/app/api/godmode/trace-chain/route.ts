@@ -57,9 +57,9 @@ export async function GET(request: NextRequest) {
         let rootNode: CausalNode;
 
         if (networkRunId) {
-            rootNode = await buildNetworkChain(networkRunId);
+            rootNode = await buildNetworkChain(networkRunId, authContext.organizationId);
         } else {
-            rootNode = await buildRunChain(runId!);
+            rootNode = await buildRunChain(runId!, authContext.organizationId);
         }
 
         return NextResponse.json({ success: true, chain: rootNode });
@@ -75,9 +75,15 @@ export async function GET(request: NextRequest) {
     }
 }
 
-async function buildNetworkChain(networkRunId: string): Promise<CausalNode> {
-    const networkRun = await prisma.networkRun.findUnique({
-        where: { id: networkRunId },
+async function buildNetworkChain(
+    networkRunId: string,
+    organizationId: string
+): Promise<CausalNode> {
+    const networkRun = await prisma.networkRun.findFirst({
+        where: {
+            id: networkRunId,
+            network: { workspace: { organizationId } }
+        },
         include: {
             network: { select: { name: true, slug: true } },
             steps: { orderBy: { stepNumber: "asc" } },
@@ -126,11 +132,12 @@ async function buildNetworkChain(networkRunId: string): Promise<CausalNode> {
             const correlatedRuns = await findCorrelatedAgentRuns(
                 step.primitiveId,
                 step.startedAt,
-                step.completedAt
+                step.completedAt,
+                organizationId
             );
 
             for (const agentRun of correlatedRuns) {
-                stepNode.children.push(await buildRunChain(agentRun.id));
+                stepNode.children.push(await buildRunChain(agentRun.id, organizationId));
             }
         }
 
@@ -202,9 +209,12 @@ async function buildNetworkChain(networkRunId: string): Promise<CausalNode> {
     return networkNode;
 }
 
-async function buildRunChain(runId: string): Promise<CausalNode> {
-    const run = await prisma.agentRun.findUnique({
-        where: { id: runId },
+async function buildRunChain(runId: string, organizationId: string): Promise<CausalNode> {
+    const run = await prisma.agentRun.findFirst({
+        where: {
+            id: runId,
+            OR: [{ tenantId: organizationId }, { agent: { workspace: { organizationId } } }]
+        },
         include: {
             agent: { select: { slug: true, name: true } },
             trace: {
@@ -317,7 +327,8 @@ async function buildRunChain(runId: string): Promise<CausalNode> {
 async function findCorrelatedAgentRuns(
     primitiveId: string,
     stepStartedAt: Date,
-    stepCompletedAt: Date | null
+    stepCompletedAt: Date | null,
+    organizationId: string
 ) {
     const windowStart = new Date(stepStartedAt.getTime() - 2000);
     const windowEnd = stepCompletedAt
@@ -327,7 +338,8 @@ async function findCorrelatedAgentRuns(
     return prisma.agentRun.findMany({
         where: {
             agent: {
-                OR: [{ id: primitiveId }, { slug: primitiveId }]
+                OR: [{ id: primitiveId }, { slug: primitiveId }],
+                workspace: { organizationId }
             },
             startedAt: {
                 gte: windowStart,

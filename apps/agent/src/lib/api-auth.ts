@@ -31,31 +31,49 @@ export async function authenticateRequest(
     if (apiKey) {
         const oauthToken = validateAccessToken(apiKey);
         if (oauthToken) {
-            const membership = await prisma.membership.findFirst({
-                where: { organizationId: oauthToken.organizationId },
+            const ownerMembership = await prisma.membership.findFirst({
+                where: { organizationId: oauthToken.organizationId, role: "owner" },
                 select: { userId: true }
             });
-            if (membership) {
-                return { userId: membership.userId, organizationId: oauthToken.organizationId };
+            if (ownerMembership) {
+                return {
+                    userId: ownerMembership.userId,
+                    organizationId: oauthToken.organizationId
+                };
             }
         }
 
         const orgSlugHeader = request!.headers.get("x-organization-slug")?.trim();
 
-        const resolveOrgContext = async (orgSlug: string) => {
+        const resolveOrgContext = async (orgSlug: string, userIdHint?: string | null) => {
             const org = await prisma.organization.findUnique({
                 where: { slug: orgSlug },
                 select: { id: true }
             });
             if (!org) return null;
 
-            const membership = await prisma.membership.findFirst({
-                where: { organizationId: org.id },
+            if (userIdHint) {
+                const membership = await prisma.membership.findUnique({
+                    where: {
+                        userId_organizationId: {
+                            userId: userIdHint,
+                            organizationId: org.id
+                        }
+                    },
+                    select: { userId: true }
+                });
+                if (membership) {
+                    return { userId: membership.userId, organizationId: org.id };
+                }
+            }
+
+            const ownerMembership = await prisma.membership.findFirst({
+                where: { organizationId: org.id, role: "owner" },
                 select: { userId: true }
             });
-            if (!membership) return null;
+            if (!ownerMembership) return null;
 
-            return { userId: membership.userId, organizationId: org.id };
+            return { userId: ownerMembership.userId, organizationId: org.id };
         };
 
         // Check against MCP_API_KEY env var
@@ -82,13 +100,13 @@ export async function authenticateRequest(
                             toolId: "mastra-mcp-api"
                         }
                     },
-                    select: { credentials: true, isActive: true }
+                    select: { credentials: true, isActive: true, createdBy: true }
                 });
                 if (
                     credential &&
                     validateStoredApiKey(apiKey, credential.credentials, credential.isActive)
                 ) {
-                    const context = await resolveOrgContext(orgSlugHeader);
+                    const context = await resolveOrgContext(orgSlugHeader, credential.createdBy);
                     if (context) return context;
                 }
             }
@@ -105,7 +123,8 @@ export async function authenticateRequest(
         });
         if (!session?.user) return null;
 
-        const organizationId = await getUserOrganizationId(session.user.id);
+        const preferredOrgId = request?.headers.get("x-organization-id")?.trim() || null;
+        const organizationId = await getUserOrganizationId(session.user.id, preferredOrgId);
         if (!organizationId) return null;
 
         return { userId: session.user.id, organizationId };

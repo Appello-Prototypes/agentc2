@@ -75,7 +75,10 @@ export async function GET(request: NextRequest) {
         const firstRuns =
             threadIds.length > 0
                 ? await prisma.agentRun.findMany({
-                      where: { threadId: { in: threadIds } },
+                      where: {
+                          threadId: { in: threadIds },
+                          agent: { workspace: { organizationId: authContext.organizationId } }
+                      },
                       orderBy: { startedAt: "asc" },
                       distinct: ["threadId"],
                       select: {
@@ -94,7 +97,10 @@ export async function GET(request: NextRequest) {
         const lastRuns =
             threadIds.length > 0
                 ? await prisma.agentRun.findMany({
-                      where: { threadId: { in: threadIds } },
+                      where: {
+                          threadId: { in: threadIds },
+                          agent: { workspace: { organizationId: authContext.organizationId } }
+                      },
                       orderBy: { startedAt: "desc" },
                       distinct: ["threadId"],
                       select: {
