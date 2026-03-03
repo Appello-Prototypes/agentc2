@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
+import { requireAuth } from "@/lib/authz/require-auth";
+import { requireAgentAccess } from "@/lib/authz/require-agent-access";
 
 /**
  * GET /api/agents/[id]/stream
@@ -14,19 +16,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
         const channel = searchParams.get("channel") || "runs";
 
-        // Find agent by slug or id
-        const agent = await prisma.agent.findFirst({
-            where: {
-                OR: [{ slug: id }, { id: id }]
-            }
-        });
-
-        if (!agent) {
-            return NextResponse.json(
-                { success: false, error: `Agent '${id}' not found` },
-                { status: 404 }
-            );
-        }
+        const { context, response: authResponse } = await requireAuth(request);
+        if (authResponse) return authResponse;
+        const { agentId, response: accessResponse } = await requireAgentAccess(
+            context.organizationId,
+            id
+        );
+        if (accessResponse) return accessResponse;
 
         // Create SSE stream
         const encoder = new TextEncoder();
@@ -37,7 +33,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                 // Send initial connection message
                 controller.enqueue(
                     encoder.encode(
-                        `data: ${JSON.stringify({ type: "connected", channel, agentId: agent.id })}\n\n`
+                        `data: ${JSON.stringify({ type: "connected", channel, agentId })}\n\n`
                     )
                 );
 
@@ -47,14 +43,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
                 // Get initial last IDs
                 const lastRun = await prisma.agentRun.findFirst({
-                    where: { agentId: agent.id },
+                    where: { agentId },
                     orderBy: { createdAt: "desc" },
                     select: { id: true }
                 });
                 lastRunId = lastRun?.id || null;
 
                 const lastAlert = await prisma.agentAlert.findFirst({
-                    where: { agentId: agent.id },
+                    where: { agentId },
                     orderBy: { createdAt: "desc" },
                     select: { id: true }
                 });
@@ -67,7 +63,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                             // Check for new runs
                             const newRuns = await prisma.agentRun.findMany({
                                 where: {
-                                    agentId: agent.id,
+                                    agentId,
                                     ...(lastRunId ? { id: { gt: lastRunId } } : {})
                                 },
                                 orderBy: { createdAt: "asc" },
@@ -103,7 +99,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                             // Check for updated running runs
                             const runningRuns = await prisma.agentRun.findMany({
                                 where: {
-                                    agentId: agent.id,
+                                    agentId,
                                     status: { in: ["RUNNING", "QUEUED"] }
                                 },
                                 select: {
@@ -129,7 +125,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                             // Check for new alerts
                             const newAlerts = await prisma.agentAlert.findMany({
                                 where: {
-                                    agentId: agent.id,
+                                    agentId,
                                     ...(lastAlertId ? { id: { gt: lastAlertId } } : {})
                                 },
                                 orderBy: { createdAt: "asc" },

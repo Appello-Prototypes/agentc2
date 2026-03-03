@@ -3,6 +3,7 @@ import type {
     PackagePlaybookOptions,
     PlaybookManifest,
     AgentSnapshot,
+    BacklogTaskSnapshot,
     SkillSnapshot,
     DocumentSnapshot,
     WorkflowSnapshot,
@@ -55,7 +56,8 @@ async function snapshotAgent(agentId: string): Promise<{
             skills: { include: { skill: true } },
             guardrailPolicy: true,
             testCases: true,
-            scorecard: true
+            scorecard: true,
+            backlog: { include: { tasks: true } }
         }
     });
 
@@ -117,7 +119,20 @@ async function snapshotAgent(agentId: string): Promise<{
         skills: record.skills.map((as) => as.skill.slug),
         guardrail,
         testCases,
-        scorecard
+        scorecard,
+        backlogTasks: (record.backlog?.tasks ?? [])
+            .filter((t) => t.status === "PENDING" || t.status === "IN_PROGRESS")
+            .map(
+                (t, idx): BacklogTaskSnapshot => ({
+                    title: t.title,
+                    description: t.description ?? undefined,
+                    priority: t.priority,
+                    status: t.status,
+                    sortOrder: idx,
+                    tags: t.tags,
+                    metadata: (t.contextJson as Record<string, unknown>) ?? undefined
+                })
+            )
     };
 
     const documentIds: string[] = [];

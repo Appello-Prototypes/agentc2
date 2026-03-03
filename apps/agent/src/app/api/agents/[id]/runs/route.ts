@@ -4,6 +4,8 @@ import { agentResolver, resolveModelOverride } from "@repo/agentc2/agents";
 import { managedGenerate, getFastCompressionModel } from "@repo/agentc2";
 import { TRAFFIC_SPLIT } from "@/lib/learning-config";
 import { extractToolCalls } from "@/lib/run-recorder";
+import { requireAuth } from "@/lib/authz/require-auth";
+import { requireAgentAccess } from "@/lib/authz/require-agent-access";
 
 function formatToolResultPreview(result: unknown, maxLength = 500): string {
     if (typeof result === "string") {
@@ -100,24 +102,17 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         const instanceId = searchParams.get("instanceId");
         const threadId = searchParams.get("threadId");
 
-        // Find agent by slug or id
-        const agent = await prisma.agent.findFirst({
-            where: {
-                OR: [{ slug: id }, { id: id }],
-                isActive: true
-            }
-        });
-
-        if (!agent) {
-            return NextResponse.json(
-                { success: false, error: `Agent '${id}' not found` },
-                { status: 404 }
-            );
-        }
+        const { context, response: authResponse } = await requireAuth(request);
+        if (authResponse) return authResponse;
+        const { agentId, response: accessResponse } = await requireAgentAccess(
+            context.organizationId,
+            id
+        );
+        if (accessResponse) return accessResponse;
 
         // Build where clause
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const where: any = { agentId: agent.id };
+        const where: any = { agentId };
 
         // Apply source filter
         if (source === "production") {
@@ -213,7 +208,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         }
 
         // Get total count
-        const total = await prisma.agentRun.count({ where: { agentId: agent.id } });
+        const total = await prisma.agentRun.count({ where: { agentId } });
 
         return NextResponse.json({
             success: true,
@@ -293,6 +288,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
         const { id } = await params;
+        const { context, response: authResponse } = await requireAuth(request);
+        if (authResponse) return authResponse;
+        const { agentId, response: accessResponse } = await requireAgentAccess(
+            context.organizationId,
+            id
+        );
+        if (accessResponse) return accessResponse;
         const body = await request.json();
 
         const { input, runType = "TEST", contextVars, versionId } = body;
@@ -313,7 +315,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         // Resolve the agent
         const { agent, record, source } = await agentResolver.resolve({
             slug: id,
-            id: id,
+            id: agentId,
             requestContext: {
                 resource: contextVars,
                 metadata: contextVars
@@ -343,9 +345,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         }
 
         // Check for active experiment and get routing decision
-        const { experimentId, experimentGroup, candidateVersionId } = await getExperimentRouting(
-            record.id
-        );
+        const { experimentId, experimentGroup, candidateVersionId } =
+            await getExperimentRouting(agentId);
 
         // Determine effective version ID
         // If routed to candidate, use the candidate version; otherwise use baseline (current)
@@ -360,7 +361,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         // Create the run record with experiment linkage
         const run = await prisma.agentRun.create({
             data: {
-                agentId: record.id,
+                agentId,
                 runType: experimentGroup ? "AB" : (runType.toUpperCase() as "TEST" | "PROD" | "AB"),
                 status: "RUNNING",
                 inputText: input,
@@ -393,7 +394,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         const trace = await prisma.agentTrace.create({
             data: {
                 runId: run.id,
-                agentId: record.id,
+                agentId,
                 status: "RUNNING",
                 inputText: input,
                 stepsJson: [],

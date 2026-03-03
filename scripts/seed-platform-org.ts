@@ -16,6 +16,9 @@
 
 import { prisma } from "../packages/database/src/index";
 
+const ORG_SLUG = "agentc2";
+const orgSlug = (base: string) => `${base}-${ORG_SLUG}`;
+
 const NEXUS_INSTRUCTIONS = `You are Nexus, the central coordination agent for this workspace. You orchestrate work across the AgentC2 platform by delegating to specialist networks, activating skills on demand, and maintaining a persistent backlog of tasks.
 
 ## Operating Model
@@ -98,14 +101,14 @@ async function main() {
 
     // 2. Create or find the Platform workspace
     let workspace = await prisma.workspace.findFirst({
-        where: { organizationId: org.id, slug: "platform" }
+        where: { organizationId: org.id, slug: orgSlug("platform") }
     });
     if (!workspace) {
         workspace = await prisma.workspace.create({
             data: {
                 organizationId: org.id,
                 name: "Platform",
-                slug: "platform",
+                slug: orgSlug("platform"),
                 environment: "production",
                 isDefault: true
             }
@@ -156,7 +159,7 @@ async function main() {
 
     // 4. Create or upsert Nexus agent
     let nexusAgent = await prisma.agent.findFirst({
-        where: { slug: "nexus", workspaceId: workspace.id }
+        where: { slug: orgSlug("nexus"), workspaceId: workspace.id }
     });
     const nexusTools = [
         "network-execute",
@@ -178,7 +181,7 @@ async function main() {
     if (!nexusAgent) {
         nexusAgent = await prisma.agent.create({
             data: {
-                slug: "nexus",
+                slug: orgSlug("nexus"),
                 name: "Nexus",
                 description:
                     "Central coordination agent — delegates to specialist networks, activates skills on demand, and manages the workspace backlog.",
@@ -225,12 +228,12 @@ async function main() {
 
     // 5. Create or upsert Operations Hub network
     let opsNetwork = await prisma.network.findFirst({
-        where: { slug: "operations-hub", workspaceId: workspace.id }
+        where: { slug: orgSlug("operations-hub"), workspaceId: workspace.id }
     });
     if (!opsNetwork) {
         opsNetwork = await prisma.network.create({
             data: {
-                slug: "operations-hub",
+                slug: orgSlug("operations-hub"),
                 name: "Operations Hub",
                 description:
                     "Central operations network for platform management, knowledge management, and workspace health monitoring.",
@@ -295,12 +298,12 @@ Always provide clear reasoning for your routing decisions.`,
 
     // 6. Create or upsert Research and Ingest workflow
     let riWorkflow = await prisma.workflow.findFirst({
-        where: { slug: "research-and-ingest", workspaceId: workspace.id }
+        where: { slug: orgSlug("research-and-ingest"), workspaceId: workspace.id }
     });
     if (!riWorkflow) {
         riWorkflow = await prisma.workflow.create({
             data: {
-                slug: "research-and-ingest",
+                slug: orgSlug("research-and-ingest"),
                 name: "Research and Ingest",
                 description:
                     "Fetches content from a URL or topic, processes it, and ingests it into the RAG knowledge base. Returns a summary of the ingested content.",
@@ -497,7 +500,7 @@ Always provide clear reasoning for your routing decisions.`,
             testCases: [],
             scorecards: [],
             requiredIntegrations: [],
-            entryPoint: { type: "agent" as const, slug: "nexus" }
+            entryPoint: { type: "agent" as const, slug: orgSlug("nexus") }
         };
 
         // Add campaign template

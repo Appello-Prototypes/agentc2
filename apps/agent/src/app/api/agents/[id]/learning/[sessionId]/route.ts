@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
+import { requireAuth } from "@/lib/authz/require-auth";
+import { requireAgentAccess } from "@/lib/authz/require-agent-access";
 
 /**
  * DELETE /api/agents/[id]/learning/[sessionId]
@@ -12,28 +14,22 @@ export async function DELETE(
 ) {
     try {
         const { id, sessionId } = await params;
+        const { context, response: authResponse } = await requireAuth(request);
+        if (authResponse) return authResponse;
+        const { agentId, response: accessResponse } = await requireAgentAccess(
+            context.organizationId,
+            id
+        );
+        if (accessResponse) return accessResponse;
+
         const body = await request.json().catch(() => ({}));
         const reason = body.reason || "Cancelled via UI";
-
-        // Find agent by slug or id
-        const agent = await prisma.agent.findFirst({
-            where: {
-                OR: [{ slug: id }, { id: id }]
-            }
-        });
-
-        if (!agent) {
-            return NextResponse.json(
-                { success: false, error: `Agent '${id}' not found` },
-                { status: 404 }
-            );
-        }
 
         // Get the session
         const session = await prisma.learningSession.findFirst({
             where: {
                 id: sessionId,
-                agentId: agent.id
+                agentId
             }
         });
 
@@ -79,8 +75,8 @@ export async function DELETE(
         // Log audit event
         await prisma.auditLog.create({
             data: {
-                tenantId: agent.tenantId,
-                actorId: "current-user",
+                tenantId: session.tenantId,
+                actorId: context.userId,
                 action: "LEARNING_SESSION_CANCELLED",
                 entityType: "LearningSession",
                 entityId: sessionId,
@@ -120,26 +116,19 @@ export async function GET(
 ) {
     try {
         const { id, sessionId } = await params;
-
-        // Find agent by slug or id
-        const agent = await prisma.agent.findFirst({
-            where: {
-                OR: [{ slug: id }, { id: id }]
-            }
-        });
-
-        if (!agent) {
-            return NextResponse.json(
-                { success: false, error: `Agent '${id}' not found` },
-                { status: 404 }
-            );
-        }
+        const { context, response: authResponse } = await requireAuth(request);
+        if (authResponse) return authResponse;
+        const { agentId, response: accessResponse } = await requireAgentAccess(
+            context.organizationId,
+            id
+        );
+        if (accessResponse) return accessResponse;
 
         // Get session with all related data
         const session = await prisma.learningSession.findFirst({
             where: {
                 id: sessionId,
-                agentId: agent.id
+                agentId
             },
             include: {
                 dataset: true,

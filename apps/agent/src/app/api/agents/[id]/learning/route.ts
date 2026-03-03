@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
 import { inngest } from "@/lib/inngest";
+import { requireAuth } from "@/lib/authz/require-auth";
+import { requireAgentAccess } from "@/lib/authz/require-agent-access";
 
 /**
  * GET /api/agents/[id]/learning
@@ -10,30 +12,24 @@ import { inngest } from "@/lib/inngest";
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
         const { id } = await params;
+        const { context, response: authResponse } = await requireAuth(request);
+        if (authResponse) return authResponse;
+        const { agentId, response: accessResponse } = await requireAgentAccess(
+            context.organizationId,
+            id
+        );
+        if (accessResponse) return accessResponse;
+
         const { searchParams } = new URL(request.url);
 
         const status = searchParams.get("status");
         const limit = Math.min(parseInt(searchParams.get("limit") || "20"), 100);
         const cursor = searchParams.get("cursor");
 
-        // Find agent by slug or id
-        const agent = await prisma.agent.findFirst({
-            where: {
-                OR: [{ slug: id }, { id: id }]
-            }
-        });
-
-        if (!agent) {
-            return NextResponse.json(
-                { success: false, error: `Agent '${id}' not found` },
-                { status: 404 }
-            );
-        }
-
         // Build where clause
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const where: any = {
-            agentId: agent.id
+            agentId
         };
 
         if (status) {
@@ -76,10 +72,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         // Get summary stats
         const [totalSessions, activeSessions, completedSessions, promotedSessions] =
             await Promise.all([
-                prisma.learningSession.count({ where: { agentId: agent.id } }),
+                prisma.learningSession.count({ where: { agentId } }),
                 prisma.learningSession.count({
                     where: {
-                        agentId: agent.id,
+                        agentId,
                         status: {
                             in: [
                                 "COLLECTING",
@@ -93,13 +89,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                 }),
                 prisma.learningSession.count({
                     where: {
-                        agentId: agent.id,
+                        agentId,
                         status: { in: ["APPROVED", "PROMOTED"] }
                     }
                 }),
                 prisma.learningSession.count({
                     where: {
-                        agentId: agent.id,
+                        agentId,
                         status: "PROMOTED"
                     }
                 })
@@ -154,27 +150,26 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
         const { id } = await params;
+        const { context, response: authResponse } = await requireAuth(request);
+        if (authResponse) return authResponse;
+        const { agentId, response: accessResponse } = await requireAgentAccess(
+            context.organizationId,
+            id
+        );
+        if (accessResponse) return accessResponse;
+
         const body = await request.json().catch(() => ({}));
         const triggerReason = body.triggerReason || "Manual trigger via API";
 
-        // Find agent by slug or id
-        const agent = await prisma.agent.findFirst({
-            where: {
-                OR: [{ slug: id }, { id: id }]
-            }
+        const agent = await prisma.agent.findUnique({
+            where: { id: agentId },
+            select: { tenantId: true, version: true }
         });
-
-        if (!agent) {
-            return NextResponse.json(
-                { success: false, error: `Agent '${id}' not found` },
-                { status: 404 }
-            );
-        }
 
         // Check for existing active session
         const activeSession = await prisma.learningSession.findFirst({
             where: {
-                agentId: agent.id,
+                agentId,
                 status: {
                     in: ["COLLECTING", "ANALYZING", "PROPOSING", "TESTING", "AWAITING_APPROVAL"]
                 }
@@ -196,10 +191,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         // Create session synchronously so client can navigate to it immediately
         const session = await prisma.learningSession.create({
             data: {
-                agentId: agent.id,
-                tenantId: agent.tenantId,
+                agentId,
+                tenantId: agent!.tenantId,
                 status: "COLLECTING",
-                baselineVersion: agent.version,
+                baselineVersion: agent!.version,
                 scorerConfig: { scorers: [] },
                 metadata: { triggerReason, triggerType: "manual" }
             }
@@ -209,7 +204,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         await inngest.send({
             name: "learning/session.start",
             data: {
-                agentId: agent.id,
+                agentId,
                 sessionId: session.id,
                 triggerReason
             }
@@ -219,7 +214,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             success: true,
             message: "Learning session started",
             sessionId: session.id,
-            agentId: agent.id,
+            agentId,
             triggerReason
         });
     } catch (error) {

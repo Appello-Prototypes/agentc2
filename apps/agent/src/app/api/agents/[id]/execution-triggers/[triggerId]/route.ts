@@ -13,6 +13,8 @@ import {
     type UnifiedTrigger,
     type UnifiedTriggerRunSummary
 } from "@/lib/unified-triggers";
+import { requireAuth } from "@/lib/authz/require-auth";
+import { requireAgentAccess } from "@/lib/authz/require-agent-access";
 
 type TriggerRow = {
     id: string;
@@ -150,6 +152,14 @@ export async function GET(
 ) {
     try {
         const { id, triggerId } = await params;
+        const { context, response: authResponse } = await requireAuth(request);
+        if (authResponse) return authResponse;
+        const { agentId, response: accessResponse } = await requireAgentAccess(
+            context.organizationId,
+            id
+        );
+        if (accessResponse) return accessResponse;
+
         const parsed = parseUnifiedTriggerId(triggerId);
         if (!parsed) {
             return NextResponse.json(
@@ -158,22 +168,13 @@ export async function GET(
             );
         }
 
-        const agent = await prisma.agent.findFirst({
-            where: {
-                OR: [{ slug: id }, { id }]
-            },
+        const agent = await prisma.agent.findUnique({
+            where: { id: agentId },
             select: { id: true, slug: true }
         });
 
-        if (!agent) {
-            return NextResponse.json(
-                { success: false, error: `Agent '${id}' not found` },
-                { status: 404 }
-            );
-        }
-
         const lastRun = await prisma.agentRun.findFirst({
-            where: { agentId: agent.id, triggerId: parsed.id },
+            where: { agentId, triggerId: parsed.id },
             orderBy: { startedAt: "desc" },
             select: {
                 id: true,
@@ -186,7 +187,7 @@ export async function GET(
 
         if (parsed.source === "schedule") {
             const schedule = await prisma.agentSchedule.findFirst({
-                where: { id: parsed.id, agentId: agent.id }
+                where: { id: parsed.id, agentId }
             });
 
             if (!schedule) {
@@ -206,7 +207,7 @@ export async function GET(
         }
 
         const trigger = await prisma.agentTrigger.findFirst({
-            where: { id: parsed.id, agentId: agent.id }
+            where: { id: parsed.id, agentId }
         });
 
         if (!trigger) {
@@ -220,7 +221,7 @@ export async function GET(
             success: true,
             trigger: buildTriggerTrigger(
                 trigger as TriggerRow,
-                agent.slug,
+                agent!.slug,
                 (lastRun as RunRow | null) ?? null
             )
         });
@@ -248,6 +249,14 @@ export async function PATCH(
 ) {
     try {
         const { id, triggerId } = await params;
+        const { context, response: authResponse } = await requireAuth(request);
+        if (authResponse) return authResponse;
+        const { agentId, response: accessResponse } = await requireAgentAccess(
+            context.organizationId,
+            id
+        );
+        if (accessResponse) return accessResponse;
+
         const parsed = parseUnifiedTriggerId(triggerId);
         if (!parsed) {
             return NextResponse.json(
@@ -263,7 +272,7 @@ export async function PATCH(
             description,
             config = {},
             input,
-            context,
+            context: reqContext,
             maxSteps,
             environment,
             filter,
@@ -284,23 +293,14 @@ export async function PATCH(
             isArchived?: boolean;
         };
 
-        const agent = await prisma.agent.findFirst({
-            where: {
-                OR: [{ slug: id }, { id }]
-            },
+        const agent = await prisma.agent.findUnique({
+            where: { id: agentId },
             select: { id: true, slug: true }
         });
 
-        if (!agent) {
-            return NextResponse.json(
-                { success: false, error: `Agent '${id}' not found` },
-                { status: 404 }
-            );
-        }
-
         if (parsed.source === "schedule") {
             const schedule = await prisma.agentSchedule.findFirst({
-                where: { id: parsed.id, agentId: agent.id }
+                where: { id: parsed.id, agentId }
             });
 
             if (!schedule) {
@@ -330,13 +330,13 @@ export async function PATCH(
 
             const defaults: TriggerInputDefaults = {
                 input,
-                context,
+                context: reqContext,
                 maxSteps,
                 environment
             };
             if (
                 input !== undefined ||
-                context !== undefined ||
+                reqContext !== undefined ||
                 maxSteps !== undefined ||
                 environment !== undefined
             ) {
@@ -385,7 +385,7 @@ export async function PATCH(
         }
 
         const trigger = await prisma.agentTrigger.findFirst({
-            where: { id: parsed.id, agentId: agent.id }
+            where: { id: parsed.id, agentId }
         });
 
         if (!trigger) {
@@ -404,13 +404,13 @@ export async function PATCH(
 
         const defaults: TriggerInputDefaults = {
             input,
-            context,
+            context: reqContext,
             maxSteps,
             environment
         };
         const configOverrides =
             input !== undefined ||
-            context !== undefined ||
+            reqContext !== undefined ||
             maxSteps !== undefined ||
             environment !== undefined
                 ? {
@@ -482,7 +482,7 @@ export async function PATCH(
 
         return NextResponse.json({
             success: true,
-            trigger: buildTriggerTrigger(updated as TriggerRow, agent.slug, null)
+            trigger: buildTriggerTrigger(updated as TriggerRow, agent!.slug, null)
         });
     } catch (error) {
         console.error("[Execution Triggers] Error updating:", error);
@@ -507,6 +507,14 @@ export async function DELETE(
 ) {
     try {
         const { id, triggerId } = await params;
+        const { context, response: authResponse } = await requireAuth(request);
+        if (authResponse) return authResponse;
+        const { agentId, response: accessResponse } = await requireAgentAccess(
+            context.organizationId,
+            id
+        );
+        if (accessResponse) return accessResponse;
+
         const parsed = parseUnifiedTriggerId(triggerId);
         if (!parsed) {
             return NextResponse.json(
@@ -515,23 +523,9 @@ export async function DELETE(
             );
         }
 
-        const agent = await prisma.agent.findFirst({
-            where: {
-                OR: [{ slug: id }, { id }]
-            },
-            select: { id: true }
-        });
-
-        if (!agent) {
-            return NextResponse.json(
-                { success: false, error: `Agent '${id}' not found` },
-                { status: 404 }
-            );
-        }
-
         if (parsed.source === "schedule") {
             const schedule = await prisma.agentSchedule.findFirst({
-                where: { id: parsed.id, agentId: agent.id }
+                where: { id: parsed.id, agentId }
             });
 
             if (!schedule) {
@@ -550,7 +544,7 @@ export async function DELETE(
         }
 
         const trigger = await prisma.agentTrigger.findFirst({
-            where: { id: parsed.id, agentId: agent.id }
+            where: { id: parsed.id, agentId }
         });
 
         if (!trigger) {

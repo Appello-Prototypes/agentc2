@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
+import { requireAuth } from "@/lib/authz/require-auth";
+import { requireAgentAccess } from "@/lib/authz/require-agent-access";
 
 /**
  * GET /api/agents/[id]/recommendations
@@ -10,30 +12,23 @@ import { prisma } from "@repo/database";
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
         const { id } = await params;
-        const { searchParams } = new URL(request.url);
+        const { context, response: authResponse } = await requireAuth(request);
+        if (authResponse) return authResponse;
+        const { agentId, response: accessResponse } = await requireAgentAccess(
+            context.organizationId,
+            id
+        );
+        if (accessResponse) return accessResponse;
 
+        const { searchParams } = new URL(request.url);
         const status = searchParams.get("status"); // "active", "graduated", "expired", "rejected"
         const type = searchParams.get("type"); // "sustain", "improve"
         const category = searchParams.get("category");
         const limit = Math.min(parseInt(searchParams.get("limit") || "50"), 200);
 
-        // Find agent by slug or id
-        const agent = await prisma.agent.findFirst({
-            where: {
-                OR: [{ slug: id }, { id: id }]
-            }
-        });
-
-        if (!agent) {
-            return NextResponse.json(
-                { success: false, error: `Agent '${id}' not found` },
-                { status: 404 }
-            );
-        }
-
         // Build where clause
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const where: any = { agentId: agent.id };
+        const where: any = { agentId };
         if (status) where.status = status;
         if (type) where.type = type;
         if (category) where.category = category;
@@ -56,7 +51,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             // Get aggregate stats
             prisma.agentRecommendation.groupBy({
                 by: ["status"],
-                where: { agentId: agent.id },
+                where: { agentId },
                 _count: { id: true }
             })
         ]);
@@ -111,6 +106,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
         const { id } = await params;
+        const { context, response: authResponse } = await requireAuth(request);
+        if (authResponse) return authResponse;
+        const { agentId, response: accessResponse } = await requireAgentAccess(
+            context.organizationId,
+            id
+        );
+        if (accessResponse) return accessResponse;
+
         const body = await request.json();
         const { recommendationId, status } = body;
 
@@ -123,18 +126,6 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
         if (!["active", "graduated", "expired", "rejected"].includes(status)) {
             return NextResponse.json({ success: false, error: "Invalid status" }, { status: 400 });
-        }
-
-        // Verify agent exists
-        const agent = await prisma.agent.findFirst({
-            where: { OR: [{ slug: id }, { id: id }] }
-        });
-
-        if (!agent) {
-            return NextResponse.json(
-                { success: false, error: `Agent '${id}' not found` },
-                { status: 404 }
-            );
         }
 
         const updated = await prisma.agentRecommendation.update({

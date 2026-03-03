@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
+import { requireAuth } from "@/lib/authz/require-auth";
+import { requireAgentAccess } from "@/lib/authz/require-agent-access";
 
 /**
  * GET /api/agents/[id]/budget
@@ -10,23 +12,17 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     try {
         const { id } = await params;
 
-        // Find agent by slug or id
-        const agent = await prisma.agent.findFirst({
-            where: {
-                OR: [{ slug: id }, { id: id }]
-            }
-        });
-
-        if (!agent) {
-            return NextResponse.json(
-                { success: false, error: `Agent '${id}' not found` },
-                { status: 404 }
-            );
-        }
+        const { context, response: authResponse } = await requireAuth(request);
+        if (authResponse) return authResponse;
+        const { agentId, response: accessResponse } = await requireAgentAccess(
+            context.organizationId,
+            id
+        );
+        if (accessResponse) return accessResponse;
 
         // Get budget policy
         const budgetPolicy = await prisma.budgetPolicy.findUnique({
-            where: { agentId: agent.id }
+            where: { agentId }
         });
 
         // Get current month's cost
@@ -36,7 +32,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
         const costEvents = await prisma.costEvent.findMany({
             where: {
-                agentId: agent.id,
+                agentId,
                 createdAt: { gte: startOfMonth }
             },
             select: { costUsd: true }
@@ -88,34 +84,29 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
         const { id } = await params;
+
+        const { context, response: authResponse } = await requireAuth(request);
+        if (authResponse) return authResponse;
+        const { agentId, response: accessResponse } = await requireAgentAccess(
+            context.organizationId,
+            id
+        );
+        if (accessResponse) return accessResponse;
+
         const body = await request.json();
 
         const { enabled, monthlyLimitUsd, alertAtPct, hardLimit } = body;
 
-        // Find agent by slug or id
-        const agent = await prisma.agent.findFirst({
-            where: {
-                OR: [{ slug: id }, { id: id }]
-            }
-        });
-
-        if (!agent) {
-            return NextResponse.json(
-                { success: false, error: `Agent '${id}' not found` },
-                { status: 404 }
-            );
-        }
-
         // If setting a budget amount, default hardLimit to true unless explicitly set to false
         const existingPolicy = await prisma.budgetPolicy.findUnique({
-            where: { agentId: agent.id }
+            where: { agentId }
         });
         const resolvedHardLimit =
             hardLimit !== undefined ? hardLimit : monthlyLimitUsd !== undefined ? true : undefined;
 
         // Upsert budget policy
         const budgetPolicy = await prisma.budgetPolicy.upsert({
-            where: { agentId: agent.id },
+            where: { agentId },
             update: {
                 enabled: enabled ?? undefined,
                 monthlyLimitUsd: monthlyLimitUsd ?? undefined,
@@ -123,8 +114,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
                 hardLimit: resolvedHardLimit ?? undefined
             },
             create: {
-                agentId: agent.id,
-                tenantId: agent.tenantId,
+                agentId,
+                tenantId: context.organizationId,
                 enabled: enabled ?? false,
                 monthlyLimitUsd: monthlyLimitUsd ?? null,
                 alertAtPct: alertAtPct ?? 80,
@@ -135,12 +126,12 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         // Create audit log
         await prisma.auditLog.create({
             data: {
-                tenantId: agent.tenantId,
+                tenantId: context.organizationId,
                 action: "BUDGET_UPDATE",
                 entityType: "BudgetPolicy",
                 entityId: budgetPolicy.id,
                 metadata: {
-                    agentId: agent.id,
+                    agentId,
                     enabled,
                     monthlyLimitUsd,
                     alertAtPct,

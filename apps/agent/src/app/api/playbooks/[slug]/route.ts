@@ -57,10 +57,7 @@ export async function GET(_request: NextRequest, { params }: Params) {
             }
         });
 
-        if (
-            !playbook ||
-            !["PUBLISHED", "DRAFT", "PENDING_REVIEW"].includes(playbook.status)
-        ) {
+        if (!playbook || !["PUBLISHED", "DRAFT", "PENDING_REVIEW"].includes(playbook.status)) {
             return NextResponse.json({ error: "Playbook not found" }, { status: 404 });
         }
 

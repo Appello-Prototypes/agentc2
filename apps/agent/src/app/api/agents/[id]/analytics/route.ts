@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
+import { requireAuth } from "@/lib/authz/require-auth";
+import { requireAgentAccess } from "@/lib/authz/require-agent-access";
 
 /**
  * GET /api/agents/[id]/analytics
@@ -20,23 +22,17 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         const startDate = from ? new Date(from) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
         const endDate = to ? new Date(to) : new Date();
 
-        // Find agent by slug or id
-        const agent = await prisma.agent.findFirst({
-            where: {
-                OR: [{ slug: id }, { id: id }]
-            }
-        });
-
-        if (!agent) {
-            return NextResponse.json(
-                { success: false, error: `Agent '${id}' not found` },
-                { status: 404 }
-            );
-        }
+        const { context, response: authResponse } = await requireAuth(request);
+        if (authResponse) return authResponse;
+        const { agentId, response: accessResponse } = await requireAgentAccess(
+            context.organizationId,
+            id
+        );
+        if (accessResponse) return accessResponse;
 
         // Build base where clause
         const baseWhere = {
-            agentId: agent.id,
+            agentId,
             startedAt: {
                 gte: startDate,
                 lte: endDate
@@ -121,7 +117,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         // Get evaluations
         const evaluations = await prisma.agentEvaluation.findMany({
             where: {
-                agentId: agent.id,
+                agentId,
                 createdAt: {
                     gte: startDate,
                     lte: endDate
@@ -150,7 +146,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         // Get feedback summary
         const feedback = await prisma.agentFeedback.findMany({
             where: {
-                agentId: agent.id,
+                agentId,
                 createdAt: {
                     gte: startDate,
                     lte: endDate

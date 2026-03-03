@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
+import { requireAuth } from "@/lib/authz/require-auth";
+import { requireAgentAccess } from "@/lib/authz/require-agent-access";
 
 /**
  * GET /api/agents/[id]/learning/metrics
@@ -9,29 +11,23 @@ import { prisma } from "@repo/database";
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
         const { id } = await params;
+        const { context, response: authResponse } = await requireAuth(request);
+        if (authResponse) return authResponse;
+        const { agentId, response: accessResponse } = await requireAgentAccess(
+            context.organizationId,
+            id
+        );
+        if (accessResponse) return accessResponse;
+
         const { searchParams } = new URL(request.url);
 
         const days = Math.min(parseInt(searchParams.get("days") || "30"), 90);
         const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
-        // Find agent by slug or id
-        const agent = await prisma.agent.findFirst({
-            where: {
-                OR: [{ slug: id }, { id: id }]
-            }
-        });
-
-        if (!agent) {
-            return NextResponse.json(
-                { success: false, error: `Agent '${id}' not found` },
-                { status: 404 }
-            );
-        }
-
         // Get all sessions for metrics
         const sessions = await prisma.learningSession.findMany({
             where: {
-                agentId: agent.id,
+                agentId,
                 createdAt: { gte: startDate }
             },
             include: {
@@ -92,7 +88,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         // Get daily metrics
         const dailyMetrics = await prisma.learningMetricDaily.findMany({
             where: {
-                agentId: agent.id,
+                agentId,
                 date: { gte: startDate }
             },
             orderBy: { date: "asc" }
@@ -101,7 +97,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         // Get recent evaluations coverage
         const recentRuns = await prisma.agentRun.count({
             where: {
-                agentId: agent.id,
+                agentId,
                 status: "COMPLETED",
                 createdAt: { gte: startDate }
             }
@@ -109,7 +105,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
         const evaluatedRuns = await prisma.agentEvaluation.count({
             where: {
-                agentId: agent.id,
+                agentId,
                 createdAt: { gte: startDate }
             }
         });

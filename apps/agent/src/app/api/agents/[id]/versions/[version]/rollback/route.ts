@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma, Prisma } from "@repo/database";
 import { createChangeLog } from "@/lib/changelog";
+import { requireAuth } from "@/lib/authz/require-auth";
+import { requireAgentAccess } from "@/lib/authz/require-agent-access";
 
 /**
  * POST /api/agents/[id]/versions/[version]/rollback
@@ -13,6 +15,14 @@ export async function POST(
 ) {
     try {
         const { id, version: versionStr } = await params;
+        const { context, response: authResponse } = await requireAuth(request);
+        if (authResponse) return authResponse;
+        const { agentId, response: accessResponse } = await requireAgentAccess(
+            context.organizationId,
+            id
+        );
+        if (accessResponse) return accessResponse;
+
         const body = await request.json().catch(() => ({}));
 
         const { reason, createdBy } = body;
@@ -25,25 +35,15 @@ export async function POST(
             );
         }
 
-        // Find agent by slug or id
-        const agent = await prisma.agent.findFirst({
-            where: {
-                OR: [{ slug: id }, { id: id }]
-            },
+        const agent = await prisma.agent.findUnique({
+            where: { id: agentId },
             include: { tools: true }
         });
-
-        if (!agent) {
-            return NextResponse.json(
-                { success: false, error: `Agent '${id}' not found` },
-                { status: 404 }
-            );
-        }
 
         // Find the target version
         const targetVersionRecord = await prisma.agentVersion.findFirst({
             where: {
-                agentId: agent.id,
+                agentId,
                 version: targetVersion
             }
         });
@@ -60,33 +60,33 @@ export async function POST(
 
         // Delete existing tool and skill associations
         await prisma.agentTool.deleteMany({
-            where: { agentId: agent.id }
+            where: { agentId }
         });
         await prisma.agentSkill.deleteMany({
-            where: { agentId: agent.id }
+            where: { agentId }
         });
 
         // Apply the snapshot to the agent
         const updatedAgent = await prisma.agent.update({
-            where: { id: agent.id },
+            where: { id: agentId },
             data: {
-                name: (snapshot.name as string) || agent.name,
-                description: (snapshot.description as string) || agent.description,
-                instructions: (snapshot.instructions as string) || agent.instructions,
+                name: (snapshot.name as string) || agent!.name,
+                description: (snapshot.description as string) || agent!.description,
+                instructions: (snapshot.instructions as string) || agent!.instructions,
                 instructionsTemplate: (snapshot.instructionsTemplate as string) || undefined,
-                modelProvider: (snapshot.modelProvider as string) || agent.modelProvider,
-                modelName: (snapshot.modelName as string) || agent.modelName,
-                temperature: (snapshot.temperature as number) ?? agent.temperature,
+                modelProvider: (snapshot.modelProvider as string) || agent!.modelProvider,
+                modelName: (snapshot.modelName as string) || agent!.modelName,
+                temperature: (snapshot.temperature as number) ?? agent!.temperature,
                 maxTokens: (snapshot.maxTokens as number) || undefined,
                 modelConfig: snapshot.modelConfig
                     ? (snapshot.modelConfig as Prisma.InputJsonValue)
                     : Prisma.JsonNull,
-                memoryEnabled: (snapshot.memoryEnabled as boolean) ?? agent.memoryEnabled,
+                memoryEnabled: (snapshot.memoryEnabled as boolean) ?? agent!.memoryEnabled,
                 memoryConfig: snapshot.memoryConfig
                     ? (snapshot.memoryConfig as Prisma.InputJsonValue)
                     : Prisma.JsonNull,
-                maxSteps: (snapshot.maxSteps as number) ?? agent.maxSteps,
-                visibility: ((snapshot.visibility as string) ?? agent.visibility) as
+                maxSteps: (snapshot.maxSteps as number) ?? agent!.maxSteps,
+                visibility: ((snapshot.visibility as string) ?? agent!.visibility) as
                     | "PRIVATE"
                     | "ORGANIZATION"
                     | "PUBLIC",
@@ -101,7 +101,7 @@ export async function POST(
         if (tools && tools.length > 0) {
             await prisma.agentTool.createMany({
                 data: tools.map((t) => ({
-                    agentId: agent.id,
+                    agentId,
                     toolId: t.toolId,
                     config: t.config ? (t.config as Prisma.InputJsonValue) : Prisma.JsonNull
                 }))
@@ -113,7 +113,7 @@ export async function POST(
         if (skills && skills.length > 0) {
             await prisma.agentSkill.createMany({
                 data: skills.map((s) => ({
-                    agentId: agent.id,
+                    agentId,
                     skillId: s.skillId,
                     pinned: s.pinned ?? true
                 }))
@@ -122,7 +122,7 @@ export async function POST(
 
         // Create a new version record for the rollback
         const lastVersion = await prisma.agentVersion.findFirst({
-            where: { agentId: agent.id },
+            where: { agentId },
             orderBy: { version: "desc" },
             select: { version: true }
         });
@@ -131,8 +131,8 @@ export async function POST(
 
         const rollbackVersion = await prisma.agentVersion.create({
             data: {
-                agentId: agent.id,
-                tenantId: agent.tenantId,
+                agentId,
+                tenantId: agent!.tenantId,
                 version: newVersion,
                 description: `Rollback to version ${targetVersion}${reason ? `: ${reason}` : ""}`,
                 instructions: updatedAgent.instructions,
@@ -140,7 +140,7 @@ export async function POST(
                 modelName: updatedAgent.modelName,
                 changesJson: {
                     type: "rollback",
-                    fromVersion: agent.version,
+                    fromVersion: agent!.version,
                     toVersion: targetVersion,
                     reason: reason || null
                 } as Prisma.InputJsonValue,
@@ -151,16 +151,16 @@ export async function POST(
 
         // Update agent's current version
         await prisma.agent.update({
-            where: { id: agent.id },
+            where: { id: agentId },
             data: { version: newVersion }
         });
 
         // Create an alert for the rollback
         await prisma.agentAlert.create({
             data: {
-                agentId: agent.id,
+                agentId,
                 severity: "INFO",
-                message: `Agent rolled back from version ${agent.version} to version ${targetVersion}`,
+                message: `Agent rolled back from version ${agent!.version} to version ${targetVersion}`,
                 source: "SYSTEM"
             }
         });
@@ -168,19 +168,19 @@ export async function POST(
         // Write structured changelog entry for rollback
         createChangeLog({
             entityType: "agent",
-            entityId: agent.id,
-            entitySlug: agent.slug,
+            entityId: agentId,
+            entitySlug: agent!.slug,
             version: newVersion,
             action: "rollback",
             changes: [
                 {
                     field: "version",
                     action: "modified",
-                    before: agent.version,
+                    before: agent!.version,
                     after: targetVersion
                 }
             ],
-            summary: `Rolled back from v${agent.version} to v${targetVersion}`,
+            summary: `Rolled back from v${agent!.version} to v${targetVersion}`,
             reason: reason || undefined,
             createdBy
         }).catch((err) => console.error("[ChangeLog] Rollback write failed:", err));
@@ -188,13 +188,13 @@ export async function POST(
         // Create audit log
         await prisma.auditLog.create({
             data: {
-                tenantId: agent.tenantId,
+                tenantId: agent!.tenantId,
                 actorId: createdBy,
                 action: "VERSION_ROLLBACK",
                 entityType: "Agent",
-                entityId: agent.id,
+                entityId: agentId,
                 metadata: {
-                    fromVersion: agent.version,
+                    fromVersion: agent!.version,
                     toVersion: targetVersion,
                     newVersion,
                     reason
@@ -210,7 +210,7 @@ export async function POST(
                 description: rollbackVersion.description,
                 createdAt: rollbackVersion.createdAt
             },
-            previousVersion: agent.version,
+            previousVersion: agent!.version,
             rolledBackTo: targetVersion
         });
     } catch (error) {

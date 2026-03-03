@@ -142,8 +142,8 @@ export const instanceGetTool = createTool({
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const where: any = instanceId
             ? { id: instanceId }
-            : instanceSlug && organizationId
-              ? { organizationId_slug: { organizationId, slug: instanceSlug } }
+            : instanceSlug
+              ? { slug: instanceSlug }
               : null;
 
         if (!where) {

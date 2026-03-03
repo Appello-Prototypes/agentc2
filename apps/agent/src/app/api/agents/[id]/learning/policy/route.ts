@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
 import { getEffectiveConfig } from "@/lib/learning-config";
+import { requireAuth } from "@/lib/authz/require-auth";
+import { requireAgentAccess } from "@/lib/authz/require-agent-access";
 
 /**
  * GET /api/agents/[id]/learning/policy
@@ -10,31 +12,25 @@ import { getEffectiveConfig } from "@/lib/learning-config";
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
         const { id } = await params;
+        const { context, response: authResponse } = await requireAuth(request);
+        if (authResponse) return authResponse;
+        const { agentId, response: accessResponse } = await requireAgentAccess(
+            context.organizationId,
+            id
+        );
+        if (accessResponse) return accessResponse;
 
-        // Find agent by slug or id
-        const agent = await prisma.agent.findFirst({
-            where: {
-                OR: [{ slug: id }, { id: id }],
-                isActive: true
-            },
-            include: {
-                learningPolicy: true
-            }
+        const agent = await prisma.agent.findUnique({
+            where: { id: agentId },
+            include: { learningPolicy: true }
         });
 
-        if (!agent) {
-            return NextResponse.json(
-                { success: false, error: `Agent '${id}' not found` },
-                { status: 404 }
-            );
-        }
-
         // Get effective config (merging defaults with overrides)
-        const effectiveConfig = getEffectiveConfig(agent.learningPolicy || {});
+        const effectiveConfig = getEffectiveConfig(agent!.learningPolicy || {});
 
         return NextResponse.json({
             success: true,
-            policy: agent.learningPolicy || null,
+            policy: agent!.learningPolicy || null,
             effectiveConfig,
             defaults: {
                 signalThreshold: 5,
@@ -67,22 +63,20 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
         const { id } = await params;
+        const { context, response: authResponse } = await requireAuth(request);
+        if (authResponse) return authResponse;
+        const { agentId, response: accessResponse } = await requireAgentAccess(
+            context.organizationId,
+            id
+        );
+        if (accessResponse) return accessResponse;
+
         const body = await request.json();
 
-        // Find agent by slug or id
-        const agent = await prisma.agent.findFirst({
-            where: {
-                OR: [{ slug: id }, { id: id }],
-                isActive: true
-            }
+        const agent = await prisma.agent.findUnique({
+            where: { id: agentId },
+            select: { tenantId: true, slug: true }
         });
-
-        if (!agent) {
-            return NextResponse.json(
-                { success: false, error: `Agent '${id}' not found` },
-                { status: 404 }
-            );
-        }
 
         // Validate and extract policy fields
         const {
@@ -100,10 +94,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
         // Upsert the policy
         const policy = await prisma.learningPolicy.upsert({
-            where: { agentId: agent.id },
+            where: { agentId },
             create: {
-                agentId: agent.id,
-                tenantId: agent.tenantId,
+                agentId,
+                tenantId: agent!.tenantId,
                 enabled: enabled ?? true,
                 autoPromotionEnabled: autoPromotionEnabled ?? false,
                 scheduledEnabled: scheduledEnabled ?? true,
@@ -132,13 +126,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         // Audit log
         await prisma.auditLog.create({
             data: {
-                tenantId: agent.tenantId,
+                tenantId: agent!.tenantId,
                 actorId: updatedBy || "unknown",
                 action: "LEARNING_POLICY_UPDATED",
                 entityType: "LearningPolicy",
                 entityId: policy.id,
                 metadata: {
-                    agentSlug: agent.slug,
+                    agentSlug: agent!.slug,
                     changes: body
                 }
             }

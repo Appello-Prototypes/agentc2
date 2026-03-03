@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
 import { getNextRunAt } from "@/lib/schedule-utils";
+import { requireAuth } from "@/lib/authz/require-auth";
+import { requireAgentAccess } from "@/lib/authz/require-agent-access";
 
 /**
  * PATCH /api/agents/[id]/schedules/[scheduleId]
@@ -13,6 +15,15 @@ export async function PATCH(
 ) {
     try {
         const { id, scheduleId } = await params;
+
+        const { context: authContext, response: authResponse } = await requireAuth(request);
+        if (authResponse) return authResponse;
+        const { agentId, response: accessResponse } = await requireAgentAccess(
+            authContext.organizationId,
+            id
+        );
+        if (accessResponse) return accessResponse;
+
         const body = await request.json();
 
         const {
@@ -29,21 +40,8 @@ export async function PATCH(
             color
         } = body;
 
-        const agent = await prisma.agent.findFirst({
-            where: {
-                OR: [{ slug: id }, { id }]
-            }
-        });
-
-        if (!agent) {
-            return NextResponse.json(
-                { success: false, error: `Agent '${id}' not found` },
-                { status: 404 }
-            );
-        }
-
         const schedule = await prisma.agentSchedule.findFirst({
-            where: { id: scheduleId, agentId: agent.id }
+            where: { id: scheduleId, agentId }
         });
 
         if (!schedule) {
@@ -151,21 +149,16 @@ export async function DELETE(
     try {
         const { id, scheduleId } = await params;
 
-        const agent = await prisma.agent.findFirst({
-            where: {
-                OR: [{ slug: id }, { id }]
-            }
-        });
-
-        if (!agent) {
-            return NextResponse.json(
-                { success: false, error: `Agent '${id}' not found` },
-                { status: 404 }
-            );
-        }
+        const { context, response: authResponse } = await requireAuth(request);
+        if (authResponse) return authResponse;
+        const { agentId, response: accessResponse } = await requireAgentAccess(
+            context.organizationId,
+            id
+        );
+        if (accessResponse) return accessResponse;
 
         const schedule = await prisma.agentSchedule.findFirst({
-            where: { id: scheduleId, agentId: agent.id }
+            where: { id: scheduleId, agentId }
         });
 
         if (!schedule) {

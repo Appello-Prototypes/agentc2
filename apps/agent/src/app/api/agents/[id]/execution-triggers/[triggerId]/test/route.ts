@@ -8,6 +8,8 @@ import {
     parseUnifiedTriggerId,
     type TriggerInputDefaults
 } from "@/lib/unified-triggers";
+import { requireAuth } from "@/lib/authz/require-auth";
+import { requireAgentAccess } from "@/lib/authz/require-agent-access";
 
 /**
  * POST /api/agents/[id]/execution-triggers/[triggerId]/test
@@ -20,6 +22,14 @@ export async function POST(
 ) {
     try {
         const { id, triggerId } = await params;
+        const { context, response: authResponse } = await requireAuth(request);
+        if (authResponse) return authResponse;
+        const { agentId, response: accessResponse } = await requireAgentAccess(
+            context.organizationId,
+            id
+        );
+        if (accessResponse) return accessResponse;
+
         const parsed = parseUnifiedTriggerId(triggerId);
         if (!parsed) {
             return NextResponse.json(
@@ -43,23 +53,9 @@ export async function POST(
             environment?: string;
         };
 
-        const agent = await prisma.agent.findFirst({
-            where: {
-                OR: [{ slug: id }, { id }]
-            },
-            select: { id: true }
-        });
-
-        if (!agent) {
-            return NextResponse.json(
-                { success: false, error: `Agent '${id}' not found` },
-                { status: 404 }
-            );
-        }
-
         if (parsed.source === "schedule") {
             const schedule = await prisma.agentSchedule.findFirst({
-                where: { id: parsed.id, agentId: agent.id }
+                where: { id: parsed.id, agentId }
             });
 
             if (!schedule) {
@@ -101,7 +97,7 @@ export async function POST(
         }
 
         const trigger = await prisma.agentTrigger.findFirst({
-            where: { id: parsed.id, agentId: agent.id }
+            where: { id: parsed.id, agentId }
         });
 
         if (!trigger) {

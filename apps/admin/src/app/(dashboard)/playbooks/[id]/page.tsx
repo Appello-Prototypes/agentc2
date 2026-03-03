@@ -30,9 +30,7 @@ const STATUS_LABELS: Record<string, string> = {
     ARCHIVED: "Archived"
 };
 
-export default async function PlaybookDetailPage(props: {
-    params: Promise<{ id: string }>;
-}) {
+export default async function PlaybookDetailPage(props: { params: Promise<{ id: string }> }) {
     const { id } = await props.params;
 
     const playbook = await prisma.playbook.findUnique({

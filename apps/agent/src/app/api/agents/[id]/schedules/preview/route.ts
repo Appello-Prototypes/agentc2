@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@repo/database";
 import { getNextRunTimes } from "@/lib/schedule-utils";
+import { requireAuth } from "@/lib/authz/require-auth";
+import { requireAgentAccess } from "@/lib/authz/require-agent-access";
 
 /**
  * POST /api/agents/[id]/schedules/preview
@@ -10,6 +11,12 @@ import { getNextRunTimes } from "@/lib/schedule-utils";
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
         const { id } = await params;
+
+        const { context, response: authResponse } = await requireAuth(request);
+        if (authResponse) return authResponse;
+        const { response: accessResponse } = await requireAgentAccess(context.organizationId, id);
+        if (accessResponse) return accessResponse;
+
         const body = await request.json();
 
         const { cronExpr, timezone, count } = body;
@@ -18,19 +25,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             return NextResponse.json(
                 { success: false, error: "Missing required field: cronExpr" },
                 { status: 400 }
-            );
-        }
-
-        const agent = await prisma.agent.findFirst({
-            where: {
-                OR: [{ slug: id }, { id }]
-            }
-        });
-
-        if (!agent) {
-            return NextResponse.json(
-                { success: false, error: `Agent '${id}' not found` },
-                { status: 404 }
             );
         }
 

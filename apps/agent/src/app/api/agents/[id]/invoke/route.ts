@@ -786,12 +786,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
  */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params;
+    const { context, response: authResponse } = await requireAuth(request);
+    if (authResponse) return authResponse;
+    const { agentId, response: accessResponse } = await requireAgentAccess(
+        context.organizationId,
+        id
+    );
+    if (accessResponse) return accessResponse;
 
-    // Find agent to include in docs
-    const agent = await prisma.agent.findFirst({
-        where: {
-            OR: [{ slug: id }, { id: id }]
-        },
+    const agent = await prisma.agent.findUnique({
+        where: { id: agentId },
         select: {
             id: true,
             slug: true,
@@ -806,29 +810,22 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         }
     });
 
-    if (!agent) {
-        return NextResponse.json(
-            { success: false, error: `Agent '${id}' not found` },
-            { status: 404 }
-        );
-    }
-
     return NextResponse.json({
         success: true,
         agent: {
-            id: agent.id,
-            slug: agent.slug,
-            name: agent.name,
-            description: agent.description,
-            model: `${agent.modelProvider}/${agent.modelName}`,
-            is_active: agent.isActive,
-            requires_approval: agent.requiresApproval,
-            max_spend_usd: agent.maxSpendUsd,
-            max_steps: agent.maxSteps
+            id: agent!.id,
+            slug: agent!.slug,
+            name: agent!.name,
+            description: agent!.description,
+            model: `${agent!.modelProvider}/${agent!.modelName}`,
+            is_active: agent!.isActive,
+            requires_approval: agent!.requiresApproval,
+            max_spend_usd: agent!.maxSpendUsd,
+            max_steps: agent!.maxSteps
         },
         endpoint: {
             method: "POST",
-            path: `/api/agents/${agent.slug}/invoke`,
+            path: `/api/agents/${agent!.slug}/invoke`,
             description: "Invoke the agent with an input and receive a response",
             request_body: {
                 input: {
@@ -856,7 +853,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                 maxSteps: {
                     type: "number",
                     required: false,
-                    default: agent.maxSteps || 5,
+                    default: agent!.maxSteps || 5,
                     description: "Maximum tool-use steps"
                 },
                 triggerId: {

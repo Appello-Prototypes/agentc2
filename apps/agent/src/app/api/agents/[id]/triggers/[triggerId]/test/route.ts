@@ -7,6 +7,8 @@ import {
     createTriggerEventRecord,
     updateTriggerEventRecord
 } from "@/lib/trigger-events";
+import { requireAuth } from "@/lib/authz/require-auth";
+import { requireAgentAccess } from "@/lib/authz/require-agent-access";
 
 /**
  * POST /api/agents/[id]/triggers/[triggerId]/test
@@ -19,23 +21,18 @@ export async function POST(
 ) {
     try {
         const { id, triggerId } = await params;
+        const { context, response: authResponse } = await requireAuth(request);
+        if (authResponse) return authResponse;
+        const { agentId, response: accessResponse } = await requireAgentAccess(
+            context.organizationId,
+            id
+        );
+        if (accessResponse) return accessResponse;
+
         const body = await request.json().catch(() => ({}));
 
-        const agent = await prisma.agent.findFirst({
-            where: {
-                OR: [{ slug: id }, { id }]
-            }
-        });
-
-        if (!agent) {
-            return NextResponse.json(
-                { success: false, error: `Agent '${id}' not found` },
-                { status: 404 }
-            );
-        }
-
         const trigger = await prisma.agentTrigger.findFirst({
-            where: { id: triggerId, agentId: agent.id },
+            where: { id: triggerId, agentId },
             include: {
                 agent: {
                     select: { id: true, slug: true, isActive: true }

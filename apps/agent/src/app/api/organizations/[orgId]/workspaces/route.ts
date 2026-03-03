@@ -127,14 +127,9 @@ export async function POST(
                 .replace(/[^a-z0-9]+/g, "-")
                 .replace(/^-|-$/g, "");
 
-        // Check for slug uniqueness within org
+        // Check for slug uniqueness (globally unique)
         const existing = await prisma.workspace.findUnique({
-            where: {
-                organizationId_slug: {
-                    organizationId: organization.id,
-                    slug: wsSlug
-                }
-            }
+            where: { slug: wsSlug }
         });
 
         if (existing) {

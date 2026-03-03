@@ -1,3 +1,13 @@
+export interface BacklogTaskSnapshot {
+    title: string;
+    description?: string;
+    priority: number;
+    status: string;
+    sortOrder: number;
+    tags: string[];
+    metadata?: Record<string, unknown>;
+}
+
 export interface AgentSnapshot {
     slug: string;
     name: string;
@@ -28,6 +38,7 @@ export interface AgentSnapshot {
     guardrail: GuardrailSnapshot | null;
     testCases: TestCaseSnapshot[];
     scorecard: ScorecardSnapshot | null;
+    backlogTasks: BacklogTaskSnapshot[];
 }
 
 export interface AgentToolSnapshot {

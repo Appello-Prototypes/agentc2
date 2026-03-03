@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
-import { authenticateRequest } from "@/lib/api-auth";
+import { requireAuth } from "@/lib/authz/require-auth";
+import { requireAgentAccess } from "@/lib/authz/require-agent-access";
 import { userHasPermission } from "@/lib/organization";
 
 /**
@@ -12,35 +13,25 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     try {
         const { id } = await params;
 
-        // Find agent by slug or id
-        const agent = await prisma.agent.findFirst({
-            where: {
-                OR: [{ slug: id }, { id: id }]
-            }
-        });
-
-        if (!agent) {
-            return NextResponse.json(
-                { success: false, error: `Agent '${id}' not found` },
-                { status: 404 }
-            );
-        }
+        const { context, response: authResponse } = await requireAuth(request);
+        if (authResponse) return authResponse;
+        const { agentId, response: accessResponse } = await requireAgentAccess(
+            context.organizationId,
+            id
+        );
+        if (accessResponse) return accessResponse;
 
         // Get guardrail policy
         const guardrailPolicy = await prisma.guardrailPolicy.findUnique({
-            where: { agentId: agent.id }
+            where: { agentId }
         });
 
         // Check if the current user can toggle bypassOrgGuardrails
-        let canOverrideGuardrails = false;
-        const authContext = await authenticateRequest(request);
-        if (authContext) {
-            canOverrideGuardrails = await userHasPermission(
-                authContext.userId,
-                authContext.organizationId,
-                "guardrail_override"
-            );
-        }
+        const canOverrideGuardrails = await userHasPermission(
+            context.userId,
+            context.organizationId,
+            "guardrail_override"
+        );
 
         return NextResponse.json({
             success: true,
@@ -76,6 +67,15 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
         const { id } = await params;
+
+        const { context, response: authResponse } = await requireAuth(request);
+        if (authResponse) return authResponse;
+        const { agentId, response: accessResponse } = await requireAgentAccess(
+            context.organizationId,
+            id
+        );
+        if (accessResponse) return accessResponse;
+
         const body = await request.json();
 
         const { configJson, createdBy } = body;
@@ -87,32 +87,11 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             );
         }
 
-        // Find agent by slug or id
-        const agent = await prisma.agent.findFirst({
-            where: {
-                OR: [{ slug: id }, { id: id }]
-            }
-        });
-
-        if (!agent) {
-            return NextResponse.json(
-                { success: false, error: `Agent '${id}' not found` },
-                { status: 404 }
-            );
-        }
-
         // Guard: bypassOrgGuardrails requires guardrail_override permission
         if (configJson.bypassOrgGuardrails) {
-            const authContext = await authenticateRequest(request);
-            if (!authContext) {
-                return NextResponse.json(
-                    { success: false, error: "Authentication required to set guardrail override" },
-                    { status: 401 }
-                );
-            }
             const hasPermission = await userHasPermission(
-                authContext.userId,
-                authContext.organizationId,
+                context.userId,
+                context.organizationId,
                 "guardrail_override"
             );
             if (!hasPermission) {
@@ -128,22 +107,22 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
         // Get existing policy for version increment
         const existingPolicy = await prisma.guardrailPolicy.findUnique({
-            where: { agentId: agent.id }
+            where: { agentId }
         });
 
         const newVersion = (existingPolicy?.version || 0) + 1;
 
         // Upsert guardrail policy
         const guardrailPolicy = await prisma.guardrailPolicy.upsert({
-            where: { agentId: agent.id },
+            where: { agentId },
             update: {
                 configJson,
                 version: newVersion,
                 createdBy
             },
             create: {
-                agentId: agent.id,
-                tenantId: agent.tenantId,
+                agentId,
+                tenantId: context.organizationId,
                 configJson,
                 version: 1,
                 createdBy
@@ -153,13 +132,13 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         // Create audit log
         await prisma.auditLog.create({
             data: {
-                tenantId: agent.tenantId,
+                tenantId: context.organizationId,
                 actorId: createdBy,
                 action: "GUARDRAIL_UPDATE",
                 entityType: "GuardrailPolicy",
                 entityId: guardrailPolicy.id,
                 metadata: {
-                    agentId: agent.id,
+                    agentId,
                     version: guardrailPolicy.version
                 }
             }

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
-
 import { inngest } from "@/lib/inngest";
+import { requireAuth } from "@/lib/authz/require-auth";
+import { requireAgentAccess } from "@/lib/authz/require-agent-access";
 
 /**
  * GET /api/agents/[id]/evaluations
@@ -11,8 +12,15 @@ import { inngest } from "@/lib/inngest";
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
         const { id } = await params;
-        const { searchParams } = new URL(request.url);
+        const { context, response: authResponse } = await requireAuth(request);
+        if (authResponse) return authResponse;
+        const { agentId, response: accessResponse } = await requireAgentAccess(
+            context.organizationId,
+            id
+        );
+        if (accessResponse) return accessResponse;
 
+        const { searchParams } = new URL(request.url);
         const from = searchParams.get("from");
         const to = searchParams.get("to");
         const limit = Math.min(parseInt(searchParams.get("limit") || "50"), 200);
@@ -28,20 +36,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         const trendDays = trendRange === "7d" ? 7 : trendRange === "90d" ? 90 : 30;
         const trendStartDate = new Date(Date.now() - trendDays * 24 * 60 * 60 * 1000);
 
-        // Find agent by slug or id
-        const agent = await prisma.agent.findFirst({
-            where: {
-                OR: [{ slug: id }, { id: id }]
-            }
-        });
-
-        if (!agent) {
-            return NextResponse.json(
-                { success: false, error: `Agent '${id}' not found` },
-                { status: 404 }
-            );
-        }
-
         // Build source filter for runs (evaluations are linked to runs)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         let runSourceFilter: any = undefined;
@@ -55,7 +49,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         // Build where clause
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const where: any = {
-            agentId: agent.id,
+            agentId,
             createdAt: {
                 gte: startDate,
                 lte: endDate
@@ -89,20 +83,20 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                 }),
                 // Get feedback themes for this agent
                 prisma.evaluationTheme.findMany({
-                    where: { agentId: agent.id },
+                    where: { agentId },
                     orderBy: { count: "desc" },
                     take: 10
                 }),
                 // Get AI insights for this agent
                 prisma.insight.findMany({
-                    where: { agentId: agent.id },
+                    where: { agentId },
                     orderBy: { createdAt: "desc" },
                     take: 10
                 }),
                 // Get quality metrics for trends (using trendRange)
                 prisma.agentQualityMetricDaily.findMany({
                     where: {
-                        agentId: agent.id,
+                        agentId,
                         date: {
                             gte: trendStartDate,
                             lte: endDate
@@ -113,7 +107,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                 // Get learning sessions for trend annotations
                 prisma.learningSession.findMany({
                     where: {
-                        agentId: agent.id,
+                        agentId,
                         status: { in: ["PROMOTED", "APPROVED", "REJECTED"] },
                         createdAt: {
                             gte: trendStartDate,
@@ -131,7 +125,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                 // Get agent version changes for trend annotations
                 prisma.agentVersion.findMany({
                     where: {
-                        agentId: agent.id,
+                        agentId,
                         createdAt: {
                             gte: trendStartDate,
                             lte: endDate
@@ -323,28 +317,22 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
         const { id } = await params;
+        const { context, response: authResponse } = await requireAuth(request);
+        if (authResponse) return authResponse;
+        const { agentId, response: accessResponse } = await requireAgentAccess(
+            context.organizationId,
+            id
+        );
+        if (accessResponse) return accessResponse;
+
         const body = await request.json().catch(() => ({}));
         const limit = Math.min(body.limit || 10, 50);
         const runIds: string[] | undefined = body.runIds;
 
-        // Find agent by slug or id
-        const agent = await prisma.agent.findFirst({
-            where: {
-                OR: [{ slug: id }, { id: id }]
-            }
-        });
-
-        if (!agent) {
-            return NextResponse.json(
-                { success: false, error: `Agent '${id}' not found` },
-                { status: 404 }
-            );
-        }
-
         // Find runs without evaluations
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const where: any = {
-            agentId: agent.id,
+            agentId,
             status: "COMPLETED",
             evaluation: null
         };
@@ -396,7 +384,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 // Trigger evaluation via Inngest (async, using scorer factory)
                 await inngest.send({
                     name: "run/evaluate",
-                    data: { runId: run.id, agentId: agent.id }
+                    data: { runId: run.id, agentId }
                 });
 
                 results.push({

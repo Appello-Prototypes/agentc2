@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
+import { requireAuth } from "@/lib/authz/require-auth";
+import { requireAgentAccess } from "@/lib/authz/require-agent-access";
 
 /**
  * GET /api/agents/[id]/output-actions
@@ -10,19 +12,16 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     try {
         const { id } = await params;
 
-        const agent = await prisma.agent.findFirst({
-            where: { OR: [{ slug: id }, { id }] }
-        });
-
-        if (!agent) {
-            return NextResponse.json(
-                { success: false, error: `Agent '${id}' not found` },
-                { status: 404 }
-            );
-        }
+        const { context, response: authResponse } = await requireAuth(request);
+        if (authResponse) return authResponse;
+        const { agentId, response: accessResponse } = await requireAgentAccess(
+            context.organizationId,
+            id
+        );
+        if (accessResponse) return accessResponse;
 
         const outputActions = await prisma.outputAction.findMany({
-            where: { agentId: agent.id },
+            where: { agentId },
             orderBy: { createdAt: "desc" }
         });
 
@@ -60,6 +59,15 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
         const { id } = await params;
+
+        const { context, response: authResponse } = await requireAuth(request);
+        if (authResponse) return authResponse;
+        const { agentId, response: accessResponse } = await requireAgentAccess(
+            context.organizationId,
+            id
+        );
+        if (accessResponse) return accessResponse;
+
         const body = await request.json();
 
         const { name, type, configJson, isActive } = body;
@@ -85,21 +93,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             );
         }
 
-        const agent = await prisma.agent.findFirst({
-            where: { OR: [{ slug: id }, { id }] }
-        });
-
-        if (!agent) {
-            return NextResponse.json(
-                { success: false, error: `Agent '${id}' not found` },
-                { status: 404 }
-            );
-        }
-
         const outputAction = await prisma.outputAction.create({
             data: {
-                agentId: agent.id,
-                tenantId: agent.tenantId,
+                agentId,
+                tenantId: context.organizationId,
                 name,
                 type,
                 configJson,

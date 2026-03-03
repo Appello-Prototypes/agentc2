@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
 import { mergeTriggerInputMapping, validateTriggerInputMapping } from "@/lib/unified-triggers";
+import { requireAuth } from "@/lib/authz/require-auth";
+import { requireAgentAccess } from "@/lib/authz/require-agent-access";
 
 /**
  * PATCH /api/agents/[id]/triggers/[triggerId]
@@ -13,26 +15,21 @@ export async function PATCH(
 ) {
     try {
         const { id, triggerId } = await params;
+        const { context, response: authResponse } = await requireAuth(request);
+        if (authResponse) return authResponse;
+        const { agentId, response: accessResponse } = await requireAgentAccess(
+            context.organizationId,
+            id
+        );
+        if (accessResponse) return accessResponse;
+
         const body = await request.json();
 
         const { name, description, eventName, filter, inputMapping, isActive, triggerType, color } =
             body;
 
-        const agent = await prisma.agent.findFirst({
-            where: {
-                OR: [{ slug: id }, { id }]
-            }
-        });
-
-        if (!agent) {
-            return NextResponse.json(
-                { success: false, error: `Agent '${id}' not found` },
-                { status: 404 }
-            );
-        }
-
         const trigger = await prisma.agentTrigger.findFirst({
-            where: { id: triggerId, agentId: agent.id }
+            where: { id: triggerId, agentId }
         });
 
         if (!trigger) {
@@ -144,22 +141,16 @@ export async function DELETE(
 ) {
     try {
         const { id, triggerId } = await params;
-
-        const agent = await prisma.agent.findFirst({
-            where: {
-                OR: [{ slug: id }, { id }]
-            }
-        });
-
-        if (!agent) {
-            return NextResponse.json(
-                { success: false, error: `Agent '${id}' not found` },
-                { status: 404 }
-            );
-        }
+        const { context, response: authResponse } = await requireAuth(request);
+        if (authResponse) return authResponse;
+        const { agentId, response: accessResponse } = await requireAgentAccess(
+            context.organizationId,
+            id
+        );
+        if (accessResponse) return accessResponse;
 
         const trigger = await prisma.agentTrigger.findFirst({
-            where: { id: triggerId, agentId: agent.id }
+            where: { id: triggerId, agentId }
         });
 
         if (!trigger) {

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
+import { requireAuth } from "@/lib/authz/require-auth";
+import { requireAgentAccess } from "@/lib/authz/require-agent-access";
 
 /**
  * PATCH /api/agents/[id]/output-actions/[actionId]
@@ -12,21 +14,19 @@ export async function PATCH(
 ) {
     try {
         const { id, actionId } = await params;
+
+        const { context, response: authResponse } = await requireAuth(request);
+        if (authResponse) return authResponse;
+        const { agentId, response: accessResponse } = await requireAgentAccess(
+            context.organizationId,
+            id
+        );
+        if (accessResponse) return accessResponse;
+
         const body = await request.json();
 
-        const agent = await prisma.agent.findFirst({
-            where: { OR: [{ slug: id }, { id }] }
-        });
-
-        if (!agent) {
-            return NextResponse.json(
-                { success: false, error: `Agent '${id}' not found` },
-                { status: 404 }
-            );
-        }
-
         const existing = await prisma.outputAction.findFirst({
-            where: { id: actionId, agentId: agent.id }
+            where: { id: actionId, agentId }
         });
 
         if (!existing) {
@@ -97,19 +97,16 @@ export async function DELETE(
     try {
         const { id, actionId } = await params;
 
-        const agent = await prisma.agent.findFirst({
-            where: { OR: [{ slug: id }, { id }] }
-        });
-
-        if (!agent) {
-            return NextResponse.json(
-                { success: false, error: `Agent '${id}' not found` },
-                { status: 404 }
-            );
-        }
+        const { context, response: authResponse } = await requireAuth(request);
+        if (authResponse) return authResponse;
+        const { agentId, response: accessResponse } = await requireAgentAccess(
+            context.organizationId,
+            id
+        );
+        if (accessResponse) return accessResponse;
 
         const existing = await prisma.outputAction.findFirst({
-            where: { id: actionId, agentId: agent.id }
+            where: { id: actionId, agentId }
         });
 
         if (!existing) {

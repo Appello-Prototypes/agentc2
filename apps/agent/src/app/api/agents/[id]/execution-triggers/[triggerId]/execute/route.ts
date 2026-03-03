@@ -13,6 +13,8 @@ import {
     type TriggerInputDefaults
 } from "@/lib/unified-triggers";
 import { createTriggerEventRecord } from "@/lib/trigger-events";
+import { requireAuth } from "@/lib/authz/require-auth";
+import { requireAgentAccess } from "@/lib/authz/require-agent-access";
 
 /**
  * POST /api/agents/[id]/execution-triggers/[triggerId]/execute
@@ -25,6 +27,14 @@ export async function POST(
 ) {
     try {
         const { id, triggerId } = await params;
+        const { context, response: authResponse } = await requireAuth(request);
+        if (authResponse) return authResponse;
+        const { agentId, response: accessResponse } = await requireAgentAccess(
+            context.organizationId,
+            id
+        );
+        if (accessResponse) return accessResponse;
+
         const parsed = parseUnifiedTriggerId(triggerId);
         if (!parsed) {
             return NextResponse.json(
@@ -48,10 +58,8 @@ export async function POST(
             environment?: string;
         };
 
-        const agent = await prisma.agent.findFirst({
-            where: {
-                OR: [{ slug: id }, { id }]
-            },
+        const agent = await prisma.agent.findUnique({
+            where: { id: agentId },
             select: {
                 id: true,
                 slug: true,
@@ -60,14 +68,7 @@ export async function POST(
             }
         });
 
-        if (!agent) {
-            return NextResponse.json(
-                { success: false, error: `Agent '${id}' not found` },
-                { status: 404 }
-            );
-        }
-
-        if (!agent.isActive) {
+        if (!agent!.isActive) {
             return NextResponse.json(
                 { success: false, error: `Agent '${id}' is not active` },
                 { status: 403 }
@@ -76,7 +77,7 @@ export async function POST(
 
         if (parsed.source === "schedule") {
             const schedule = await prisma.agentSchedule.findFirst({
-                where: { id: parsed.id, agentId: agent.id }
+                where: { id: parsed.id, agentId }
             });
 
             if (!schedule) {
@@ -114,8 +115,8 @@ export async function POST(
             };
 
             const runHandle = await startRun({
-                agentId: agent.id,
-                agentSlug: agent.slug,
+                agentId,
+                agentSlug: agent!.slug,
                 input,
                 source: resolveRunSource("scheduled"),
                 triggerType: resolveRunTriggerType("scheduled"),
@@ -134,8 +135,8 @@ export async function POST(
             // Record trigger event for unified triggers dashboard
             try {
                 await createTriggerEventRecord({
-                    agentId: agent.id,
-                    workspaceId: agent.workspaceId || schedule.workspaceId || null,
+                    agentId,
+                    workspaceId: agent!.workspaceId || schedule.workspaceId || null,
                     runId: runHandle.runId,
                     sourceType: "schedule",
                     triggerType: "schedule",
@@ -156,8 +157,8 @@ export async function POST(
                 name: "agent/invoke.async",
                 data: {
                     runId: runHandle.runId,
-                    agentId: agent.id,
-                    agentSlug: agent.slug,
+                    agentId,
+                    agentSlug: agent!.slug,
                     input,
                     context: mergedContext,
                     maxSteps
@@ -171,7 +172,7 @@ export async function POST(
         }
 
         const trigger = await prisma.agentTrigger.findFirst({
-            where: { id: parsed.id, agentId: agent.id },
+            where: { id: parsed.id, agentId },
             include: {
                 agent: { select: { id: true, slug: true, isActive: true } }
             }
@@ -276,7 +277,7 @@ export async function POST(
             await createTriggerEventRecord({
                 triggerId: trigger.id,
                 agentId: trigger.agent.id,
-                workspaceId: trigger.workspaceId || agent.workspaceId || null,
+                workspaceId: trigger.workspaceId || agent!.workspaceId || null,
                 runId: runHandle.runId,
                 sourceType: trigger.triggerType,
                 triggerType: trigger.triggerType,

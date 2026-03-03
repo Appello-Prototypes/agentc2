@@ -9,17 +9,16 @@ interface PlaybookReviewActionsProps {
     currentStatus: string;
 }
 
-const TRANSITIONS: Record<string, Array<{ status: string; label: string; variant: string; icon: typeof CheckIcon }>> = {
+const TRANSITIONS: Record<
+    string,
+    Array<{ status: string; label: string; variant: string; icon: typeof CheckIcon }>
+> = {
     PENDING_REVIEW: [
         { status: "PUBLISHED", label: "Approve & Publish", variant: "success", icon: CheckIcon },
         { status: "DRAFT", label: "Reject", variant: "destructive", icon: XIcon }
     ],
-    PUBLISHED: [
-        { status: "SUSPENDED", label: "Suspend", variant: "destructive", icon: PauseIcon }
-    ],
-    SUSPENDED: [
-        { status: "PUBLISHED", label: "Reinstate", variant: "success", icon: PlayIcon }
-    ]
+    PUBLISHED: [{ status: "SUSPENDED", label: "Suspend", variant: "destructive", icon: PauseIcon }],
+    SUSPENDED: [{ status: "PUBLISHED", label: "Reinstate", variant: "success", icon: PlayIcon }]
 };
 
 export function PlaybookReviewActions({ playbookId, currentStatus }: PlaybookReviewActionsProps) {

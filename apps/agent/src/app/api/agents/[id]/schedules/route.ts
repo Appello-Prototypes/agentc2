@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
 import { getNextRunAt } from "@/lib/schedule-utils";
+import { requireAuth } from "@/lib/authz/require-auth";
+import { requireAgentAccess } from "@/lib/authz/require-agent-access";
 
 /**
  * GET /api/agents/[id]/schedules
@@ -11,23 +13,17 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     try {
         const { id } = await params;
 
-        // Find agent
-        const agent = await prisma.agent.findFirst({
-            where: {
-                OR: [{ slug: id }, { id: id }]
-            }
-        });
-
-        if (!agent) {
-            return NextResponse.json(
-                { success: false, error: `Agent '${id}' not found` },
-                { status: 404 }
-            );
-        }
+        const { context, response: authResponse } = await requireAuth(request);
+        if (authResponse) return authResponse;
+        const { agentId, response: accessResponse } = await requireAgentAccess(
+            context.organizationId,
+            id
+        );
+        if (accessResponse) return accessResponse;
 
         // Get schedules
         const schedules = await prisma.agentSchedule.findMany({
-            where: { agentId: agent.id },
+            where: { agentId },
             orderBy: { createdAt: "desc" }
         });
 
@@ -71,6 +67,15 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
         const { id } = await params;
+
+        const { context: authContext, response: authResponse } = await requireAuth(request);
+        if (authResponse) return authResponse;
+        const { agentId, response: accessResponse } = await requireAgentAccess(
+            authContext.organizationId,
+            id
+        );
+        if (accessResponse) return accessResponse;
+
         const body = await request.json();
 
         const {
@@ -96,20 +101,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
         const resolvedTimezone = timezone || "UTC";
 
-        // Find agent
-        const agent = await prisma.agent.findFirst({
-            where: {
-                OR: [{ slug: id }, { id: id }]
-            }
-        });
-
-        if (!agent) {
-            return NextResponse.json(
-                { success: false, error: `Agent '${id}' not found` },
-                { status: 404 }
-            );
-        }
-
         let nextRunAt: Date;
         try {
             nextRunAt = getNextRunAt(cronExpr, resolvedTimezone, new Date());
@@ -131,11 +122,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 ? { input, context, maxSteps, environment }
                 : null;
 
+        const agentRecord = await prisma.agent.findUnique({
+            where: { id: agentId },
+            select: { workspaceId: true }
+        });
+
         // Create schedule
         const schedule = await prisma.agentSchedule.create({
             data: {
-                agentId: agent.id,
-                workspaceId: agent.workspaceId,
+                agentId,
+                workspaceId: agentRecord!.workspaceId,
                 name,
                 description,
                 task: task || null,

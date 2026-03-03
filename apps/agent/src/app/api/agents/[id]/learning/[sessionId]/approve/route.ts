@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
 import { inngest } from "@/lib/inngest";
+import { requireAuth } from "@/lib/authz/require-auth";
+import { requireAgentAccess } from "@/lib/authz/require-agent-access";
 
 /**
  * POST /api/agents/[id]/learning/[sessionId]/approve
@@ -14,6 +16,14 @@ export async function POST(
 ) {
     try {
         const { id, sessionId } = await params;
+        const { context, response: authResponse } = await requireAuth(request);
+        if (authResponse) return authResponse;
+        const { agentId, response: accessResponse } = await requireAgentAccess(
+            context.organizationId,
+            id
+        );
+        if (accessResponse) return accessResponse;
+
         const body = await request.json();
 
         if (!body.approvedBy) {
@@ -25,25 +35,11 @@ export async function POST(
 
         const { approvedBy, rationale } = body;
 
-        // Find agent by slug or id
-        const agent = await prisma.agent.findFirst({
-            where: {
-                OR: [{ slug: id }, { id: id }]
-            }
-        });
-
-        if (!agent) {
-            return NextResponse.json(
-                { success: false, error: `Agent '${id}' not found` },
-                { status: 404 }
-            );
-        }
-
         // Get session
         const session = await prisma.learningSession.findFirst({
             where: {
                 id: sessionId,
-                agentId: agent.id
+                agentId
             },
             include: {
                 proposals: {

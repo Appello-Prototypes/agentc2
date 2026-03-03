@@ -1,5 +1,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@repo/database";
+import { requireAuth } from "@/lib/authz/require-auth";
+import { requireAgentAccess } from "@/lib/authz/require-agent-access";
 
 /**
  * GET /api/agents/[id]/runs/[runId]/stream
@@ -21,23 +23,16 @@ export async function GET(
 ) {
     const { id, runId } = await params;
 
-    const agent = await prisma.agent.findFirst({
-        where: {
-            OR: [{ slug: id }, { id }],
-            isActive: true
-        },
-        select: { id: true }
-    });
-
-    if (!agent) {
-        return new Response(JSON.stringify({ error: "Agent not found" }), {
-            status: 404,
-            headers: { "Content-Type": "application/json" }
-        });
-    }
+    const { context, response: authResponse } = await requireAuth(request);
+    if (authResponse) return authResponse;
+    const { agentId, response: accessResponse } = await requireAgentAccess(
+        context.organizationId,
+        id
+    );
+    if (accessResponse) return accessResponse;
 
     const run = await prisma.agentRun.findFirst({
-        where: { id: runId, agentId: agent.id },
+        where: { id: runId, agentId },
         select: { id: true, status: true }
     });
 

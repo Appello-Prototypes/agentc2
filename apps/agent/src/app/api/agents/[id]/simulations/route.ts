@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
 import { inngest } from "@/lib/inngest";
 import { createTriggerEventRecord } from "@/lib/trigger-events";
+import { requireAuth } from "@/lib/authz/require-auth";
+import { requireAgentAccess } from "@/lib/authz/require-agent-access";
 
 /**
  * GET /api/agents/[id]/simulations
@@ -11,29 +13,21 @@ import { createTriggerEventRecord } from "@/lib/trigger-events";
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
         const { id } = await params;
-        const { searchParams } = new URL(request.url);
+        const { context, response: authResponse } = await requireAuth(request);
+        if (authResponse) return authResponse;
+        const { agentId, response: accessResponse } = await requireAgentAccess(
+            context.organizationId,
+            id
+        );
+        if (accessResponse) return accessResponse;
 
+        const { searchParams } = new URL(request.url);
         const cursor = searchParams.get("cursor");
         const limit = Math.min(parseInt(searchParams.get("limit") || "20"), 100);
 
-        // Find agent by slug or id
-        const agent = await prisma.agent.findFirst({
-            where: {
-                OR: [{ slug: id }, { id: id }],
-                isActive: true
-            }
-        });
-
-        if (!agent) {
-            return NextResponse.json(
-                { success: false, error: `Agent '${id}' not found` },
-                { status: 404 }
-            );
-        }
-
         // Build query
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const where: any = { agentId: agent.id };
+        const where: any = { agentId };
 
         if (cursor) {
             where.id = { lt: cursor };
@@ -54,7 +48,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
         // Get total count
         const total = await prisma.simulationSession.count({
-            where: { agentId: agent.id }
+            where: { agentId }
         });
 
         return NextResponse.json({
@@ -101,8 +95,15 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
         const { id } = await params;
-        const body = await request.json();
+        const { context, response: authResponse } = await requireAuth(request);
+        if (authResponse) return authResponse;
+        const { agentId, response: accessResponse } = await requireAgentAccess(
+            context.organizationId,
+            id
+        );
+        if (accessResponse) return accessResponse;
 
+        const body = await request.json();
         const { theme, count = 100, concurrency = 5 } = body;
 
         if (!theme || typeof theme !== "string" || theme.trim().length === 0) {
@@ -116,25 +117,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         const targetCount = Math.max(1, Math.min(1000, parseInt(String(count)) || 100));
         const validConcurrency = Math.max(1, Math.min(10, parseInt(String(concurrency)) || 5));
 
-        // Find agent by slug or id
-        const agent = await prisma.agent.findFirst({
-            where: {
-                OR: [{ slug: id }, { id: id }],
-                isActive: true
-            }
+        const agent = await prisma.agent.findUnique({
+            where: { id: agentId },
+            select: { slug: true, workspaceId: true }
         });
-
-        if (!agent) {
-            return NextResponse.json(
-                { success: false, error: `Agent '${id}' not found` },
-                { status: 404 }
-            );
-        }
 
         // Create simulation session
         const session = await prisma.simulationSession.create({
             data: {
-                agentId: agent.id,
+                agentId,
                 theme: theme.trim(),
                 status: "PENDING",
                 targetCount,
@@ -145,8 +136,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         // Record trigger event for unified triggers dashboard
         try {
             await createTriggerEventRecord({
-                agentId: agent.id,
-                workspaceId: agent.workspaceId || null,
+                agentId,
+                workspaceId: agent?.workspaceId || null,
                 sourceType: "simulation",
                 entityType: "agent",
                 payload: { theme: theme.trim(), targetCount, concurrency: validConcurrency },
@@ -165,7 +156,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             name: "simulation/session.start",
             data: {
                 sessionId: session.id,
-                agentId: agent.id,
+                agentId,
                 theme: theme.trim(),
                 targetCount,
                 concurrency: validConcurrency
@@ -173,7 +164,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         });
 
         console.log(
-            `[Simulations] Started session ${session.id} for agent ${agent.slug} with ${targetCount} conversations`
+            `[Simulations] Started session ${session.id} for agent ${agent?.slug} with ${targetCount} conversations`
         );
 
         return NextResponse.json({

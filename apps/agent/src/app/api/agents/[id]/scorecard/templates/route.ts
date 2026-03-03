@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma, Prisma } from "@repo/database";
 import { SCORECARD_TEMPLATES } from "@repo/agentc2/scorers";
+import { requireAuth } from "@/lib/authz/require-auth";
+import { requireAgentAccess } from "@/lib/authz/require-agent-access";
 
 /**
  * GET /api/agents/[id]/scorecard/templates
@@ -8,8 +10,17 @@ import { SCORECARD_TEMPLATES } from "@repo/agentc2/scorers";
  * Lists all available scorecard templates.
  * Also seeds templates into the database if not yet created.
  */
-export async function GET() {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
+        const { id } = await params;
+        const { context, response: authResponse } = await requireAuth(request);
+        if (authResponse) return authResponse;
+        const { agentId, response: accessResponse } = await requireAgentAccess(
+            context.organizationId,
+            id
+        );
+        if (accessResponse) return accessResponse;
+
         // Ensure templates are seeded in the database
         const existingCount = await prisma.scorecardTemplate.count();
         if (existingCount === 0) {
@@ -66,6 +77,14 @@ export async function GET() {
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
         const { id } = await params;
+        const { context, response: authResponse } = await requireAuth(request);
+        if (authResponse) return authResponse;
+        const { agentId, response: accessResponse } = await requireAgentAccess(
+            context.organizationId,
+            id
+        );
+        if (accessResponse) return accessResponse;
+
         const body = await request.json();
         const { templateId } = body as { templateId: string };
 
@@ -76,16 +95,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             );
         }
 
-        const agent = await prisma.agent.findFirst({
-            where: { OR: [{ slug: id }, { id }] }
+        const agent = await prisma.agent.findUnique({
+            where: { id: agentId },
+            select: { tenantId: true }
         });
-
-        if (!agent) {
-            return NextResponse.json(
-                { success: false, error: `Agent '${id}' not found` },
-                { status: 404 }
-            );
-        }
 
         const template = await prisma.scorecardTemplate.findUnique({
             where: { id: templateId }
@@ -103,13 +116,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
         // Check if scorecard exists
         const existing = await prisma.agentScorecard.findUnique({
-            where: { agentId: agent.id }
+            where: { agentId }
         });
 
         let scorecard;
         if (existing) {
             scorecard = await prisma.agentScorecard.update({
-                where: { agentId: agent.id },
+                where: { agentId },
                 data: {
                     criteria: template.criteria as Prisma.InputJsonValue,
                     templateId: template.id,
@@ -119,8 +132,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         } else {
             scorecard = await prisma.agentScorecard.create({
                 data: {
-                    agentId: agent.id,
-                    tenantId: agent.tenantId,
+                    agentId,
+                    tenantId: agent!.tenantId,
                     criteria: template.criteria as Prisma.InputJsonValue,
                     templateId: template.id
                 }

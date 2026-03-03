@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma, Prisma } from "@repo/database";
 import { validateCriteriaWeights } from "@repo/agentc2/scorers";
 import type { ScorecardCriterion } from "@repo/agentc2/scorers";
+import { requireAuth } from "@/lib/authz/require-auth";
+import { requireAgentAccess } from "@/lib/authz/require-agent-access";
 
 /**
  * GET /api/agents/[id]/scorecard
@@ -11,20 +13,16 @@ import type { ScorecardCriterion } from "@repo/agentc2/scorers";
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
         const { id } = await params;
-
-        const agent = await prisma.agent.findFirst({
-            where: { OR: [{ slug: id }, { id }] }
-        });
-
-        if (!agent) {
-            return NextResponse.json(
-                { success: false, error: `Agent '${id}' not found` },
-                { status: 404 }
-            );
-        }
+        const { context, response: authResponse } = await requireAuth(request);
+        if (authResponse) return authResponse;
+        const { agentId, response: accessResponse } = await requireAgentAccess(
+            context.organizationId,
+            id
+        );
+        if (accessResponse) return accessResponse;
 
         const scorecard = await prisma.agentScorecard.findUnique({
-            where: { agentId: agent.id },
+            where: { agentId },
             include: { template: true }
         });
 
@@ -72,6 +70,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
         const { id } = await params;
+        const { context, response: authResponse } = await requireAuth(request);
+        if (authResponse) return authResponse;
+        const { agentId, response: accessResponse } = await requireAgentAccess(
+            context.organizationId,
+            id
+        );
+        if (accessResponse) return accessResponse;
+
         const body = await request.json();
         const { criteria, samplingRate, auditorModel, evaluateTurns } = body as {
             criteria: ScorecardCriterion[];
@@ -96,27 +102,21 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             return NextResponse.json({ success: false, error: validation.error }, { status: 400 });
         }
 
-        const agent = await prisma.agent.findFirst({
-            where: { OR: [{ slug: id }, { id }] }
+        const agent = await prisma.agent.findUnique({
+            where: { id: agentId },
+            select: { tenantId: true }
         });
-
-        if (!agent) {
-            return NextResponse.json(
-                { success: false, error: `Agent '${id}' not found` },
-                { status: 404 }
-            );
-        }
 
         // Check if scorecard exists
         const existing = await prisma.agentScorecard.findUnique({
-            where: { agentId: agent.id }
+            where: { agentId }
         });
 
         let scorecard;
         if (existing) {
             // Update: bump version
             scorecard = await prisma.agentScorecard.update({
-                where: { agentId: agent.id },
+                where: { agentId },
                 data: {
                     criteria: criteria as unknown as Prisma.InputJsonValue,
                     version: existing.version + 1,
@@ -129,8 +129,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             // Create new
             scorecard = await prisma.agentScorecard.create({
                 data: {
-                    agentId: agent.id,
-                    tenantId: agent.tenantId,
+                    agentId,
+                    tenantId: agent!.tenantId,
                     criteria: criteria as unknown as Prisma.InputJsonValue,
                     samplingRate: samplingRate ?? 1.0,
                     auditorModel: auditorModel ?? "gpt-4o-mini",
@@ -175,20 +175,16 @@ export async function DELETE(
 ) {
     try {
         const { id } = await params;
-
-        const agent = await prisma.agent.findFirst({
-            where: { OR: [{ slug: id }, { id }] }
-        });
-
-        if (!agent) {
-            return NextResponse.json(
-                { success: false, error: `Agent '${id}' not found` },
-                { status: 404 }
-            );
-        }
+        const { context, response: authResponse } = await requireAuth(request);
+        if (authResponse) return authResponse;
+        const { agentId, response: accessResponse } = await requireAgentAccess(
+            context.organizationId,
+            id
+        );
+        if (accessResponse) return accessResponse;
 
         const existing = await prisma.agentScorecard.findUnique({
-            where: { agentId: agent.id }
+            where: { agentId }
         });
 
         if (!existing) {
@@ -202,7 +198,7 @@ export async function DELETE(
         }
 
         await prisma.agentScorecard.delete({
-            where: { agentId: agent.id }
+            where: { agentId }
         });
 
         return NextResponse.json({

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
+import { requireAuth } from "@/lib/authz/require-auth";
+import { requireAgentAccess } from "@/lib/authz/require-agent-access";
 
 /**
  * GET /api/agents/[id]/calibration
@@ -9,6 +11,14 @@ import { prisma } from "@repo/database";
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
         const { id } = await params;
+        const { context, response: authResponse } = await requireAuth(request);
+        if (authResponse) return authResponse;
+        const { agentId, response: accessResponse } = await requireAgentAccess(
+            context.organizationId,
+            id
+        );
+        if (accessResponse) return accessResponse;
+
         const { searchParams } = new URL(request.url);
 
         const from = searchParams.get("from");
@@ -17,20 +27,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         const startDate = from ? new Date(from) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
         const endDate = to ? new Date(to) : new Date();
 
-        const agent = await prisma.agent.findFirst({
-            where: { OR: [{ slug: id }, { id }] }
-        });
-
-        if (!agent) {
-            return NextResponse.json(
-                { success: false, error: `Agent '${id}' not found` },
-                { status: 404 }
-            );
-        }
-
         const checks = await prisma.calibrationCheck.findMany({
             where: {
-                agentId: agent.id,
+                agentId,
                 createdAt: {
                     gte: startDate,
                     lte: endDate

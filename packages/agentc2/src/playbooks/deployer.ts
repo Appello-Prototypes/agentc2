@@ -2,6 +2,7 @@ import { prisma, Prisma } from "@repo/database";
 import type { DeployPlaybookOptions, PlaybookManifest } from "./types";
 import { validateManifest } from "./manifest";
 import { mapIntegrations } from "./integration-mapper";
+import { reembedDocument } from "../documents/service";
 
 function jsonOrUndefined(val: unknown): Prisma.InputJsonValue | undefined {
     if (val === null || val === undefined) return undefined;
@@ -55,18 +56,20 @@ export async function deployPlaybook(opts: DeployPlaybookOptions) {
             data: { integrationStatus: integrationStatus as unknown as Prisma.InputJsonValue }
         });
 
+        const targetOrg = await prisma.organization.findUniqueOrThrow({
+            where: { id: opts.targetOrgId },
+            select: { slug: true }
+        });
+
         const existingAgents = await prisma.agent.findMany({
-            where: { workspaceId: opts.targetWorkspaceId },
             select: { slug: true }
         });
         const existingAgentSlugs = new Set(existingAgents.map((a) => a.slug));
         const suffix = installation.id.slice(-6);
 
         const resolveSlug = (baseSlug: string, existingSlugs: Set<string>): string => {
-            if (opts.cleanSlugs) {
-                return generateUniqueSlug(baseSlug, existingSlugs);
-            }
-            return `${baseSlug}-${suffix}`;
+            const orgSuffixed = `${baseSlug}-${targetOrg.slug}`;
+            return generateUniqueSlug(orgSuffixed, existingSlugs);
         };
 
         const agentSlugMap = new Map<string, string>();
@@ -77,10 +80,7 @@ export async function deployPlaybook(opts: DeployPlaybookOptions) {
         const createdNetworkIds: string[] = [];
         const createdCampaignIds: string[] = [];
 
-        // Preload existing slugs for clean slug mode.
-        // Document, Workflow, Network, Campaign have globally unique slugs,
-        // so we must query all existing slugs (not just the target workspace).
-        // Skills use @@unique([workspaceId, slug]) so per-workspace is fine.
+        // Preload existing slugs -- all entity slugs are now globally unique.
         const existingDocSlugs = new Set<string>();
         const existingSkillSlugs = new Set<string>();
         const existingWfSlugs = new Set<string>();
@@ -89,10 +89,7 @@ export async function deployPlaybook(opts: DeployPlaybookOptions) {
         if (opts.cleanSlugs) {
             const [docs, skills, wfs, nets, campaigns] = await Promise.all([
                 prisma.document.findMany({ select: { slug: true } }),
-                prisma.skill.findMany({
-                    where: { workspaceId: opts.targetWorkspaceId },
-                    select: { slug: true }
-                }),
+                prisma.skill.findMany({ select: { slug: true } }),
                 prisma.workflow.findMany({ select: { slug: true } }),
                 prisma.network.findMany({ select: { slug: true } }),
                 prisma.campaign.findMany({ select: { slug: true } })
@@ -126,6 +123,13 @@ export async function deployPlaybook(opts: DeployPlaybookOptions) {
             });
             createdDocumentIds.push(doc.id);
             docSlugToId.set(docSnapshot.slug, doc.id);
+
+            // Embed document into RAG vector store
+            try {
+                await reembedDocument(doc.id);
+            } catch (embedError) {
+                console.warn(`[deployPlaybook] Failed to embed doc ${docSlug}:`, embedError);
+            }
         }
 
         // 2. Create skills
@@ -173,7 +177,8 @@ export async function deployPlaybook(opts: DeployPlaybookOptions) {
 
         // 3. Create agents
         for (const agentSnapshot of manifest.agents) {
-            const deployedSlug = generateUniqueSlug(agentSnapshot.slug, existingAgentSlugs);
+            const orgSuffixed = `${agentSnapshot.slug}-${targetOrg.slug}`;
+            const deployedSlug = generateUniqueSlug(orgSuffixed, existingAgentSlugs);
             existingAgentSlugs.add(deployedSlug);
             agentSlugMap.set(agentSnapshot.slug, deployedSlug);
 
@@ -210,10 +215,33 @@ export async function deployPlaybook(opts: DeployPlaybookOptions) {
                     workspaceId: opts.targetWorkspaceId,
                     playbookSourceId: opts.playbookId,
                     playbookInstallationId: installation.id,
+                    sourcePlaybookSlug: playbook.slug,
+                    sourceAgentSlug: agentSnapshot.slug,
+                    sourceAgentVersion: agentSnapshot.version ?? 1,
                     version: 1
                 }
             });
             createdAgentIds.push(agent.id);
+
+            // Seed backlog tasks from snapshot
+            if (agentSnapshot.backlogTasks && agentSnapshot.backlogTasks.length > 0) {
+                const backlog = await prisma.backlog.create({
+                    data: { agentId: agent.id }
+                });
+                for (const task of agentSnapshot.backlogTasks) {
+                    await prisma.backlogTask.create({
+                        data: {
+                            backlogId: backlog.id,
+                            title: task.title,
+                            description: task.description,
+                            priority: task.priority,
+                            status: (task.status as "PENDING" | "IN_PROGRESS") ?? "PENDING",
+                            tags: task.tags,
+                            contextJson: jsonOrUndefined(task.metadata)
+                        }
+                    });
+                }
+            }
 
             for (const tool of agentSnapshot.tools) {
                 await prisma.agentTool.create({
@@ -424,6 +452,21 @@ export async function uninstallPlaybook(installationId: string) {
     }
 
     if (installation.createdAgentIds.length > 0) {
+        // Clean up backlogs before deleting agents
+        const backlogs = await prisma.backlog.findMany({
+            where: { agentId: { in: installation.createdAgentIds } },
+            select: { id: true }
+        });
+        if (backlogs.length > 0) {
+            const backlogIds = backlogs.map((b) => b.id);
+            await prisma.backlogTask.deleteMany({
+                where: { backlogId: { in: backlogIds } }
+            });
+            await prisma.backlog.deleteMany({
+                where: { id: { in: backlogIds } }
+            });
+        }
+
         await prisma.agent.deleteMany({
             where: { id: { in: installation.createdAgentIds } }
         });

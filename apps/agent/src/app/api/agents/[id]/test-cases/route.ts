@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
+import { requireAuth } from "@/lib/authz/require-auth";
+import { requireAgentAccess } from "@/lib/authz/require-agent-access";
 
 /**
  * GET /api/agents/[id]/test-cases
@@ -9,28 +11,21 @@ import { prisma } from "@repo/database";
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
         const { id } = await params;
-        const { searchParams } = new URL(request.url);
+        const { context, response: authResponse } = await requireAuth(request);
+        if (authResponse) return authResponse;
+        const { agentId, response: accessResponse } = await requireAgentAccess(
+            context.organizationId,
+            id
+        );
+        if (accessResponse) return accessResponse;
 
+        const { searchParams } = new URL(request.url);
         const cursor = searchParams.get("cursor");
         const limit = Math.min(parseInt(searchParams.get("limit") || "20"), 100);
 
-        // Find agent by slug or id
-        const agent = await prisma.agent.findFirst({
-            where: {
-                OR: [{ slug: id }, { id: id }]
-            }
-        });
-
-        if (!agent) {
-            return NextResponse.json(
-                { success: false, error: `Agent '${id}' not found` },
-                { status: 404 }
-            );
-        }
-
         // Build where clause
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const where: any = { agentId: agent.id };
+        const where: any = { agentId };
 
         if (cursor) {
             where.id = { lt: cursor };
@@ -96,8 +91,15 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
         const { id } = await params;
-        const body = await request.json();
+        const { context, response: authResponse } = await requireAuth(request);
+        if (authResponse) return authResponse;
+        const { agentId, response: accessResponse } = await requireAgentAccess(
+            context.organizationId,
+            id
+        );
+        if (accessResponse) return accessResponse;
 
+        const body = await request.json();
         const { name, inputText, expectedOutput, tags, createdBy } = body;
 
         if (!name || !inputText) {
@@ -107,25 +109,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             );
         }
 
-        // Find agent by slug or id
-        const agent = await prisma.agent.findFirst({
-            where: {
-                OR: [{ slug: id }, { id: id }]
-            }
+        const agent = await prisma.agent.findUnique({
+            where: { id: agentId },
+            select: { tenantId: true }
         });
-
-        if (!agent) {
-            return NextResponse.json(
-                { success: false, error: `Agent '${id}' not found` },
-                { status: 404 }
-            );
-        }
 
         // Create test case
         const testCase = await prisma.agentTestCase.create({
             data: {
-                agentId: agent.id,
-                tenantId: agent.tenantId,
+                agentId,
+                tenantId: agent!.tenantId,
                 name,
                 inputText,
                 expectedOutput: expectedOutput || null,

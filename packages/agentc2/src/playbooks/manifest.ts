@@ -96,6 +96,16 @@ const workflowSnapshotSchema = z.object({
     version: z.number()
 });
 
+const backlogTaskSnapshotSchema = z.object({
+    title: z.string(),
+    description: z.string().optional(),
+    priority: z.number(),
+    status: z.string(),
+    sortOrder: z.number(),
+    tags: z.array(z.string()),
+    metadata: z.record(z.unknown()).optional()
+});
+
 const agentSnapshotSchema = z.object({
     slug: z.string(),
     name: z.string(),
@@ -125,7 +135,8 @@ const agentSnapshotSchema = z.object({
     skills: z.array(z.string()),
     guardrail: guardrailSnapshotSchema.nullable(),
     testCases: z.array(testCaseSnapshotSchema),
-    scorecard: scorecardSnapshotSchema.nullable()
+    scorecard: scorecardSnapshotSchema.nullable(),
+    backlogTasks: z.array(backlogTaskSnapshotSchema).default([])
 });
 
 const campaignTemplateSnapshotSchema = z.object({

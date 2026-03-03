@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma, Prisma } from "@repo/database";
 import { agentResolver } from "@repo/agentc2/agents";
+import { requireAuth } from "@/lib/authz/require-auth";
+import { requireAgentAccess } from "@/lib/authz/require-agent-access";
 
 /**
  * POST /api/agents/[id]/runs/[runId]/rerun
@@ -17,26 +19,19 @@ export async function POST(
 
         const { versionId } = body;
 
-        // Find agent by slug or id
-        const agent = await prisma.agent.findFirst({
-            where: {
-                OR: [{ slug: id }, { id: id }],
-                isActive: true
-            }
-        });
-
-        if (!agent) {
-            return NextResponse.json(
-                { success: false, error: `Agent '${id}' not found` },
-                { status: 404 }
-            );
-        }
+        const { context, response: authResponse } = await requireAuth(request);
+        if (authResponse) return authResponse;
+        const { agentId, response: accessResponse } = await requireAgentAccess(
+            context.organizationId,
+            id
+        );
+        if (accessResponse) return accessResponse;
 
         // Find the original run
         const originalRun = await prisma.agentRun.findFirst({
             where: {
                 id: runId,
-                agentId: agent.id
+                agentId
             }
         });
 
@@ -53,8 +48,8 @@ export async function POST(
             record,
             source
         } = await agentResolver.resolve({
-            slug: agent.slug,
-            id: agent.id
+            slug: id,
+            id: agentId
         });
 
         if (!record) {

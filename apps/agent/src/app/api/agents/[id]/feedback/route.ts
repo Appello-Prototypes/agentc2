@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
 import { inngest } from "@/lib/inngest";
+import { requireAuth } from "@/lib/authz/require-auth";
+import { requireAgentAccess } from "@/lib/authz/require-agent-access";
 
 /**
  * GET /api/agents/[id]/feedback/summary
@@ -10,8 +12,15 @@ import { inngest } from "@/lib/inngest";
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
         const { id } = await params;
-        const { searchParams } = new URL(request.url);
+        const { context, response: authResponse } = await requireAuth(request);
+        if (authResponse) return authResponse;
+        const { agentId, response: accessResponse } = await requireAgentAccess(
+            context.organizationId,
+            id
+        );
+        if (accessResponse) return accessResponse;
 
+        const { searchParams } = new URL(request.url);
         const from = searchParams.get("from");
         const to = searchParams.get("to");
 
@@ -19,24 +28,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         const startDate = from ? new Date(from) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
         const endDate = to ? new Date(to) : new Date();
 
-        // Find agent by slug or id
-        const agent = await prisma.agent.findFirst({
-            where: {
-                OR: [{ slug: id }, { id: id }]
-            }
-        });
-
-        if (!agent) {
-            return NextResponse.json(
-                { success: false, error: `Agent '${id}' not found` },
-                { status: 404 }
-            );
-        }
-
         // Get feedback
         const feedback = await prisma.agentFeedback.findMany({
             where: {
-                agentId: agent.id,
+                agentId,
                 createdAt: {
                     gte: startDate,
                     lte: endDate
@@ -61,7 +56,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         // Get themes from EvaluationTheme table
         const themes = await prisma.evaluationTheme.findMany({
             where: {
-                agentId: agent.id,
+                agentId,
                 createdAt: {
                     gte: startDate,
                     lte: endDate
@@ -110,8 +105,15 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
         const { id } = await params;
-        const body = await request.json();
+        const { context, response: authResponse } = await requireAuth(request);
+        if (authResponse) return authResponse;
+        const { agentId, response: accessResponse } = await requireAgentAccess(
+            context.organizationId,
+            id
+        );
+        if (accessResponse) return accessResponse;
 
+        const body = await request.json();
         const { runId, turnId, thumbs, rating, comment } = body;
 
         if (!runId) {
@@ -121,25 +123,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             );
         }
 
-        // Find agent by slug or id
-        const agent = await prisma.agent.findFirst({
-            where: {
-                OR: [{ slug: id }, { id: id }]
-            }
-        });
-
-        if (!agent) {
-            return NextResponse.json(
-                { success: false, error: `Agent '${id}' not found` },
-                { status: 404 }
-            );
-        }
-
         // Verify the run exists and belongs to this agent
         const run = await prisma.agentRun.findFirst({
             where: {
                 id: runId,
-                agentId: agent.id
+                agentId
             }
         });
 
@@ -149,6 +137,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 { status: 404 }
             );
         }
+
+        const agent = await prisma.agent.findUnique({
+            where: { id: agentId },
+            select: { tenantId: true }
+        });
 
         // Find existing feedback for this run+turn combination, or create new
         const existingFeedback = await prisma.agentFeedback.findFirst({
@@ -173,8 +166,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 data: {
                     runId,
                     turnId: turnId || null,
-                    agentId: agent.id,
-                    tenantId: agent.tenantId,
+                    agentId,
+                    tenantId: agent!.tenantId,
                     thumbs: thumbs ?? null,
                     rating: rating ?? null,
                     comment: comment ?? null
@@ -188,7 +181,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 name: "feedback/submitted",
                 data: {
                     feedbackId: feedback.id,
-                    agentId: agent.id,
+                    agentId,
                     runId,
                     thumbs: feedback.thumbs,
                     rating: feedback.rating,
@@ -205,7 +198,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                     name: "evaluation/reevaluate",
                     data: {
                         runId,
-                        agentId: agent.id,
+                        agentId,
                         feedbackId: feedback.id
                     }
                 });

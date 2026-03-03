@@ -245,7 +245,7 @@ model Workspace {
     // Pulse collectives
     pulses Pulse[]
 
-    @@unique([organizationId, slug])
+    @@unique([slug]) // Global slug uniqueness for federation
     @@index([organizationId])
     @@map("workspace")
 }
@@ -863,8 +863,12 @@ model Agent {
     playbookSourceId       String?
     playbookInstallationId String?
 
-    @@unique([workspaceId, slug]) // Per-workspace slug uniqueness (NULLs treated as distinct in PG)
-    @@index([slug])
+    // Playbook lineage (tracks source agent when deployed from a playbook)
+    sourcePlaybookSlug String?
+    sourceAgentSlug    String?
+    sourceAgentVersion Int?
+
+    @@unique([slug]) // Global slug uniqueness for federation and publishing
     @@index([workspaceId])
     @@index([ownerId])
     @@index([tenantId])
@@ -2535,8 +2539,7 @@ model Workflow {
     budgetPolicy      BudgetPolicy?
     testCases         WorkflowTestCase[]
 
-    @@unique([workspaceId, slug])
-    @@index([slug])
+    @@unique([slug]) // Global slug uniqueness for federation and publishing
     @@index([workspaceId])
     @@index([isPublished])
     @@index([visibility])
@@ -3254,8 +3257,7 @@ model Skill {
     installCount Int     @default(0)
     rating       Float?
 
-    @@unique([workspaceId, slug]) // Per-workspace slug uniqueness
-    @@index([slug])
+    @@unique([slug]) // Global slug uniqueness for federation and publishing
     @@index([workspaceId])
     @@index([category])
     @@index([isPublic])
@@ -3467,7 +3469,7 @@ model AgentInstance {
     channelBindings InstanceChannelBinding[]
     runs            AgentRun[]
 
-    @@unique([organizationId, slug])
+    @@unique([slug]) // Global slug uniqueness for federation
     @@index([agentId])
     @@index([contextType, contextId])
     @@index([organizationId])

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
 import { toolRegistry } from "@repo/agentc2/tools";
 import { getMcpTools } from "@repo/agentc2/mcp";
+import { requireAuth } from "@/lib/authz/require-auth";
+import { requireAgentAccess } from "@/lib/authz/require-agent-access";
 
 /**
  * GET /api/agents/[id]/tool-health
@@ -9,12 +11,20 @@ import { getMcpTools } from "@repo/agentc2/mcp";
  * Returns tool health status for an agent: expected vs available tools,
  * with details on which tools are missing and why.
  */
-export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
         const { id } = await params;
 
-        const agent = await prisma.agent.findFirst({
-            where: { OR: [{ slug: id }, { id }] },
+        const { context, response: authResponse } = await requireAuth(request);
+        if (authResponse) return authResponse;
+        const { agentId, response: accessResponse } = await requireAgentAccess(
+            context.organizationId,
+            id
+        );
+        if (accessResponse) return accessResponse;
+
+        const agent = await prisma.agent.findUniqueOrThrow({
+            where: { id: agentId },
             select: {
                 id: true,
                 slug: true,
@@ -37,13 +47,6 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
                 workspace: { select: { organizationId: true } }
             }
         });
-
-        if (!agent) {
-            return NextResponse.json(
-                { success: false, error: `Agent '${id}' not found` },
-                { status: 404 }
-            );
-        }
 
         // Collect expected tools from direct attachments
         const directToolIds = agent.tools.map((t) => t.toolId);

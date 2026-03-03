@@ -18,6 +18,9 @@
 import { prisma } from "../packages/database/src/index";
 import { randomBytes } from "crypto";
 
+const ORG_SLUG = "agentc2";
+const orgSlug = (base: string) => `${base}-${ORG_SLUG}`;
+
 /* ─── Instructions ─────────────────────────────────────────────────── */
 
 const PLANNER_INSTRUCTIONS = `You are the SDLC Planner agent. You analyze codebases, develop implementation plans, and present development options for review.
@@ -232,14 +235,14 @@ async function main() {
     }
 
     let workspace = await prisma.workspace.findFirst({
-        where: { organizationId: org.id, slug: "platform" }
+        where: { organizationId: org.id, slug: orgSlug("platform") }
     });
     if (!workspace) {
         workspace = await prisma.workspace.create({
             data: {
                 organizationId: org.id,
                 name: "Platform",
-                slug: "platform",
+                slug: orgSlug("platform"),
                 environment: "production",
                 isDefault: true
             }
@@ -327,7 +330,7 @@ async function main() {
 
     const skillDefs = [
         {
-            slug: "code-analysis",
+            slug: orgSlug("code-analysis"),
             name: "Code Analysis",
             description:
                 "Instructions and tools for analyzing codebases, understanding architecture, and identifying relevant files.",
@@ -339,7 +342,7 @@ async function main() {
             documents: ["sdlc-coding-standards", "sdlc-architecture-overview"]
         },
         {
-            slug: "implementation-planning",
+            slug: orgSlug("implementation-planning"),
             name: "Implementation Planning",
             description:
                 "Planning methodology for generating development options and detailed implementation plans.",
@@ -351,7 +354,7 @@ async function main() {
             documents: ["sdlc-architecture-overview"]
         },
         {
-            slug: "audit-review",
+            slug: orgSlug("audit-review"),
             name: "Audit & Review",
             description:
                 "Review checklists, quality criteria, and patterns for auditing plans and code changes.",
@@ -363,7 +366,7 @@ async function main() {
             documents: ["sdlc-coding-standards", "sdlc-testing-procedures"]
         },
         {
-            slug: "ticket-triage",
+            slug: orgSlug("ticket-triage"),
             name: "Ticket Triage",
             description:
                 "Classification criteria and cross-system query patterns for ticket analysis.",
@@ -375,7 +378,7 @@ async function main() {
             documents: []
         },
         {
-            slug: "pr-review",
+            slug: orgSlug("pr-review"),
             name: "PR Review",
             description:
                 "Review standards, trust scoring rubric, and CI/CD verification procedures.",
@@ -395,7 +398,7 @@ async function main() {
     const skills: Record<string, { id: string; slug: string }> = {};
     for (const skill of skillDefs) {
         let existing = await prisma.skill.findFirst({
-            where: { slug: skill.slug, workspaceId: workspace.id }
+            where: { slug: skill.slug }
         });
         if (!existing) {
             existing = await prisma.skill.create({
@@ -437,7 +440,7 @@ async function main() {
 
     const agentDefs = [
         {
-            slug: "sdlc-classifier",
+            slug: orgSlug("sdlc-classifier"),
             name: "SDLC Classifier",
             description: "Classifies incoming tickets by type, priority, and complexity.",
             instructions: CLASSIFIER_INSTRUCTIONS,
@@ -445,7 +448,7 @@ async function main() {
             modelName: "gpt-4o",
             temperature: 0.3,
             maxSteps: 5,
-            skills: ["ticket-triage"],
+            skills: [orgSlug("ticket-triage")],
             tools: ["memory-recall", "ticket-to-github-issue"],
             scorecard: {
                 criteria: [
@@ -491,7 +494,7 @@ async function main() {
             }
         },
         {
-            slug: "sdlc-planner",
+            slug: orgSlug("sdlc-planner"),
             name: "SDLC Planner",
             description: "Analyzes codebases and creates detailed implementation plans.",
             instructions: PLANNER_INSTRUCTIONS,
@@ -499,7 +502,7 @@ async function main() {
             modelName: "claude-sonnet-4-6",
             temperature: 0.5,
             maxSteps: 10,
-            skills: ["code-analysis", "implementation-planning"],
+            skills: [orgSlug("code-analysis"), orgSlug("implementation-planning")],
             tools: ["memory-recall", "web-fetch"],
             scorecard: {
                 criteria: [
@@ -540,7 +543,7 @@ async function main() {
             }
         },
         {
-            slug: "sdlc-auditor",
+            slug: orgSlug("sdlc-auditor"),
             name: "SDLC Auditor",
             description: "Reviews plans and code for quality, completeness, and potential issues.",
             instructions: AUDITOR_INSTRUCTIONS,
@@ -548,7 +551,7 @@ async function main() {
             modelName: "claude-sonnet-4-6",
             temperature: 0.3,
             maxSteps: 8,
-            skills: ["audit-review", "code-analysis"],
+            skills: [orgSlug("audit-review"), orgSlug("code-analysis")],
             tools: ["memory-recall"],
             scorecard: {
                 criteria: [
@@ -589,7 +592,7 @@ async function main() {
             }
         },
         {
-            slug: "sdlc-reviewer",
+            slug: orgSlug("sdlc-reviewer"),
             name: "SDLC Reviewer",
             description: "Reviews PRs, calculates trust scores, and makes merge recommendations.",
             instructions: REVIEWER_INSTRUCTIONS,
@@ -597,7 +600,7 @@ async function main() {
             modelName: "claude-sonnet-4-6",
             temperature: 0.3,
             maxSteps: 8,
-            skills: ["pr-review", "audit-review"],
+            skills: [orgSlug("pr-review"), orgSlug("audit-review")],
             tools: ["memory-recall", "calculate-trust-score"],
             scorecard: {
                 criteria: [
@@ -648,7 +651,7 @@ async function main() {
     const agents: Record<string, { id: string; slug: string }> = {};
     for (const agentDef of agentDefs) {
         let existing = await prisma.agent.findFirst({
-            where: { slug: agentDef.slug, workspaceId: workspace.id }
+            where: { slug: agentDef.slug }
         });
         if (!existing) {
             existing = await prisma.agent.create({
@@ -757,7 +760,7 @@ async function main() {
                 type: "agent",
                 name: "Classify Ticket",
                 config: {
-                    agentSlug: "sdlc-classifier",
+                    agentSlug: orgSlug("sdlc-classifier"),
                     promptTemplate:
                         "Classify this ticket:\n\nTitle: {{input.title}}\nDescription: {{input.description}}\n\nGitHub Issue: {{steps.intake.issueUrl}}\n\nProvide classification, priority, complexity, and suggested route.",
                     outputFormat: "json"
@@ -811,7 +814,7 @@ async function main() {
                                         type: "agent",
                                         name: "Generate Options",
                                         config: {
-                                            agentSlug: "sdlc-planner",
+                                            agentSlug: orgSlug("sdlc-planner"),
                                             promptTemplate:
                                                 "Based on the analysis:\n{{steps.analyze.text}}\n\nGenerate 2-3 development options with pros/cons and risk assessment.\n\n{{#if steps['options-audit']}}Previous audit feedback: {{steps['options-audit'].summary}}\nIssues to address: {{helpers.json(steps['options-audit'].issues)}}{{/if}}\n\n{{#if steps['options-review']}}Human feedback: {{steps['options-review'].feedback}}{{/if}}"
                                         }
@@ -821,7 +824,7 @@ async function main() {
                                         type: "agent",
                                         name: "Audit Options",
                                         config: {
-                                            agentSlug: "sdlc-auditor",
+                                            agentSlug: orgSlug("sdlc-auditor"),
                                             promptTemplate:
                                                 "Audit these development options:\n\n{{steps.options.text}}\n\nCheck for: feasibility, missed alternatives, risk underestimation, completeness.",
                                             outputFormat: "json"
@@ -884,7 +887,7 @@ async function main() {
                                         type: "agent",
                                         name: "Create Plan",
                                         config: {
-                                            agentSlug: "sdlc-planner",
+                                            agentSlug: orgSlug("sdlc-planner"),
                                             promptTemplate:
                                                 "Create a detailed implementation plan based on the approved option.\n\nApproved option context: {{steps['options-cycle'].text}}\nCodebase analysis: {{steps.analyze.text}}\n\n{{#if steps['plan-audit']}}Previous audit feedback: {{steps['plan-audit'].summary}}\nIssues to address: {{helpers.json(steps['plan-audit'].issues)}}{{/if}}\n\n{{#if steps['plan-review']}}Human feedback: {{steps['plan-review'].feedback}}{{/if}}"
                                         }
@@ -894,7 +897,7 @@ async function main() {
                                         type: "agent",
                                         name: "Audit Plan",
                                         config: {
-                                            agentSlug: "sdlc-auditor",
+                                            agentSlug: orgSlug("sdlc-auditor"),
                                             promptTemplate:
                                                 "Audit this implementation plan:\n\n{{steps.plan.text}}\n\nVerify: completeness, correct sequencing, edge case handling, testing coverage.",
                                             outputFormat: "json"
@@ -980,7 +983,7 @@ async function main() {
                                         type: "agent",
                                         name: "PR Review",
                                         config: {
-                                            agentSlug: "sdlc-reviewer",
+                                            agentSlug: orgSlug("sdlc-reviewer"),
                                             promptTemplate:
                                                 "Review the pull request for this change:\n\nPlan: {{steps.plan.text}}\nBuild result: {{steps['build-verify']}}\n\n{{#if steps['pr-approval']}}Revision feedback: {{steps['pr-approval'].feedback}}{{/if}}\n\nProvide trust score and merge recommendation.",
                                             outputFormat: "json"
@@ -1176,7 +1179,7 @@ async function main() {
                 type: "agent",
                 name: "Feature Analysis",
                 config: {
-                    agentSlug: "sdlc-classifier",
+                    agentSlug: orgSlug("sdlc-classifier"),
                     promptTemplate:
                         "Analyze this feature request:\n\nTitle: {{input.title}}\nDescription: {{input.description}}\n\nAssess scope, complexity, and dependencies.",
                     outputFormat: "json"
@@ -1365,21 +1368,21 @@ async function main() {
 
     const workflowDefs = [
         {
-            slug: "sdlc-standard",
+            slug: orgSlug("sdlc-standard"),
             name: "SDLC Standard",
             description:
                 "Full SDLC workflow with classification, planning, revision cycles, coding, review, and deployment.",
             definitionJson: standardWorkflowDef
         },
         {
-            slug: "sdlc-bugfix",
+            slug: orgSlug("sdlc-bugfix"),
             name: "SDLC Bugfix",
             description:
                 "Streamlined SDLC workflow for bug fixes: root cause analysis, fix planning, and deployment.",
             definitionJson: bugfixWorkflowDef
         },
         {
-            slug: "sdlc-feature",
+            slug: orgSlug("sdlc-feature"),
             name: "SDLC Feature",
             description:
                 "Extended SDLC workflow for features: design, phased planning, implementation, and deployment.",
@@ -1390,7 +1393,7 @@ async function main() {
     const workflows: Record<string, { id: string; slug: string }> = {};
     for (const wfDef of workflowDefs) {
         let existing = await prisma.workflow.findFirst({
-            where: { slug: wfDef.slug, workspaceId: workspace.id }
+            where: { slug: wfDef.slug }
         });
         if (!existing) {
             existing = await prisma.workflow.create({
@@ -1416,7 +1419,7 @@ async function main() {
     const sdlcTriggerName = "SDLC GitHub Webhook";
     const existingTrigger = await prisma.agentTrigger.findFirst({
         where: {
-            workflowId: workflows["sdlc-standard"]!.id,
+            workflowId: workflows[orgSlug("sdlc-standard")]!.id,
             entityType: "workflow",
             name: sdlcTriggerName
         }
@@ -1431,7 +1434,7 @@ async function main() {
         await prisma.agentTrigger.create({
             data: {
                 entityType: "workflow",
-                workflowId: workflows["sdlc-standard"]!.id,
+                workflowId: workflows[orgSlug("sdlc-standard")]!.id,
                 workspaceId: workspace.id,
                 name: sdlcTriggerName,
                 description:
@@ -1448,9 +1451,9 @@ async function main() {
                 inputMapping: {
                     _config: {
                         workflowRouting: {
-                            bug: "sdlc-bugfix",
-                            feature: "sdlc-feature",
-                            default: "sdlc-standard"
+                            bug: orgSlug("sdlc-bugfix"),
+                            feature: orgSlug("sdlc-feature"),
+                            default: orgSlug("sdlc-standard")
                         },
                         fieldMapping: {
                             title: "issue.title",
@@ -1491,8 +1494,11 @@ async function main() {
                 "and deployment — all with human-in-the-loop controls.",
             category: "development",
             tags: ["sdlc", "development", "coding-pipeline", "autonomous", "flywheel"],
-            entryWorkflowId: workflows["sdlc-standard"].id,
-            includeWorkflows: [workflows["sdlc-bugfix"].id, workflows["sdlc-feature"].id],
+            entryWorkflowId: workflows[orgSlug("sdlc-standard")].id,
+            includeWorkflows: [
+                workflows[orgSlug("sdlc-bugfix")].id,
+                workflows[orgSlug("sdlc-feature")].id
+            ],
             organizationId: org.id,
             userId: systemUser.id,
             pricingModel: "FREE"

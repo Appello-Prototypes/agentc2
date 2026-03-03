@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
 import { calculateCostBreakdown, calculateCost } from "@/lib/cost-calculator";
+import { requireAuth } from "@/lib/authz/require-auth";
+import { requireAgentAccess } from "@/lib/authz/require-agent-access";
 
 /**
  * GET /api/agents/[id]/costs/summary
@@ -23,19 +25,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         const startDate = from ? new Date(from) : null;
         const endDate = to ? new Date(to) : new Date();
 
-        // Find agent by slug or id
-        const agent = await prisma.agent.findFirst({
-            where: {
-                OR: [{ slug: id }, { id: id }]
-            }
-        });
-
-        if (!agent) {
-            return NextResponse.json(
-                { success: false, error: `Agent '${id}' not found` },
-                { status: 404 }
-            );
-        }
+        const { context, response: authResponse } = await requireAuth(request);
+        if (authResponse) return authResponse;
+        const { agentId, response: accessResponse } = await requireAgentAccess(
+            context.organizationId,
+            id
+        );
+        if (accessResponse) return accessResponse;
 
         // Build source filter
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -50,7 +46,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         // Get runs directly (not cost events) to ensure all runs are included
         const runs = await prisma.agentRun.findMany({
             where: {
-                agentId: agent.id,
+                agentId,
                 status: "COMPLETED",
                 // Only add date filter if dates are provided
                 ...(startDate || endDate
@@ -143,7 +139,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
         // Get budget for context
         const budget = await prisma.budgetPolicy.findUnique({
-            where: { agentId: agent.id }
+            where: { agentId }
         });
 
         return NextResponse.json({

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
+import { requireAuth } from "@/lib/authz/require-auth";
+import { requireAgentAccess } from "@/lib/authz/require-agent-access";
 
 /**
  * GET /api/agents/[id]/versions
@@ -9,28 +11,27 @@ import { prisma } from "@repo/database";
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
         const { id } = await params;
+        const { context, response: authResponse } = await requireAuth(request);
+        if (authResponse) return authResponse;
+        const { agentId, response: accessResponse } = await requireAgentAccess(
+            context.organizationId,
+            id
+        );
+        if (accessResponse) return accessResponse;
+
         const { searchParams } = new URL(request.url);
 
         const cursor = searchParams.get("cursor");
         const limit = Math.min(parseInt(searchParams.get("limit") || "20"), 100);
 
-        // Find agent by slug or id
-        const agent = await prisma.agent.findFirst({
-            where: {
-                OR: [{ slug: id }, { id: id }]
-            }
+        const agent = await prisma.agent.findUnique({
+            where: { id: agentId },
+            select: { version: true }
         });
-
-        if (!agent) {
-            return NextResponse.json(
-                { success: false, error: `Agent '${id}' not found` },
-                { status: 404 }
-            );
-        }
 
         // Build where clause
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const where: any = { agentId: agent.id };
+        const where: any = { agentId };
 
         if (cursor) {
             where.version = { lt: parseInt(cursor) };
@@ -78,7 +79,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
         // Fetch runs with cost/duration for efficient aggregation
         const runs = await prisma.agentRun.findMany({
-            where: { agentId: agent.id },
+            where: { agentId },
             select: {
                 id: true,
                 status: true,
@@ -138,7 +139,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
         // Compute quality from evaluations
         const evaluations = await prisma.agentEvaluation.findMany({
-            where: { agentId: agent.id },
+            where: { agentId },
             select: {
                 runId: true,
                 scoresJson: true
@@ -170,7 +171,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         const feedbacks =
             runIds.length > 0
                 ? await prisma.agentFeedback.findMany({
-                      where: { agentId: agent.id, runId: { in: runIds } },
+                      where: { agentId, runId: { in: runIds } },
                       select: { runId: true, thumbs: true }
                   })
                 : [];
@@ -251,7 +252,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                     snapshot: v.snapshot,
                     createdBy: v.createdBy,
                     createdAt: v.createdAt,
-                    isActive: v.version === agent.version,
+                    isActive: v.version === agent!.version,
                     isRollback,
                     previousVersion: prevVersion?.version ?? null,
                     stats: {
@@ -268,8 +269,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                     experimentResult: experiment ?? null
                 };
             }),
-            currentVersion: agent.version,
-            totalCount: await prisma.agentVersion.count({ where: { agentId: agent.id } }),
+            currentVersion: agent!.version,
+            totalCount: await prisma.agentVersion.count({ where: { agentId } }),
             nextCursor: hasMore ? versions[versions.length - 1].version.toString() : null
         });
     } catch (error) {
@@ -292,48 +293,47 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
         const { id } = await params;
+        const { context, response: authResponse } = await requireAuth(request);
+        if (authResponse) return authResponse;
+        const { agentId, response: accessResponse } = await requireAgentAccess(
+            context.organizationId,
+            id
+        );
+        if (accessResponse) return accessResponse;
+
         const body = await request.json();
 
         const { description, createdBy } = body;
 
-        // Find agent by slug or id with tools and skills
-        const agent = await prisma.agent.findFirst({
-            where: {
-                OR: [{ slug: id }, { id: id }]
-            },
+        // Fetch agent with tools and skills for snapshot
+        const agent = await prisma.agent.findUnique({
+            where: { id: agentId },
             include: { tools: true, skills: true }
         });
 
-        if (!agent) {
-            return NextResponse.json(
-                { success: false, error: `Agent '${id}' not found` },
-                { status: 404 }
-            );
-        }
-
         // Create full snapshot
         const snapshot = {
-            name: agent.name,
-            description: agent.description,
-            instructions: agent.instructions,
-            instructionsTemplate: agent.instructionsTemplate,
-            modelProvider: agent.modelProvider,
-            modelName: agent.modelName,
-            temperature: agent.temperature,
-            maxTokens: agent.maxTokens,
-            modelConfig: agent.modelConfig,
-            memoryEnabled: agent.memoryEnabled,
-            memoryConfig: agent.memoryConfig,
-            maxSteps: agent.maxSteps,
-            tools: agent.tools.map((t) => ({ toolId: t.toolId, config: t.config })),
-            skills: agent.skills.map((s) => ({ skillId: s.skillId, pinned: s.pinned })),
-            visibility: agent.visibility,
-            metadata: agent.metadata
+            name: agent!.name,
+            description: agent!.description,
+            instructions: agent!.instructions,
+            instructionsTemplate: agent!.instructionsTemplate,
+            modelProvider: agent!.modelProvider,
+            modelName: agent!.modelName,
+            temperature: agent!.temperature,
+            maxTokens: agent!.maxTokens,
+            modelConfig: agent!.modelConfig,
+            memoryEnabled: agent!.memoryEnabled,
+            memoryConfig: agent!.memoryConfig,
+            maxSteps: agent!.maxSteps,
+            tools: agent!.tools.map((t) => ({ toolId: t.toolId, config: t.config })),
+            skills: agent!.skills.map((s) => ({ skillId: s.skillId, pinned: s.pinned })),
+            visibility: agent!.visibility,
+            metadata: agent!.metadata
         };
 
         // Get the next version number
         const lastVersion = await prisma.agentVersion.findFirst({
-            where: { agentId: agent.id },
+            where: { agentId },
             orderBy: { version: "desc" },
             select: { version: true }
         });
@@ -343,13 +343,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         // Create the version
         const version = await prisma.agentVersion.create({
             data: {
-                agentId: agent.id,
-                tenantId: agent.tenantId,
+                agentId,
+                tenantId: agent!.tenantId,
                 version: nextVersion,
                 description: description || `Version ${nextVersion}`,
-                instructions: agent.instructions,
-                modelProvider: agent.modelProvider,
-                modelName: agent.modelName,
+                instructions: agent!.instructions,
+                modelProvider: agent!.modelProvider,
+                modelName: agent!.modelName,
                 snapshot,
                 createdBy
             }
@@ -357,7 +357,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
         // Update agent's current version
         await prisma.agent.update({
-            where: { id: agent.id },
+            where: { id: agentId },
             data: { version: nextVersion }
         });
 
