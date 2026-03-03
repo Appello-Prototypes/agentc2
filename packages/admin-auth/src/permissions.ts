@@ -28,6 +28,9 @@ export type AdminAction =
     // User management
     | "user:list"
     | "user:read"
+    | "user:freeze"
+    | "user:activate"
+    | "user:delete"
     | "user:reset_password"
     | "user:force_logout"
     | "user:impersonate"
@@ -97,6 +100,9 @@ const ACTION_MIN_ROLE: Record<AdminAction, AdminRole> = {
     // User management
     "user:list": "support_agent",
     "user:read": "support_agent",
+    "user:freeze": "platform_admin",
+    "user:activate": "platform_admin",
+    "user:delete": "super_admin",
     "user:reset_password": "support_agent",
     "user:force_logout": "support_agent",
     "user:impersonate": "platform_admin",

@@ -26,7 +26,7 @@ import {
  * Hardcoded last-resort fallback when neither the database nor the env var
  * specifies a default Slack agent.
  */
-const FALLBACK_AGENT_SLUG = "bigjim2";
+const FALLBACK_AGENT_SLUG = "bigjim2-appello";
 
 /**
  * Check if the bot has previously participated in a thread.

@@ -99,13 +99,13 @@ export function parseRouting(message: IncomingMessage, config: RoutingConfig): R
 export function getDefaultAgentSlug(channel: ChannelType): string {
     switch (channel) {
         case "whatsapp":
-            return process.env.WHATSAPP_DEFAULT_AGENT_SLUG || "bigjim2";
+            return process.env.WHATSAPP_DEFAULT_AGENT_SLUG || "bigjim2-appello";
         case "telegram":
-            return process.env.TELEGRAM_DEFAULT_AGENT_SLUG || "bigjim2";
+            return process.env.TELEGRAM_DEFAULT_AGENT_SLUG || "bigjim2-appello";
         case "voice":
-            return process.env.VOICE_DEFAULT_AGENT_SLUG || "bigjim2";
+            return process.env.VOICE_DEFAULT_AGENT_SLUG || "bigjim2-appello";
         default:
-            return "bigjim2";
+            return "bigjim2-appello";
     }
 }
 
@@ -170,9 +170,8 @@ You can also use "AgentName: message" format to send a single message to a speci
  * List of commonly available agents (for help text)
  */
 export const COMMON_AGENTS = [
-    { slug: "mcp-agent", description: "General assistant with MCP tools" },
-    { slug: "assistant", description: "General-purpose assistant" },
-    { slug: "research", description: "Research and analysis" },
-    { slug: "james", description: "Custom agent (if configured)" },
-    { slug: "grace", description: "Custom agent (if configured)" }
+    { slug: "bigjim2-appello", description: "Big Jim II - Sentient assistant" },
+    { slug: "appello-assistant-appello", description: "Appello assistant" },
+    { slug: "nexus-appello", description: "Nexus meta-agent" },
+    { slug: "bigjim2-agentc2", description: "Big Jim II (AgentC2)" }
 ];

@@ -16,6 +16,8 @@ isProject: false
 
 # Plan 5: Vertical Use Case Pages
 
+**Brand Reference:** All use case pages follow Template C from [docs/brand-style-guide.md](/docs/brand-style-guide.md). Each use case page includes an SVG-style product illustration component relevant to the vertical.
+
 **Priority:** Medium — converts interest into conviction for specific buyer personas
 
 **Depends on:** Plan 2 (shared components from home page)

@@ -18,8 +18,8 @@ import { StarIcon } from "lucide-react";
 const DEFAULT_AGENT_KEY = "mastra-default-agent";
 
 export function getDefaultAgentSlug(): string {
-    if (typeof window === "undefined") return "bigjim2";
-    return localStorage.getItem(DEFAULT_AGENT_KEY) || "bigjim2";
+    if (typeof window === "undefined") return "bigjim2-appello";
+    return localStorage.getItem(DEFAULT_AGENT_KEY) || "bigjim2-appello";
 }
 
 export function setDefaultAgentSlug(slug: string): void {

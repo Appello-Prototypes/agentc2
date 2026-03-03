@@ -189,6 +189,8 @@ Add all new marketing routes to the public (unauthenticated) allowlist:
 
 ## Phase 3: Shared Marketing Layout System
 
+**Reference:** All components must follow the [Brand Style Guide](/docs/brand-style-guide.md) — typography hierarchy, color tokens, spacing system, and section patterns.
+
 **Problem:** Need consistent layout, typography, and component patterns across all new marketing pages.
 
 ### 3.1 Create Marketing Layout Component
@@ -225,17 +227,39 @@ Create reusable building blocks for marketing pages:
 - **`LogoGrid`** — integration/partner logo grid
 - **`FlowDiagram`** — step-by-step visual flow
 
-These components should follow the existing shadcn/ui patterns and Tailwind CSS 4 design tokens.
+**Directory:** `apps/frontend/src/components/website/illustrations/`
+
+Create SVG-style product illustration components (Appello-style React components that render stylized UI representations instead of raster screenshots). See the brand guide Section 8 for the full list of required illustrations and design standards. Key components include:
+
+- **`AgentChatIllustration`** — chat bubbles with tool call panel, agent avatar
+- **`AgentConfigIllustration`** — config card with model selector, tool list, guardrails
+- **`WorkflowBuilderIllustration`** — step cards connected by arrows
+- **`NetworkTopologyIllustration`** — central orchestrator with agent nodes
+- **`ChannelDeploymentIllustration`** — agent hub with channel badges
+- **`McpIntegrationIllustration`** — connection card with status and tool count
+- **`GuardrailPanelIllustration`** — toggle rows with status indicators
+- **`BudgetHierarchyIllustration`** — nested budget breakdown
+- **`LearningPipelineIllustration`** — signal → proposal → experiment → promotion flow
+- **`FederationIllustration`** — two orgs connected by encrypted channel
+- **`CampaignIllustration`** — mission card with task list and AAR
+- **`DarkFactoryIllustration`** — horizontal pipeline: ticket → plan → code → verify → deploy
+- **`PlaybookCardIllustration`** — marketplace card with rating and install
+- **`EvalScorecardIllustration`** — score bars with grade badge
+- **`ObservabilityIllustration`** — mini dashboard with sparklines
+- **`EmbedWidgetIllustration`** — browser frame with branded chat widget
+
+These components should follow the existing shadcn/ui patterns, Tailwind CSS 4 design tokens, and the illustration design standards in the brand guide Section 8.
 
 ### 3.3 Define Marketing Design Tokens
 
-Ensure consistency across all marketing pages:
+All design tokens are defined in the [Brand Style Guide](/docs/brand-style-guide.md). The following are already established and must be used consistently:
 
-- **Typography scale** — h1 (hero), h2 (section), h3 (feature), body, caption
-- **Spacing** — consistent section padding (py-24 or similar)
-- **Max width** — content max-w (max-w-7xl for full, max-w-4xl for text-heavy)
-- **Color palette** — use existing theme colors; define accent for CTAs
-- **Card styles** — consistent border, shadow, radius for feature cards
+- **Typography scale** — locked type scale from Display (48/52px) through Code (see brand guide Section 3)
+- **Spacing** — section padding `py-20 md:py-28 lg:py-32`, gap system (see brand guide Section 4)
+- **Max width** — `max-w-7xl` for full sections, `max-w-3xl` for text-heavy (see brand guide Section 4)
+- **Color palette** — oklch design tokens from `@repo/ui` globals.css (see brand guide Section 2)
+- **Card styles** — `rounded-2xl border border-border/60 bg-card` (see brand guide Section 5)
+- **Section patterns** — standard, centered, alternating background, split content (see brand guide Section 6)
 
 ---
 

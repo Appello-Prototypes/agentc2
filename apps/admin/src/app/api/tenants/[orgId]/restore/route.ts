@@ -22,10 +22,11 @@ export async function POST(
             beforeJson: { status: result.previousStatus },
             afterJson: { status: "active" },
             ipAddress,
-            userAgent
+            userAgent,
+            metadata: { restoredUserCount: result.restoredUserCount }
         });
 
-        return NextResponse.json({ success: true });
+        return NextResponse.json({ success: true, restoredUserCount: result.restoredUserCount });
     } catch (error) {
         if (error instanceof AdminAuthError) {
             return NextResponse.json({ error: error.message }, { status: error.status });

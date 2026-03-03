@@ -38,6 +38,12 @@ export type AdminAuditAction =
     | "USER_FORCE_LOGOUT"
     | "USER_IMPERSONATE_START"
     | "USER_IMPERSONATE_END"
+    | "USER_FREEZE"
+    | "USER_ACTIVATE"
+    | "USER_DELETE"
+    | "USER_BULK_FREEZE"
+    | "USER_BULK_ACTIVATE"
+    | "USER_BULK_DELETE"
     // Feature flags
     | "FLAG_CREATE"
     | "FLAG_UPDATE"

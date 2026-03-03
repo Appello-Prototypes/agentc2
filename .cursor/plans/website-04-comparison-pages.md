@@ -19,6 +19,8 @@ isProject: false
 
 # Plan 4: Competitive Comparison Pages
 
+**Brand Reference:** All comparison pages use Template C (Data-driven) from [docs/brand-style-guide.md](/docs/brand-style-guide.md).
+
 **Priority:** High — captures high-intent "X vs Y" search traffic and enables sales conversations
 
 **Depends on:** Plan 1 (Foundation)

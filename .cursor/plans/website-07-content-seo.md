@@ -16,6 +16,8 @@ isProject: false
 
 # Plan 7: Content Strategy & SEO Infrastructure
 
+**Brand Reference:** SEO infrastructure applies across all pages built per [docs/brand-style-guide.md](/docs/brand-style-guide.md). Meta tag templates follow Section 9 (Voice & Tone) for consistent messaging.
+
 **Priority:** Medium — long-term organic growth engine
 
 **Depends on:** Plans 2–6 (needs pages to optimize)

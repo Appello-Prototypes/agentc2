@@ -19,6 +19,8 @@ isProject: false
 
 # Plan 6: Enterprise, Security, Trust & Federation Pages
 
+**Brand Reference:** Security and Enterprise pages follow Template B (Long-form Content) from [docs/brand-style-guide.md](/docs/brand-style-guide.md). Federation and Embed Partners pages use Template A (Hero + Sections). All pages include relevant SVG-style illustration components from the brand guide Section 8.
+
 **Priority:** Medium — critical for enterprise deal progression
 
 **Depends on:** Plan 1 (Foundation)

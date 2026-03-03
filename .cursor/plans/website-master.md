@@ -55,6 +55,21 @@ Plan 7 (Content/SEO) ──────────────────> Dep
 
 ## Positioning Framework
 
+### Brand Style Guide
+
+All website implementation follows the [Brand Style Guide](/docs/brand-style-guide.md) which defines:
+
+- Color system (oklch-based, dark-mode-first)
+- Typography hierarchy (locked type scale from Display through Code)
+- Spacing and layout (section patterns, grid system)
+- Component patterns (cards, buttons, badges, icons)
+- SVG-style product illustrations (Appello-style React components instead of screenshots)
+- Motion and animation standards
+- Voice and tone guidelines
+- Accessibility requirements
+
+Every new page must pass the brand guide's 17-point verification checklist before approval.
+
 ### Positioning Statement
 
 AgentC2 is the AI operating system for organizations — where businesses build, deploy, govern, and scale intelligent agents across teams, channels, and partner organizations, with enterprise-grade security, a marketplace of ready-to-deploy solutions, and the only cross-organization federation protocol in the market.

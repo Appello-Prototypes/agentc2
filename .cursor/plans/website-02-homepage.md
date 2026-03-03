@@ -3,7 +3,7 @@ name: "Website — Plan 2: Home Page Redesign"
 overview: "Design and build a high-conviction marketing home page that immediately communicates what AgentC2 is, who it's for, and why it's different. Replaces the current embed-first root experience with a structured marketing page that includes the embed as an interactive demo section."
 todos:
     - id: phase-1-hero
-      content: "Phase 1: Hero section — headline, subheadline, CTAs, product screenshot or video loop"
+      content: "Phase 1: Hero section — headline, subheadline, CTAs, SVG-style product illustration component"
       status: pending
     - id: phase-2-problem-pillars
       content: "Phase 2: Problem statement + Five Pillars section — Build, Deploy, Govern, Scale, Improve"
@@ -21,6 +21,8 @@ isProject: false
 ---
 
 # Plan 2: Home Page Redesign
+
+**Brand Reference:** All sections must follow [docs/brand-style-guide.md](/docs/brand-style-guide.md) — locked type scale, section patterns, color tokens, card patterns, CTA rules, and illustration standards.
 
 **Priority:** Critical — the home page is the single highest-impact page
 
@@ -47,18 +49,14 @@ The hero must communicate three things within 5 seconds: what we are, who it's f
 **Primary CTA:** "Get Started Free" → `/signup`
 **Secondary CTA:** "See How It Works" → smooth scroll to How It Works section
 
-**Visual:** Product screenshot of the workspace view showing:
-
-- An active agent conversation with visible tool activity
-- The agent selector in the sidebar
-- Channel indicator (showing multi-channel capability)
+**Visual:** SVG-style product illustration component (`AgentChatIllustration`) showing an agent conversation with visible tool call activity, agent selector, and channel indicator — rendered as a styled React component per the brand guide illustration standards.
 
 **Technical notes:**
 
-- Use a real product screenshot, not an illustration or mockup
+- Use an SVG-style product illustration component (per brand guide Section 8), not a raster screenshot or generic mockup
 - Optimize image: WebP format, responsive sizes, lazy-load below fold
-- Consider a 10-second looping video (muted, autoplay) as an alternative
-- Dark background with the product screenshot in a browser frame for contrast
+- The illustration component can include subtle CSS animations (float, pulse on status dots) for visual interest
+- Dark background with the product illustration in a browser frame for contrast
 
 ### 1.2 Announcement Bar (Optional)
 
@@ -171,7 +169,7 @@ Web Chat — Slack — WhatsApp — Telegram — Voice (Twilio) — Email (Gmail
 
 ## Phase 4: Three Unique Differentiators
 
-Three feature spotlight cards with product screenshots or diagrams.
+Three feature spotlight cards with SVG-style product illustration components.
 
 ### 4.1 Federation Card
 
@@ -179,7 +177,7 @@ Three feature spotlight cards with product screenshots or diagrams.
 
 **Body:** "The only platform with cross-organization agent collaboration. Establish encrypted AES-GCM channels between organizations, expose specific agents with fine-grained controls, enforce rate limits and circuit breakers, scan for PII by data classification tier, and discover partner agents via agent cards. Your agents can securely work with your partners' agents."
 
-**Visual:** Diagram showing two organizations with agents communicating through an encrypted channel.
+**Visual:** Illustration component: `FederationIllustration` — two org cards connected by encrypted channel with lock icon and PII scanner.
 
 **CTA:** "Learn about Federation →" linking to `/platform/federation`
 
@@ -189,7 +187,7 @@ Three feature spotlight cards with product screenshots or diagrams.
 
 **Body:** "Define intent and end state. AgentC2 decomposes into missions, assigns agents, executes tasks, generates After Action Reviews, and adapts through rework loops — all with human approval gates where you need them. Military-grade planning discipline applied to AI agent operations."
 
-**Visual:** Flow diagram: Intent → Missions → Tasks → AARs → Complete
+**Visual:** Illustration component: `CampaignIllustration` — mission card with intent, task list with status badges, AAR summary.
 
 **CTA:** "Learn about Mission Command →" linking to `/platform/mission-command`
 
@@ -199,11 +197,11 @@ Three feature spotlight cards with product screenshots or diagrams.
 
 **Body:** "Package entire agent solutions — agents, skills, documents, workflows, networks, guardrails, and test cases — into deployable playbooks. Install from the marketplace in one click, customize for your organization, or publish and monetize your own solutions with Stripe Connect payouts."
 
-**Visual:** Screenshot of the marketplace browse interface or a playbook detail page.
+**Visual:** Illustration component: `PlaybookCardIllustration` — marketplace-style card with playbook name, component count, rating, install button.
 
 **CTA:** "Explore the Marketplace →" linking to `/platform/marketplace`
 
-**Design:** Large cards in a 3-column grid. Each card has a colored top border or accent. Product screenshots or technical diagrams preferred over illustrations.
+**Design:** Large cards in a 3-column grid. Each card has a colored top border or accent. SVG-style product illustration components preferred.
 
 ---
 
@@ -280,7 +278,7 @@ Links to: Trust Center | Security Policy | AI Transparency
 
 - [ ] Home page loads at `/` with full marketing content
 - [ ] Hero communicates what, who, and why within 5 seconds (ask 3 people)
-- [ ] Product screenshot/video is real (not a mockup)
+- [ ] Product illustration component renders correctly (SVG-style, not raster)
 - [ ] Problem statement clearly separates from 3 competitor categories
 - [ ] Five Pillars are scannable without reading full text
 - [ ] Channel diagram shows all 7 deployment channels

@@ -25,10 +25,10 @@ export async function POST(
             afterJson: { status: "deactivated" },
             ipAddress,
             userAgent,
-            metadata: { reason }
+            metadata: { reason, frozenUserCount: result.frozenUserCount }
         });
 
-        return NextResponse.json({ success: true });
+        return NextResponse.json({ success: true, frozenUserCount: result.frozenUserCount });
     } catch (error) {
         if (error instanceof AdminAuthError) {
             return NextResponse.json({ error: error.message }, { status: error.status });

@@ -19,6 +19,8 @@ isProject: false
 
 # Plan 3: Platform & Technical Pages
 
+**Brand Reference:** All pages must follow [docs/brand-style-guide.md](/docs/brand-style-guide.md) — use Template B (Long-form Content) layout for most platform pages, Template A for Platform Overview.
+
 **Priority:** High — evaluators need depth beyond the home page
 
 **Depends on:** Plan 1 (Foundation)
@@ -94,7 +96,7 @@ isProject: false
     - Create account (Google OAuth or email)
     - Create or join an organization
     - Connect first integration (Gmail, Slack, HubSpot, etc.)
-    - Screenshot of onboarding flow
+    - Illustration component: `AgentConfigIllustration`
 
 3. **Step 2: Build Your First Agent**
     - Write natural language instructions
@@ -103,34 +105,34 @@ isProject: false
     - Attach skills for domain-specific capabilities
     - Connect knowledge base (RAG)
     - Configure memory settings
-    - Screenshot of agent configuration
+    - Illustration component: `AgentConfigIllustration`
 
 4. **Step 3: Deploy**
     - Deploy to workspace (web chat)
     - Connect to Slack, WhatsApp, Telegram, or voice
     - Create white-label embed for external deployment
     - Or install from the Playbook Marketplace
-    - Screenshot of deployment options
+    - Illustration component: `ChannelDeploymentIllustration`
 
 5. **Step 4: Monitor & Observe**
     - View runs, traces, and tool calls
     - Monitor conversations and activity feed
     - Check agent performance scorecards
-    - Screenshot of observability dashboard
+    - Illustration component: `ObservabilityIllustration`
 
 6. **Step 5: Learn & Improve**
     - Learning pipeline extracts signals from runs
     - Generates improvement proposals
     - Runs A/B experiments
     - Auto-promotes winning configurations
-    - Screenshot of learning pipeline
+    - Illustration component: `LearningPipelineIllustration`
 
 7. **Step 6: Scale**
     - Add workspaces for different teams/environments
     - Set organization-wide guardrails and budgets
     - Federate with partner organizations
     - Execute campaigns across multiple agents
-    - Screenshot of org settings / admin
+    - Illustration component: `BudgetHierarchyIllustration`
 
 8. **CTA:** "Start building now" + link to signup
 
@@ -161,7 +163,7 @@ isProject: false
     | Background Jobs | Inngest                            | Event-driven workflow processing                         |
     | UI              | shadcn/ui, Tailwind CSS 4          | Component library, styling                               |
 
-3. **Architecture Diagram:**
+3. **Architecture Illustration** (uses diagram visual language from brand guide Section 8)**:**
    Multi-tier diagram showing:
     - Client layer (web, Slack, WhatsApp, Telegram, voice, embed)
     - API layer (Next.js API routes, middleware, auth)
@@ -466,7 +468,7 @@ Each section: endpoint summary + curl example + link to full docs.
 
 4. **Using MCP Tools in Cursor:**
     - AgentC2 as an MCP server for Cursor IDE
-    - Setup guide with screenshots
+    - Setup guide with SVG-style illustration components
     - Available tools via MCP
 
 5. **Tool Naming and Discovery:**

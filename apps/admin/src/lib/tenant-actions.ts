@@ -181,6 +181,21 @@ export async function deactivateTenant(orgId: string, reason: string, performedB
 
     const previousStatus = org.status;
 
+    // Find all active users in this tenant to freeze them
+    const memberships = await prisma.membership.findMany({
+        where: { organizationId: orgId },
+        select: { userId: true }
+    });
+    const memberUserIds = memberships.map((m) => m.userId);
+    const memberUsers =
+        memberUserIds.length > 0
+            ? await prisma.user.findMany({
+                  where: { id: { in: memberUserIds } },
+                  select: { id: true, status: true }
+              })
+            : [];
+    const userIdsToFreeze = memberUsers.filter((u) => u.status === "active").map((u) => u.id);
+
     const updated = await prisma.organization.update({
         where: { id: orgId },
         data: {
@@ -189,6 +204,14 @@ export async function deactivateTenant(orgId: string, reason: string, performedB
         }
     });
 
+    // Freeze all active users belonging to this tenant
+    if (userIdsToFreeze.length > 0) {
+        await prisma.user.updateMany({
+            where: { id: { in: userIdsToFreeze } },
+            data: { status: "frozen" }
+        });
+    }
+
     await prisma.tenantLifecycleEvent.create({
         data: {
             organizationId: orgId,
@@ -196,11 +219,11 @@ export async function deactivateTenant(orgId: string, reason: string, performedB
             toStatus: "deactivated",
             reason,
             performedBy,
-            metadata: { retentionDays: 30 }
+            metadata: { retentionDays: 30, frozenUserIds: userIdsToFreeze }
         }
     });
 
-    return { previousStatus, updated };
+    return { previousStatus, updated, frozenUserCount: userIdsToFreeze.length };
 }
 
 export async function restoreTenant(orgId: string, performedBy: string) {
@@ -212,6 +235,15 @@ export async function restoreTenant(orgId: string, performedBy: string) {
     if (!org) throw new Error("Organization not found");
     if (org.status !== "deactivated") throw new Error("Only deactivated tenants can be restored");
 
+    // Find the deactivation event to get the list of users who were frozen
+    const deactivationEvent = await prisma.tenantLifecycleEvent.findFirst({
+        where: { organizationId: orgId, toStatus: "deactivated" },
+        orderBy: { createdAt: "desc" },
+        select: { metadata: true }
+    });
+    const frozenUserIds = (deactivationEvent?.metadata as Record<string, unknown>)
+        ?.frozenUserIds as string[] | undefined;
+
     const updated = await prisma.organization.update({
         where: { id: orgId },
         data: {
@@ -222,17 +254,28 @@ export async function restoreTenant(orgId: string, performedBy: string) {
         }
     });
 
+    // Reactivate only the users who were frozen as part of the deactivation
+    let restoredUserCount = 0;
+    if (frozenUserIds && frozenUserIds.length > 0) {
+        const result = await prisma.user.updateMany({
+            where: { id: { in: frozenUserIds }, status: "frozen" },
+            data: { status: "active" }
+        });
+        restoredUserCount = result.count;
+    }
+
     await prisma.tenantLifecycleEvent.create({
         data: {
             organizationId: orgId,
             fromStatus: "deactivated",
             toStatus: "active",
             reason: "Restored by admin",
-            performedBy
+            performedBy,
+            metadata: { restoredUserIds: frozenUserIds ?? [], restoredUserCount }
         }
     });
 
-    return { previousStatus: "deactivated", updated };
+    return { previousStatus: "deactivated", updated, restoredUserCount };
 }
 
 export async function requestTenantDeletion(orgId: string, reason: string, performedBy: string) {
