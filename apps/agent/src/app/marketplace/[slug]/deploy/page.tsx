@@ -34,13 +34,15 @@ export default function DeployPage(props: { params: Promise<{ slug: string }> })
     } | null>(null);
     const [playbookName, setPlaybookName] = useState("");
     const [pricingModel, setPricingModel] = useState("FREE");
+    const [alreadyInstalled, setAlreadyInstalled] = useState(false);
 
     useEffect(() => {
         async function fetchData() {
             try {
-                const [workspacesRes, playbookRes] = await Promise.all([
+                const [workspacesRes, playbookRes, deployStatusRes] = await Promise.all([
                     fetch(`${getApiBase()}/api/workspaces`),
-                    fetch(`${getApiBase()}/api/playbooks/${slug}`)
+                    fetch(`${getApiBase()}/api/playbooks/${slug}`),
+                    fetch(`${getApiBase()}/api/playbooks/${slug}/deploy`)
                 ]);
                 const workspacesData = await workspacesRes.json();
                 const playbookData = await playbookRes.json();
@@ -51,6 +53,13 @@ export default function DeployPage(props: { params: Promise<{ slug: string }> })
                 }
                 setPlaybookName(playbookData.playbook?.name ?? slug);
                 setPricingModel(playbookData.playbook?.pricingModel ?? "FREE");
+
+                if (deployStatusRes.ok) {
+                    const statusData = await deployStatusRes.json();
+                    if (statusData.status && statusData.status !== "UNINSTALLED") {
+                        setAlreadyInstalled(true);
+                    }
+                }
             } catch (error) {
                 console.error("Failed to fetch data:", error);
             } finally {
@@ -141,7 +150,28 @@ export default function DeployPage(props: { params: Promise<{ slug: string }> })
 
             <h1 className="mb-6 text-2xl font-bold">Deploy Playbook</h1>
 
-            {deployResult ? (
+            {alreadyInstalled ? (
+                <Card>
+                    <CardContent className="py-8 text-center">
+                        <CheckCircleIcon className="mx-auto mb-4 h-12 w-12 text-green-400" />
+                        <h3 className="mb-2 text-lg font-medium">Already Installed</h3>
+                        <p className="text-muted-foreground mb-4 text-sm">
+                            This playbook is already deployed to your workspace.
+                        </p>
+                        <div className="flex justify-center gap-3">
+                            <Button onClick={() => router.push("/marketplace/installed")}>
+                                View Installed
+                            </Button>
+                            <Button
+                                variant="outline"
+                                onClick={() => router.push(`/marketplace/${slug}`)}
+                            >
+                                Back to Playbook
+                            </Button>
+                        </div>
+                    </CardContent>
+                </Card>
+            ) : deployResult ? (
                 <Card>
                     <CardContent className="py-8 text-center">
                         {deployResult.success ? (

@@ -46,8 +46,9 @@ export async function POST(request: NextRequest, { params }: Params) {
             );
         }
 
-        // For paid playbooks, check purchase exists and is completed
-        if (playbook.pricingModel !== "FREE") {
+        // For paid playbooks, check purchase exists (publishers can skip)
+        const isPublisher = playbook.publisherOrgId === organizationId;
+        if (playbook.pricingModel !== "FREE" && !isPublisher) {
             const purchase = await prisma.playbookPurchase.findFirst({
                 where: {
                     playbookId: playbook.id,

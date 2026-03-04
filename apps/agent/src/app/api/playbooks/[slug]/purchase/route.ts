@@ -24,13 +24,6 @@ export async function POST(request: NextRequest, { params }: Params) {
             );
         }
 
-        if (playbook.publisherOrgId === organizationId) {
-            return NextResponse.json(
-                { error: "Cannot purchase your own playbook" },
-                { status: 400 }
-            );
-        }
-
         // Check for existing purchase
         const existingPurchase = await prisma.playbookPurchase.findFirst({
             where: { playbookId: playbook.id, buyerOrgId: organizationId, status: "COMPLETED" }
@@ -42,15 +35,17 @@ export async function POST(request: NextRequest, { params }: Params) {
             );
         }
 
-        if (playbook.pricingModel === "FREE") {
-            // Free path — no Stripe interaction
+        // Publishers can deploy their own playbooks at no cost
+        const isPublisher = playbook.publisherOrgId === organizationId;
+
+        if (playbook.pricingModel === "FREE" || isPublisher) {
             const purchase = await prisma.playbookPurchase.create({
                 data: {
                     playbookId: playbook.id,
                     buyerOrgId: organizationId,
                     buyerUserId: userId,
                     status: "COMPLETED",
-                    pricingModel: "FREE",
+                    pricingModel: isPublisher ? "FREE" : playbook.pricingModel,
                     amountUsd: 0,
                     platformFeeUsd: 0,
                     sellerPayoutUsd: 0
