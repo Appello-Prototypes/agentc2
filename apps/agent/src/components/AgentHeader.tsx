@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSession, signOut } from "@repo/auth/client";
 import { usePathname, useRouter } from "next/navigation";
 import { AgentBrand } from "@/components/AgentBrand";
+import { OrgSwitcher } from "@/components/OrgSwitcher";
 
 const navItems = [
     { label: "Work", href: "/workspace" },
@@ -89,7 +90,13 @@ export function AgentHeader() {
     return (
         <AppTopBar
             title=""
-            logo={<AgentBrand />}
+            logo={
+                <div className="flex items-center gap-3">
+                    <AgentBrand />
+                    <div className="bg-border h-5 w-px" />
+                    <OrgSwitcher />
+                </div>
+            }
             session={session}
             navItems={navItems}
             onSignOut={handleSignOut}

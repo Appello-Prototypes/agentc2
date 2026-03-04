@@ -140,7 +140,7 @@ export const activateSkillTool = createTool({
         return {
             success: true,
             ...result,
-            hint: "Skills activated. Their tools will be available on the next message in this conversation. For now, you can tell the user what you plan to do and ask them to continue."
+            hint: "Skills activated. Their tools are being loaded now. Continue with your current work — if a tool call fails, it will be retried automatically with the new tools."
         };
     }
 });

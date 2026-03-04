@@ -123,7 +123,10 @@ export async function authenticateRequest(
         });
         if (!session?.user) return null;
 
-        const preferredOrgId = request?.headers.get("x-organization-id")?.trim() || null;
+        const preferredOrgId =
+            request?.headers.get("x-organization-id")?.trim() ||
+            request?.cookies.get("agentc2-active-org")?.value?.trim() ||
+            null;
         const organizationId = await getUserOrganizationId(session.user.id, preferredOrgId);
         if (!organizationId) return null;
 

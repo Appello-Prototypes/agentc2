@@ -1097,11 +1097,12 @@ export default function UnifiedChatPage() {
           ? ("streaming" as const)
           : undefined;
 
-    // Activity log uses the raw stream status so it stays visible during
-    // extended thinking pauses (effectivelyReady is only for input unlock).
+    // Activity log: show "working" while submitted or streaming, but clear once
+    // effectivelyReady is true (no new content for 2s) so the loader doesn't
+    // stay stuck during orphan recovery or auto-continuation.
     const activityStatus = isSubmitted
         ? ("submitted" as const)
-        : isStreaming
+        : isStreaming && !effectivelyReady
           ? ("streaming" as const)
           : undefined;
 

@@ -194,5 +194,5 @@ export const agentOperationsToolRoutes: McpToolRoute[] = [
         bodyParams: ["enabled", "monthlyLimitUsd", "alertAtPct", "hardLimit"]
     },
     { kind: "registry", name: "agent-discover" },
-    { kind: "registry", name: "agent-invoke-dynamic" }
+    { kind: "custom", name: "agent-invoke-dynamic", handler: "agentInvokeDynamic" }
 ];

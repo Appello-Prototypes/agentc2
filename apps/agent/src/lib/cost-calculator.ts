@@ -99,6 +99,9 @@ const MODEL_PRICING: Record<string, ModelPricing> = {
         cachedInputPer1M: 0.3
     },
 
+    // Anthropic Claude Haiku 4.5 (cached = 10% of input)
+    "claude-haiku-4-5-20251001": { inputPer1M: 0.8, outputPer1M: 4.0, cachedInputPer1M: 0.08 },
+
     // Anthropic Claude 3.5 models (cached = 10% of input)
     "claude-3-5-sonnet-20241022": { inputPer1M: 3.0, outputPer1M: 15.0, cachedInputPer1M: 0.3 },
     "claude-3-5-sonnet-20240620": { inputPer1M: 3.0, outputPer1M: 15.0, cachedInputPer1M: 0.3 },
@@ -244,8 +247,10 @@ export interface DetailedTokenUsage {
     completionTokens: number;
     /** Thinking/reasoning tokens (Anthropic extended thinking, OpenAI o-series) */
     thinkingTokens?: number;
-    /** Cached input tokens (Anthropic prompt caching — 90% discount) */
+    /** Cached input tokens read from cache (Anthropic prompt caching — 90% discount) */
     cachedTokens?: number;
+    /** Cache creation tokens (Anthropic — charged at 1.25x input rate) */
+    cacheCreationTokens?: number;
 }
 
 /**
@@ -267,13 +272,18 @@ export function calculateCostDetailed(
 
     const thinkingTokens = usage.thinkingTokens ?? 0;
     const cachedTokens = usage.cachedTokens ?? 0;
+    const cacheCreationTokens = usage.cacheCreationTokens ?? 0;
 
-    // Regular prompt tokens = total prompt minus cached (avoid double-counting)
-    const regularPromptTokens = Math.max(0, usage.promptTokens - cachedTokens);
+    // Regular prompt tokens = total prompt minus cached reads and cache creation (avoid double-counting)
+    const regularPromptTokens = Math.max(
+        0,
+        usage.promptTokens - cachedTokens - cacheCreationTokens
+    );
 
     const regularInputCost = (regularPromptTokens / 1_000_000) * pricing.inputPer1M;
     const cachedInputCost =
         (cachedTokens / 1_000_000) * (pricing.cachedInputPer1M ?? pricing.inputPer1M * 0.1);
+    const cacheCreationCost = (cacheCreationTokens / 1_000_000) * pricing.inputPer1M * 1.25;
 
     // Completion tokens may include thinking tokens depending on provider reporting.
     // If thinkingTokens are reported separately, subtract them from completion to avoid double-counting.
@@ -283,6 +293,11 @@ export function calculateCostDetailed(
     const thinkingOutputCost =
         (thinkingTokens / 1_000_000) * (pricing.thinkingOutputPer1M ?? pricing.outputPer1M);
 
-    const total = regularInputCost + cachedInputCost + regularOutputCost + thinkingOutputCost;
+    const total =
+        regularInputCost +
+        cachedInputCost +
+        cacheCreationCost +
+        regularOutputCost +
+        thinkingOutputCost;
     return Math.round(total * 1_000_000) / 1_000_000;
 }

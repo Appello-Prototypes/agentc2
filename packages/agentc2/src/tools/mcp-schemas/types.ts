@@ -34,7 +34,7 @@ export type RegistryToolRoute = {
 export type CustomToolRoute = {
     kind: "custom";
     name: string;
-    handler: "workflowExecute" | "networkExecute" | "agentVersionsList";
+    handler: "workflowExecute" | "networkExecute" | "agentVersionsList" | "agentInvokeDynamic";
 };
 
 export type McpToolRoute = InternalToolRoute | RegistryToolRoute | CustomToolRoute;

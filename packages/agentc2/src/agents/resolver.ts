@@ -137,6 +137,9 @@ export interface ResolveOptions {
     /** Override the agent's configured model. Used by model routing to swap
      *  to a fast or escalation model based on input complexity. */
     modelOverride?: { provider: string; name: string };
+    /** Skill slugs activated during the current turn (bypasses ThreadSkillState read).
+     *  Used by the chat route's orphan recovery to make skills available immediately. */
+    justActivatedSlugs?: string[];
 }
 
 /**
@@ -338,7 +341,9 @@ export class AgentResolver {
             });
 
             // Check hydration cache (keyed by slug:version:threadId:loadAllSkills)
-            const cacheKey = `${record.slug}:${record.version}:${threadId || "none"}:${loadAllSkills ? "all" : "prog"}`;
+            const justActivatedKey =
+                this.currentResolveOptions?.justActivatedSlugs?.sort().join(",") || "";
+            const cacheKey = `${record.slug}:${record.version}:${threadId || "none"}:${loadAllSkills ? "all" : "prog"}:${justActivatedKey}`;
             const cached = this.hydrationCache.get(cacheKey);
             if (cached && cached.expiresAt > Date.now()) {
                 console.log(
@@ -476,12 +481,23 @@ export class AgentResolver {
         }
 
         // Load thread-activated skills (from previous conversation turns)
-        const threadActivatedSlugs = threadId ? await getThreadSkillState(threadId) : [];
+        const threadActivatedSlugsFromDb = threadId ? await getThreadSkillState(threadId) : [];
+        const justActivated = this.currentResolveOptions?.justActivatedSlugs || [];
+        const preActivated = (metadata?.preActivatedSkills as string[]) || [];
+        const threadActivatedSlugs = [
+            ...new Set([...threadActivatedSlugsFromDb, ...justActivated, ...preActivated])
+        ];
 
         // Parallelize independent async work: tools, skills, sub-agents, and MCP tools
         const [registryTools, skillResult, subAgents, mcpTools] = await Promise.all([
             getToolsByNamesAsync(toolNames, organizationId),
-            this.loadSkills(record.id, organizationId, threadActivatedSlugs, loadAllSkills),
+            this.loadSkills(
+                record.id,
+                organizationId,
+                threadActivatedSlugs,
+                loadAllSkills,
+                metadata
+            ),
             this.loadSubAgents(record.subAgents, context),
             // Only load ALL MCP tools for legacy agents without skills
             hasSkills === 0 && metadata?.mcpEnabled
@@ -630,7 +646,9 @@ export class AgentResolver {
                     "list-active-skills",
                     "rag-query",
                     "document-search",
-                    "turn-complete"
+                    "turn-complete",
+                    "backlog",
+                    "network"
                 ];
                 // Also keep tools explicitly listed in metadata.alwaysLoadedTools
                 const alwaysLoaded = (metadata?.alwaysLoadedTools as string[]) || [];
@@ -664,8 +682,10 @@ export class AgentResolver {
                 const toolsToKeep = new Set([...priorityTools, ...remainingTools.slice(0, budget)]);
 
                 const beforeCount = Object.keys(tools).length;
+                const droppedTools: string[] = [];
                 for (const toolKey of Object.keys(tools)) {
                     if (!toolsToKeep.has(toolKey)) {
+                        droppedTools.push(toolKey);
                         delete tools[toolKey];
                     }
                 }
@@ -677,6 +697,11 @@ export class AgentResolver {
                         `maxToolsLoaded: ${maxToolsLoaded}). ` +
                         `${beforeCount - afterCount} tools accessible via skill activation.`
                 );
+                if (droppedTools.length > 0) {
+                    console.log(
+                        `[AgentResolver] Dropped tools for "${record.slug}": ${droppedTools.join(", ")}`
+                    );
+                }
             }
         }
 
@@ -789,12 +814,13 @@ export class AgentResolver {
 
         // Append discoverable skill manifests as a guide for meta-tool usage
         if (hasDiscoverableSkills && discoverableSkillManifests.length > 0) {
-            finalInstructions += `\n\n---\n# Available Skills (Not Yet Loaded)\n`;
-            finalInstructions += `You have access to additional skills that can be activated on demand. `;
-            finalInstructions += `Use the search-skills and activate-skill tools to discover and load them.\n\n`;
-            finalInstructions += `Available skills:\n`;
+            finalInstructions += `\n\n---\n# Available Skills (use search-skills to explore)\n`;
             for (const manifest of discoverableSkillManifests) {
-                finalInstructions += `- **${manifest.name}** (\`${manifest.slug}\`): ${manifest.description}\n`;
+                const shortDesc =
+                    manifest.description.length > 80
+                        ? manifest.description.slice(0, 77) + "..."
+                        : manifest.description;
+                finalInstructions += `- \`${manifest.slug}\`: ${shortDesc}\n`;
             }
         }
 
@@ -1190,7 +1216,8 @@ export class AgentResolver {
         agentId: string,
         organizationId?: string | null,
         threadActivatedSlugs?: string[],
-        loadAllSkills?: boolean
+        loadAllSkills?: boolean,
+        metadata?: Record<string, unknown> | null
     ): Promise<{
         skillInstructions: string;
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1306,7 +1333,7 @@ export class AgentResolver {
                 discoverableSkillManifests.push({
                     slug: skill.slug,
                     name: skill.name,
-                    description: skill.description || skill.instructions.slice(0, 200)
+                    description: (skill.description || skill.instructions).slice(0, 80)
                 });
                 loadedSkillSlugs.add(skill.slug);
             }
@@ -1756,8 +1783,16 @@ export class AgentResolver {
             const anthCfg: AnthropicProviderConfig = modelConfig.anthropic ?? {};
             const anthropicOptions: Record<string, unknown> = {};
 
+            const modelOverride = this.currentResolveOptions?.modelOverride;
+            const overrideModelName = modelOverride?.name ?? "";
+            const isFastOverride =
+                !!modelOverride &&
+                (overrideModelName.includes("haiku") || overrideModelName.includes("mini"));
+
             const thinking = anthCfg.thinking ?? modelConfig.thinking;
-            if (thinking?.type === "adaptive") {
+            if (isFastOverride) {
+                // Fast models (Haiku, etc.) don't support thinking or contextManagement — skip
+            } else if (thinking?.type === "adaptive") {
                 anthropicOptions.thinking = { type: "adaptive" };
             } else if (thinking?.type === "enabled") {
                 const thinkingConfig = thinking as Record<string, unknown>;
@@ -1796,7 +1831,7 @@ export class AgentResolver {
                 anthropicOptions.sendReasoning = anthCfg.sendReasoning;
             }
 
-            if (anthCfg.contextManagement) {
+            if (anthCfg.contextManagement && !isFastOverride) {
                 anthropicOptions.contextManagement = anthCfg.contextManagement;
             }
 
@@ -2187,6 +2222,18 @@ export async function resolveModelOverride(
 
     if (!inputForRouting) {
         return { routingDecision: null };
+    }
+
+    // First message in a new thread always uses the primary model.
+    // Short inputs like "go" score as "simple" but trigger full awakening (backlog, memory, etc.).
+    if (Array.isArray(input)) {
+        const userMessageCount = input.filter((m) => m.role === "user").length;
+        if (userMessageCount <= 1) {
+            console.log(
+                `[ModelRouting] New thread (${userMessageCount} user msg) → always PRIMARY`
+            );
+            return { routingDecision: null };
+        }
     }
 
     let budgetExceeded = false;

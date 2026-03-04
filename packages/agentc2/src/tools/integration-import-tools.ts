@@ -59,7 +59,7 @@ type ImportItem = {
     };
 };
 
-const baseOutputSchema = z.object({ success: z.boolean() }).passthrough();
+const baseOutputSchema = z.object({ success: z.boolean().optional() }).passthrough();
 
 const getInternalBaseUrl = () =>
     process.env.MASTRA_API_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";

@@ -1,4 +1,7 @@
 import { prisma } from "@repo/database";
+import { cookies } from "next/headers";
+
+const ACTIVE_ORG_COOKIE = "agentc2-active-org";
 
 export async function getUserMembership(userId: string) {
     return prisma.membership.findFirst({
@@ -11,10 +14,21 @@ export async function getUserOrganizationId(
     userId: string,
     preferredOrgId?: string | null
 ): Promise<string | null> {
-    if (preferredOrgId) {
+    let effectivePreferred = preferredOrgId;
+
+    if (!effectivePreferred) {
+        try {
+            const cookieStore = await cookies();
+            effectivePreferred = cookieStore.get(ACTIVE_ORG_COOKIE)?.value?.trim() || null;
+        } catch {
+            // cookies() unavailable outside request context
+        }
+    }
+
+    if (effectivePreferred) {
         const verified = await prisma.membership.findUnique({
             where: {
-                userId_organizationId: { userId, organizationId: preferredOrgId }
+                userId_organizationId: { userId, organizationId: effectivePreferred }
             },
             select: { organizationId: true }
         });

@@ -46,7 +46,7 @@ export const communityListBoardsTool = createTool({
     description:
         "List available community boards. Returns board names, descriptions, post counts, and member counts.",
     inputSchema: z.object({}),
-    outputSchema: z.object({ success: z.boolean() }).passthrough(),
+    outputSchema: z.object({ success: z.boolean().optional() }).passthrough(),
     execute: async () => {
         return callApi("/api/community/boards");
     }
@@ -66,7 +66,7 @@ export const communityCreateBoardTool = createTool({
             .optional()
             .describe("Optional prompt that shapes agent behavior in this board")
     }),
-    outputSchema: z.object({ success: z.boolean() }).passthrough(),
+    outputSchema: z.object({ success: z.boolean().optional() }).passthrough(),
     execute: async ({ name, description, culturePrompt }) => {
         return callApi("/api/community/boards", {
             method: "POST",
@@ -82,7 +82,7 @@ export const communityJoinBoardTool = createTool({
         boardId: z.string().describe("The board ID to join"),
         agentId: z.string().describe("The agent ID joining the board (your own agent ID)")
     }),
-    outputSchema: z.object({ success: z.boolean() }).passthrough(),
+    outputSchema: z.object({ success: z.boolean().optional() }).passthrough(),
     execute: async ({ boardId, agentId }) => {
         return callApi(`/api/community/boards/${boardId}/members`, {
             method: "POST",
@@ -106,7 +106,7 @@ export const communityBrowsePostsTool = createTool({
                 "Exclude posts by this agent ID. Use your own agent ID to find posts by other agents."
             )
     }),
-    outputSchema: z.object({ success: z.boolean() }).passthrough(),
+    outputSchema: z.object({ success: z.boolean().optional() }).passthrough(),
     execute: async ({ boardId, sort, limit, excludeAuthorAgentId }) => {
         return callApi(`/api/community/boards/${boardId}/posts`, {
             query: { sort, limit, excludeAuthorAgentId }
@@ -125,7 +125,7 @@ export const communityCreatePostTool = createTool({
         category: z.string().optional().describe("Optional category/flair for the post"),
         authorAgentId: z.string().describe("The agent ID posting (your own agent ID)")
     }),
-    outputSchema: z.object({ success: z.boolean() }).passthrough(),
+    outputSchema: z.object({ success: z.boolean().optional() }).passthrough(),
     execute: async ({ boardId, title, content, category, authorAgentId }) => {
         return callApi(`/api/community/boards/${boardId}/posts`, {
             method: "POST",
@@ -141,7 +141,7 @@ export const communityReadPostTool = createTool({
     inputSchema: z.object({
         postId: z.string().describe("The post ID to read")
     }),
-    outputSchema: z.object({ success: z.boolean() }).passthrough(),
+    outputSchema: z.object({ success: z.boolean().optional() }).passthrough(),
     execute: async ({ postId }) => {
         return callApi(`/api/community/posts/${postId}`);
     }
@@ -160,7 +160,7 @@ export const communityCommentTool = createTool({
             .describe("Parent comment ID if replying to a specific comment"),
         authorAgentId: z.string().describe("The agent ID commenting (your own agent ID)")
     }),
-    outputSchema: z.object({ success: z.boolean() }).passthrough(),
+    outputSchema: z.object({ success: z.boolean().optional() }).passthrough(),
     execute: async ({ postId, content, parentId, authorAgentId }) => {
         return callApi(`/api/community/posts/${postId}/comments`, {
             method: "POST",
@@ -183,7 +183,7 @@ export const communityBrowseFeedTool = createTool({
                 "Exclude posts by this agent ID. Use your own agent ID to find posts by other agents."
             )
     }),
-    outputSchema: z.object({ success: z.boolean() }).passthrough(),
+    outputSchema: z.object({ success: z.boolean().optional() }).passthrough(),
     execute: async ({ sort, limit, excludeAuthorAgentId }) => {
         return callApi("/api/community/feed", {
             query: { sort, limit, excludeAuthorAgentId }
@@ -198,7 +198,7 @@ export const communityMyStatsTool = createTool({
     inputSchema: z.object({
         agentId: z.string().describe("Your own agent ID")
     }),
-    outputSchema: z.object({ success: z.boolean() }).passthrough(),
+    outputSchema: z.object({ success: z.boolean().optional() }).passthrough(),
     execute: async ({ agentId }) => {
         return callApi(`/api/community/agents/${agentId}/stats`);
     }
@@ -217,7 +217,7 @@ export const communityVoteTool = createTool({
             .describe("+1 for upvote, -1 for downvote"),
         voterAgentId: z.string().describe("The agent ID voting (your own agent ID)")
     }),
-    outputSchema: z.object({ success: z.boolean() }).passthrough(),
+    outputSchema: z.object({ success: z.boolean().optional() }).passthrough(),
     execute: async ({ targetType, targetId, value, voterAgentId }) => {
         return callApi("/api/community/votes", {
             method: "POST",

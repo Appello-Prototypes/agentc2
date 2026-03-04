@@ -17,7 +17,7 @@ async function resolveAgent(agentId: string, organizationId?: string) {
     });
 }
 
-const baseOutputSchema = z.object({ success: z.boolean() }).passthrough();
+const baseOutputSchema = z.object({ success: z.boolean().optional() }).passthrough();
 
 const getInternalBaseUrl = () =>
     process.env.MASTRA_API_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
@@ -78,14 +78,7 @@ export const metricsLiveSummaryTool = createTool({
             .optional()
             .describe("Organization ID for tenant-scoped access (auto-injected)")
     }),
-    outputSchema: z.object({
-        success: z.boolean(),
-        summary: z.record(z.any()),
-        latency: z.record(z.any()),
-        topRuns: z.record(z.any()),
-        perAgent: z.array(z.any()),
-        modelUsage: z.array(z.any())
-    }),
+    outputSchema: baseOutputSchema,
     execute: async ({ runType, from, to, organizationId }) => {
         const baseWhere: Prisma.AgentRunWhereInput = {
             ...(organizationId ? { agent: { workspace: { organizationId } } } : {})
@@ -315,16 +308,7 @@ export const metricsAgentAnalyticsTool = createTool({
             .optional()
             .describe("Organization ID for tenant-scoped access (auto-injected)")
     }),
-    outputSchema: z.object({
-        success: z.boolean(),
-        summary: z.record(z.any()),
-        latency: z.record(z.any()),
-        trends: z.record(z.any()),
-        toolUsage: z.array(z.any()),
-        quality: z.record(z.any()),
-        models: z.array(z.any()),
-        dateRange: z.record(z.any())
-    }),
+    outputSchema: baseOutputSchema,
     execute: async ({ agentId, from, to, organizationId }) => {
         const agent = await resolveAgent(agentId, organizationId);
         if (!agent) {
@@ -558,12 +542,7 @@ export const metricsAgentRunsTool = createTool({
             .optional()
             .describe("Organization ID for tenant-scoped access (auto-injected)")
     }),
-    outputSchema: z.object({
-        success: z.boolean(),
-        runs: z.array(z.any()),
-        hasMore: z.boolean(),
-        total: z.number()
-    }),
+    outputSchema: baseOutputSchema,
     execute: async ({
         agentId,
         status,
@@ -705,10 +684,7 @@ export const metricsWorkflowDailyTool = createTool({
             .optional()
             .describe("Organization ID for tenant-scoped access (auto-injected)")
     }),
-    outputSchema: z.object({
-        success: z.boolean(),
-        metrics: z.array(z.any())
-    }),
+    outputSchema: baseOutputSchema,
     execute: async ({ workflowSlug, days, organizationId }) => {
         const workflow = await prisma.workflow.findFirst({
             where: {
@@ -747,10 +723,7 @@ export const metricsNetworkDailyTool = createTool({
             .optional()
             .describe("Organization ID for tenant-scoped access (auto-injected)")
     }),
-    outputSchema: z.object({
-        success: z.boolean(),
-        metrics: z.array(z.any())
-    }),
+    outputSchema: baseOutputSchema,
     execute: async ({ networkSlug, days, organizationId }) => {
         const network = await prisma.network.findFirst({
             where: {

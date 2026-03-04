@@ -279,12 +279,14 @@ export default function OnboardingPage() {
                 // sufficient — they can re-authorize from Settings later.
 
                 // Get session info for org/user IDs
-                const sessionRes = await fetch(`${getApiBase()}/api/auth/session`, {
+                const sessionRes = await fetch(`${getApiBase()}/api/auth/get-session`, {
                     credentials: "include"
                 });
-                const sessionResult = await sessionRes.json();
-                if (sessionResult?.user) {
-                    setUserId(sessionResult.user.id);
+                if (sessionRes.ok) {
+                    const sessionResult = await sessionRes.json();
+                    if (sessionResult?.user) {
+                        setUserId(sessionResult.user.id);
+                    }
                 }
 
                 // Get org ID from membership
@@ -619,12 +621,14 @@ export default function OnboardingPage() {
                 setOnboardingPath("google_oauth");
             }
 
-            const sessionRes = await fetch(`${getApiBase()}/api/auth/session`, {
+            const sessionRes = await fetch(`${getApiBase()}/api/auth/get-session`, {
                 credentials: "include"
             });
-            const sessionResult = await sessionRes.json();
-            if (sessionResult?.user) {
-                setUserId(sessionResult.user.id);
+            if (sessionRes.ok) {
+                const sessionResult = await sessionRes.json();
+                if (sessionResult?.user) {
+                    setUserId(sessionResult.user.id);
+                }
             }
         } catch (error) {
             console.error("[Onboarding] Failed to sync integrations after org choice:", error);

@@ -7,6 +7,7 @@ import { GOOGLE_OAUTH_SCOPES } from "@repo/auth/google-scopes";
 import { AppProviders } from "@repo/ui";
 import { useSessionContext } from "@repo/auth/providers";
 import { TimezoneProvider } from "@/components/TimezoneProvider";
+import { OrganizationProvider } from "@/components/OrganizationProvider";
 
 function GmailSyncOnLogin() {
     const { session } = useSessionContext();
@@ -101,11 +102,13 @@ export function AppProvidersWrapper({ children }: { children: React.ReactNode })
 
     return (
         <AppProviders router={router} pathname={pathname}>
-            <TimezoneProvider>
-                <GmailSyncOnLogin />
-                <MicrosoftSyncOnLogin />
-                {children}
-            </TimezoneProvider>
+            <OrganizationProvider>
+                <TimezoneProvider>
+                    <GmailSyncOnLogin />
+                    <MicrosoftSyncOnLogin />
+                    {children}
+                </TimezoneProvider>
+            </OrganizationProvider>
         </AppProviders>
     );
 }

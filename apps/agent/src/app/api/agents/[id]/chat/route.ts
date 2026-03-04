@@ -571,6 +571,21 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             `[Agent Chat] Memory context: thread=${userThreadId}, resource=${resourceId}, agentHasMemory=${hasMemory}, agent=${id}`
         );
 
+        // Ensure provider options (e.g. Anthropic prompt caching) from the agent's
+        // defaultOptions are passed through to every stream call, rather than relying
+        // on Mastra's internal merge which may not forward providerOptions.
+        try {
+            const agentDefaultOpts = await agent.getDefaultOptions();
+            if (agentDefaultOpts?.providerOptions) {
+                streamOptions.providerOptions = {
+                    ...agentDefaultOpts.providerOptions,
+                    ...streamOptions.providerOptions
+                };
+            }
+        } catch {
+            // Non-fatal: if getDefaultOptions fails, proceed without provider options
+        }
+
         // Wire request abort signal to agent stream so client cancellation
         // stops token consumption immediately at the LLM API level
         const abortController = new AbortController();
@@ -888,11 +903,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                     // never sees a blank response.
 
                     const IDLE_TIMEOUT_MS = 10_000;
-                    const GLOBAL_STREAM_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes max per stream
-                    const CHUNK_IDLE_TIMEOUT_MS = 60_000; // 60s max between chunks
+                    const GLOBAL_STREAM_TIMEOUT_MS = 3 * 60 * 1000; // 3 minutes max per stream
+                    const CHUNK_IDLE_TIMEOUT_MS = 45_000; // 45s max between chunks
                     let hasReceivedContent = false;
                     let streamAttempt = 0;
                     let activeStreamResult = streamResult;
+                    const allStreamResults: StreamResult[] = [
+                        streamResult as unknown as StreamResult
+                    ];
                     let activeResponseStream = responseStream;
 
                     const consumeFullStream = async (
@@ -1102,6 +1120,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                                         );
                                         accumulatedCostUsd += stepCost;
 
+                                        w.write({
+                                            type: "data-step-cost",
+                                            data: {
+                                                step: stepCounter,
+                                                inputTokens: inTok,
+                                                outputTokens: outTok,
+                                                costUsd: stepCost,
+                                                cumulativeCostUsd: accumulatedCostUsd
+                                            }
+                                        });
+
                                         const usageStep = {
                                             step: stepCounter,
                                             type: "step_usage" as const,
@@ -1117,6 +1146,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                                                     `$${accumulatedCostUsd.toFixed(4)} > $${PER_TURN_COST_CAP_USD}. ` +
                                                     `Accumulated: ${accumulatedInputTokens} in + ${accumulatedOutputTokens} out.`
                                             );
+                                            w.write({
+                                                type: "data-cost-warning",
+                                                data: {
+                                                    runningCost: accumulatedCostUsd,
+                                                    cap: PER_TURN_COST_CAP_USD,
+                                                    message: "Turn cost cap reached"
+                                                }
+                                            });
                                         }
                                     }
                                     finishSeen = false;
@@ -1229,12 +1266,19 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
                             let continuationAgent = agent;
                             if (skillActivated) {
+                                const activatedSlugs = toolCalls
+                                    .filter((tc) => tc.toolKey === "activate-skill" && tc.success)
+                                    .flatMap((tc) => {
+                                        const input = tc.input as { skillSlugs?: string[] };
+                                        return input?.skillSlugs || [];
+                                    });
                                 try {
                                     const reResolved = await agentResolver.resolve({
                                         slug: id,
                                         requestContext: enrichedRequestContext,
                                         threadId: userThreadId,
-                                        modelOverride: modelOverrideForResolve
+                                        modelOverride: modelOverrideForResolve,
+                                        justActivatedSlugs: activatedSlugs
                                     });
                                     continuationAgent = reResolved.agent;
                                     console.log(
@@ -1265,6 +1309,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                                     );
                                     const contResult = contStream as unknown as StreamResult;
                                     activeStreamResult = contResult;
+                                    allStreamResults.push(contResult);
                                     activeResponseStream = contStream;
 
                                     const contGotContent = await consumeFullStream(
@@ -1299,6 +1344,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                         try {
                             activeResponseStream = await agent.stream(streamInput, streamOptions);
                             activeStreamResult = activeResponseStream as unknown as StreamResult;
+                            allStreamResults.push(activeStreamResult);
                             hasReceivedContent = await consumeFullStream(
                                 activeStreamResult,
                                 writer,
@@ -1335,6 +1381,89 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                         );
                     }
 
+                    // ── Auto-continuation loop ──
+                    // When turn-complete signals "work_complete" with a nextAction,
+                    // automatically continue execution without requiring human input.
+                    const MAX_AUTO_CONTINUATIONS = 3;
+                    const MAX_SESSION_COST_USD = 2.0;
+                    const MAX_CONTINUATION_LOOP_MS = 120_000; // 2 min total for all continuations
+                    const CONTINUATION_MAX_STEPS = 10;
+                    let continuationCount = 0;
+                    const contLoopStart = Date.now();
+
+                    while (
+                        turnCompleteMetadata?.reason === "work_complete" &&
+                        turnCompleteMetadata?.nextAction &&
+                        continuationCount < MAX_AUTO_CONTINUATIONS &&
+                        accumulatedCostUsd < MAX_SESSION_COST_USD &&
+                        hasReceivedContent &&
+                        Date.now() - contLoopStart < MAX_CONTINUATION_LOOP_MS
+                    ) {
+                        continuationCount++;
+                        console.log(
+                            `[Agent Chat] Auto-continuation ${continuationCount}/${MAX_AUTO_CONTINUATIONS} ` +
+                                `for "${id}" (cost: $${accumulatedCostUsd.toFixed(4)}): ${turnCompleteMetadata.nextAction}`
+                        );
+
+                        writer.write({
+                            type: "data-continuation",
+                            data: {
+                                count: continuationCount,
+                                maxCount: MAX_AUTO_CONTINUATIONS,
+                                costSoFar: accumulatedCostUsd,
+                                costCap: MAX_SESSION_COST_USD,
+                                nextAction: turnCompleteMetadata.nextAction
+                            }
+                        });
+
+                        const prevNextAction = turnCompleteMetadata.nextAction;
+                        turnCompleteMetadata = null;
+
+                        if (textState.currentId) {
+                            writer.write({ type: "text-end", id: textState.currentId });
+                            textState.currentId = null;
+                        }
+                        writer.write({ type: "finish-step" });
+                        writer.write({ type: "start-step" });
+                        const contTextId = generateId();
+                        writer.write({ type: "text-start", id: contTextId });
+                        textState.currentId = contTextId;
+
+                        try {
+                            const contPrompt = `[System: Continue execution. Your previous turn completed with nextAction: "${prevNextAction}". Execute it now. Finish within ${CONTINUATION_MAX_STEPS} steps.]`;
+                            const contStreamOpts = {
+                                ...streamOptions,
+                                maxSteps: CONTINUATION_MAX_STEPS
+                            };
+                            const contStream = await agent.stream(contPrompt, contStreamOpts);
+                            const contResult = contStream as unknown as StreamResult;
+                            activeStreamResult = contResult;
+                            allStreamResults.push(contResult);
+
+                            const contGotContent = await consumeFullStream(
+                                contResult,
+                                writer,
+                                textState
+                            );
+                            if (contGotContent) {
+                                hasReceivedContent = true;
+                            }
+                        } catch (contErr) {
+                            console.error(
+                                `[Agent Chat] Auto-continuation ${continuationCount} failed:`,
+                                contErr instanceof Error ? contErr.message : contErr
+                            );
+                            break;
+                        }
+                    }
+
+                    if (continuationCount > 0) {
+                        console.log(
+                            `[Agent Chat] Auto-continuation complete: ${continuationCount} additional turns, ` +
+                                `total cost: $${accumulatedCostUsd.toFixed(4)}`
+                        );
+                    }
+
                     // Close any remaining open text block
                     if (textState.currentId) {
                         writer.write({ type: "text-end", id: textState.currentId });
@@ -1344,6 +1473,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                     // Snapshot values needed by post-stream work (closures)
                     const capturedRun = run;
                     const capturedStreamResult = activeStreamResult;
+                    const capturedAllStreamResults = [...allStreamResults];
                     const capturedToolCalls = [...toolCalls];
                     const capturedToolCallMap = new Map(toolCallMap);
                     const capturedFullOutput = fullOutput;
@@ -1358,30 +1488,71 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                     // This does NOT block the stream from closing.
                     void (async () => {
                         try {
-                            // Get usage data from the stream result's .usage promise
+                            // Aggregate usage data from ALL stream results (original + orphan recovery + continuations)
                             let usage: UsageLike | null = null;
                             try {
-                                if (capturedStreamResult?.usage) {
-                                    const resolvedUsage = await Promise.race([
-                                        capturedStreamResult.usage,
-                                        new Promise<null>((resolve) =>
-                                            setTimeout(() => resolve(null), 10_000)
-                                        )
-                                    ]);
-                                    usage =
-                                        resolvedUsage && typeof resolvedUsage === "object"
-                                            ? (resolvedUsage as UsageLike)
-                                            : null;
-                                    if (!usage) {
+                                const aggregated: UsageLike = {
+                                    promptTokens: 0,
+                                    completionTokens: 0,
+                                    totalTokens: 0,
+                                    inputTokens: 0,
+                                    outputTokens: 0,
+                                    reasoningTokens: 0,
+                                    cachedTokens: 0,
+                                    cacheReadTokens: 0
+                                };
+                                let anyResolved = false;
+                                let streamsWithoutUsage = 0;
+
+                                for (const sr of capturedAllStreamResults) {
+                                    if (!sr?.usage) {
+                                        streamsWithoutUsage++;
+                                        continue;
+                                    }
+                                    try {
+                                        const resolved = await Promise.race([
+                                            sr.usage,
+                                            new Promise<null>((resolve) =>
+                                                setTimeout(() => resolve(null), 15_000)
+                                            )
+                                        ]);
+                                        if (resolved && typeof resolved === "object") {
+                                            const u = resolved as UsageLike;
+                                            aggregated.promptTokens! +=
+                                                u.promptTokens ?? u.inputTokens ?? 0;
+                                            aggregated.completionTokens! +=
+                                                u.completionTokens ?? u.outputTokens ?? 0;
+                                            aggregated.totalTokens! += u.totalTokens ?? 0;
+                                            aggregated.reasoningTokens! += u.reasoningTokens ?? 0;
+                                            aggregated.cachedTokens! +=
+                                                u.cachedTokens ?? u.cacheReadTokens ?? 0;
+                                            anyResolved = true;
+                                        }
+                                    } catch (usageErr) {
                                         console.warn(
-                                            `[Agent Chat] Usage promise resolved to non-object for run ${capturedRun?.runId}:`,
-                                            typeof resolvedUsage,
-                                            resolvedUsage
+                                            `[Agent Chat] Stream usage resolution failed for run ${capturedRun?.runId}:`,
+                                            usageErr instanceof Error ? usageErr.message : usageErr
+                                        );
+                                    }
+                                }
+
+                                if (streamsWithoutUsage > 0) {
+                                    console.warn(
+                                        `[Agent Chat] ${streamsWithoutUsage}/${capturedAllStreamResults.length} stream(s) lacked .usage property for run ${capturedRun?.runId}`
+                                    );
+                                }
+
+                                if (anyResolved) {
+                                    usage = aggregated;
+                                    if (capturedAllStreamResults.length > 1) {
+                                        console.log(
+                                            `[Agent Chat] Aggregated usage from ${capturedAllStreamResults.length} streams for run ${capturedRun?.runId}: ` +
+                                                `in=${aggregated.promptTokens}, out=${aggregated.completionTokens}`
                                         );
                                     }
                                 } else {
                                     console.warn(
-                                        `[Agent Chat] No .usage property on stream result for run ${capturedRun?.runId}`
+                                        `[Agent Chat] No usage data resolved from ${capturedAllStreamResults.length} stream(s) for run ${capturedRun?.runId}`
                                     );
                                 }
                             } catch (e) {
@@ -1458,11 +1629,27 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                             // Extract thinking and cached tokens for accurate cost calculation
                             const thinkingTokens = usage?.reasoningTokens ?? 0;
                             const cachedTokens = usage?.cachedTokens ?? usage?.cacheReadTokens ?? 0;
+                            const cacheCreation = usage?.cacheCreationTokens ?? 0;
+
+                            if (cacheCreation > 0 || cachedTokens > 0) {
+                                console.log(
+                                    `[Agent Chat] Cache stats for run ${capturedRun?.runId}: ` +
+                                        `created=${cacheCreation}, read=${cachedTokens}, ` +
+                                        `total_prompt=${promptTokens}, ` +
+                                        `cache_rate=${((cachedTokens / Math.max(promptTokens, 1)) * 100).toFixed(1)}%`
+                                );
+                            }
 
                             const costUsd = calculateCostDetailed(
                                 record?.modelName || "unknown",
                                 record?.modelProvider || "unknown",
-                                { promptTokens, completionTokens, thinkingTokens, cachedTokens }
+                                {
+                                    promptTokens,
+                                    completionTokens,
+                                    thinkingTokens,
+                                    cachedTokens,
+                                    cacheCreationTokens: cacheCreation
+                                }
                             );
 
                             // Post-stream output guardrail check (flag only -- tokens already sent)
@@ -1561,6 +1748,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                                         );
                                     }
                                 } else {
+                                    console.log(
+                                        `[Agent Chat] Usage summary for run ${capturedRun.runId}: ` +
+                                            `streams=${capturedAllStreamResults.length}, ` +
+                                            `prompt=${promptTokens}, completion=${completionTokens}, ` +
+                                            `cached=${cachedTokens}, cost=$${costUsd.toFixed(4)}, ` +
+                                            `model=${actualModelName}`
+                                    );
+
                                     await capturedRun.complete({
                                         output: capturedFullOutput,
                                         modelProvider: actualModelProvider,

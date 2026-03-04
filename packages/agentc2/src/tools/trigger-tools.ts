@@ -196,7 +196,7 @@ export const triggerUnifiedListTool = createTool({
     description: "List all execution triggers for an agent.",
     inputSchema: z.object({ agentId: z.string() }),
     outputSchema: z.object({
-        success: z.boolean(),
+        success: z.boolean().optional(),
         triggers: z.array(z.any()),
         total: z.number()
     }),
@@ -270,7 +270,7 @@ export const triggerUnifiedGetTool = createTool({
     description: "Fetch a unified execution trigger by ID.",
     inputSchema: z.object({ agentId: z.string(), triggerId: z.string() }),
     outputSchema: z.object({
-        success: z.boolean(),
+        success: z.boolean().optional(),
         trigger: z.any()
     }),
     execute: async ({ agentId, triggerId }) => {
@@ -341,7 +341,7 @@ export const triggerUnifiedCreateTool = createTool({
         name: z.string().describe("Human-readable trigger name")
     }),
     outputSchema: z.object({
-        success: z.boolean(),
+        success: z.boolean().optional(),
         trigger: z.any(),
         webhook: z
             .object({
@@ -514,7 +514,7 @@ export const triggerUnifiedUpdateTool = createTool({
         triggerId: z.string()
     }),
     outputSchema: z.object({
-        success: z.boolean(),
+        success: z.boolean().optional(),
         trigger: z.any()
     }),
     execute: async (input) => {
@@ -686,7 +686,7 @@ export const triggerUnifiedDeleteTool = createTool({
     description: "Delete a unified execution trigger.",
     inputSchema: z.object({ agentId: z.string(), triggerId: z.string() }),
     outputSchema: z.object({
-        success: z.boolean(),
+        success: z.boolean().optional(),
         message: z.string()
     }),
     execute: async ({ agentId, triggerId }) => {
@@ -726,7 +726,7 @@ export const triggerUnifiedEnableTool = createTool({
     id: "trigger-unified-enable",
     description: "Enable a unified execution trigger.",
     inputSchema: z.object({ agentId: z.string(), triggerId: z.string() }),
-    outputSchema: z.object({ success: z.boolean(), trigger: z.any() }),
+    outputSchema: z.object({ success: z.boolean().optional(), trigger: z.any() }),
     execute: async ({ agentId, triggerId }) => {
         if (!triggerUnifiedUpdateTool.execute) {
             throw new Error("triggerUnifiedUpdateTool.execute is not available");
@@ -742,7 +742,7 @@ export const triggerUnifiedDisableTool = createTool({
     id: "trigger-unified-disable",
     description: "Disable a unified execution trigger.",
     inputSchema: z.object({ agentId: z.string(), triggerId: z.string() }),
-    outputSchema: z.object({ success: z.boolean(), trigger: z.any() }),
+    outputSchema: z.object({ success: z.boolean().optional(), trigger: z.any() }),
     execute: async ({ agentId, triggerId }) => {
         if (!triggerUnifiedUpdateTool.execute) {
             throw new Error("triggerUnifiedUpdateTool.execute is not available");
@@ -813,7 +813,7 @@ export const triggerTestTool = createTool({
         environment: z.string().optional(),
         payload: z.record(z.any()).optional()
     }),
-    outputSchema: z.object({ success: z.boolean() }).passthrough(),
+    outputSchema: z.object({ success: z.boolean().optional() }).passthrough(),
     execute: async ({ agentId, triggerId, input, context, maxSteps, environment, payload }) => {
         return callInternalApi(`/api/agents/${agentId}/execution-triggers/${triggerId}/test`, {
             method: "POST",
@@ -834,7 +834,7 @@ export const triggerExecuteTool = createTool({
         environment: z.string().optional(),
         payload: z.record(z.any()).optional()
     }),
-    outputSchema: z.object({ success: z.boolean() }).passthrough(),
+    outputSchema: z.object({ success: z.boolean().optional() }).passthrough(),
     execute: async ({ agentId, triggerId, input, context, maxSteps, environment, payload }) => {
         return callInternalApi(`/api/agents/${agentId}/execution-triggers/${triggerId}/execute`, {
             method: "POST",

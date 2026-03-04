@@ -903,9 +903,79 @@ export async function POST(request: NextRequest) {
         };
 
         const customHandlers: Record<
-            "workflowExecute" | "networkExecute" | "agentVersionsList",
+            "workflowExecute" | "networkExecute" | "agentVersionsList" | "agentInvokeDynamic",
             ToolHandler
         > = {
+            agentInvokeDynamic: async (inputParams) => {
+                const scopedParams = normalizeParams(inputParams);
+                const agentSlug = String(scopedParams.agentSlug || "");
+                const message = String(scopedParams.message || "");
+                if (!agentSlug || !message) {
+                    return NextResponse.json(
+                        { success: false, error: "Missing agentSlug or message" },
+                        { status: 400 }
+                    );
+                }
+
+                const agent = await prisma.agent.findFirst({
+                    where: {
+                        AND: [
+                            { OR: [{ slug: agentSlug }, { id: agentSlug }] },
+                            { isActive: true },
+                            {
+                                OR: [
+                                    { workspace: { organizationId } },
+                                    { tenantId: organizationId }
+                                ]
+                            }
+                        ]
+                    },
+                    select: { id: true, slug: true }
+                });
+                if (!agent) {
+                    return NextResponse.json(
+                        {
+                            success: false,
+                            agentSlug,
+                            error: `Agent not found: ${agentSlug}`
+                        },
+                        { status: 404 }
+                    );
+                }
+
+                const invokeUrl = new URL(
+                    `/api/agents/${encodeURIComponent(agentSlug)}/invoke`,
+                    getInternalBaseUrl()
+                );
+                const invokeBody: Record<string, unknown> = {
+                    input: message,
+                    mode: "sync"
+                };
+                if (scopedParams.context) invokeBody.context = scopedParams.context;
+                if (scopedParams.maxSteps) invokeBody.maxSteps = scopedParams.maxSteps;
+
+                const result = await callInternalApi(invokeUrl, "POST", invokeBody, {
+                    expectSuccess: true
+                });
+                if (!result.ok) {
+                    return NextResponse.json(
+                        { success: false, agentSlug, error: result.error },
+                        { status: result.status }
+                    );
+                }
+
+                return NextResponse.json({
+                    success: true,
+                    result: {
+                        success: true,
+                        agentSlug,
+                        output: result.data.output,
+                        run_id: result.data.run_id,
+                        duration_ms: result.data.duration_ms,
+                        usage: result.data.usage
+                    }
+                });
+            },
             workflowExecute: async (inputParams) => {
                 const scopedParams = normalizeParams(inputParams);
                 const resolvedInput = resolveWorkflowInput(scopedParams);
