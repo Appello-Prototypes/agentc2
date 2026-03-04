@@ -2,36 +2,60 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
 import { requireAdminAction, AdminAuthError } from "@repo/admin-auth";
 import type { AdminAction } from "@repo/admin-auth";
-import { adminAudit, getRequestContext } from "@/lib/admin-audit";
+import { adminAudit, getRequestContext, type AdminAuditAction } from "@/lib/admin-audit";
 
-type BulkAction = "freeze" | "activate" | "delete";
+type BulkAction = "freeze" | "activate" | "delete" | "verify_email" | "unverify_email";
 
-const ACTION_CONFIG: Record<
-    BulkAction,
-    {
-        targetStatus: string;
-        auditAction: "USER_BULK_FREEZE" | "USER_BULK_ACTIVATE" | "USER_BULK_DELETE";
-        permission: AdminAction;
-        revokeSessionsOnUpdate: boolean;
-    }
-> = {
+type StatusAction = {
+    kind: "status";
+    targetStatus: string;
+    auditAction: AdminAuditAction;
+    permission: AdminAction;
+    revokeSessionsOnUpdate: boolean;
+};
+
+type EmailVerifyAction = {
+    kind: "email_verify";
+    targetValue: boolean;
+    auditAction: AdminAuditAction;
+    permission: AdminAction;
+};
+
+type ActionConfig = StatusAction | EmailVerifyAction;
+
+const ACTION_CONFIG: Record<BulkAction, ActionConfig> = {
     freeze: {
+        kind: "status",
         targetStatus: "frozen",
         auditAction: "USER_BULK_FREEZE",
         permission: "user:freeze",
         revokeSessionsOnUpdate: true
     },
     activate: {
+        kind: "status",
         targetStatus: "active",
         auditAction: "USER_BULK_ACTIVATE",
         permission: "user:activate",
         revokeSessionsOnUpdate: false
     },
     delete: {
+        kind: "status",
         targetStatus: "deleted",
         auditAction: "USER_BULK_DELETE",
         permission: "user:delete",
         revokeSessionsOnUpdate: true
+    },
+    verify_email: {
+        kind: "email_verify",
+        targetValue: true,
+        auditAction: "USER_BULK_VERIFY_EMAIL",
+        permission: "user:verify_email"
+    },
+    unverify_email: {
+        kind: "email_verify",
+        targetValue: false,
+        auditAction: "USER_BULK_UNVERIFY_EMAIL",
+        permission: "user:verify_email"
     }
 };
 
@@ -49,13 +73,62 @@ export async function POST(request: NextRequest) {
         }
         if (!action || !ACTION_CONFIG[action]) {
             return NextResponse.json(
-                { error: "Invalid action. Must be: freeze, activate, or delete" },
+                {
+                    error: "Invalid action. Must be: freeze, activate, delete, verify_email, or unverify_email"
+                },
                 { status: 400 }
             );
         }
 
         const config = ACTION_CONFIG[action];
         const admin = await requireAdminAction(request, config.permission);
+
+        if (config.kind === "email_verify") {
+            const users = await prisma.user.findMany({
+                where: { id: { in: userIds } },
+                select: { id: true, emailVerified: true }
+            });
+
+            const eligible = users.filter((u) => u.emailVerified !== config.targetValue);
+            if (eligible.length === 0) {
+                return NextResponse.json(
+                    {
+                        error: `All selected users already have emailVerified = ${config.targetValue}`
+                    },
+                    { status: 400 }
+                );
+            }
+
+            const eligibleIds = eligible.map((u) => u.id);
+
+            const result = await prisma.user.updateMany({
+                where: { id: { in: eligibleIds } },
+                data: { emailVerified: config.targetValue }
+            });
+
+            const { ipAddress, userAgent } = getRequestContext(request);
+            await adminAudit.log({
+                adminUserId: admin.adminUserId,
+                action: config.auditAction,
+                entityType: "User",
+                entityId: "bulk",
+                afterJson: { emailVerified: config.targetValue },
+                ipAddress,
+                userAgent,
+                metadata: {
+                    userIds: eligibleIds,
+                    count: result.count,
+                    reason: reason || `Bulk ${action} by admin`
+                }
+            });
+
+            return NextResponse.json({
+                success: true,
+                affected: result.count,
+                total: userIds.length,
+                skipped: userIds.length - eligible.length
+            });
+        }
 
         const users = await prisma.user.findMany({
             where: { id: { in: userIds } },

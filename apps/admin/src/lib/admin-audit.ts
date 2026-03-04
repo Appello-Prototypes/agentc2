@@ -41,9 +41,13 @@ export type AdminAuditAction =
     | "USER_FREEZE"
     | "USER_ACTIVATE"
     | "USER_DELETE"
+    | "USER_VERIFY_EMAIL"
+    | "USER_UNVERIFY_EMAIL"
     | "USER_BULK_FREEZE"
     | "USER_BULK_ACTIVATE"
     | "USER_BULK_DELETE"
+    | "USER_BULK_VERIFY_EMAIL"
+    | "USER_BULK_UNVERIFY_EMAIL"
     // Feature flags
     | "FLAG_CREATE"
     | "FLAG_UPDATE"

@@ -2,14 +2,24 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { MoreHorizontal, Eye, Snowflake, Play, Trash2, Loader2 } from "lucide-react";
+import {
+    MoreHorizontal,
+    Eye,
+    Snowflake,
+    Play,
+    Trash2,
+    Loader2,
+    MailCheck,
+    MailX
+} from "lucide-react";
 
 interface UserRowActionsProps {
     userId: string;
     status: string;
+    emailVerified: boolean;
 }
 
-export function UserRowActions({ userId, status }: UserRowActionsProps) {
+export function UserRowActions({ userId, status, emailVerified }: UserRowActionsProps) {
     const router = useRouter();
     const [open, setOpen] = useState(false);
     const [loading, setLoading] = useState(false);
@@ -61,6 +71,28 @@ export function UserRowActions({ userId, status }: UserRowActionsProps) {
                             <Eye className="h-3.5 w-3.5" />
                             View Details
                         </a>
+
+                        <div className="border-border my-1 border-t" />
+                        <button
+                            onClick={() => executeAction("verify-email")}
+                            className={`hover:bg-accent flex w-full items-center gap-2 px-3 py-2 text-xs ${
+                                emailVerified
+                                    ? "text-orange-600 dark:text-orange-400"
+                                    : "text-blue-600 dark:text-blue-400"
+                            }`}
+                        >
+                            {emailVerified ? (
+                                <>
+                                    <MailX className="h-3.5 w-3.5" />
+                                    Unverify Email
+                                </>
+                            ) : (
+                                <>
+                                    <MailCheck className="h-3.5 w-3.5" />
+                                    Verify Email
+                                </>
+                            )}
+                        </button>
 
                         {canFreeze && (
                             <>

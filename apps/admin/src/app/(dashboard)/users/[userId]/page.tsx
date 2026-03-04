@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@repo/database";
 import { getServerTimezone } from "@/lib/timezone-server";
 import { formatDateTime } from "@/lib/timezone";
+import { VerifyEmailButton } from "./verify-email-button";
 
 export const dynamic = "force-dynamic";
 
@@ -71,7 +72,9 @@ export default async function UserDetailPage({ params }: { params: Promise<{ use
                     <dd>{formatDateTime(user.updatedAt, tz)}</dd>
 
                     <dt className="text-muted-foreground">Email Verified</dt>
-                    <dd>{user.emailVerified ? "Yes" : "No"}</dd>
+                    <dd>
+                        <VerifyEmailButton userId={user.id} emailVerified={user.emailVerified} />
+                    </dd>
                 </dl>
             </div>
 

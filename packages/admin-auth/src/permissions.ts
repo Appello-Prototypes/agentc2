@@ -34,6 +34,7 @@ export type AdminAction =
     | "user:reset_password"
     | "user:force_logout"
     | "user:impersonate"
+    | "user:verify_email"
     // Feature flags
     | "flag:list"
     | "flag:read"
@@ -106,6 +107,7 @@ const ACTION_MIN_ROLE: Record<AdminAction, AdminRole> = {
     "user:reset_password": "support_agent",
     "user:force_logout": "support_agent",
     "user:impersonate": "platform_admin",
+    "user:verify_email": "platform_admin",
 
     // Feature flags
     "flag:list": "viewer",

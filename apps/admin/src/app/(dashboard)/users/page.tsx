@@ -131,6 +131,7 @@ export default async function UsersPage({
         id: user.id,
         name: user.name,
         email: user.email,
+        emailVerified: user.emailVerified,
         status: user.status,
         createdAt: user.createdAt.toISOString(),
         memberships: (membershipsByUser.get(user.id) || []).map((m) => ({

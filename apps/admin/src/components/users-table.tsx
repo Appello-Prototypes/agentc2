@@ -3,7 +3,7 @@
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Snowflake, Play, Trash2, Loader2, X } from "lucide-react";
+import { Snowflake, Play, Trash2, Loader2, X, MailCheck, MailX } from "lucide-react";
 import { UserRowActions } from "./user-row-actions";
 import { ImpersonateButton } from "./impersonate-button";
 import { formatDate } from "@/lib/timezone";
@@ -12,6 +12,7 @@ interface UserRow {
     id: string;
     name: string;
     email: string;
+    emailVerified: boolean;
     status: string;
     createdAt: string;
     memberships: {
@@ -26,7 +27,7 @@ interface UsersTableProps {
     tz: string;
 }
 
-type BulkAction = "freeze" | "activate" | "delete";
+type BulkAction = "freeze" | "activate" | "delete" | "verify_email" | "unverify_email";
 
 export function UsersTable({ users, tz }: UsersTableProps) {
     const router = useRouter();
@@ -146,6 +147,21 @@ export function UsersTable({ users, tz }: UsersTableProps) {
                                     <Trash2 className="h-3.5 w-3.5" />
                                     Delete
                                 </button>
+                                <div className="bg-border mx-1 h-4 w-px" />
+                                <button
+                                    onClick={() => setConfirmBulkAction("verify_email")}
+                                    className="inline-flex items-center gap-1.5 rounded-md bg-blue-500/10 px-3 py-1.5 text-xs font-medium text-blue-600 transition-colors hover:bg-blue-500/20 dark:text-blue-400"
+                                >
+                                    <MailCheck className="h-3.5 w-3.5" />
+                                    Verify Email
+                                </button>
+                                <button
+                                    onClick={() => setConfirmBulkAction("unverify_email")}
+                                    className="inline-flex items-center gap-1.5 rounded-md bg-orange-500/10 px-3 py-1.5 text-xs font-medium text-orange-600 transition-colors hover:bg-orange-500/20 dark:text-orange-400"
+                                >
+                                    <MailX className="h-3.5 w-3.5" />
+                                    Unverify Email
+                                </button>
                                 <button
                                     onClick={() => setSelected(new Set())}
                                     className="text-muted-foreground hover:text-foreground ml-2 rounded p-1 transition-colors"
@@ -178,6 +194,7 @@ export function UsersTable({ users, tz }: UsersTableProps) {
                             <th className="px-4 py-3 text-left font-medium">Name</th>
                             <th className="px-4 py-3 text-left font-medium">Email</th>
                             <th className="px-4 py-3 text-left font-medium">Status</th>
+                            <th className="px-4 py-3 text-left font-medium">Verified</th>
                             <th className="px-4 py-3 text-left font-medium">Organizations</th>
                             <th className="px-4 py-3 text-left font-medium">Joined</th>
                             <th className="w-24 px-4 py-3 text-right font-medium" />
@@ -221,6 +238,17 @@ export function UsersTable({ users, tz }: UsersTableProps) {
                                     </span>
                                 </td>
                                 <td className="px-4 py-3">
+                                    <span
+                                        className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
+                                            user.emailVerified
+                                                ? "bg-green-500/10 text-green-500"
+                                                : "bg-red-500/10 text-red-500"
+                                        }`}
+                                    >
+                                        {user.emailVerified ? "Yes" : "No"}
+                                    </span>
+                                </td>
+                                <td className="px-4 py-3">
                                     <div className="flex flex-wrap gap-1">
                                         {user.memberships.map((m) => (
                                             <Link
@@ -242,7 +270,11 @@ export function UsersTable({ users, tz }: UsersTableProps) {
                                             userId={user.id}
                                             userName={user.name || user.email}
                                         />
-                                        <UserRowActions userId={user.id} status={user.status} />
+                                        <UserRowActions
+                                            userId={user.id}
+                                            status={user.status}
+                                            emailVerified={user.emailVerified}
+                                        />
                                     </div>
                                 </td>
                             </tr>
@@ -250,7 +282,7 @@ export function UsersTable({ users, tz }: UsersTableProps) {
                         {users.length === 0 && (
                             <tr>
                                 <td
-                                    colSpan={7}
+                                    colSpan={8}
                                     className="text-muted-foreground px-4 py-8 text-center"
                                 >
                                     No users found

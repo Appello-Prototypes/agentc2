@@ -10,7 +10,6 @@ config({ path: resolve(__dirname, "../../.env") });
 
 // Agent app serves at root (primary app)
 const nextConfig: NextConfig = {
-    output: "standalone",
     env: sharedEnv,
     devIndicators,
     async headers() {
