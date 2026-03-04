@@ -1768,203 +1768,213 @@ export default function UnifiedChatPage() {
     );
 
     // ═════════════════════════════════════════════════════════════════════════
-    // LANDING STATE -- content at bottom, like CoWork
-    // ═════════════════════════════════════════════════════════════════════════
-    if (!hasMessages) {
-        return (
-            <div className="flex h-full">
-                {voiceOverlay}
-                <ConversationSidebar
-                    activeId={null}
-                    onSelect={handleLoadConversation}
-                    onNewConversation={handleNewConversation}
-                    refreshKey={titleVersion}
-                />
-                <div className="cowork-bg relative flex flex-1 flex-col">
-                    {/* Scrollable area above */}
-                    <div className="flex flex-1 flex-col items-center justify-end overflow-y-auto">
-                        <div className="w-full max-w-[780px] px-3 pb-4 md:px-6">
-                            {/* Greeting */}
-                            <div className="mb-8 text-center">
-                                <SparklesIcon className="text-primary/70 mx-auto mb-3 size-8" />
-                                <h1 className="text-foreground/90 mb-1 text-2xl font-semibold tracking-tight">
-                                    {greeting || "\u00A0"}
-                                </h1>
-                                <p className="text-muted-foreground text-sm">
-                                    Pick a task, or ask anything
-                                </p>
-                            </div>
-
-                            {/* Task suggestions */}
-                            {showSuggestions && (
-                                <div className="mb-4">
-                                    <div className="mb-2.5 flex items-center justify-between px-1">
-                                        <span className="text-muted-foreground text-xs">
-                                            Pick a task, any task
-                                        </span>
-                                        <button
-                                            onClick={() => setShowSuggestions(false)}
-                                            className="text-muted-foreground/60 hover:text-muted-foreground text-xs transition-colors"
-                                        >
-                                            Hide
-                                        </button>
-                                    </div>
-                                    <TaskSuggestions onSelect={handleSuggestionSelect} />
-                                </div>
-                            )}
-
-                            {!showSuggestions && (
-                                <div className="mb-4 flex justify-center">
-                                    <button
-                                        onClick={() => setShowSuggestions(true)}
-                                        className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-xs transition-colors"
-                                    >
-                                        Show suggestions
-                                        <ChevronDownIcon className="size-3" />
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Input -- truly fixed at bottom */}
-                    <div className="shrink-0 px-3 pb-5 md:px-6">
-                        <div className="bg-card mx-auto max-w-[780px] rounded-2xl border shadow-sm">
-                            {chatInput}
-                        </div>
-                    </div>
-                </div>
-            </div>
-        );
-    }
-
-    // ═════════════════════════════════════════════════════════════════════════
-    // CHAT STATE
+    // UNIFIED RENDER: Conditional rendering within single return statement
     // ═════════════════════════════════════════════════════════════════════════
     return (
         <div className="flex h-full">
             {voiceOverlay}
-            <ConversationSidebar
-                activeId={threadId}
-                onSelect={handleLoadConversation}
-                onNewConversation={handleNewConversation}
-                refreshKey={titleVersion}
-            />
-            <div className="cowork-bg relative flex flex-1 flex-col">
-                {/* Context bar */}
-                <div className="flex items-center justify-between border-b px-4 py-2">
-                    <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium">
-                            {agentName || selectedAgentSlug}
-                        </span>
+            {/* LANDING STATE -- content at bottom, like CoWork */}
+            {!hasMessages && (
+                <>
+                    <ConversationSidebar
+                        activeId={null}
+                        onSelect={handleLoadConversation}
+                        onNewConversation={handleNewConversation}
+                        refreshKey={titleVersion}
+                    />
+                    <div className="cowork-bg relative flex flex-1 flex-col">
+                        {/* Scrollable area above */}
+                        <div className="flex flex-1 flex-col items-center justify-end overflow-y-auto">
+                            <div className="w-full max-w-[780px] px-3 pb-4 md:px-6">
+                                {/* Greeting */}
+                                <div className="mb-8 text-center">
+                                    <SparklesIcon className="text-primary/70 mx-auto mb-3 size-8" />
+                                    <h1 className="text-foreground/90 mb-1 text-2xl font-semibold tracking-tight">
+                                        {greeting || "\u00A0"}
+                                    </h1>
+                                    <p className="text-muted-foreground text-sm">
+                                        Pick a task, or ask anything
+                                    </p>
+                                </div>
+
+                                {/* Task suggestions */}
+                                {showSuggestions && (
+                                    <div className="mb-4">
+                                        <div className="mb-2.5 flex items-center justify-between px-1">
+                                            <span className="text-muted-foreground text-xs">
+                                                Pick a task, any task
+                                            </span>
+                                            <button
+                                                onClick={() => setShowSuggestions(false)}
+                                                className="text-muted-foreground/60 hover:text-muted-foreground text-xs transition-colors"
+                                            >
+                                                Hide
+                                            </button>
+                                        </div>
+                                        <TaskSuggestions onSelect={handleSuggestionSelect} />
+                                    </div>
+                                )}
+
+                                {!showSuggestions && (
+                                    <div className="mb-4 flex justify-center">
+                                        <button
+                                            onClick={() => setShowSuggestions(true)}
+                                            className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-xs transition-colors"
+                                        >
+                                            Show suggestions
+                                            <ChevronDownIcon className="size-3" />
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Input -- truly fixed at bottom */}
+                        <div className="shrink-0 px-3 pb-5 md:px-6">
+                            <div className="bg-card mx-auto max-w-[780px] rounded-2xl border shadow-sm">
+                                {chatInput}
+                            </div>
+                        </div>
                     </div>
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={handleNewConversation}
-                        className="text-muted-foreground"
-                    >
-                        <RefreshCwIcon className="mr-1 size-4" />
-                        New conversation
-                    </Button>
-                </div>
+                </>
+            )}
+            {/* CHAT STATE */}
+            {hasMessages && (
+                <>
+                    <ConversationSidebar
+                        activeId={threadId}
+                        onSelect={handleLoadConversation}
+                        onNewConversation={handleNewConversation}
+                        refreshKey={titleVersion}
+                    />
+                    <div className="cowork-bg relative flex flex-1 flex-col">
+                        {/* Context bar */}
+                        <div className="flex items-center justify-between border-b px-4 py-2">
+                            <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium">
+                                    {agentName || selectedAgentSlug}
+                                </span>
+                            </div>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={handleNewConversation}
+                                className="text-muted-foreground"
+                            >
+                                <RefreshCwIcon className="mr-1 size-4" />
+                                New conversation
+                            </Button>
+                        </div>
 
-                {/* Debug info bar */}
-                <DebugInfoBar
-                    threadId={threadId}
-                    runId={currentRunId}
-                    agentSlug={selectedAgentSlug}
-                    turnIndex={currentTurnIndex}
-                />
+                        {/* Debug info bar */}
+                        <DebugInfoBar
+                            threadId={threadId}
+                            runId={currentRunId}
+                            agentSlug={selectedAgentSlug}
+                            turnIndex={currentTurnIndex}
+                        />
 
-                {/* Messages */}
-                <div className="min-h-0 flex-1">
-                    <Conversation className="h-full">
-                        <ConversationContent className="mx-auto max-w-3xl px-3 md:px-6">
-                            <ConversationScrollButton />
-                            {messages.map((message) => (
-                                <Message key={message.id} from={message.role}>
-                                    <MessageContent>
-                                        {message.parts && message.parts.length > 0 ? (
-                                            message.parts.map((part, idx) =>
-                                                renderPart(part, idx, message)
-                                            )
-                                        ) : message.role === "assistant" &&
-                                          (isStreaming || isSubmitted) &&
-                                          message.id === messages[messages.length - 1]?.id ? (
-                                            // Shimmer skeleton for empty assistant message while streaming
-                                            <div className="flex flex-col gap-2 py-1">
-                                                <div className="bg-muted/60 h-3 w-3/4 animate-pulse rounded" />
-                                                <div className="bg-muted/40 h-3 w-1/2 animate-pulse rounded" />
-                                                <div className="bg-muted/30 h-3 w-2/3 animate-pulse rounded" />
-                                            </div>
-                                        ) : (
-                                            <MessageResponse>
-                                                {String(
-                                                    (message as unknown as { content?: string })
-                                                        .content || ""
+                        {/* Messages */}
+                        <div className="min-h-0 flex-1">
+                            <Conversation className="h-full">
+                                <ConversationContent className="mx-auto max-w-3xl px-3 md:px-6">
+                                    <ConversationScrollButton />
+                                    {messages.map((message) => (
+                                        <Message key={message.id} from={message.role}>
+                                            <MessageContent>
+                                                {message.parts && message.parts.length > 0 ? (
+                                                    message.parts.map((part, idx) =>
+                                                        renderPart(part, idx, message)
+                                                    )
+                                                ) : message.role === "assistant" &&
+                                                  (isStreaming || isSubmitted) &&
+                                                  message.id ===
+                                                      messages[messages.length - 1]?.id ? (
+                                                    // Shimmer skeleton for empty assistant message while streaming
+                                                    <div className="flex flex-col gap-2 py-1">
+                                                        <div className="bg-muted/60 h-3 w-3/4 animate-pulse rounded" />
+                                                        <div className="bg-muted/40 h-3 w-1/2 animate-pulse rounded" />
+                                                        <div className="bg-muted/30 h-3 w-2/3 animate-pulse rounded" />
+                                                    </div>
+                                                ) : (
+                                                    <MessageResponse>
+                                                        {String(
+                                                            (
+                                                                message as unknown as {
+                                                                    content?: string;
+                                                                }
+                                                            ).content || ""
+                                                        )}
+                                                    </MessageResponse>
                                                 )}
-                                            </MessageResponse>
-                                        )}
-                                    </MessageContent>
-                                    {message.role === "assistant" &&
-                                        (() => {
-                                            const hasTextContent = message.parts?.some(
-                                                (p) =>
-                                                    p.type === "text" &&
-                                                    (p as { text: string }).text.trim().length > 0
-                                            );
-                                            const isLastMessage =
-                                                message.id === messages[messages.length - 1]?.id;
-                                            const isCurrentlyStreaming =
-                                                isLastMessage && (isStreaming || isSubmitted);
-                                            if (!hasTextContent || isCurrentlyStreaming)
-                                                return null;
-                                            return (
-                                                <MessageActions>
-                                                    <MessageAction
-                                                        tooltip="Copy"
-                                                        onClick={() => {
-                                                            const text =
-                                                                message.parts
-                                                                    ?.filter(
-                                                                        (p) => p.type === "text"
-                                                                    )
-                                                                    .map(
-                                                                        (p) =>
-                                                                            (
-                                                                                p as {
-                                                                                    text: string;
-                                                                                }
-                                                                            ).text
-                                                                    )
-                                                                    .join("\n") || "";
-                                                            navigator.clipboard.writeText(text);
-                                                        }}
-                                                    >
-                                                        <CopyIcon className="size-3.5" />
-                                                    </MessageAction>
-                                                </MessageActions>
-                                            );
-                                        })()}
-                                </Message>
-                            ))}
-                            <RunActivityLog
-                                status={activityStatus}
-                                events={runActivityEvents}
-                                agentName={agentName || undefined}
-                            />
-                        </ConversationContent>
-                    </Conversation>
-                </div>
+                                            </MessageContent>
+                                            {message.role === "assistant" &&
+                                                (() => {
+                                                    const hasTextContent = message.parts?.some(
+                                                        (p) =>
+                                                            p.type === "text" &&
+                                                            (p as { text: string }).text.trim()
+                                                                .length > 0
+                                                    );
+                                                    const isLastMessage =
+                                                        message.id ===
+                                                        messages[messages.length - 1]?.id;
+                                                    const isCurrentlyStreaming =
+                                                        isLastMessage &&
+                                                        (isStreaming || isSubmitted);
+                                                    if (!hasTextContent || isCurrentlyStreaming)
+                                                        return null;
+                                                    return (
+                                                        <MessageActions>
+                                                            <MessageAction
+                                                                tooltip="Copy"
+                                                                onClick={() => {
+                                                                    const text =
+                                                                        message.parts
+                                                                            ?.filter(
+                                                                                (p) =>
+                                                                                    p.type ===
+                                                                                    "text"
+                                                                            )
+                                                                            .map(
+                                                                                (p) =>
+                                                                                    (
+                                                                                        p as {
+                                                                                            text: string;
+                                                                                        }
+                                                                                    ).text
+                                                                            )
+                                                                            .join("\n") || "";
+                                                                    navigator.clipboard.writeText(
+                                                                        text
+                                                                    );
+                                                                }}
+                                                            >
+                                                                <CopyIcon className="size-3.5" />
+                                                            </MessageAction>
+                                                        </MessageActions>
+                                                    );
+                                                })()}
+                                        </Message>
+                                    ))}
+                                    <RunActivityLog
+                                        status={activityStatus}
+                                        events={runActivityEvents}
+                                        agentName={agentName || undefined}
+                                    />
+                                </ConversationContent>
+                            </Conversation>
+                        </div>
 
-                {/* Input -- fixed at bottom */}
-                <div className="shrink-0 px-3 py-3 md:px-6">
-                    <div className="bg-card mx-auto max-w-3xl rounded-2xl border shadow-sm">
-                        {chatInput}
+                        {/* Input -- fixed at bottom */}
+                        <div className="shrink-0 px-3 py-3 md:px-6">
+                            <div className="bg-card mx-auto max-w-3xl rounded-2xl border shadow-sm">
+                                {chatInput}
+                            </div>
+                        </div>
                     </div>
-                </div>
-            </div>
+                </>
+            )}
         </div>
     );
 }
