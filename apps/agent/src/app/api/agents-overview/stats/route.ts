@@ -43,6 +43,7 @@ export async function GET(request: NextRequest) {
                 memoryEnabled: true,
                 isActive: true,
                 isArchived: true,
+                playbookInstallationId: true,
                 createdAt: true,
                 updatedAt: true,
                 tools: {

@@ -8876,6 +8876,66 @@ export const asyncWorkflowExecuteFunction = inngest.createFunction(
                     .catch(() => {});
             }
 
+            // Close the loop: update the originating SupportTicket or BacklogTask.
+            // Source info may be directly in the input (legacy dispatch) or embedded
+            // in the description as an HTML comment (webhook trigger path).
+            const inputObj2 = input as Record<string, unknown> | undefined;
+            let sourceType = inputObj2?.sourceType as string | undefined;
+            let sourceId = inputObj2?.sourceId as string | undefined;
+
+            if (!sourceType || !sourceId) {
+                const desc = inputObj2?.description as string | undefined;
+                if (desc) {
+                    const metaMatch = desc.match(/<!-- agentc2:(.*?) -->/);
+                    if (metaMatch?.[1]) {
+                        try {
+                            const meta = JSON.parse(metaMatch[1]);
+                            sourceType = meta.sourceType;
+                            sourceId = meta.sourceId;
+                        } catch {}
+                    }
+                }
+            }
+            if (sourceType && sourceId) {
+                const ticketStatus = finalStatus === "COMPLETED" ? "RESOLVED" : "IN_PROGRESS";
+                const comment =
+                    finalStatus === "COMPLETED"
+                        ? `SDLC workflow completed successfully. Workflow: ${workflowSlug}, Run: ${workflowRunId.slice(0, 8)}, Duration: ${durationMs}ms.`
+                        : `SDLC workflow failed. Workflow: ${workflowSlug}, Run: ${workflowRunId.slice(0, 8)}. Review the workflow run for details.`;
+
+                if (sourceType === "support_ticket") {
+                    await prisma.supportTicket
+                        .update({
+                            where: { id: sourceId },
+                            data: {
+                                status: ticketStatus,
+                                ...(finalStatus === "COMPLETED" ? { resolvedAt: new Date() } : {})
+                            }
+                        })
+                        .catch(() => {});
+                    await prisma.supportTicketComment
+                        .create({
+                            data: {
+                                ticketId: sourceId,
+                                authorType: "system",
+                                authorId: "sdlc-pipeline",
+                                authorName: "SDLC Pipeline",
+                                content: comment
+                            }
+                        })
+                        .catch(() => {});
+                } else if (sourceType === "backlog_task") {
+                    await prisma.backlogTask
+                        .update({
+                            where: { id: sourceId },
+                            data: {
+                                status: finalStatus === "COMPLETED" ? "COMPLETED" : "IN_PROGRESS"
+                            }
+                        })
+                        .catch(() => {});
+                }
+            }
+
             recordActivity({
                 type: finalStatus === "COMPLETED" ? "WORKFLOW_COMPLETED" : "WORKFLOW_FAILED",
                 summary: `Workflow "${workflowSlug}" ${finalStatus.toLowerCase()} (${durationMs}ms)`,
@@ -9514,19 +9574,33 @@ export const playbookVersionPublishedFunction = inngest.createFunction(
             const activeInstallations = await prisma.playbookInstallation.findMany({
                 where: {
                     playbookId,
-                    status: "ACTIVE"
+                    status: "ACTIVE",
+                    OR: [{ pinnedVersion: null }, { pinnedVersion: { lt: version } }]
                 },
                 select: {
                     id: true,
                     targetOrgId: true,
-                    versionInstalled: true
+                    versionInstalled: true,
+                    autoUpdate: true,
+                    pinnedVersion: true,
+                    createdAgentIds: true,
+                    createdWorkflowIds: true,
+                    createdNetworkIds: true,
+                    customizations: true
                 }
             });
 
+            let autoUpdated = 0;
+
             for (const install of activeInstallations) {
+                if (install.pinnedVersion !== null && install.pinnedVersion < version) {
+                    continue;
+                }
+
                 await prisma.playbookInstallation.update({
                     where: { id: install.id },
                     data: {
+                        lastCheckedAt: new Date(),
                         testResults: {
                             updateAvailable: true,
                             latestVersion: version,
@@ -9534,11 +9608,72 @@ export const playbookVersionPublishedFunction = inngest.createFunction(
                         }
                     }
                 });
+
+                if (install.autoUpdate && install.versionInstalled < version) {
+                    try {
+                        const latestVersionRecord = await prisma.playbookVersion.findFirst({
+                            where: { playbookId, version }
+                        });
+                        if (!latestVersionRecord) continue;
+
+                        const manifest = latestVersionRecord.manifest as Record<string, unknown>;
+                        const latestAgents = (manifest.agents ?? []) as Record<string, unknown>[];
+
+                        for (const agentSnapshot of latestAgents) {
+                            const agent = await prisma.agent.findFirst({
+                                where: {
+                                    id: { in: install.createdAgentIds },
+                                    sourceAgentSlug: agentSnapshot.slug as string
+                                }
+                            });
+                            if (!agent) continue;
+
+                            const customized = agent.customizedFields ?? [];
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                            const updateData: Record<string, any> = {};
+                            const autoFields = [
+                                "instructions",
+                                "modelProvider",
+                                "modelName",
+                                "temperature",
+                                "maxTokens",
+                                "description"
+                            ];
+                            for (const f of autoFields) {
+                                if (!customized.includes(f) && agentSnapshot[f] !== undefined) {
+                                    updateData[f] = agentSnapshot[f];
+                                }
+                            }
+                            if (Object.keys(updateData).length > 0) {
+                                updateData.sourceAgentVersion = version;
+                                await prisma.agent.update({
+                                    where: { id: agent.id },
+                                    data: updateData
+                                });
+                            }
+                        }
+
+                        await prisma.playbookInstallation.update({
+                            where: { id: install.id },
+                            data: {
+                                versionInstalled: version,
+                                lastCheckedAt: new Date()
+                            }
+                        });
+                        autoUpdated++;
+                    } catch (autoErr) {
+                        console.warn(
+                            `[playbook/version-published] Auto-update failed for installation ${install.id}:`,
+                            autoErr
+                        );
+                    }
+                }
             }
 
             return {
                 success: true,
                 notifiedInstallations: activeInstallations.length,
+                autoUpdatedInstallations: autoUpdated,
                 version
             };
         } catch (error) {

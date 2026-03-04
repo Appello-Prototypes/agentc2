@@ -638,6 +638,23 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
                 workspaceId: existing.workspaceId || undefined
             });
 
+            // Track customized fields for playbook-sourced agents
+            if (existing.playbookInstallationId) {
+                const changedFieldNames = Object.keys(updateData);
+                const existingCustomized = existing.customizedFields ?? [];
+                const merged = [...new Set([...existingCustomized, ...changedFieldNames])];
+                if (merged.length !== existingCustomized.length) {
+                    prisma.agent
+                        .update({
+                            where: { id: existing.id },
+                            data: { customizedFields: merged }
+                        })
+                        .catch((err: unknown) =>
+                            console.warn("[Agent Update] customizedFields tracking failed:", err)
+                        );
+                }
+            }
+
             return NextResponse.json({
                 success: true,
                 agent: updatedAgent,
@@ -699,10 +716,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
  *
  * Archive or unarchive an agent
  */
-export async function PATCH(
-    request: NextRequest,
-    { params }: { params: Promise<{ id: string }> }
-) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
         const { id } = await params;
         const authResult = await requireAuth(request);
@@ -840,9 +854,21 @@ export async function DELETE(
                 );
             }
 
+            const deletedAgentId = existing.id;
+
             await prisma.agent.delete({
-                where: { id: existing.id }
+                where: { id: deletedAgentId }
             });
+
+            // Clean up parent playbook installation if this agent came from one
+            if (existing.playbookInstallationId) {
+                try {
+                    const { removeEntityFromInstallation } = await import("@repo/agentc2");
+                    await removeEntityFromInstallation(deletedAgentId, "createdAgentIds");
+                } catch (cleanupErr) {
+                    console.warn("[Agent Delete] Installation cleanup failed:", cleanupErr);
+                }
+            }
 
             return NextResponse.json({
                 success: true,

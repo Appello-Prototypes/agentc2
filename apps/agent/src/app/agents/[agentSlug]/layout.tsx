@@ -34,6 +34,10 @@ interface Agent {
     deploymentMode?: string;
     visibility: string;
     publicToken: string | null;
+    playbookSourceId?: string | null;
+    playbookInstallationId?: string | null;
+    sourcePlaybookSlug?: string | null;
+    sourceAgentVersion?: number | null;
 }
 
 interface AgentListItem {
@@ -90,6 +94,7 @@ export default function AgentDetailLayout({ children }: { children: React.ReactN
     const [allAgents, setAllAgents] = useState<AgentListItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [shareOpen, setShareOpen] = useState(false);
+    const [playbookUpdateAvailable, setPlaybookUpdateAvailable] = useState(false);
 
     const activeTab = pathname.split("/").pop() || "overview";
 
@@ -104,6 +109,24 @@ export default function AgentDetailLayout({ children }: { children: React.ReactN
                 const agentData = await agentRes.json();
                 if (agentData.success && agentData.agent) {
                     setAgent(agentData.agent);
+
+                    if (agentData.agent.sourcePlaybookSlug) {
+                        try {
+                            const pbRes = await fetch(
+                                `${getApiBase()}/api/playbooks/${agentData.agent.sourcePlaybookSlug}`
+                            );
+                            if (pbRes.ok) {
+                                const pbData = await pbRes.json();
+                                const latestVersion = pbData.playbook?.version ?? 0;
+                                const installedVersion = agentData.agent.sourceAgentVersion ?? 0;
+                                if (latestVersion > installedVersion) {
+                                    setPlaybookUpdateAvailable(true);
+                                }
+                            }
+                        } catch {
+                            /* playbook may not be accessible */
+                        }
+                    }
                 }
 
                 const allAgentsData = await allAgentsRes.json();
@@ -281,6 +304,7 @@ export default function AgentDetailLayout({ children }: { children: React.ReactN
                                     entitySlug={agent.slug}
                                     isArchived={agent.isArchived}
                                     isSystem={agent.type === "SYSTEM"}
+                                    isPlaybookSourced={!!agent.playbookInstallationId}
                                     variant="buttons"
                                     redirectTo="/agents"
                                 />
@@ -316,6 +340,18 @@ export default function AgentDetailLayout({ children }: { children: React.ReactN
                 )
             }
         >
+            {playbookUpdateAvailable && agent?.sourcePlaybookSlug && (
+                <div className="mb-4 flex items-center justify-between rounded-lg border border-amber-500/30 bg-amber-500/5 px-4 py-2.5">
+                    <p className="text-sm text-amber-300">
+                        A newer version of this agent is available from the marketplace.
+                    </p>
+                    <Link href="/marketplace/installed">
+                        <Button variant="outline" size="sm">
+                            View Updates
+                        </Button>
+                    </Link>
+                </div>
+            )}
             {children}
         </DetailPageShell>
     );

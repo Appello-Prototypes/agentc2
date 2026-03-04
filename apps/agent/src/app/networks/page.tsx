@@ -158,7 +158,13 @@ function isInteractiveTarget(event: MouseEvent<HTMLElement>) {
     return !!target?.closest("a,button");
 }
 
-function NetworkCardView({ network, onRefresh }: { network: NetworkSummaryItem; onRefresh: () => void }) {
+function NetworkCardView({
+    network,
+    onRefresh
+}: {
+    network: NetworkSummaryItem;
+    onRefresh: () => void;
+}) {
     const router = useRouter();
     const handleCardClick = (event: MouseEvent<HTMLDivElement>) => {
         if (isInteractiveTarget(event)) return;
@@ -176,7 +182,10 @@ function NetworkCardView({ network, onRefresh }: { network: NetworkSummaryItem; 
                     <div className="flex items-center gap-2">
                         <div className="flex flex-col items-end gap-1">
                             {network.isArchived ? (
-                                <Badge variant="outline" className="border-orange-300 text-orange-600">
+                                <Badge
+                                    variant="outline"
+                                    className="border-orange-300 text-orange-600"
+                                >
                                     Archived
                                 </Badge>
                             ) : (
@@ -256,7 +265,13 @@ function NetworkCardView({ network, onRefresh }: { network: NetworkSummaryItem; 
     );
 }
 
-function NetworkListView({ network, onRefresh }: { network: NetworkSummaryItem; onRefresh: () => void }) {
+function NetworkListView({
+    network,
+    onRefresh
+}: {
+    network: NetworkSummaryItem;
+    onRefresh: () => void;
+}) {
     const router = useRouter();
     const handleCardClick = (event: MouseEvent<HTMLDivElement>) => {
         if (isInteractiveTarget(event)) return;
@@ -322,7 +337,13 @@ function NetworkListView({ network, onRefresh }: { network: NetworkSummaryItem; 
     );
 }
 
-function NetworkTableView({ networks, onRefresh }: { networks: NetworkSummaryItem[]; onRefresh: () => void }) {
+function NetworkTableView({
+    networks,
+    onRefresh
+}: {
+    networks: NetworkSummaryItem[];
+    onRefresh: () => void;
+}) {
     return (
         <Card>
             <Table>
@@ -882,10 +903,7 @@ export default function NetworksPage() {
                                 </CardContent>
                             </Card>
                         ) : viewMode === "table" ? (
-                            <NetworkTableView
-                                networks={filteredNetworks}
-                                onRefresh={fetchStats}
-                            />
+                            <NetworkTableView networks={filteredNetworks} onRefresh={fetchStats} />
                         ) : viewMode === "list" ? (
                             <div className="space-y-3">
                                 {filteredNetworks.map((network) => (

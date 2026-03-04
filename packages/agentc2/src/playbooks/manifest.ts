@@ -166,6 +166,21 @@ const bootConfigSchema = z.object({
     autoBootEnabled: z.boolean()
 });
 
+const setupStepSchema = z.object({
+    id: z.string(),
+    type: z.string(),
+    label: z.string(),
+    description: z.string(),
+    provider: z.string().optional(),
+    config: z.record(z.unknown()).optional()
+});
+
+const setupConfigSchema = z.object({
+    headline: z.string().optional(),
+    description: z.string().optional(),
+    steps: z.array(setupStepSchema).optional()
+});
+
 export const playbookManifestSchema = z.object({
     version: z.string(),
     agents: z.array(agentSnapshotSchema),
@@ -182,7 +197,8 @@ export const playbookManifestSchema = z.object({
         type: z.enum(["agent", "workflow", "network"]),
         slug: z.string()
     }),
-    bootConfig: bootConfigSchema.optional()
+    bootConfig: bootConfigSchema.optional(),
+    setupConfig: setupConfigSchema.optional()
 });
 
 export function validateManifest(manifest: unknown): PlaybookManifest {

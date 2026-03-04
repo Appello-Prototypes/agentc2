@@ -73,12 +73,11 @@ export async function POST(request: NextRequest, { params }: Params) {
         }
 
         // Must have an active installation to review
-        const installation = await prisma.playbookInstallation.findUnique({
+        const installation = await prisma.playbookInstallation.findFirst({
             where: {
-                playbookId_targetOrgId: {
-                    playbookId: playbook.id,
-                    targetOrgId: organizationId
-                }
+                playbookId: playbook.id,
+                targetOrgId: organizationId,
+                status: { not: "UNINSTALLED" }
             }
         });
         if (!installation || installation.status === "UNINSTALLED") {

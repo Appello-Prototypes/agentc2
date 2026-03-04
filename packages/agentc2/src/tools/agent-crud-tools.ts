@@ -583,7 +583,7 @@ export const agentDeleteTool = createTool({
         if (action === "archive") {
             await prisma.agent.update({
                 where: { id: existing.id },
-                data: { isActive: false }
+                data: { isActive: false, isArchived: true, archivedAt: new Date() }
             });
 
             return { success: true, message: `Agent '${agentId}' archived` };

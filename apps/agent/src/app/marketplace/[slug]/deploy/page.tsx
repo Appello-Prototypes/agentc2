@@ -9,7 +9,8 @@ import {
     CheckCircleIcon,
     AlertCircleIcon,
     RocketIcon,
-    LoaderIcon
+    LoaderIcon,
+    PlugIcon
 } from "lucide-react";
 
 interface Workspace {
@@ -31,10 +32,11 @@ export default function DeployPage(props: { params: Promise<{ slug: string }> })
         success: boolean;
         message: string;
         installationId?: string;
+        installationStatus?: string;
     } | null>(null);
     const [playbookName, setPlaybookName] = useState("");
     const [pricingModel, setPricingModel] = useState("FREE");
-    const [alreadyInstalled, setAlreadyInstalled] = useState(false);
+    const [existingInstallCount, setExistingInstallCount] = useState(0);
 
     useEffect(() => {
         async function fetchData() {
@@ -56,9 +58,7 @@ export default function DeployPage(props: { params: Promise<{ slug: string }> })
 
                 if (deployStatusRes.ok) {
                     const statusData = await deployStatusRes.json();
-                    if (statusData.status && statusData.status !== "UNINSTALLED") {
-                        setAlreadyInstalled(true);
-                    }
+                    setExistingInstallCount(statusData.installations?.length ?? 0);
                 }
             } catch (error) {
                 console.error("Failed to fetch data:", error);
@@ -111,7 +111,8 @@ export default function DeployPage(props: { params: Promise<{ slug: string }> })
                 setDeployResult({
                     success: true,
                     message: "Playbook deployed successfully!",
-                    installationId: data.installation?.id
+                    installationId: data.installation?.id,
+                    installationStatus: data.installation?.status
                 });
             } else {
                 setDeployResult({
@@ -150,28 +151,29 @@ export default function DeployPage(props: { params: Promise<{ slug: string }> })
 
             <h1 className="mb-6 text-2xl font-bold">Deploy Playbook</h1>
 
-            {alreadyInstalled ? (
-                <Card>
-                    <CardContent className="py-8 text-center">
-                        <CheckCircleIcon className="mx-auto mb-4 h-12 w-12 text-green-400" />
-                        <h3 className="mb-2 text-lg font-medium">Already Installed</h3>
-                        <p className="text-muted-foreground mb-4 text-sm">
-                            This playbook is already deployed to your workspace.
-                        </p>
-                        <div className="flex justify-center gap-3">
-                            <Button onClick={() => router.push("/marketplace/installed")}>
-                                View Installed
-                            </Button>
-                            <Button
-                                variant="outline"
-                                onClick={() => router.push(`/marketplace/${slug}`)}
-                            >
-                                Back to Playbook
-                            </Button>
+            {existingInstallCount > 0 && !deployResult && (
+                <Card className="mb-4 border-blue-500/30 bg-blue-500/5">
+                    <CardContent className="flex items-center justify-between py-3">
+                        <div className="flex items-center gap-2">
+                            <CheckCircleIcon className="h-4 w-4 text-blue-400" />
+                            <p className="text-sm">
+                                You have {existingInstallCount} active{" "}
+                                {existingInstallCount === 1 ? "installation" : "installations"} of
+                                this playbook.
+                            </p>
                         </div>
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => router.push("/marketplace/installed")}
+                        >
+                            View Installed
+                        </Button>
                     </CardContent>
                 </Card>
-            ) : deployResult ? (
+            )}
+
+            {deployResult ? (
                 <Card>
                     <CardContent className="py-8 text-center">
                         {deployResult.success ? (
@@ -179,12 +181,29 @@ export default function DeployPage(props: { params: Promise<{ slug: string }> })
                                 <CheckCircleIcon className="mx-auto mb-4 h-12 w-12 text-green-400" />
                                 <h3 className="mb-2 text-lg font-medium">{deployResult.message}</h3>
                                 <p className="text-muted-foreground mb-4 text-sm">
-                                    Your new agents, skills, and workflows are ready.
+                                    {deployResult.installationStatus === "CONFIGURING"
+                                        ? "Your agents and workflows are installed. Connect integrations to activate."
+                                        : "Your new agents, skills, and workflows are ready."}
                                 </p>
                                 <div className="flex justify-center gap-3">
-                                    <Button onClick={() => router.push("/marketplace/installed")}>
-                                        View Installed
-                                    </Button>
+                                    {deployResult.installationStatus === "CONFIGURING" ? (
+                                        <Button
+                                            onClick={() =>
+                                                router.push(
+                                                    `/marketplace/${slug}/setup?installation=${deployResult.installationId}`
+                                                )
+                                            }
+                                        >
+                                            <PlugIcon className="mr-2 h-4 w-4" />
+                                            Set Up Integrations
+                                        </Button>
+                                    ) : (
+                                        <Button
+                                            onClick={() => router.push("/marketplace/installed")}
+                                        >
+                                            View Installed
+                                        </Button>
+                                    )}
                                     <Button
                                         variant="outline"
                                         onClick={() => router.push("/agents")}
@@ -270,7 +289,9 @@ export default function DeployPage(props: { params: Promise<{ slug: string }> })
                             ) : (
                                 <>
                                     <RocketIcon className="mr-2 h-4 w-4" />
-                                    Deploy to Workspace
+                                    {existingInstallCount > 0
+                                        ? "Install Another Copy"
+                                        : "Deploy to Workspace"}
                                 </>
                             )}
                         </Button>

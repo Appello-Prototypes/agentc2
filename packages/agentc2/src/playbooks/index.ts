@@ -1,6 +1,6 @@
 export { packagePlaybook, repackagePlaybook } from "./packager";
 export type { RepackagePlaybookOptions } from "./packager";
-export { deployPlaybook, uninstallPlaybook } from "./deployer";
+export { deployPlaybook, uninstallPlaybook, removeEntityFromInstallation } from "./deployer";
 export { sanitizeManifest, detectHardcodedUrls } from "./sanitizer";
 export { validateManifest, isValidManifest, playbookManifestSchema } from "./manifest";
 export { mapIntegrations } from "./integration-mapper";
@@ -22,5 +22,7 @@ export type {
     IntegrationMapping,
     BootTaskTemplate,
     BootConfig,
-    RepackageMode
+    RepackageMode,
+    SetupStep,
+    SetupConfig
 } from "./types";

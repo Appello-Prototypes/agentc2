@@ -489,6 +489,7 @@ export {
     repackagePlaybook,
     deployPlaybook,
     uninstallPlaybook,
+    removeEntityFromInstallation,
     sanitizeManifest,
     detectHardcodedUrls,
     validateManifest,
@@ -514,7 +515,9 @@ export type {
     IntegrationMapping,
     BootTaskTemplate,
     BootConfig,
-    RepackageMode
+    RepackageMode,
+    SetupStep,
+    SetupConfig
 } from "./playbooks";
 
 // Re-export useful types from @mastra/core

@@ -5,7 +5,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { getApiBase } from "@/lib/utils";
 import { Badge, Button, Card, CardContent } from "@repo/ui";
-import { PackageIcon, TrashIcon, ExternalLinkIcon } from "lucide-react";
+import {
+    PackageIcon,
+    TrashIcon,
+    ExternalLinkIcon,
+    ArrowUpCircleIcon,
+    PlugIcon
+} from "lucide-react";
 
 interface Installation {
     id: string;
@@ -24,6 +30,7 @@ interface Installation {
         tagline: string | null;
         category: string;
         iconUrl: string | null;
+        version: number;
         publisherOrg: { name: string; slug: string };
     };
 }
@@ -122,6 +129,11 @@ export default function InstalledPlaybooksPage() {
                                         <Badge className={statusColor[inst.status] ?? ""}>
                                             {inst.status}
                                         </Badge>
+                                        {inst.playbook.version > inst.versionInstalled && (
+                                            <Badge className="bg-amber-500/10 text-amber-400">
+                                                Update Available
+                                            </Badge>
+                                        )}
                                     </div>
                                     {inst.playbook.tagline && (
                                         <p className="text-muted-foreground mt-1 text-sm">
@@ -130,7 +142,11 @@ export default function InstalledPlaybooksPage() {
                                     )}
                                     <div className="text-muted-foreground mt-2 flex gap-3 text-xs">
                                         <span>by {inst.playbook.publisherOrg.name}</span>
-                                        <span>v{inst.versionInstalled}</span>
+                                        <span>
+                                            v{inst.versionInstalled}
+                                            {inst.playbook.version > inst.versionInstalled &&
+                                                ` → v${inst.playbook.version}`}
+                                        </span>
                                         <span>
                                             {inst.createdAgentIds.length} agents ·{" "}
                                             {inst.createdSkillIds.length} skills ·{" "}
@@ -143,6 +159,24 @@ export default function InstalledPlaybooksPage() {
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-2">
+                                    {inst.status === "CONFIGURING" && (
+                                        <Link
+                                            href={`/marketplace/${inst.playbook.slug}/setup?installation=${inst.id}`}
+                                        >
+                                            <Button variant="outline" size="sm">
+                                                <PlugIcon className="mr-1.5 h-4 w-4" />
+                                                Continue Setup
+                                            </Button>
+                                        </Link>
+                                    )}
+                                    {inst.playbook.version > inst.versionInstalled && (
+                                        <Link href={`/marketplace/installed/${inst.id}/update`}>
+                                            <Button variant="outline" size="sm">
+                                                <ArrowUpCircleIcon className="mr-1.5 h-4 w-4" />
+                                                Update
+                                            </Button>
+                                        </Link>
+                                    )}
                                     <Link href={`/marketplace/${inst.playbook.slug}`}>
                                         <Button variant="ghost" size="sm">
                                             <ExternalLinkIcon className="h-4 w-4" />

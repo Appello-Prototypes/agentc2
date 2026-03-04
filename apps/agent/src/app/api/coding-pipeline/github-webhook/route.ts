@@ -1,156 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@repo/database";
-import { inngest } from "@/lib/inngest";
-import crypto from "crypto";
-
-const PIPELINE_LABEL = "agentc2-autofix";
-
-function verifyGitHubSignature(body: string, signature: string | null, secret: string): boolean {
-    if (!signature) return false;
-    const hmac = crypto.createHmac("sha256", secret);
-    const digest = `sha256=${hmac.update(body).digest("hex")}`;
-    return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(digest));
-}
 
 /**
- * @deprecated Use the generic trigger system at /api/webhooks/[path] instead.
- * Create a workflow trigger via the Automation tab and point your GitHub webhook there.
- * This route is kept for backward compatibility only.
+ * @deprecated This endpoint is fully replaced by the generic trigger system
+ * at /api/webhooks/[path]. The GitHub webhook should point to
+ * /api/webhooks/sdlc-github instead.
+ *
+ * This stub remains to return a clear error if any old integrations still hit it.
  */
-export async function POST(request: NextRequest) {
-    console.warn(
-        "[DEPRECATED] /api/coding-pipeline/github-webhook is deprecated. " +
-            "Use the generic trigger system at /api/webhooks/[path] instead. " +
-            "Configure a workflow trigger via the Automation tab."
+export async function POST(_request: NextRequest) {
+    console.error(
+        "[REMOVED] /api/coding-pipeline/github-webhook is removed. " +
+            "Use the generic trigger system at /api/webhooks/[path] instead."
     );
 
-    try {
-        const rawBody = await request.text();
-        const event = request.headers.get("x-github-event");
-
-        const webhookSecret = process.env.GITHUB_WEBHOOK_SECRET;
-        if (webhookSecret) {
-            const signature = request.headers.get("x-hub-signature-256");
-            if (!verifyGitHubSignature(rawBody, signature, webhookSecret)) {
-                return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
-            }
-        }
-
-        if (event !== "issues") {
-            return NextResponse.json({ message: "Event ignored", event });
-        }
-
-        const payload = JSON.parse(rawBody);
-        const action = payload.action;
-
-        if (action !== "labeled") {
-            return NextResponse.json({
-                message: "Action ignored",
-                action
-            });
-        }
-
-        const label = payload.label?.name;
-        if (label !== PIPELINE_LABEL) {
-            return NextResponse.json({
-                message: "Label not matching",
-                label
-            });
-        }
-
-        const issue = payload.issue;
-        const repo = payload.repository;
-
-        if (!issue || !repo) {
-            return NextResponse.json(
-                { error: "Missing issue or repository data" },
-                { status: 400 }
-            );
-        }
-
-        const repository = repo.html_url || `https://github.com/${repo.full_name}`;
-
-        const pipelineRun = await prisma.codingPipelineRun.create({
-            data: {
-                sourceType: "github_issue",
-                sourceId: String(issue.number),
-                repository,
-                baseBranch: repo.default_branch || "main",
-                status: "running",
-                variant: "standard",
-                organizationId: null
-            }
-        });
-
-        const workflow = await prisma.workflow.findFirst({
-            where: { slug: "coding-pipeline", isActive: true }
-        });
-
-        if (!workflow) {
-            await prisma.codingPipelineRun.update({
-                where: { id: pipelineRun.id },
-                data: { status: "failed" }
-            });
-            return NextResponse.json(
-                {
-                    success: false,
-                    error: "coding-pipeline workflow not found"
-                },
-                { status: 404 }
-            );
-        }
-
-        const workflowRun = await prisma.workflowRun.create({
-            data: {
-                workflowId: workflow.id,
-                status: "QUEUED",
-                inputJson: {
-                    sourceType: "github_issue",
-                    sourceId: String(issue.number),
-                    repository,
-                    branch: repo.default_branch || "main",
-                    pipelineRunId: pipelineRun.id,
-                    issueTitle: issue.title,
-                    issueBody: issue.body || "",
-                    issueLabels: (issue.labels || []).map((l: { name: string }) => l.name)
-                },
-                source: "github-webhook",
-                triggerType: "WEBHOOK"
-            }
-        });
-
-        await prisma.codingPipelineRun.update({
-            where: { id: pipelineRun.id },
-            data: { workflowRunId: workflowRun.id }
-        });
-
-        await inngest.send({
-            name: "workflow/execute.async",
-            data: {
-                workflowRunId: workflowRun.id,
-                workflowId: workflow.id,
-                workflowSlug: workflow.slug,
-                input: workflowRun.inputJson as Record<string, unknown>,
-                pipelineRunId: pipelineRun.id
-            }
-        });
-
-        return NextResponse.json({
-            success: true,
-            pipelineRunId: pipelineRun.id,
-            workflowRunId: workflowRun.id,
-            issue: {
-                number: issue.number,
-                title: issue.title
-            }
-        });
-    } catch (error) {
-        console.error("[CodingPipeline] GitHub webhook error:", error);
-        return NextResponse.json(
-            {
-                error: error instanceof Error ? error.message : "Internal server error"
-            },
-            { status: 500 }
-        );
-    }
+    return NextResponse.json(
+        {
+            error:
+                "This endpoint is deprecated and disabled. " +
+                "Use the generic trigger system at /api/webhooks/sdlc-github instead.",
+            migration:
+                "Update your GitHub webhook URL to: https://agentc2.ai/api/webhooks/sdlc-github"
+        },
+        { status: 410 }
+    );
 }

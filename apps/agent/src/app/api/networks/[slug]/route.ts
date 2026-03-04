@@ -243,6 +243,23 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             }
         }
 
+        // Track customized fields for playbook-sourced networks
+        if (existing.playbookInstallationId && fieldChanges.length > 0) {
+            const changedFieldNames = Object.keys(updateData);
+            const existingCustomized = existing.customizedFields ?? [];
+            const merged = [...new Set([...existingCustomized, ...changedFieldNames])];
+            if (merged.length !== existingCustomized.length) {
+                prisma.network
+                    .update({
+                        where: { id: existing.id },
+                        data: { customizedFields: merged }
+                    })
+                    .catch((err: unknown) =>
+                        console.warn("[Network Update] customizedFields tracking failed:", err)
+                    );
+            }
+        }
+
         return NextResponse.json({
             success: true,
             network: updated
@@ -339,7 +356,15 @@ export async function DELETE(
             );
         }
 
-        await prisma.network.delete({ where: { id: existing.id } });
+        const deletedId = existing.id;
+        await prisma.network.delete({ where: { id: deletedId } });
+
+        try {
+            const { removeEntityFromInstallation } = await import("@repo/agentc2");
+            await removeEntityFromInstallation(deletedId, "createdNetworkIds");
+        } catch (cleanupErr) {
+            console.warn("[Network Delete] Installation cleanup failed:", cleanupErr);
+        }
 
         return NextResponse.json({ success: true });
     } catch (error) {

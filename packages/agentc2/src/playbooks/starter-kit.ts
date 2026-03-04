@@ -23,12 +23,11 @@ export async function deployStarterKit(
         return;
     }
 
-    const existing = await prisma.playbookInstallation.findUnique({
+    const existing = await prisma.playbookInstallation.findFirst({
         where: {
-            playbookId_targetOrgId: {
-                playbookId: playbook.id,
-                targetOrgId
-            }
+            playbookId: playbook.id,
+            targetOrgId,
+            status: { not: "UNINSTALLED" }
         }
     });
 

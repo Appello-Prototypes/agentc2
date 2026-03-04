@@ -160,6 +160,22 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
                 reason: body.changeReason || undefined,
                 createdBy: body.createdBy || undefined
             }).catch((err) => console.error("[ChangeLog] Workflow write failed:", err));
+
+            if (existing.playbookInstallationId) {
+                const changedFieldNames = Object.keys(updateData);
+                const existingCustomized = existing.customizedFields ?? [];
+                const merged = [...new Set([...existingCustomized, ...changedFieldNames])];
+                if (merged.length !== existingCustomized.length) {
+                    prisma.workflow
+                        .update({
+                            where: { id: existing.id },
+                            data: { customizedFields: merged }
+                        })
+                        .catch((err: unknown) =>
+                            console.warn("[Workflow Update] customizedFields tracking failed:", err)
+                        );
+                }
+            }
         }
 
         return NextResponse.json({
@@ -254,7 +270,15 @@ export async function DELETE(
             );
         }
 
-        await prisma.workflow.delete({ where: { id: existing.id } });
+        const deletedId = existing.id;
+        await prisma.workflow.delete({ where: { id: deletedId } });
+
+        try {
+            const { removeEntityFromInstallation } = await import("@repo/agentc2");
+            await removeEntityFromInstallation(deletedId, "createdWorkflowIds");
+        } catch (cleanupErr) {
+            console.warn("[Workflow Delete] Installation cleanup failed:", cleanupErr);
+        }
 
         return NextResponse.json({
             success: true

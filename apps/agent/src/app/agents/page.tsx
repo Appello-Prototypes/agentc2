@@ -103,6 +103,7 @@ interface Agent {
     toolCount?: number;
     memoryEnabled?: boolean;
     scorers?: string[];
+    playbookInstallationId?: string | null;
     createdAt: string;
     updatedAt: string;
     stats: AgentStats;
@@ -303,54 +304,57 @@ function AgentCardView({
                     </div>
                     <div className="ml-2 flex shrink-0 items-start gap-1">
                         <div className="flex flex-col items-end gap-1">
-                        {agent.isArchived ? (
-                            <Badge variant="outline" className="border-orange-300 text-orange-600">
-                                Archived
-                            </Badge>
-                        ) : (
-                        <Badge variant={agent.isActive ? "default" : "secondary"}>
-                            {agent.isActive ? "Active" : "Inactive"}
-                        </Badge>
-                        )}
-                        {agent.type === "SYSTEM" && (
-                            <Badge variant="outline" className="text-xs">
-                                SYSTEM
-                            </Badge>
-                        )}
-                        {agent.visibility === "ORGANIZATION" && (
-                            <Badge variant="outline" className="text-xs">
-                                Org
-                            </Badge>
-                        )}
-                        {agent.visibility === "PUBLIC" && (
-                            <Badge variant="outline" className="text-xs">
-                                Public
-                            </Badge>
-                        )}
-                        {agent.healthScore && (
-                            <div
-                                className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
-                                    agent.healthScore.status === "excellent" ||
-                                    agent.healthScore.status === "good"
-                                        ? "bg-green-500/10 text-green-600"
-                                        : agent.healthScore.status === "fair"
-                                          ? "bg-yellow-500/10 text-yellow-600"
-                                          : "bg-red-500/10 text-red-600"
-                                }`}
-                            >
+                            {agent.isArchived ? (
+                                <Badge
+                                    variant="outline"
+                                    className="border-orange-300 text-orange-600"
+                                >
+                                    Archived
+                                </Badge>
+                            ) : (
+                                <Badge variant={agent.isActive ? "default" : "secondary"}>
+                                    {agent.isActive ? "Active" : "Inactive"}
+                                </Badge>
+                            )}
+                            {agent.type === "SYSTEM" && (
+                                <Badge variant="outline" className="text-xs">
+                                    SYSTEM
+                                </Badge>
+                            )}
+                            {agent.visibility === "ORGANIZATION" && (
+                                <Badge variant="outline" className="text-xs">
+                                    Org
+                                </Badge>
+                            )}
+                            {agent.visibility === "PUBLIC" && (
+                                <Badge variant="outline" className="text-xs">
+                                    Public
+                                </Badge>
+                            )}
+                            {agent.healthScore && (
                                 <div
-                                    className={`h-1.5 w-1.5 rounded-full ${
+                                    className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
                                         agent.healthScore.status === "excellent" ||
                                         agent.healthScore.status === "good"
-                                            ? "bg-green-500"
+                                            ? "bg-green-500/10 text-green-600"
                                             : agent.healthScore.status === "fair"
-                                              ? "bg-yellow-500"
-                                              : "bg-red-500"
+                                              ? "bg-yellow-500/10 text-yellow-600"
+                                              : "bg-red-500/10 text-red-600"
                                     }`}
-                                />
-                                {Math.round(agent.healthScore.score * 100)}%
-                            </div>
-                        )}
+                                >
+                                    <div
+                                        className={`h-1.5 w-1.5 rounded-full ${
+                                            agent.healthScore.status === "excellent" ||
+                                            agent.healthScore.status === "good"
+                                                ? "bg-green-500"
+                                                : agent.healthScore.status === "fair"
+                                                  ? "bg-yellow-500"
+                                                  : "bg-red-500"
+                                        }`}
+                                    />
+                                    {Math.round(agent.healthScore.score * 100)}%
+                                </div>
+                            )}
                         </div>
                         <ArchiveDeleteActions
                             entityType="agent"
@@ -359,6 +363,7 @@ function AgentCardView({
                             entitySlug={agent.slug}
                             isArchived={agent.isArchived}
                             isSystem={agent.type === "SYSTEM"}
+                            isPlaybookSourced={!!agent.playbookInstallationId}
                             onComplete={onArchiveDelete}
                         />
                     </div>
@@ -479,12 +484,12 @@ function AgentListView({
                                 Archived
                             </Badge>
                         ) : (
-                        <Badge
-                            variant={agent.isActive ? "default" : "secondary"}
-                            className="text-xs"
-                        >
-                            {agent.isActive ? "Active" : "Inactive"}
-                        </Badge>
+                            <Badge
+                                variant={agent.isActive ? "default" : "secondary"}
+                                className="text-xs"
+                            >
+                                {agent.isActive ? "Active" : "Inactive"}
+                            </Badge>
                         )}
                         {agent.type === "SYSTEM" && (
                             <Badge variant="outline" className="text-xs">
@@ -559,6 +564,7 @@ function AgentListView({
                     entitySlug={agent.slug}
                     isArchived={agent.isArchived}
                     isSystem={agent.type === "SYSTEM"}
+                    isPlaybookSourced={!!agent.playbookInstallationId}
                     onComplete={onArchiveDelete}
                 />
             </CardContent>
@@ -679,6 +685,7 @@ function AgentTableView({
                                     entitySlug={agent.slug}
                                     isArchived={agent.isArchived}
                                     isSystem={agent.type === "SYSTEM"}
+                                    isPlaybookSourced={!!agent.playbookInstallationId}
                                     onComplete={onArchiveDelete}
                                 />
                             </TableCell>
@@ -809,7 +816,7 @@ export default function AgentsPage() {
 
     useEffect(() => {
         fetchWorkspaceStats();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [showArchived]);
 
     // Fetch runs when Runs tab is active

@@ -51,7 +51,6 @@ export async function POST(request: NextRequest) {
         }
 
         const agentBaseUrl = process.env.NEXT_PUBLIC_AGENT_URL || "http://localhost:3001";
-        const agentPath = agentBaseUrl.includes("localhost") ? "" : "/agent";
         const apiKey = process.env.MCP_API_KEY;
 
         if (!apiKey) {
@@ -74,7 +73,7 @@ export async function POST(request: NextRequest) {
             workflowId: config.workflowId
         };
 
-        const res = await fetch(`${agentBaseUrl}${agentPath}/api/coding-pipeline/dispatch`, {
+        const res = await fetch(`${agentBaseUrl}/api/coding-pipeline/dispatch`, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",

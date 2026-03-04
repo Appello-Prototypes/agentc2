@@ -165,6 +165,21 @@ export interface BootConfig {
 
 export type RepackageMode = "full" | "components-only" | "boot-only";
 
+export interface SetupStep {
+    id: string;
+    type: string;
+    label: string;
+    description: string;
+    provider?: string;
+    config?: Record<string, unknown>;
+}
+
+export interface SetupConfig {
+    headline?: string;
+    description?: string;
+    steps?: SetupStep[];
+}
+
 export interface PlaybookManifest {
     version: string;
     agents: AgentSnapshot[];
@@ -179,6 +194,7 @@ export interface PlaybookManifest {
     requiredIntegrations: string[];
     entryPoint: { type: "agent" | "workflow" | "network"; slug: string };
     bootConfig?: BootConfig;
+    setupConfig?: SetupConfig;
 }
 
 export interface PackagePlaybookOptions {

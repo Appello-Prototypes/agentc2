@@ -25,6 +25,7 @@ export async function GET(request: NextRequest) {
                         tagline: true,
                         category: true,
                         iconUrl: true,
+                        version: true,
                         publisherOrg: {
                             select: { name: true, slug: true }
                         }

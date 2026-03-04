@@ -390,6 +390,11 @@ export async function deployPlaybook(opts: DeployPlaybookOptions) {
                     timeout: wfSnapshot.timeout,
                     retryConfig: jsonOrUndefined(wfSnapshot.retryConfig),
                     workspaceId: opts.targetWorkspaceId,
+                    playbookSourceId: opts.playbookId,
+                    playbookInstallationId: installation.id,
+                    sourcePlaybookSlug: playbook.slug,
+                    sourceWorkflowSlug: wfSnapshot.slug,
+                    sourceWorkflowVersion: wfSnapshot.version ?? 1,
                     version: 1
                 }
             });
@@ -414,6 +419,11 @@ export async function deployPlaybook(opts: DeployPlaybookOptions) {
                     memoryConfig: netSnapshot.memoryConfig as Prisma.InputJsonValue,
                     maxSteps: netSnapshot.maxSteps,
                     workspaceId: opts.targetWorkspaceId,
+                    playbookSourceId: opts.playbookId,
+                    playbookInstallationId: installation.id,
+                    sourcePlaybookSlug: playbook.slug,
+                    sourceNetworkSlug: netSnapshot.slug,
+                    sourceNetworkVersion: netSnapshot.version ?? 1,
                     version: 1
                 }
             });
@@ -505,16 +515,32 @@ export async function deployPlaybook(opts: DeployPlaybookOptions) {
             }
         }
 
+        const hasDisconnectedIntegrations = integrationStatus.some(
+            (m: { connected: boolean }) => !m.connected
+        );
+        const finalStatus =
+            hasDisconnectedIntegrations || manifest.setupConfig?.steps?.length
+                ? "CONFIGURING"
+                : "ACTIVE";
+
+        const customizations: Record<string, unknown> = {};
+        if (manifest.setupConfig) {
+            customizations.setupConfig = manifest.setupConfig;
+        }
+
         await prisma.playbookInstallation.update({
             where: { id: installation.id },
             data: {
-                status: "ACTIVE",
+                status: finalStatus,
                 createdAgentIds,
                 createdSkillIds,
                 createdDocumentIds,
                 createdWorkflowIds,
                 createdNetworkIds,
-                createdCampaignIds
+                createdCampaignIds,
+                ...(Object.keys(customizations).length > 0
+                    ? { customizations: customizations as Prisma.InputJsonValue }
+                    : {})
             }
         });
 
@@ -530,6 +556,7 @@ export async function deployPlaybook(opts: DeployPlaybookOptions) {
 
         return {
             ...installation,
+            status: finalStatus,
             bootMetadata: {
                 autoBootEnabled: manifest.bootConfig?.autoBootEnabled ?? false,
                 entryAgentSlug,
@@ -621,4 +648,47 @@ export async function uninstallPlaybook(installationId: string) {
         where: { id: installation.playbookId },
         data: { installCount: { decrement: 1 } }
     });
+}
+
+type EntityArrayField =
+    | "createdAgentIds"
+    | "createdSkillIds"
+    | "createdDocumentIds"
+    | "createdWorkflowIds"
+    | "createdNetworkIds"
+    | "createdCampaignIds";
+
+/**
+ * Remove a deleted entity's ID from its parent PlaybookInstallation.
+ * If all created entity arrays are empty after removal, mark the installation UNINSTALLED.
+ */
+export async function removeEntityFromInstallation(
+    entityId: string,
+    field: EntityArrayField
+): Promise<void> {
+    const installations = await prisma.playbookInstallation.findMany({
+        where: { [field]: { has: entityId }, status: { not: "UNINSTALLED" } }
+    });
+
+    for (const inst of installations) {
+        const updatedArray = (inst[field] as string[]).filter((id) => id !== entityId);
+
+        const allEmpty =
+            (field === "createdAgentIds" ? updatedArray : inst.createdAgentIds).length === 0 &&
+            (field === "createdSkillIds" ? updatedArray : inst.createdSkillIds).length === 0 &&
+            (field === "createdDocumentIds" ? updatedArray : inst.createdDocumentIds).length ===
+                0 &&
+            (field === "createdWorkflowIds" ? updatedArray : inst.createdWorkflowIds).length ===
+                0 &&
+            (field === "createdNetworkIds" ? updatedArray : inst.createdNetworkIds).length === 0 &&
+            (field === "createdCampaignIds" ? updatedArray : inst.createdCampaignIds).length === 0;
+
+        await prisma.playbookInstallation.update({
+            where: { id: inst.id },
+            data: {
+                [field]: updatedArray,
+                ...(allEmpty ? { status: "UNINSTALLED" as const } : {})
+            }
+        });
+    }
 }

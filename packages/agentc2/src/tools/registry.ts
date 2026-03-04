@@ -101,7 +101,12 @@ import {
     playbookSearchTool,
     playbookDetailTool,
     playbookListInstalledTool,
-    playbookDeployTool
+    playbookDeployTool,
+    playbookInstallationSetupTool,
+    playbookInstallationVerifyTool,
+    playbookInstallationActivateTool,
+    playbookInstallationConfigureTool,
+    playbookInstallationReposTool
 } from "./playbook";
 import {
     playbookListMineTool,
@@ -733,6 +738,11 @@ export const toolCategoryMap: Record<string, string> = {
     "playbook-detail": "Marketplace",
     "playbook-list-installed": "Marketplace",
     "playbook-deploy": "Marketplace",
+    "playbook-installation-setup": "Marketplace",
+    "playbook-installation-verify": "Marketplace",
+    "playbook-installation-activate": "Marketplace",
+    "playbook-installation-configure": "Marketplace",
+    "playbook-installation-repos": "Marketplace",
 
     // Playbook Publishing
     "playbook-list-mine": "Playbook Publishing",
@@ -1054,6 +1064,8 @@ export const toolBehaviorMap: Record<string, ToolBehaviorMeta> = {
 
     // Playbook Marketplace
     "playbook-deploy": { behavior: "mutation" },
+    "playbook-installation-activate": { behavior: "mutation" },
+    "playbook-installation-configure": { behavior: "mutation" },
 
     // Playbook Publishing
     "playbook-update-metadata": { behavior: "mutation" },
@@ -1614,6 +1626,11 @@ export const toolRegistry: Record<string, any> = {
     "playbook-detail": playbookDetailTool,
     "playbook-list-installed": playbookListInstalledTool,
     "playbook-deploy": playbookDeployTool,
+    "playbook-installation-setup": playbookInstallationSetupTool,
+    "playbook-installation-verify": playbookInstallationVerifyTool,
+    "playbook-installation-activate": playbookInstallationActivateTool,
+    "playbook-installation-configure": playbookInstallationConfigureTool,
+    "playbook-installation-repos": playbookInstallationReposTool,
 
     // Playbook Publishing tools
     "playbook-list-mine": playbookListMineTool,

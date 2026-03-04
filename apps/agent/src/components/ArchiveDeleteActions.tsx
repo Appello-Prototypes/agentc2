@@ -1,7 +1,7 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -16,29 +16,30 @@ import {
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuSeparator,
-    DropdownMenuTrigger,
-} from "@repo/ui"
-import { getApiBase } from "@/lib/utils"
+    DropdownMenuTrigger
+} from "@repo/ui";
+import { getApiBase } from "@/lib/utils";
 
-type EntityType = "agent" | "network" | "workflow"
+type EntityType = "agent" | "network" | "workflow";
 
 interface ArchiveDeleteActionsProps {
-    entityType: EntityType
-    entityId: string
-    entityName: string
-    entitySlug: string
-    isArchived: boolean
-    isSystem: boolean
-    onComplete?: () => void
-    redirectTo?: string
-    variant?: "dropdown" | "buttons"
+    entityType: EntityType;
+    entityId: string;
+    entityName: string;
+    entitySlug: string;
+    isArchived: boolean;
+    isSystem: boolean;
+    isPlaybookSourced?: boolean;
+    onComplete?: () => void;
+    redirectTo?: string;
+    variant?: "dropdown" | "buttons";
 }
 
 function getApiPath(entityType: EntityType, entityId: string, entitySlug: string) {
     if (entityType === "agent") {
-        return `${getApiBase()}/api/agents/${entityId}`
+        return `${getApiBase()}/api/agents/${entityId}`;
     }
-    return `${getApiBase()}/api/${entityType}s/${entitySlug}`
+    return `${getApiBase()}/api/${entityType}s/${entitySlug}`;
 }
 
 export function ArchiveDeleteActions({
@@ -48,66 +49,70 @@ export function ArchiveDeleteActions({
     entitySlug,
     isArchived,
     isSystem,
+    isPlaybookSourced,
     onComplete,
     redirectTo,
-    variant = "dropdown",
+    variant = "dropdown"
 }: ArchiveDeleteActionsProps) {
-    const router = useRouter()
-    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
-    const [loading, setLoading] = useState(false)
+    const router = useRouter();
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [loading, setLoading] = useState(false);
 
-    const apiPath = getApiPath(entityType, entityId, entitySlug)
+    const apiPath = getApiPath(entityType, entityId, entitySlug);
 
     const handleArchiveToggle = async () => {
-        setLoading(true)
+        setLoading(true);
         try {
             const res = await fetch(apiPath, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    action: isArchived ? "unarchive" : "archive",
-                }),
-            })
-            const data = await res.json()
+                    action: isArchived ? "unarchive" : "archive"
+                })
+            });
+            const data = await res.json();
             if (!data.success) {
-                alert(`Error: ${data.error}`)
-                return
+                alert(`Error: ${data.error}`);
+                return;
             }
             if (redirectTo) {
-                router.push(redirectTo)
+                router.push(redirectTo);
             }
-            onComplete?.()
+            onComplete?.();
         } catch (error) {
-            console.error(`Failed to ${isArchived ? "unarchive" : "archive"} ${entityType}:`, error)
-            alert(`Failed to ${isArchived ? "unarchive" : "archive"} ${entityType}`)
+            console.error(
+                `Failed to ${isArchived ? "unarchive" : "archive"} ${entityType}:`,
+                error
+            );
+            alert(`Failed to ${isArchived ? "unarchive" : "archive"} ${entityType}`);
         } finally {
-            setLoading(false)
+            setLoading(false);
         }
-    }
+    };
 
     const handleDelete = async () => {
-        setLoading(true)
+        setLoading(true);
         try {
-            const res = await fetch(apiPath, { method: "DELETE" })
-            const data = await res.json()
+            const res = await fetch(apiPath, { method: "DELETE" });
+            const data = await res.json();
             if (!data.success) {
-                alert(`Error: ${data.error}`)
-                return
+                alert(`Error: ${data.error}`);
+                return;
             }
-            setDeleteDialogOpen(false)
+            setDeleteDialogOpen(false);
             if (redirectTo) {
-                router.push(redirectTo)
+                router.push(redirectTo);
             }
-            onComplete?.()
+            onComplete?.();
         } catch (error) {
-            console.error(`Failed to delete ${entityType}:`, error)
-            alert(`Failed to delete ${entityType}`)
+            console.error(`Failed to delete ${entityType}:`, error);
+            alert(`Failed to delete ${entityType}`);
         } finally {
-            setLoading(false)
+            setLoading(false);
         }
-    }
+    };
 
-    if (isSystem) return null
+    if (isSystem) return null;
 
     if (variant === "buttons") {
         return (
@@ -132,24 +137,28 @@ export function ArchiveDeleteActions({
                 <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
                     <AlertDialogContent>
                         <AlertDialogHeader>
-                            <AlertDialogTitle>
-                                Delete {entityType}?
-                            </AlertDialogTitle>
+                            <AlertDialogTitle>Delete {entityType}?</AlertDialogTitle>
                             <AlertDialogDescription>
-                                This will permanently delete &quot;{entityName}&quot;.
-                                This action cannot be undone.
+                                This will permanently delete &quot;{entityName}&quot;. This action
+                                cannot be undone.
+                                {isPlaybookSourced && (
+                                    <>
+                                        {" "}
+                                        This {entityType} was installed from a marketplace playbook.
+                                        To cleanly remove everything, use Uninstall from the
+                                        Installed Playbooks page.
+                                    </>
+                                )}
                             </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                             <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={handleDelete}>
-                                Delete
-                            </AlertDialogAction>
+                            <AlertDialogAction onClick={handleDelete}>Delete</AlertDialogAction>
                         </AlertDialogFooter>
                     </AlertDialogContent>
                 </AlertDialog>
             </>
-        )
+        );
     }
 
     return (
@@ -174,8 +183,8 @@ export function ArchiveDeleteActions({
                 <DropdownMenuContent align="end" side="bottom">
                     <DropdownMenuItem
                         onClick={(e) => {
-                            e.stopPropagation()
-                            handleArchiveToggle()
+                            e.stopPropagation();
+                            handleArchiveToggle();
                         }}
                         disabled={loading}
                     >
@@ -185,8 +194,8 @@ export function ArchiveDeleteActions({
                     <DropdownMenuItem
                         className="text-destructive"
                         onClick={(e) => {
-                            e.stopPropagation()
-                            setDeleteDialogOpen(true)
+                            e.stopPropagation();
+                            setDeleteDialogOpen(true);
                         }}
                         disabled={loading}
                     >
@@ -198,22 +207,26 @@ export function ArchiveDeleteActions({
             <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
                 <AlertDialogContent onClick={(e) => e.stopPropagation()}>
                     <AlertDialogHeader>
-                        <AlertDialogTitle>
-                            Delete {entityType}?
-                        </AlertDialogTitle>
+                        <AlertDialogTitle>Delete {entityType}?</AlertDialogTitle>
                         <AlertDialogDescription>
-                            This will permanently delete &quot;{entityName}&quot;.
-                            This action cannot be undone.
+                            This will permanently delete &quot;{entityName}&quot;. This action
+                            cannot be undone.
+                            {isPlaybookSourced && (
+                                <>
+                                    {" "}
+                                    This {entityType} was installed from a marketplace playbook. To
+                                    cleanly remove everything, use Uninstall from the Installed
+                                    Playbooks page.
+                                </>
+                            )}
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleDelete}>
-                            Delete
-                        </AlertDialogAction>
+                        <AlertDialogAction onClick={handleDelete}>Delete</AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
         </>
-    )
+    );
 }

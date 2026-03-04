@@ -890,6 +890,7 @@ model Agent {
     sourcePlaybookSlug String?
     sourceAgentSlug    String?
     sourceAgentVersion Int?
+    customizedFields   String[]
 
     @@unique([slug]) // Global slug uniqueness for federation and publishing
     @@index([workspaceId])
@@ -2597,6 +2598,14 @@ model Workflow {
     ownerId     String?
     type        WorkflowType @default(USER)
 
+    // Playbook Marketplace lineage
+    playbookSourceId       String?
+    playbookInstallationId String?
+    sourcePlaybookSlug     String?
+    sourceWorkflowSlug     String?
+    sourceWorkflowVersion  Int?
+    customizedFields       String[]
+
     // Audit
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
@@ -2770,7 +2779,7 @@ model Network {
     meshEnabled Boolean @default(false)
 
     // Status
-    isPublished Boolean @default(false)
+    isPublished Boolean   @default(false)
     isActive    Boolean   @default(true)
     isArchived  Boolean   @default(false)
     archivedAt  DateTime?
@@ -2786,6 +2795,14 @@ model Network {
     workspace   Workspace?  @relation(fields: [workspaceId], references: [id])
     ownerId     String?
     type        NetworkType @default(USER)
+
+    // Playbook Marketplace lineage
+    playbookSourceId       String?
+    playbookInstallationId String?
+    sourcePlaybookSlug     String?
+    sourceNetworkSlug      String?
+    sourceNetworkVersion   Int?
+    customizedFields       String[]
 
     // Audit
     createdAt DateTime @default(now())
@@ -5369,7 +5386,7 @@ model PlaybookPurchase {
     createdAt             DateTime             @default(now())
     updatedAt             DateTime             @updatedAt
 
-    installation PlaybookInstallation?
+    installations PlaybookInstallation[]
 
     @@index([playbookId])
     @@index([buyerOrgId])
@@ -5380,7 +5397,7 @@ model PlaybookInstallation {
     id                 String             @id @default(cuid())
     playbookId         String
     playbook           Playbook           @relation(fields: [playbookId], references: [id])
-    purchaseId         String?            @unique
+    purchaseId         String?
     purchase           PlaybookPurchase?  @relation(fields: [purchaseId], references: [id])
     targetOrgId        String
     targetOrg          Organization       @relation("PlaybookInstaller", fields: [targetOrgId], references: [id])
@@ -5396,12 +5413,15 @@ model PlaybookInstallation {
     createdNetworkIds  String[]
     createdCampaignIds String[]
     customizations     Json?
+    pinnedVersion      Int?
+    autoUpdate         Boolean            @default(false)
+    lastCheckedAt      DateTime?
     testResults        Json?
     integrationStatus  Json?
     createdAt          DateTime           @default(now())
     updatedAt          DateTime           @updatedAt
 
-    @@unique([playbookId, targetOrgId])
+    @@index([playbookId, targetOrgId])
     @@index([playbookId])
     @@index([targetOrgId])
     @@map("playbook_installation")

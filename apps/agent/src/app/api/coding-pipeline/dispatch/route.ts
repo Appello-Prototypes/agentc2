@@ -4,9 +4,15 @@ import { authenticateRequest } from "@/lib/api-auth";
 import { inngest } from "@/lib/inngest";
 
 /**
- * @deprecated The direct dispatch path (without via=github) is deprecated.
- * Use via=github to create a GitHub Issue that triggers the SDLC workflow
- * through the generic trigger system at /api/webhooks/[path].
+ * POST /api/coding-pipeline/dispatch
+ *
+ * Dispatches a ticket to the SDLC pipeline. Two modes:
+ *
+ * via=github (preferred): Creates a GitHub Issue with the agentc2-sdlc label.
+ *   The GitHub webhook at /api/webhooks/[path] fires and the generic trigger
+ *   system creates the WorkflowRun. This avoids double-execution.
+ *
+ * without via (deprecated): Creates a CodingPipelineRun + WorkflowRun directly.
  */
 export async function POST(request: NextRequest) {
     try {
@@ -59,9 +65,10 @@ export async function POST(request: NextRequest) {
                 await import("@repo/agentc2/tools/ticket-to-github-issue");
 
             const issueTitle = title || `[Ticket] ${sourceId}`;
+            const metaBlock = `<!-- agentc2:${JSON.stringify({ sourceType, sourceId })} -->`;
             const issueBody =
                 (description || "") +
-                `\n\n---\n_Source: ${sourceType} \`${sourceId}\` via AgentC2_`;
+                `\n\n---\n_Source: ${sourceType} \`${sourceId}\` via AgentC2_\n${metaBlock}`;
 
             // Parse repository URL to owner/repo format
             let repoPath = repository;
@@ -88,61 +95,9 @@ export async function POST(request: NextRequest) {
                 );
             }
 
-            const sdlcWorkflow = workflowId
-                ? await prisma.workflow.findUnique({ where: { id: workflowId } })
-                : await prisma.workflow.findFirst({
-                      where: {
-                          slug: "sdlc-standard",
-                          isActive: true,
-                          workspace: { organizationId: orgId }
-                      }
-                  });
-
-            let workflowRunId: string | null = null;
-
-            if (sdlcWorkflow) {
-                const workflowRun = await prisma.workflowRun.create({
-                    data: {
-                        workflowId: sdlcWorkflow.id,
-                        status: "QUEUED",
-                        inputJson: {
-                            title: issueTitle,
-                            description: issueBody,
-                            repository: repoPath,
-                            existingIssueUrl: result.issueUrl,
-                            existingIssueNumber: result.issueNumber,
-                            labels: labels || ["agentc2-sdlc"],
-                            sourceType,
-                            sourceId,
-                            organizationId: orgId
-                        },
-                        source: "coding-pipeline",
-                        triggerType: "API"
-                    }
-                });
-                workflowRunId = workflowRun.id;
-
-                await inngest.send({
-                    name: "workflow/execute.async",
-                    data: {
-                        workflowRunId: workflowRun.id,
-                        workflowId: sdlcWorkflow.id,
-                        workflowSlug: sdlcWorkflow.slug,
-                        input: {
-                            title: issueTitle,
-                            description: issueBody,
-                            repository: repoPath,
-                            existingIssueUrl: result.issueUrl,
-                            existingIssueNumber: result.issueNumber,
-                            labels: labels || ["agentc2-sdlc"],
-                            sourceType,
-                            sourceId,
-                            organizationId: orgId
-                        }
-                    }
-                });
-            }
-
+            // Update source ticket/task status. The actual WorkflowRun is created
+            // by the generic trigger system when GitHub sends the issues.labeled
+            // webhook to /api/webhooks/[path].
             if (sourceType === "support_ticket") {
                 await prisma.supportTicket
                     .update({
@@ -165,11 +120,8 @@ export async function POST(request: NextRequest) {
                 issueNumber: result.issueNumber,
                 issueUrl: result.issueUrl,
                 repository: result.repository,
-                workflowRunId,
-                workflowSlug: sdlcWorkflow?.slug ?? null,
-                message: workflowRunId
-                    ? "GitHub Issue created and SDLC workflow triggered."
-                    : "GitHub Issue created. No active SDLC workflow found to trigger."
+                message:
+                    "GitHub Issue created. SDLC workflow will be triggered via webhook when the issue is labeled."
             });
         }
 

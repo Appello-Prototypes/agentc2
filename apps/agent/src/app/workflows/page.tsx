@@ -167,10 +167,7 @@ function WorkflowCardView({
                     </div>
                     <div className="flex flex-col items-end gap-1">
                         {workflow.isArchived ? (
-                            <Badge
-                                variant="outline"
-                                className="border-orange-300 text-orange-600"
-                            >
+                            <Badge variant="outline" className="border-orange-300 text-orange-600">
                                 Archived
                             </Badge>
                         ) : (
@@ -269,10 +266,7 @@ function WorkflowListView({
                     <div className="flex items-center gap-2">
                         <h3 className="text-base font-semibold">{workflow.name}</h3>
                         {workflow.isArchived ? (
-                            <Badge
-                                variant="outline"
-                                className="border-orange-300 text-orange-600"
-                            >
+                            <Badge variant="outline" className="border-orange-300 text-orange-600">
                                 Archived
                             </Badge>
                         ) : (
@@ -423,9 +417,7 @@ export default function WorkflowsPage() {
             setLoading(true);
             const params = new URLSearchParams();
             if (showArchived) params.set("includeArchived", "true");
-            const res = await fetch(
-                `${getApiBase()}/api/workflows/stats?${params.toString()}`
-            );
+            const res = await fetch(`${getApiBase()}/api/workflows/stats?${params.toString()}`);
             const data = await res.json();
             if (data.success) {
                 setSummary(data.summary);

@@ -1797,6 +1797,42 @@ Every critical step includes a revision cycle powered by the \`dowhile\` workflo
     });
     console.log("Updated playbook metadata");
 
+    // Inject setupConfig into the latest version manifest
+    const latestVersion = await prisma.playbookVersion.findFirst({
+        where: { playbookId: playbook.id },
+        orderBy: { version: "desc" }
+    });
+    if (latestVersion) {
+        const manifest = latestVersion.manifest as Record<string, unknown>;
+        manifest.setupConfig = {
+            headline: "Set up your Dark Software Factory",
+            description:
+                "Connect your integrations, select a repository, and create a webhook to start autonomous development.",
+            steps: [
+                {
+                    id: "select-repo",
+                    type: "repo-select",
+                    label: "Select Repository",
+                    description: "Pick the GitHub repository where the SDLC pipeline will operate",
+                    provider: "github"
+                },
+                {
+                    id: "create-webhook",
+                    type: "webhook-create",
+                    label: "Create Webhook",
+                    description:
+                        "Auto-create a GitHub webhook so labeled issues trigger the pipeline",
+                    provider: "github"
+                }
+            ]
+        };
+        await prisma.playbookVersion.update({
+            where: { id: latestVersion.id },
+            data: { manifest: manifest as any }
+        });
+        console.log("Injected setupConfig into manifest");
+    }
+
     // 8. Publish
     if (playbook.status !== "PUBLISHED") {
         await prisma.playbook.update({

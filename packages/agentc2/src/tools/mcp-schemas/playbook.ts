@@ -288,6 +288,88 @@ export const playbookToolDefinitions: McpToolDefinition[] = [
         },
         invoke_url: "/api/mcp",
         category: "playbook-publishing"
+    },
+
+    // Setup Wizard tools
+    {
+        name: "playbook-installation-setup",
+        description:
+            "Get the current setup state for a playbook installation: integration status, config step progress, readiness.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                installationId: { type: "string", description: "Installation ID" },
+                organizationId: { type: "string", description: "Organization ID" }
+            },
+            required: ["installationId", "organizationId"]
+        },
+        invoke_url: "/api/mcp",
+        category: "playbook"
+    },
+    {
+        name: "playbook-installation-verify",
+        description:
+            "Test all connected integrations for a playbook installation. Returns per-integration test results.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                installationId: { type: "string", description: "Installation ID" },
+                organizationId: { type: "string", description: "Organization ID" },
+                userId: { type: "string", description: "User ID for MCP server testing" }
+            },
+            required: ["installationId", "organizationId", "userId"]
+        },
+        invoke_url: "/api/mcp",
+        category: "playbook"
+    },
+    {
+        name: "playbook-installation-activate",
+        description:
+            "Activate a playbook installation after all integrations are connected and config steps are complete.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                installationId: { type: "string", description: "Installation ID" },
+                organizationId: { type: "string", description: "Organization ID" }
+            },
+            required: ["installationId", "organizationId"]
+        },
+        invoke_url: "/api/mcp",
+        category: "playbook"
+    },
+    {
+        name: "playbook-installation-configure",
+        description:
+            "Complete a custom configuration step for a playbook installation. For repo-select: { repository }. For webhook-create: { repository, webhookPath }.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                installationId: { type: "string", description: "Installation ID" },
+                organizationId: { type: "string", description: "Organization ID" },
+                stepId: { type: "string", description: "Config step ID to complete" },
+                data: {
+                    type: "object",
+                    description: "Step-specific data (e.g. { repository: 'owner/repo' })"
+                }
+            },
+            required: ["installationId", "organizationId", "stepId", "data"]
+        },
+        invoke_url: "/api/mcp",
+        category: "playbook"
+    },
+    {
+        name: "playbook-installation-repos",
+        description:
+            "List GitHub repositories available to the organization for use with a playbook installation.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                organizationId: { type: "string", description: "Organization ID" }
+            },
+            required: ["organizationId"]
+        },
+        invoke_url: "/api/mcp",
+        category: "playbook"
     }
 ];
 
@@ -307,5 +389,10 @@ export const playbookToolRoutes: McpToolRoute[] = [
     { kind: "registry", name: "playbook-remove-boot-task", enforceOrg: true },
     { kind: "registry", name: "playbook-package", enforceOrg: true, enforceUser: true },
     { kind: "registry", name: "playbook-submit-review", enforceOrg: true },
-    { kind: "registry", name: "playbook-set-auto-boot", enforceOrg: true }
+    { kind: "registry", name: "playbook-set-auto-boot", enforceOrg: true },
+    { kind: "registry", name: "playbook-installation-setup", enforceOrg: true },
+    { kind: "registry", name: "playbook-installation-verify", enforceOrg: true, enforceUser: true },
+    { kind: "registry", name: "playbook-installation-activate", enforceOrg: true },
+    { kind: "registry", name: "playbook-installation-configure", enforceOrg: true },
+    { kind: "registry", name: "playbook-installation-repos", enforceOrg: true }
 ];

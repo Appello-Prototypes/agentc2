@@ -30,22 +30,6 @@ export async function POST(request: NextRequest, { params }: Params) {
             return NextResponse.json({ error: "Playbook not found" }, { status: 404 });
         }
 
-        // Check for existing installation
-        const existingInstallation = await prisma.playbookInstallation.findUnique({
-            where: {
-                playbookId_targetOrgId: {
-                    playbookId: playbook.id,
-                    targetOrgId: organizationId
-                }
-            }
-        });
-        if (existingInstallation && existingInstallation.status !== "UNINSTALLED") {
-            return NextResponse.json(
-                { error: "Playbook already installed", installationId: existingInstallation.id },
-                { status: 409 }
-            );
-        }
-
         // For paid playbooks, check purchase exists (publishers can skip)
         const isPublisher = playbook.publisherOrgId === organizationId;
         if (playbook.pricingModel !== "FREE" && !isPublisher) {
@@ -88,15 +72,15 @@ export async function POST(request: NextRequest, { params }: Params) {
         // Auto-create default webhook trigger for SDLC playbook workflows
         if (playbook.slug === "sdlc-flywheel" && installation.createdWorkflowIds.length > 0) {
             try {
-                const sdlcStandard = await prisma.workflow.findFirst({
+                const sdlcTriage = await prisma.workflow.findFirst({
                     where: {
                         id: { in: installation.createdWorkflowIds },
-                        slug: { contains: "sdlc-standard" }
+                        slug: { contains: "sdlc-triage" }
                     },
                     select: { id: true, slug: true }
                 });
 
-                if (sdlcStandard) {
+                if (sdlcTriage) {
                     const webhookPath = `trigger_${randomBytes(16).toString("hex")}`;
                     const webhookSecretPlain = randomBytes(32).toString("hex");
                     const webhookSecret = encryptString(webhookSecretPlain);
@@ -119,7 +103,7 @@ export async function POST(request: NextRequest, { params }: Params) {
                     await prisma.agentTrigger.create({
                         data: {
                             entityType: "workflow",
-                            workflowId: sdlcStandard.id,
+                            workflowId: sdlcTriage.id,
                             workspaceId,
                             name: "SDLC GitHub Webhook",
                             description: "Triggers SDLC workflows when a GitHub Issue is labeled.",
@@ -136,7 +120,7 @@ export async function POST(request: NextRequest, { params }: Params) {
                                     workflowRouting: {
                                         bug: sdlcBugfix?.slug ?? "sdlc-bugfix",
                                         feature: sdlcFeature?.slug ?? "sdlc-feature",
-                                        default: sdlcStandard.slug
+                                        default: sdlcTriage.slug
                                     },
                                     fieldMapping: {
                                         title: "issue.title",
@@ -165,8 +149,8 @@ export async function POST(request: NextRequest, { params }: Params) {
 }
 
 /**
- * GET /api/playbooks/[slug]/deploy/status
- * Check deployment status
+ * GET /api/playbooks/[slug]/deploy
+ * Check deployment status — returns all installations for this playbook/org
  */
 export async function GET(request: NextRequest, { params }: Params) {
     try {
@@ -180,25 +164,26 @@ export async function GET(request: NextRequest, { params }: Params) {
             return NextResponse.json({ error: "Playbook not found" }, { status: 404 });
         }
 
-        const installation = await prisma.playbookInstallation.findUnique({
+        const installations = await prisma.playbookInstallation.findMany({
             where: {
-                playbookId_targetOrgId: {
-                    playbookId: playbook.id,
-                    targetOrgId: authResult.context.organizationId
-                }
-            }
+                playbookId: playbook.id,
+                targetOrgId: authResult.context.organizationId,
+                status: { not: "UNINSTALLED" }
+            },
+            orderBy: { createdAt: "desc" }
         });
 
-        if (!installation) {
+        if (installations.length === 0) {
             return NextResponse.json({ error: "No installation found" }, { status: 404 });
         }
 
         return NextResponse.json({
-            status: installation.status,
-            testResults: installation.testResults,
-            integrationStatus: installation.integrationStatus,
-            createdAt: installation.createdAt,
-            updatedAt: installation.updatedAt
+            installations,
+            status: installations[0].status,
+            testResults: installations[0].testResults,
+            integrationStatus: installations[0].integrationStatus,
+            createdAt: installations[0].createdAt,
+            updatedAt: installations[0].updatedAt
         });
     } catch (error) {
         console.error("[playbooks] Deploy status error:", error);
