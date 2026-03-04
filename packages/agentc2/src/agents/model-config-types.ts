@@ -86,9 +86,7 @@ export interface ModelConfig {
 
 const ADAPTIVE_THINKING_MODELS = new Set([
     "claude-sonnet-4-6",
-    "claude-sonnet-4-20250514",
     "claude-opus-4-6",
-    "claude-opus-4-20250514",
     "claude-sonnet-4-5",
     "claude-sonnet-4-5-20250929",
     "claude-sonnet-4-5-20250514",

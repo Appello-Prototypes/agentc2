@@ -139,56 +139,85 @@ const buildModelConfig = (
         cacheControl?: boolean;
         toolChoice?: z.infer<typeof toolChoiceSchema>;
         reasoning?: { type: "enabled" | "disabled" };
-    }
+    },
+    provider?: string
 ) => {
     const config = { ...(baseConfig || {}) } as Record<string, unknown>;
 
-    if (overrides.adaptiveThinking !== undefined) {
-        const anthCfg = (config.anthropic as Record<string, unknown>) ?? {};
-        if (overrides.adaptiveThinking) {
-            anthCfg.thinking = { type: "adaptive" };
-            if (overrides.thinkingEffort) {
-                anthCfg.effort = overrides.thinkingEffort;
+    // Strip deprecated flat fields from base — always normalize to provider-keyed
+    delete config.thinking;
+    delete config.parallelToolCalls;
+    delete config.reasoningEffort;
+    delete config.cacheControl;
+
+    // Anthropic-specific overrides → config.anthropic.*
+    if (
+        overrides.adaptiveThinking !== undefined ||
+        overrides.extendedThinking !== undefined ||
+        overrides.thinkingEffort !== undefined ||
+        (overrides.cacheControl !== undefined && (provider === "anthropic" || !provider))
+    ) {
+        const anthCfg = { ...((config.anthropic as Record<string, unknown>) ?? {}) };
+
+        if (overrides.adaptiveThinking !== undefined) {
+            if (overrides.adaptiveThinking) {
+                anthCfg.thinking = { type: "adaptive" };
+                if (overrides.thinkingEffort) {
+                    anthCfg.effort = overrides.thinkingEffort;
+                }
+            } else {
+                delete anthCfg.thinking;
+                delete anthCfg.effort;
             }
-        } else {
-            delete anthCfg.thinking;
-            delete anthCfg.effort;
+        } else if (overrides.extendedThinking !== undefined) {
+            if (overrides.extendedThinking) {
+                anthCfg.thinking = {
+                    type: "enabled",
+                    budgetTokens: overrides.thinkingBudget || 10000
+                };
+            } else {
+                delete anthCfg.thinking;
+            }
         }
+
+        if (overrides.thinkingEffort !== undefined && overrides.adaptiveThinking === undefined) {
+            anthCfg.effort = overrides.thinkingEffort;
+        }
+
+        if (overrides.cacheControl !== undefined && (provider === "anthropic" || !provider)) {
+            if (overrides.cacheControl) {
+                anthCfg.cacheControl = { type: "ephemeral" };
+            } else {
+                delete anthCfg.cacheControl;
+            }
+        }
+
         config.anthropic = Object.keys(anthCfg).length > 0 ? anthCfg : undefined;
-        delete config.thinking;
-    } else if (overrides.extendedThinking !== undefined) {
-        if (overrides.extendedThinking) {
-            config.thinking = {
-                type: "enabled",
-                budget_tokens: overrides.thinkingBudget || 10000
-            };
-        } else {
-            delete config.thinking;
+    }
+
+    // OpenAI-specific overrides → config.openai.*
+    if (
+        overrides.parallelToolCalls !== undefined ||
+        (overrides.reasoningEffort !== undefined && (provider === "openai" || !provider))
+    ) {
+        const oaiCfg = { ...((config.openai as Record<string, unknown>) ?? {}) };
+
+        if (overrides.parallelToolCalls !== undefined) {
+            oaiCfg.parallelToolCalls = overrides.parallelToolCalls;
         }
-    }
 
-    if (overrides.thinkingEffort !== undefined && overrides.adaptiveThinking === undefined) {
-        const anthCfg = (config.anthropic as Record<string, unknown>) ?? {};
-        anthCfg.effort = overrides.thinkingEffort;
-        config.anthropic = anthCfg;
-    }
-
-    if (overrides.parallelToolCalls !== undefined) {
-        config.parallelToolCalls = overrides.parallelToolCalls;
-    }
-
-    if (overrides.reasoningEffort !== undefined) {
-        config.reasoningEffort = overrides.reasoningEffort;
-    }
-
-    if (overrides.cacheControl !== undefined) {
-        if (overrides.cacheControl) {
-            config.cacheControl = { type: "ephemeral" };
-        } else {
-            delete config.cacheControl;
+        if (overrides.reasoningEffort !== undefined && (provider === "openai" || !provider)) {
+            if (overrides.reasoningEffort) {
+                oaiCfg.reasoningEffort = overrides.reasoningEffort;
+            } else {
+                delete oaiCfg.reasoningEffort;
+            }
         }
+
+        config.openai = Object.keys(oaiCfg).length > 0 ? oaiCfg : undefined;
     }
 
+    // Shared (provider-agnostic) overrides
     if (overrides.toolChoice !== undefined) {
         config.toolChoice = overrides.toolChoice;
     }
@@ -261,17 +290,21 @@ export const agentCreateTool = createTool({
             throw new Error(`Agent with slug '${slug}' already exists`);
         }
 
-        const modelConfig = buildModelConfig(input.modelConfig || null, {
-            extendedThinking: input.extendedThinking,
-            thinkingBudget: input.thinkingBudget,
-            adaptiveThinking: input.adaptiveThinking,
-            thinkingEffort: input.thinkingEffort,
-            parallelToolCalls: input.parallelToolCalls,
-            reasoningEffort: input.reasoningEffort,
-            cacheControl: input.cacheControl,
-            toolChoice: input.toolChoice,
-            reasoning: input.reasoning
-        });
+        const modelConfig = buildModelConfig(
+            input.modelConfig || null,
+            {
+                extendedThinking: input.extendedThinking,
+                thinkingBudget: input.thinkingBudget,
+                adaptiveThinking: input.adaptiveThinking,
+                thinkingEffort: input.thinkingEffort,
+                parallelToolCalls: input.parallelToolCalls,
+                reasoningEffort: input.reasoningEffort,
+                cacheControl: input.cacheControl,
+                toolChoice: input.toolChoice,
+                reasoning: input.reasoning
+            },
+            input.modelProvider
+        );
 
         const agent = await prisma.agent.create({
             data: {
@@ -444,17 +477,22 @@ export const agentUpdateTool = createTool({
             payload.modelConfig !== undefined
                 ? payload.modelConfig || null
                 : (existing.modelConfig as Record<string, unknown> | null);
-        const modelConfig = buildModelConfig(modelConfigBase, {
-            extendedThinking: payload.extendedThinking,
-            thinkingBudget: payload.thinkingBudget,
-            adaptiveThinking: payload.adaptiveThinking,
-            thinkingEffort: payload.thinkingEffort,
-            parallelToolCalls: payload.parallelToolCalls,
-            reasoningEffort: payload.reasoningEffort,
-            cacheControl: payload.cacheControl,
-            toolChoice: payload.toolChoice,
-            reasoning: payload.reasoning
-        });
+        const resolvedProvider = payload.modelProvider ?? existing.modelProvider;
+        const modelConfig = buildModelConfig(
+            modelConfigBase,
+            {
+                extendedThinking: payload.extendedThinking,
+                thinkingBudget: payload.thinkingBudget,
+                adaptiveThinking: payload.adaptiveThinking,
+                thinkingEffort: payload.thinkingEffort,
+                parallelToolCalls: payload.parallelToolCalls,
+                reasoningEffort: payload.reasoningEffort,
+                cacheControl: payload.cacheControl,
+                toolChoice: payload.toolChoice,
+                reasoning: payload.reasoning
+            },
+            resolvedProvider
+        );
 
         const existingMemoryConfig = (existing.memoryConfig ??
             Prisma.DbNull) as Prisma.InputJsonValue;
@@ -481,6 +519,10 @@ export const agentUpdateTool = createTool({
                 payload.contextConfig !== undefined
                     ? (payload.contextConfig as Prisma.InputJsonValue)
                     : existingContextConfig,
+            routingConfig:
+                payload.routingConfig !== undefined
+                    ? (payload.routingConfig as Prisma.InputJsonValue)
+                    : ((existing.routingConfig ?? Prisma.DbNull) as Prisma.InputJsonValue),
             maxSteps: payload.maxSteps ?? existing.maxSteps,
             subAgents: payload.subAgents ?? existing.subAgents,
             workflows: payload.workflows ?? existing.workflows,

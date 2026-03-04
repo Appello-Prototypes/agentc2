@@ -204,8 +204,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             if (body.workflows !== undefined) updateData.workflows = body.workflows;
 
             const hasModelConfigUpdate =
-                body.extendedThinking !== undefined ||
                 body.modelConfig !== undefined ||
+                body.extendedThinking !== undefined ||
                 body.parallelToolCalls !== undefined ||
                 body.reasoningEffort !== undefined ||
                 body.cacheControl !== undefined ||
@@ -213,58 +213,83 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
                 body.reasoning !== undefined;
 
             if (hasModelConfigUpdate) {
-                const baseConfig =
-                    (body.modelConfig !== undefined
-                        ? (body.modelConfig as Record<string, unknown> | null)
-                        : (existing.modelConfig as Record<string, unknown> | null)) || {};
+                // When body.modelConfig is provided directly (new UI sends complete
+                // provider-keyed config), use it as the base. Otherwise fall back to
+                // the existing DB value and apply flat-field overrides for backward
+                // compatibility (MCP tools, legacy clients).
+                const isFullConfigProvided = body.modelConfig !== undefined;
+                const baseConfig = isFullConfigProvided
+                    ? (body.modelConfig as Record<string, unknown> | null) || {}
+                    : { ...((existing.modelConfig as Record<string, unknown> | null) || {}) };
+
                 const nextConfig: Record<string, unknown> = { ...baseConfig };
 
-                if (body.extendedThinking !== undefined) {
-                    if (body.extendedThinking) {
-                        nextConfig.thinking = {
-                            type: "enabled",
-                            budget_tokens: body.thinkingBudget || 10000
-                        };
-                    } else {
-                        delete nextConfig.thinking;
+                // Backward-compatible flat field overrides (for MCP tools / legacy clients).
+                // These normalize into provider-keyed format.
+                if (!isFullConfigProvided) {
+                    const provider = body.modelProvider || existing.modelProvider || "";
+
+                    if (body.extendedThinking !== undefined) {
+                        const providerCfg = (nextConfig[provider] as Record<string, unknown>) ?? {};
+                        if (body.extendedThinking) {
+                            providerCfg.thinking = {
+                                type: "enabled",
+                                budgetTokens: body.thinkingBudget || 10000
+                            };
+                        } else {
+                            delete providerCfg.thinking;
+                        }
+                        nextConfig[provider] = providerCfg;
+                    }
+
+                    if (body.parallelToolCalls !== undefined && provider === "openai") {
+                        const providerCfg = (nextConfig.openai as Record<string, unknown>) ?? {};
+                        providerCfg.parallelToolCalls = body.parallelToolCalls;
+                        nextConfig.openai = providerCfg;
+                    }
+
+                    if (body.reasoningEffort !== undefined && provider === "openai") {
+                        const providerCfg = (nextConfig.openai as Record<string, unknown>) ?? {};
+                        if (body.reasoningEffort) {
+                            providerCfg.reasoningEffort = body.reasoningEffort;
+                        } else {
+                            delete providerCfg.reasoningEffort;
+                        }
+                        nextConfig.openai = providerCfg;
+                    }
+
+                    if (body.cacheControl !== undefined && provider === "anthropic") {
+                        const providerCfg = (nextConfig.anthropic as Record<string, unknown>) ?? {};
+                        if (body.cacheControl) {
+                            providerCfg.cacheControl = { type: "ephemeral" };
+                        } else {
+                            delete providerCfg.cacheControl;
+                        }
+                        nextConfig.anthropic = providerCfg;
+                    }
+
+                    if (body.toolChoice !== undefined) {
+                        if (body.toolChoice) {
+                            nextConfig.toolChoice = body.toolChoice;
+                        } else {
+                            delete nextConfig.toolChoice;
+                        }
+                    }
+
+                    if (body.reasoning !== undefined) {
+                        if (body.reasoning) {
+                            nextConfig.reasoning = body.reasoning;
+                        } else {
+                            delete nextConfig.reasoning;
+                        }
                     }
                 }
 
-                if (body.parallelToolCalls !== undefined) {
-                    nextConfig.parallelToolCalls = body.parallelToolCalls;
-                }
-
-                if (body.reasoningEffort !== undefined) {
-                    if (body.reasoningEffort) {
-                        nextConfig.reasoningEffort = body.reasoningEffort;
-                    } else {
-                        delete nextConfig.reasoningEffort;
-                    }
-                }
-
-                if (body.cacheControl !== undefined) {
-                    if (body.cacheControl) {
-                        nextConfig.cacheControl = { type: "ephemeral" };
-                    } else {
-                        delete nextConfig.cacheControl;
-                    }
-                }
-
-                if (body.toolChoice !== undefined) {
-                    if (body.toolChoice) {
-                        nextConfig.toolChoice = body.toolChoice;
-                    } else {
-                        delete nextConfig.toolChoice;
-                    }
-                }
-
-                if (body.reasoning !== undefined) {
-                    if (body.reasoning) {
-                        nextConfig.reasoning = body.reasoning;
-                    } else {
-                        delete nextConfig.reasoning;
-                    }
-                }
+                // Strip deprecated flat fields on every save
+                delete nextConfig.thinking;
+                delete nextConfig.parallelToolCalls;
+                delete nextConfig.reasoningEffort;
+                delete nextConfig.cacheControl;
 
                 updateData.modelConfig = Object.keys(nextConfig).length > 0 ? nextConfig : null;
             }
@@ -390,60 +415,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
                 );
             }
             if (hasModelConfigUpdate && !jsonEqual(updateData.modelConfig, existing.modelConfig)) {
-                // Build specific change descriptions for modelConfig sub-fields
-                if (body.extendedThinking !== undefined) {
-                    const existingThinking =
-                        (existing.modelConfig as { thinking?: { type: string } })?.thinking
-                            ?.type === "enabled";
-                    if (body.extendedThinking !== existingThinking) {
-                        changes.push(
-                            `Extended thinking: ${existingThinking ? "enabled" : "disabled"} → ${body.extendedThinking ? "enabled" : "disabled"}`
-                        );
-                    }
-                }
-                if (body.parallelToolCalls !== undefined) {
-                    const existingParallel = (
-                        existing.modelConfig as { parallelToolCalls?: boolean }
-                    )?.parallelToolCalls;
-                    if (body.parallelToolCalls !== existingParallel) {
-                        changes.push("Parallel tool calling updated");
-                    }
-                }
-                if (body.reasoningEffort !== undefined) {
-                    const existingEffort = (existing.modelConfig as { reasoningEffort?: string })
-                        ?.reasoningEffort;
-                    if (body.reasoningEffort !== existingEffort) {
-                        changes.push("Reasoning effort updated");
-                    }
-                }
-                if (body.cacheControl !== undefined) {
-                    const existingCache =
-                        (existing.modelConfig as { cacheControl?: { type?: string } })?.cacheControl
-                            ?.type === "ephemeral";
-                    if (body.cacheControl !== existingCache) {
-                        changes.push("Prompt cache control updated");
-                    }
-                }
-                if (body.toolChoice !== undefined) {
-                    const existingToolChoice = (existing.modelConfig as { toolChoice?: string })
-                        ?.toolChoice;
-                    if (body.toolChoice !== existingToolChoice) {
-                        changes.push("Tool choice updated");
-                    }
-                }
-                // If modelConfig changed but no specific sub-field produced a description, add generic
-                if (
-                    !changes.some(
-                        (c) =>
-                            c.includes("thinking") ||
-                            c.includes("Parallel") ||
-                            c.includes("Reasoning") ||
-                            c.includes("cache") ||
-                            c.includes("Tool choice")
-                    )
-                ) {
-                    changes.push("Updated model configuration");
-                }
+                changes.push("Updated model configuration");
             }
             if (body.isActive !== undefined && body.isActive !== existing.isActive) {
                 changes.push(

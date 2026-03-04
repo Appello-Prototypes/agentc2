@@ -39,7 +39,8 @@ import {
     PromptInputActionMenuContent,
     PromptInputActionMenuItem,
     usePromptInputAttachments,
-    StreamingStatus,
+    RunActivityLog,
+    type RunActivityEvent,
     Plan,
     PlanHeader,
     PlanTitle,
@@ -66,8 +67,7 @@ import {
     ToolInvocationCard,
     CodeDiffCard,
     isDiffResult,
-    type PromptInputMessage,
-    type ToolActivity
+    type PromptInputMessage
 } from "@repo/ui";
 import {
     PlusIcon,
@@ -278,13 +278,15 @@ function BudgetExceededCard({
     );
 }
 
-function getGreeting(name?: string | null): string {
-    const hour = new Date().getHours();
-    let greeting: string;
-    if (hour < 12) greeting = "Good morning";
-    else if (hour < 17) greeting = "Good afternoon";
-    else greeting = "Good evening";
-    if (name) return `${greeting}, ${name.split(" ")[0]}`;
+function useGreeting(name?: string | null): string {
+    const greeting = useMemo(() => {
+        const hour = new Date().getHours();
+        let g: string;
+        if (hour < 12) g = "Good morning";
+        else if (hour < 17) g = "Good afternoon";
+        else g = "Good evening";
+        return name ? `${g}, ${name.split(" ")[0]}` : g;
+    }, [name]);
     return greeting;
 }
 
@@ -969,12 +971,21 @@ function DebugInfoBar({
     );
 }
 
+// AI SDK v6 represents tool invocation parts with `type` set to the tool name
+// (e.g. "tool-rag-query") rather than a generic "tool-invocation" type.
+// Properties (toolCallId, state, input, output, etc.) live directly on the part.
+const KNOWN_NON_TOOL_TYPES = new Set(["text", "reasoning", "file", "step-start", "source"]);
+function isToolPart(part: { type: string }): boolean {
+    return !KNOWN_NON_TOOL_TYPES.has(part.type) && !part.type.startsWith("data-");
+}
+
 // ─── Main component ──────────────────────────────────────────────────────────
 
 export default function UnifiedChatPage() {
     const searchParams = useSearchParams();
     const { data: session } = useSession();
     const embedConfig = useEmbedConfig();
+    const greeting = useGreeting(session?.user?.name);
 
     // Scope localStorage conversations by user so they don't leak across accounts
     useEffect(() => {
@@ -1027,13 +1038,30 @@ export default function UnifiedChatPage() {
         });
     }, [selectedAgentSlug, threadId, currentRunId, session?.user?.id]);
 
-    const { messages, setMessages, sendMessage, status, stop } = useChat({
+    const {
+        messages,
+        setMessages,
+        sendMessage,
+        status,
+        stop: rawStop
+    } = useChat({
         transport,
         id: threadId
     });
     const isStreaming = status === "streaming";
     const isSubmitted = status === "submitted";
     const hasMessages = messages.length > 0;
+
+    const stop = useCallback(() => {
+        rawStop();
+        if (currentRunId && selectedAgentSlug) {
+            fetch(`${getApiBase()}/api/agents/${selectedAgentSlug}/chat/finalize`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ runId: currentRunId })
+            }).catch((e) => console.warn("[Chat] Failed to finalize run on stop:", e));
+        }
+    }, [rawStop, currentRunId, selectedAgentSlug]);
 
     // Optimistic "effectively ready" detection: if the stream is technically
     // still open but no new content has arrived for 2s and we already have
@@ -1069,31 +1097,117 @@ export default function UnifiedChatPage() {
           ? ("streaming" as const)
           : undefined;
 
-    // Derive active tool calls from the latest assistant message during streaming
-    const activeTools: ToolActivity[] = useMemo(() => {
-        if (!submitStatus) return [];
-        // Find the last assistant message (the one being streamed)
-        const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
-        if (!lastAssistant?.parts) return [];
+    // Activity log uses the raw stream status so it stays visible during
+    // extended thinking pauses (effectivelyReady is only for input unlock).
+    const activityStatus = isSubmitted
+        ? ("submitted" as const)
+        : isStreaming
+          ? ("streaming" as const)
+          : undefined;
 
-        const tools: ToolActivity[] = [];
-        for (const part of lastAssistant.parts) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const p = part as any;
-            if (p.type === "tool-invocation" && p.toolInvocation) {
-                const toolName = p.toolInvocation.toolName || "unknown";
-                const callId = p.toolInvocation.toolCallId || toolName;
-                const hasResult = "result" in p.toolInvocation;
-                tools.push({
-                    id: callId,
-                    name: toolName,
-                    status: hasResult ? "complete" : "running",
-                    durationMs: undefined
+    // ── Run Activity Log: accumulated events for the current assistant turn ──
+    const runSubmitTimeRef = useRef<number | null>(null);
+    const prevStatusRef = useRef<typeof status>(undefined);
+
+    useEffect(() => {
+        if (status === "submitted" && prevStatusRef.current !== "submitted") {
+            runSubmitTimeRef.current = Date.now();
+        }
+        if (!status && prevStatusRef.current) {
+            runSubmitTimeRef.current = null;
+        }
+        prevStatusRef.current = status;
+    }, [status]);
+
+    const runActivityEvents: RunActivityEvent[] = useMemo(() => {
+        const events: RunActivityEvent[] = [];
+        const now = Date.now();
+        const submitTime = runSubmitTimeRef.current ?? now;
+
+        const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
+        if (!lastAssistant?.parts && !activityStatus) return events;
+
+        if (activityStatus || lastAssistant?.parts?.length) {
+            events.push({
+                id: "ev-submitted",
+                type: "submitted",
+                label: "Processing request",
+                timestamp: submitTime
+            });
+        }
+
+        if (lastAssistant?.parts) {
+            let hasText = false;
+            let reasoningIdx = 0;
+            let toolIdx = 0;
+
+            for (const part of lastAssistant.parts) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const p = part as any;
+
+                if (p.type === "reasoning") {
+                    events.push({
+                        id: `ev-reasoning-${reasoningIdx++}`,
+                        type: "thinking",
+                        label: "Reasoning",
+                        timestamp: submitTime + events.length
+                    });
+                }
+
+                if (isToolPart(p)) {
+                    const toolName = p.type || "unknown";
+                    const callId = p.toolCallId || `tool-${toolIdx++}`;
+                    const hasResult = p.state === "output-available" || "output" in p;
+                    const isError = p.state === "output-error";
+                    const startTime = toolStartTimes.get(callId) ?? submitTime;
+
+                    const humanName = toolName
+                        .replace(/[-_]/g, " ")
+                        .replace(/\b\w/g, (c: string) => c.toUpperCase());
+
+                    if (hasResult) {
+                        const durationMs = startTime ? now - startTime : undefined;
+                        events.push({
+                            id: `ev-tool-${callId}`,
+                            type: isError ? "tool-error" : "tool-complete",
+                            label: isError ? `${humanName} failed` : humanName,
+                            timestamp: startTime,
+                            durationMs
+                        });
+                    } else {
+                        events.push({
+                            id: `ev-tool-${callId}`,
+                            type: "tool-start",
+                            label: humanName,
+                            timestamp: startTime
+                        });
+                    }
+                }
+
+                if (p.type === "text" && p.text?.length > 0) {
+                    hasText = true;
+                }
+            }
+
+            if (hasText && !activityStatus) {
+                events.push({
+                    id: "ev-done",
+                    type: "composing",
+                    label: "Response ready",
+                    timestamp: now
+                });
+            } else if (hasText && activityStatus) {
+                events.push({
+                    id: "ev-composing",
+                    type: "composing",
+                    label: "Composing response",
+                    timestamp: now
                 });
             }
         }
-        return tools;
-    }, [submitStatus, messages]);
+
+        return events;
+    }, [activityStatus, messages, toolStartTimes]);
 
     // Extract runId and turnIndex from assistant messages' data-run-metadata parts.
     // runId is set once (first metadata) and reused for subsequent turns.
@@ -1384,11 +1498,11 @@ export default function UnifiedChatPage() {
             const next = new Map(prev);
             for (const msg of messages) {
                 for (const part of msg.parts || []) {
-                    if (part.type === "tool-invocation") {
+                    if (isToolPart(part)) {
                         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                        const inv = (part as any).toolInvocation || part;
-                        const callId: string | undefined = inv.toolCallId;
-                        const hasResult = "result" in inv;
+                        const p = part as any;
+                        const callId: string | undefined = p.toolCallId;
+                        const hasResult = p.state === "output-available" || "output" in p;
                         if (callId && !hasResult && !next.has(callId)) {
                             next.set(callId, Date.now());
                             updated = true;
@@ -1481,15 +1595,15 @@ export default function UnifiedChatPage() {
         if (part.type === "reasoning") {
             return <ReasoningDisplay key={index} text={part.reasoning || part.text || ""} />;
         }
-        if (part.type === "tool-invocation") {
-            const toolName = part.toolInvocation?.toolName || "unknown";
-            const hasResult = "result" in (part.toolInvocation || {});
-            const callId = part.toolInvocation?.toolCallId || `tool-${index}`;
+        if (isToolPart(part)) {
+            const toolName = part.type || "unknown";
+            const callId = part.toolCallId || `tool-${index}`;
+            const hasResult = part.state === "output-available" || "output" in part;
 
             const startTime = toolStartTimes.get(callId);
 
-            if (toolName === "ask_questions") {
-                const toolInput = part.toolInvocation?.input || part.toolInvocation?.args || {};
+            if (toolName === "ask_questions" || toolName === "tool-ask-questions") {
+                const toolInput = part.input || part.rawInput || {};
                 const saved = questionAnswers[callId];
                 return (
                     <InteractiveQuestions
@@ -1509,18 +1623,20 @@ export default function UnifiedChatPage() {
                 );
             }
 
-            const toolInput = part.toolInvocation?.input || part.toolInvocation?.args;
-            const toolResult = hasResult ? part.toolInvocation?.result : undefined;
+            const toolInput = part.input || part.rawInput;
+            const toolResult = hasResult ? part.output : undefined;
             const toolError =
-                part.toolInvocation?.state === "output-error"
-                    ? part.toolInvocation?.errorText || "Tool execution failed"
+                part.state === "output-error"
+                    ? part.errorText || "Tool execution failed"
                     : undefined;
 
             // Human-readable label for network-execute and workflow-execute tools
             const displayLabel =
-                toolName === "network-execute" && toolInput?.networkSlug
+                (toolName === "network-execute" || toolName === "tool-network-execute") &&
+                toolInput?.networkSlug
                     ? `Running ${String(toolInput.networkSlug)} network`
-                    : toolName === "workflow-execute" && toolInput?.workflowSlug
+                    : (toolName === "workflow-execute" || toolName === "tool-workflow-execute") &&
+                        toolInput?.workflowSlug
                       ? `Running ${String(toolInput.workflowSlug)} workflow`
                       : undefined;
 
@@ -1672,7 +1788,7 @@ export default function UnifiedChatPage() {
                             <div className="mb-8 text-center">
                                 <SparklesIcon className="text-primary/70 mx-auto mb-3 size-8" />
                                 <h1 className="text-foreground/90 mb-1 text-2xl font-semibold tracking-tight">
-                                    {getGreeting(session?.user?.name)}
+                                    {greeting || "\u00A0"}
                                 </h1>
                                 <p className="text-muted-foreground text-sm">
                                     Pick a task, or ask anything
@@ -1833,25 +1949,10 @@ export default function UnifiedChatPage() {
                                         })()}
                                 </Message>
                             ))}
-                            <StreamingStatus
-                                status={submitStatus}
-                                hasVisibleContent={(() => {
-                                    // Only check the LATEST assistant message, not all messages.
-                                    // Previous assistant messages always have text, which would
-                                    // cause StreamingStatus to hide immediately on follow-up messages.
-                                    const lastAssistant = [...messages]
-                                        .reverse()
-                                        .find((m) => m.role === "assistant");
-                                    return (
-                                        lastAssistant?.parts?.some(
-                                            (p) =>
-                                                p.type === "text" &&
-                                                (p as { text: string }).text.length > 0
-                                        ) ?? false
-                                    );
-                                })()}
+                            <RunActivityLog
+                                status={activityStatus}
+                                events={runActivityEvents}
                                 agentName={agentName || undefined}
-                                activeTools={activeTools}
                             />
                         </ConversationContent>
                     </Conversation>

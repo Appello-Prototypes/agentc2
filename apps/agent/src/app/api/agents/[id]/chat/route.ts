@@ -4,6 +4,8 @@ import {
     createUIMessageStream,
     createUIMessageStreamResponse,
     generateId,
+    hasToolCall,
+    stepCountIs,
     type UIMessageStreamWriter
 } from "ai";
 import {
@@ -23,7 +25,7 @@ import {
     type TurnHandle,
     type ToolCallData
 } from "@/lib/run-recorder";
-import { calculateCost } from "@/lib/cost-calculator";
+import { calculateCost, calculateCostDetailed } from "@/lib/cost-calculator";
 import { createTriggerEventRecord } from "@/lib/trigger-events";
 import { getUserOrganizationId, getDefaultWorkspaceIdForUser } from "@/lib/organization";
 import { orgScopedResourceId, orgScopedThreadId } from "@repo/agentc2/tenant-scope";
@@ -31,6 +33,8 @@ import { requireAgentAccess, requireAuth } from "@/lib/authz";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { RATE_LIMIT_POLICIES } from "@/lib/security/rate-limit-policy";
 import { enforceCsrf } from "@/lib/security/http-security";
+
+let prewarmed = false;
 
 function formatToolResultPreview(result: unknown, maxLength = 500): string {
     if (typeof result === "string") {
@@ -82,6 +86,10 @@ type UsageLike = {
     completionTokens?: number;
     outputTokens?: number;
     totalTokens?: number;
+    reasoningTokens?: number;
+    cachedTokens?: number;
+    cacheReadTokens?: number;
+    cacheCreationTokens?: number;
 };
 
 type StreamResult = {
@@ -213,11 +221,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             modelOverrideForResolve = routingResult.modelOverride;
         }
 
+        // Lazy pre-warm: on the very first chat request, pre-warm the hydration cache
+        if (!prewarmed) {
+            prewarmed = true;
+            agentResolver.prewarm().catch(() => {});
+        }
+
         // Resolve agent via AgentResolver (database-first, fallback to code-defined)
         // This is the same path used by production channels (Slack, WhatsApp, Voice)
         const tResolve = performance.now();
         // eslint-disable-next-line prefer-const
-        let { agent, record, source, activeSkills, toolOriginMap, toolHealth } =
+        let { agent, record, source, activeSkills, toolOriginMap, toolHealth, resolvedToolNames } =
             await agentResolver.resolve({
                 slug: id,
                 requestContext: enrichedRequestContext,
@@ -429,6 +443,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         let fullOutput = "";
         const toolCalls: ToolCallData[] = [];
 
+        // Accumulate per-step token counts as a fallback for when .usage promise fails
+        let accumulatedInputTokens = 0;
+        let accumulatedOutputTokens = 0;
+        let accumulatedCostUsd = 0;
+        const PER_TURN_COST_CAP_USD = record?.maxSpendUsd ? record.maxSpendUsd / 300 : 0.5;
+
         // Build execution steps for time-travel debugging
         type ExecutionStep = {
             step: number;
@@ -445,6 +465,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             string,
             { toolName: string; args: Record<string, unknown>; startTime: number }
         >();
+
+        // Capture turn-complete metadata when the finish-tool pattern is active
+        let turnCompleteMetadata: {
+            reason?: string;
+            nextAction?: string;
+            summary?: string;
+        } | null = null;
 
         // Build stream input -- multimodal (text + images) when image parts present
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -481,13 +508,60 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
         // Stream the response using the resolved agent
         const MAX_EMPTY_RETRIES = 2;
-        const streamOptions = {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const streamOptions: Record<string, any> = {
             maxSteps,
             memory: {
                 thread: userThreadId,
                 resource: resourceId
             }
         };
+
+        // Finish-tool pattern: when agent has turn-complete, force explicit termination
+        const hasTurnComplete = resolvedToolNames?.includes("turn-complete");
+        if (hasTurnComplete) {
+            // Anthropic rejects toolChoice:"required" when thinking is enabled.
+            // Detect thinking from the agent's modelConfig and fall back to "auto".
+            const mc = record?.modelConfig as Record<string, unknown> | null;
+            const anthCfg = (mc?.anthropic ?? {}) as Record<string, unknown>;
+            const thinkingCfg = (anthCfg.thinking ?? mc?.thinking ?? null) as {
+                type?: string;
+            } | null;
+            const thinkingEnabled =
+                thinkingCfg?.type === "enabled" || thinkingCfg?.type === "adaptive";
+
+            if (thinkingEnabled) {
+                // toolChoice "auto" is the only value compatible with Anthropic thinking
+                streamOptions.toolChoice = "auto";
+            } else {
+                streamOptions.toolChoice = "required";
+            }
+
+            streamOptions.stopWhen = [
+                hasToolCall("turn-complete"),
+                hasToolCall("ask_questions"),
+                stepCountIs(maxSteps)
+            ];
+
+            if (!thinkingEnabled) {
+                streamOptions.prepareStep = ({ steps }: { steps: unknown[] }) => {
+                    const currentStep = steps.length + 1;
+                    if (currentStep >= maxSteps) {
+                        return {
+                            toolChoice: {
+                                type: "tool" as const,
+                                toolName: "turn-complete"
+                            }
+                        };
+                    }
+                    return undefined;
+                };
+            }
+
+            console.log(
+                `[Agent Chat] Finish-tool pattern enabled for "${id}" (maxSteps=${maxSteps}, thinking=${thinkingEnabled ? "on→auto" : "off→required"})`
+            );
+        }
 
         // Memory diagnostic: log thread/resource used and whether agent has memory
         const hasMemory = Boolean(
@@ -496,6 +570,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         console.log(
             `[Agent Chat] Memory context: thread=${userThreadId}, resource=${resourceId}, agentHasMemory=${hasMemory}, agent=${id}`
         );
+
+        // Wire request abort signal to agent stream so client cancellation
+        // stops token consumption immediately at the LLM API level
+        const abortController = new AbortController();
+        request.signal.addEventListener("abort", () => abortController.abort());
+        streamOptions.abortSignal = abortController.signal;
 
         const tStream = performance.now();
         let responseStream;
@@ -531,27 +611,54 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                     });
                     textState.currentId = messageId;
 
-                    // Send run metadata once the handle resolves (non-blocking for text streaming).
-                    // We wait briefly for the run handle, but don't block if it's not ready yet.
+                    // Send run metadata when the DB write resolves — don't block text streaming.
                     if (runReady) {
-                        await runReady;
-                    }
-                    if (run) {
-                        writer.write({
-                            type: "data-run-metadata",
-                            data: {
-                                runId: run.runId,
-                                turnId: turnHandle?.turnId,
-                                turnIndex: turnHandle?.turnIndex,
-                                messageId
-                            }
-                        });
+                        runReady
+                            .then(() => {
+                                if (run) {
+                                    writer.write({
+                                        type: "data-run-metadata",
+                                        data: {
+                                            runId: run.runId,
+                                            turnId: turnHandle?.turnId,
+                                            turnIndex: turnHandle?.turnIndex,
+                                            messageId
+                                        }
+                                    });
+                                }
+                            })
+                            .catch(() => {});
                     }
 
                     // Use fullStream to capture ALL events including tool calls
                     const streamResult = responseStream as unknown as StreamResult;
                     const fullStream = streamResult.fullStream;
                     const textStream = streamResult.textStream;
+                    const writeTraceStepLive = (step: {
+                        step: number;
+                        type: string;
+                        content: string;
+                        durationMs?: number;
+                    }) => {
+                        if (!run) return;
+                        prisma.agentTraceStep
+                            .create({
+                                data: {
+                                    traceId: run.traceId,
+                                    stepNumber: step.step,
+                                    type: step.type,
+                                    content: step.content,
+                                    durationMs: step.durationMs ?? null
+                                }
+                            })
+                            .catch(() => {});
+                    };
+
+                    const writeToolCallLive = (tc: ToolCallData) => {
+                        if (!run) return;
+                        run.addToolCall(tc).catch(() => {});
+                    };
+
                     const handleToolChunk = (c: StreamChunk) => {
                         // Handle tool calls
                         if (c.type === "tool-call") {
@@ -583,6 +690,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                                 startTime: Date.now()
                             });
 
+                            // Extract turn-complete metadata for run recording
+                            if (toolName === "turn-complete") {
+                                turnCompleteMetadata = {
+                                    reason: args.reason as string | undefined,
+                                    nextAction: args.nextAction as string | undefined,
+                                    summary: args.summary as string | undefined
+                                };
+                            }
+
                             // Close current text block before tool invocation
                             if (textState.currentId) {
                                 writer.write({ type: "text-end", id: textState.currentId });
@@ -598,12 +714,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                             });
 
                             stepCounter++;
-                            executionSteps.push({
+                            const toolCallStep = {
                                 step: stepCounter,
-                                type: "tool_call",
+                                type: "tool_call" as const,
                                 content: `Calling tool: ${toolName}\nArgs: ${JSON.stringify(args, null, 2)}`,
                                 timestamp: new Date().toISOString()
-                            });
+                            };
+                            executionSteps.push(toolCallStep);
+                            writeTraceStepLive(toolCallStep);
                             return;
                         }
 
@@ -671,15 +789,18 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
                             stepCounter++;
                             const resultPreview = formatToolResultPreview(result, 500);
-                            executionSteps.push({
+                            const toolResultStep = {
                                 step: stepCounter,
-                                type: "tool_result",
+                                type: "tool_result" as const,
                                 content: error
                                     ? `Tool ${call?.toolName || toolName} failed: ${error}`
                                     : `Tool ${call?.toolName || toolName} result:\n${resultPreview}${resultPreview.length >= 500 ? "..." : ""}`,
                                 timestamp: new Date().toISOString(),
                                 durationMs
-                            });
+                            };
+                            executionSteps.push(toolResultStep);
+                            writeTraceStepLive(toolResultStep);
+                            writeToolCallLive(toolCalls[toolCalls.length - 1]!);
                         }
 
                         if (c.type === "tool-error") {
@@ -747,13 +868,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                             textState.currentId = nextTextId;
 
                             stepCounter++;
-                            executionSteps.push({
+                            const toolErrorStep = {
                                 step: stepCounter,
-                                type: "tool_result",
+                                type: "tool_result" as const,
                                 content: `Tool ${call?.toolName || toolName} failed: ${errorMessage}`,
                                 timestamp: new Date().toISOString(),
                                 durationMs
-                            });
+                            };
+                            executionSteps.push(toolErrorStep);
+                            writeTraceStepLive(toolErrorStep);
+                            writeToolCallLive(toolCalls[toolCalls.length - 1]!);
                         }
                     };
 
@@ -764,6 +888,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                     // never sees a blank response.
 
                     const IDLE_TIMEOUT_MS = 10_000;
+                    const GLOBAL_STREAM_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes max per stream
+                    const CHUNK_IDLE_TIMEOUT_MS = 60_000; // 60s max between chunks
                     let hasReceivedContent = false;
                     let streamAttempt = 0;
                     let activeStreamResult = streamResult;
@@ -778,6 +904,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                         const txs = sr.textStream;
                         let gotContent = false;
                         let reasoningBuffer = "";
+                        let reasoningId: string | null = null;
 
                         if (fs) {
                             const fsIterator = (
@@ -787,26 +914,47 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                             )[Symbol.asyncIterator]();
 
                             let finishSeen = false;
+                            const streamStartTime = Date.now();
+                            let lastChunkTime = Date.now();
 
                             while (true) {
+                                const now = Date.now();
+                                if (now - streamStartTime > GLOBAL_STREAM_TIMEOUT_MS) {
+                                    console.warn(
+                                        `[Agent Chat] Global stream timeout (${GLOBAL_STREAM_TIMEOUT_MS}ms) reached for agent "${id}". Ending stream.`
+                                    );
+                                    break;
+                                }
+
+                                const chunkTimeout = finishSeen
+                                    ? IDLE_TIMEOUT_MS
+                                    : CHUNK_IDLE_TIMEOUT_MS;
                                 const raceTargets: Promise<
                                     | IteratorResult<unknown, unknown>
                                     | { done: true; value: undefined }
-                                >[] = [fsIterator.next()];
-
-                                if (finishSeen) {
-                                    raceTargets.push(
-                                        new Promise((resolve) =>
-                                            setTimeout(
-                                                () => resolve({ done: true, value: undefined }),
-                                                IDLE_TIMEOUT_MS
-                                            )
+                                >[] = [
+                                    fsIterator.next(),
+                                    new Promise((resolve) =>
+                                        setTimeout(
+                                            () => resolve({ done: true, value: undefined }),
+                                            chunkTimeout
                                         )
-                                    );
-                                }
+                                    )
+                                ];
 
                                 const result = await Promise.race(raceTargets);
-                                if (result.done) break;
+                                if (result.done) {
+                                    if (
+                                        !finishSeen &&
+                                        now - lastChunkTime >= CHUNK_IDLE_TIMEOUT_MS
+                                    ) {
+                                        console.warn(
+                                            `[Agent Chat] Chunk idle timeout (${CHUNK_IDLE_TIMEOUT_MS}ms) reached for agent "${id}". Stream appears hung.`
+                                        );
+                                    }
+                                    break;
+                                }
+                                lastChunkTime = Date.now();
 
                                 const c = normalizeChunk(result.value);
 
@@ -860,22 +1008,53 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                                 ) {
                                     gotContent = true;
                                     finishSeen = false;
+
+                                    if (c.type === "reasoning-start") {
+                                        if (textState.currentId) {
+                                            w.write({ type: "text-end", id: textState.currentId });
+                                            textState.currentId = null;
+                                        }
+                                        reasoningId = generateId();
+                                        w.write({ type: "reasoning-start", id: reasoningId });
+                                    }
+
                                     if (
                                         c.type === "reasoning-delta" &&
                                         typeof (c as Record<string, unknown>).text === "string"
                                     ) {
-                                        reasoningBuffer += (c as Record<string, unknown>)
-                                            .text as string;
+                                        const text = (c as Record<string, unknown>).text as string;
+                                        reasoningBuffer += text;
+                                        if (reasoningId) {
+                                            w.write({
+                                                type: "reasoning-delta",
+                                                id: reasoningId,
+                                                delta: text
+                                            });
+                                        }
                                     }
-                                    if (c.type === "reasoning-end" && reasoningBuffer) {
-                                        stepCounter++;
-                                        executionSteps.push({
-                                            step: stepCounter,
-                                            type: "thinking",
-                                            content: reasoningBuffer.substring(0, 2000),
-                                            timestamp: new Date().toISOString()
-                                        });
-                                        reasoningBuffer = "";
+
+                                    if (c.type === "reasoning-end") {
+                                        if (reasoningId) {
+                                            w.write({ type: "reasoning-end", id: reasoningId });
+                                            reasoningId = null;
+                                        }
+                                        if (reasoningBuffer) {
+                                            stepCounter++;
+                                            const thinkingStep = {
+                                                step: stepCounter,
+                                                type: "thinking" as const,
+                                                content: reasoningBuffer.substring(0, 2000),
+                                                timestamp: new Date().toISOString()
+                                            };
+                                            executionSteps.push(thinkingStep);
+                                            writeTraceStepLive(thinkingStep);
+                                            reasoningBuffer = "";
+                                        }
+                                        if (!ts.currentId) {
+                                            const nextTextId = generateId();
+                                            w.write({ type: "text-start", id: nextTextId });
+                                            ts.currentId = nextTextId;
+                                        }
                                     }
                                 } else if (c.type === "reasoning-part-finish") {
                                     gotContent = true;
@@ -899,18 +1078,46 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                                     gotContent = true;
                                     finishSeen = false;
                                 } else if (c.type === "finish-step") {
-                                    const usage =
+                                    const stepUsage =
                                         c.usage ??
                                         (c.payload as Record<string, unknown> | undefined)?.usage;
-                                    if (usage && typeof usage === "object") {
-                                        const u = usage as Record<string, unknown>;
+                                    if (stepUsage && typeof stepUsage === "object") {
+                                        const u = stepUsage as Record<string, unknown>;
+                                        const inTok =
+                                            (u.inputTokens as number) ??
+                                            (u.promptTokens as number) ??
+                                            0;
+                                        const outTok =
+                                            (u.outputTokens as number) ??
+                                            (u.completionTokens as number) ??
+                                            0;
+                                        accumulatedInputTokens += inTok;
+                                        accumulatedOutputTokens += outTok;
                                         stepCounter++;
-                                        executionSteps.push({
+
+                                        const stepCost = calculateCostDetailed(
+                                            record?.modelName || "unknown",
+                                            record?.modelProvider || "unknown",
+                                            { promptTokens: inTok, completionTokens: outTok }
+                                        );
+                                        accumulatedCostUsd += stepCost;
+
+                                        const usageStep = {
                                             step: stepCounter,
-                                            type: "step_usage",
-                                            content: `Tokens: ${u.totalTokens ?? "?"} (in: ${u.inputTokens ?? "?"}, out: ${u.outputTokens ?? "?"})`,
+                                            type: "step_usage" as const,
+                                            content: `Tokens: ${u.totalTokens ?? inTok + outTok} (in: ${inTok}, out: ${outTok}) | Cost: $${stepCost.toFixed(4)} (cumulative: $${accumulatedCostUsd.toFixed(4)})`,
                                             timestamp: new Date().toISOString()
-                                        });
+                                        };
+                                        executionSteps.push(usageStep);
+                                        writeTraceStepLive(usageStep);
+
+                                        if (accumulatedCostUsd > PER_TURN_COST_CAP_USD) {
+                                            console.warn(
+                                                `[Agent Chat] Per-turn cost cap exceeded for "${id}": ` +
+                                                    `$${accumulatedCostUsd.toFixed(4)} > $${PER_TURN_COST_CAP_USD}. ` +
+                                                    `Accumulated: ${accumulatedInputTokens} in + ${accumulatedOutputTokens} out.`
+                                            );
+                                        }
                                     }
                                     finishSeen = false;
                                 } else if (
@@ -941,15 +1148,38 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                                 }
                             }
                         } else if (txs) {
-                            for await (const chunk of txs) {
+                            const textIterator = (
+                                txs as AsyncIterable<string> & {
+                                    [Symbol.asyncIterator](): AsyncIterator<string>;
+                                }
+                            )[Symbol.asyncIterator]();
+                            let textDone = false;
+                            while (!textDone) {
+                                const result = await Promise.race([
+                                    textIterator.next(),
+                                    new Promise<{ done: true; value: undefined }>((_, reject) =>
+                                        setTimeout(
+                                            () =>
+                                                reject(new Error("Text stream chunk idle timeout")),
+                                            CHUNK_IDLE_TIMEOUT_MS
+                                        )
+                                    )
+                                ]).catch((err) => {
+                                    console.warn(
+                                        `[Agent Chat] textStream timeout for agent "${id}":`,
+                                        err.message
+                                    );
+                                    return { done: true as const, value: undefined };
+                                });
+                                if (result.done) {
+                                    textDone = true;
+                                    break;
+                                }
+                                const chunk = result.value;
                                 if (chunk && ts.currentId) {
                                     gotContent = true;
                                     fullOutput += chunk;
-                                    w.write({
-                                        type: "text-delta",
-                                        id: ts.currentId,
-                                        delta: chunk
-                                    });
+                                    w.write({ type: "text-delta", id: ts.currentId, delta: chunk });
                                 }
                             }
                         }
@@ -1121,20 +1351,38 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                     const capturedStepCounter = stepCounter;
                     const capturedHasReceivedContent = hasReceivedContent;
                     const capturedStreamAttempt = streamAttempt;
+                    const capturedAccumulatedInput = accumulatedInputTokens;
+                    const capturedAccumulatedOutput = accumulatedOutputTokens;
 
                     // Fire-and-forget: run recording, usage tracking, evaluations
                     // This does NOT block the stream from closing.
                     void (async () => {
                         try {
-                            // Get usage data
+                            // Get usage data from the stream result's .usage promise
                             let usage: UsageLike | null = null;
                             try {
                                 if (capturedStreamResult?.usage) {
-                                    const resolvedUsage = await capturedStreamResult.usage;
+                                    const resolvedUsage = await Promise.race([
+                                        capturedStreamResult.usage,
+                                        new Promise<null>((resolve) =>
+                                            setTimeout(() => resolve(null), 10_000)
+                                        )
+                                    ]);
                                     usage =
                                         resolvedUsage && typeof resolvedUsage === "object"
                                             ? (resolvedUsage as UsageLike)
                                             : null;
+                                    if (!usage) {
+                                        console.warn(
+                                            `[Agent Chat] Usage promise resolved to non-object for run ${capturedRun?.runId}:`,
+                                            typeof resolvedUsage,
+                                            resolvedUsage
+                                        );
+                                    }
+                                } else {
+                                    console.warn(
+                                        `[Agent Chat] No .usage property on stream result for run ${capturedRun?.runId}`
+                                    );
                                 }
                             } catch (e) {
                                 console.warn(
@@ -1175,29 +1423,46 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                                 }
                             }
 
-                            // Record tool calls
-                            if (capturedRun) {
-                                for (const tc of capturedToolCalls) {
-                                    await capturedRun.addToolCall(tc);
-                                }
-                            }
+                            // Tool calls are already recorded to the DB during
+                            // streaming (for live observability), so we skip
+                            // duplicate recording here.
 
-                            // Extract token counts (use ?? to preserve valid 0 values)
+                            // Extract token counts: prefer .usage promise, fall back to
+                            // per-step accumulated counts from finish-step events
                             let promptTokens = usage?.promptTokens ?? usage?.inputTokens ?? 0;
                             let completionTokens =
                                 usage?.completionTokens ?? usage?.outputTokens ?? 0;
-                            const totalTokens = usage?.totalTokens ?? 0;
+                            let totalTokens = usage?.totalTokens ?? 0;
 
                             if (totalTokens > 0 && promptTokens === 0 && completionTokens === 0) {
                                 promptTokens = Math.round(totalTokens * 0.7);
                                 completionTokens = totalTokens - promptTokens;
                             }
 
-                            const costUsd = calculateCost(
+                            // Fallback: use per-step accumulated counts if .usage resolved empty
+                            if (
+                                promptTokens === 0 &&
+                                completionTokens === 0 &&
+                                (capturedAccumulatedInput > 0 || capturedAccumulatedOutput > 0)
+                            ) {
+                                console.log(
+                                    `[Agent Chat] Using per-step accumulated tokens for run ${capturedRun?.runId}: ` +
+                                        `in=${capturedAccumulatedInput}, out=${capturedAccumulatedOutput} ` +
+                                        `(usage promise resolved: ${!!usage})`
+                                );
+                                promptTokens = capturedAccumulatedInput;
+                                completionTokens = capturedAccumulatedOutput;
+                                totalTokens = capturedAccumulatedInput + capturedAccumulatedOutput;
+                            }
+
+                            // Extract thinking and cached tokens for accurate cost calculation
+                            const thinkingTokens = usage?.reasoningTokens ?? 0;
+                            const cachedTokens = usage?.cachedTokens ?? usage?.cacheReadTokens ?? 0;
+
+                            const costUsd = calculateCostDetailed(
                                 record?.modelName || "unknown",
                                 record?.modelProvider || "unknown",
-                                promptTokens,
-                                completionTokens
+                                { promptTokens, completionTokens, thinkingTokens, cachedTokens }
                             );
 
                             // Post-stream output guardrail check (flag only -- tokens already sent)
@@ -1223,6 +1488,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                                     (capturedFullOutput.length > 2000 ? "..." : ""),
                                 timestamp: new Date().toISOString()
                             });
+
+                            // Log turn-complete metadata if the finish-tool pattern was used
+                            if (turnCompleteMetadata) {
+                                console.log(
+                                    `[Agent Chat] Turn completed via turn-complete tool:`,
+                                    JSON.stringify(turnCompleteMetadata)
+                                );
+                            }
 
                             // Complete or fail the run
                             if (capturedRun) {

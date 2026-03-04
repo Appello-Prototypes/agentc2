@@ -150,6 +150,13 @@ export { Loader, LoaderIcon, type LoaderProps, type LoaderIconProps } from "./lo
 // Streaming Status
 export { StreamingStatus, type StreamingStatusProps, type ToolActivity } from "./streaming-status";
 
+// Run Activity Log
+export {
+    RunActivityLog,
+    type RunActivityLogProps,
+    type RunActivityEvent
+} from "./run-activity-log";
+
 // Shimmer
 export { Shimmer, ShimmerText, type ShimmerProps, type ShimmerTextProps } from "./shimmer";
 

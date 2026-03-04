@@ -21,6 +21,10 @@
 interface ModelPricing {
     inputPer1M: number;
     outputPer1M: number;
+    /** Price per 1M thinking/reasoning tokens (Anthropic extended thinking, OpenAI o-series) */
+    thinkingOutputPer1M?: number;
+    /** Price per 1M cached input tokens (Anthropic prompt caching = 10% of input) */
+    cachedInputPer1M?: number;
 }
 
 /**
@@ -61,24 +65,49 @@ const MODEL_PRICING: Record<string, ModelPricing> = {
     "gpt-3.5-turbo-0125": { inputPer1M: 0.5, outputPer1M: 1.5 },
     "gpt-3.5-turbo-16k": { inputPer1M: 3.0, outputPer1M: 4.0 },
 
-    // Anthropic Claude 4.5 models
-    "claude-opus-4-5-20251101": { inputPer1M: 15.0, outputPer1M: 75.0 },
-    "claude-sonnet-4-5-20250929": { inputPer1M: 3.0, outputPer1M: 15.0 },
+    // Anthropic Claude 4.5 models (thinking = same as output, cached = 10% of input)
+    "claude-opus-4-5-20251101": {
+        inputPer1M: 15.0,
+        outputPer1M: 75.0,
+        thinkingOutputPer1M: 75.0,
+        cachedInputPer1M: 1.5
+    },
+    "claude-sonnet-4-5-20250929": {
+        inputPer1M: 3.0,
+        outputPer1M: 15.0,
+        thinkingOutputPer1M: 15.0,
+        cachedInputPer1M: 0.3
+    },
 
-    // Anthropic Claude 4 models
-    "claude-opus-4-20250514": { inputPer1M: 15.0, outputPer1M: 75.0 },
-    "claude-sonnet-4-20250514": { inputPer1M: 3.0, outputPer1M: 15.0 },
-    "claude-sonnet-4-6": { inputPer1M: 3.0, outputPer1M: 15.0 },
+    // Anthropic Claude 4 models (thinking = same as output, cached = 10% of input)
+    "claude-opus-4-20250514": {
+        inputPer1M: 15.0,
+        outputPer1M: 75.0,
+        thinkingOutputPer1M: 75.0,
+        cachedInputPer1M: 1.5
+    },
+    "claude-sonnet-4-20250514": {
+        inputPer1M: 3.0,
+        outputPer1M: 15.0,
+        thinkingOutputPer1M: 15.0,
+        cachedInputPer1M: 0.3
+    },
+    "claude-sonnet-4-6": {
+        inputPer1M: 3.0,
+        outputPer1M: 15.0,
+        thinkingOutputPer1M: 15.0,
+        cachedInputPer1M: 0.3
+    },
 
-    // Anthropic Claude 3.5 models
-    "claude-3-5-sonnet-20241022": { inputPer1M: 3.0, outputPer1M: 15.0 },
-    "claude-3-5-sonnet-20240620": { inputPer1M: 3.0, outputPer1M: 15.0 },
-    "claude-3-5-haiku-20241022": { inputPer1M: 1.0, outputPer1M: 5.0 },
+    // Anthropic Claude 3.5 models (cached = 10% of input)
+    "claude-3-5-sonnet-20241022": { inputPer1M: 3.0, outputPer1M: 15.0, cachedInputPer1M: 0.3 },
+    "claude-3-5-sonnet-20240620": { inputPer1M: 3.0, outputPer1M: 15.0, cachedInputPer1M: 0.3 },
+    "claude-3-5-haiku-20241022": { inputPer1M: 1.0, outputPer1M: 5.0, cachedInputPer1M: 0.1 },
 
-    // Anthropic Claude 3 models
-    "claude-3-opus-20240229": { inputPer1M: 15.0, outputPer1M: 75.0 },
-    "claude-3-sonnet-20240229": { inputPer1M: 3.0, outputPer1M: 15.0 },
-    "claude-3-haiku-20240307": { inputPer1M: 0.25, outputPer1M: 1.25 },
+    // Anthropic Claude 3 models (cached = 10% of input)
+    "claude-3-opus-20240229": { inputPer1M: 15.0, outputPer1M: 75.0, cachedInputPer1M: 1.5 },
+    "claude-3-sonnet-20240229": { inputPer1M: 3.0, outputPer1M: 15.0, cachedInputPer1M: 0.3 },
+    "claude-3-haiku-20240307": { inputPer1M: 0.25, outputPer1M: 1.25, cachedInputPer1M: 0.025 },
 
     // Anthropic Claude 2.x (legacy)
     "claude-2.1": { inputPer1M: 8.0, outputPer1M: 24.0 },
@@ -204,4 +233,56 @@ export function calculateCostBreakdown(
         outputCost: Math.round(outputCost * 1_000_000) / 1_000_000,
         totalCost: Math.round((inputCost + outputCost) * 1_000_000) / 1_000_000
     };
+}
+
+/**
+ * Detailed token breakdown for accurate cost calculation.
+ * Separates thinking tokens and cached tokens from regular tokens.
+ */
+export interface DetailedTokenUsage {
+    promptTokens: number;
+    completionTokens: number;
+    /** Thinking/reasoning tokens (Anthropic extended thinking, OpenAI o-series) */
+    thinkingTokens?: number;
+    /** Cached input tokens (Anthropic prompt caching — 90% discount) */
+    cachedTokens?: number;
+}
+
+/**
+ * Calculate cost with detailed token type awareness.
+ *
+ * Handles:
+ * - Thinking tokens: priced at thinkingOutputPer1M (or outputPer1M if not set)
+ * - Cached tokens: priced at cachedInputPer1M (or 10% of inputPer1M)
+ * - Regular prompt tokens: adjusted to exclude cached tokens to avoid double-counting
+ *
+ * @returns Total cost in USD (rounded to 6 decimal places)
+ */
+export function calculateCostDetailed(
+    modelName: string,
+    modelProvider: string,
+    usage: DetailedTokenUsage
+): number {
+    const pricing = getModelPricing(modelName, modelProvider);
+
+    const thinkingTokens = usage.thinkingTokens ?? 0;
+    const cachedTokens = usage.cachedTokens ?? 0;
+
+    // Regular prompt tokens = total prompt minus cached (avoid double-counting)
+    const regularPromptTokens = Math.max(0, usage.promptTokens - cachedTokens);
+
+    const regularInputCost = (regularPromptTokens / 1_000_000) * pricing.inputPer1M;
+    const cachedInputCost =
+        (cachedTokens / 1_000_000) * (pricing.cachedInputPer1M ?? pricing.inputPer1M * 0.1);
+
+    // Completion tokens may include thinking tokens depending on provider reporting.
+    // If thinkingTokens are reported separately, subtract them from completion to avoid double-counting.
+    const regularCompletionTokens = Math.max(0, usage.completionTokens - thinkingTokens);
+
+    const regularOutputCost = (regularCompletionTokens / 1_000_000) * pricing.outputPer1M;
+    const thinkingOutputCost =
+        (thinkingTokens / 1_000_000) * (pricing.thinkingOutputPer1M ?? pricing.outputPer1M);
+
+    const total = regularInputCost + cachedInputCost + regularOutputCost + thinkingOutputCost;
+    return Math.round(total * 1_000_000) / 1_000_000;
 }

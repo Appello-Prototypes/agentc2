@@ -671,9 +671,7 @@ export async function repackagePlaybook(opts: RepackagePlaybookOptions) {
                 ),
                 autoBootEnabled: playbook?.autoBootEnabled ?? false
             },
-            setupConfig: playbook?.setupConfig
-                ? (playbook.setupConfig as SetupConfig)
-                : undefined
+            setupConfig: playbook?.setupConfig ? (playbook.setupConfig as SetupConfig) : undefined
         };
         requiredIntegrations = previousManifest.requiredIntegrations;
     } else if (mode === "components-only" && previousManifest) {

@@ -291,6 +291,7 @@ import {
     skillGetVersionsTool
 } from "./skill-tools";
 import { askQuestionsTool } from "./ask-questions";
+import { turnCompleteTool } from "./turn-complete";
 import { searchSkillsTool, activateSkillTool, listActiveSkillsTool } from "./skill-discovery-tools";
 import {
     executeCodeTool,
@@ -448,6 +449,7 @@ export const toolCategoryMap: Record<string, string> = {
     "youtube-ingest-to-knowledge": "YouTube",
     "json-parser": "Utilities",
     "ask-questions": "Utilities",
+    "turn-complete": "Agent Control",
     "execute-code": "Code Execution",
     "write-workspace-file": "Code Execution",
     "read-workspace-file": "Code Execution",
@@ -1612,6 +1614,9 @@ export const toolRegistry: Record<string, any> = {
 
     // Interactive UI tools
     "ask-questions": askQuestionsTool,
+
+    // Agent control tools
+    "turn-complete": turnCompleteTool,
 
     // Skill discovery meta-tools (Dynamic ReAct pattern)
     "search-skills": searchSkillsTool,

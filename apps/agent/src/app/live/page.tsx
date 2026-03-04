@@ -260,6 +260,19 @@ const formatModelLabel = sharedFormatModelLabel;
 const getStatusBadgeVariant = sharedGetStatusBadgeVariant;
 const getSourceBadgeColor = sharedGetSourceBadgeColor;
 
+function LiveDurationCounter({ startedAt }: { startedAt: string }) {
+    const [elapsed, setElapsed] = useState(() =>
+        Math.max(0, Date.now() - new Date(startedAt).getTime())
+    );
+    useEffect(() => {
+        const interval = setInterval(() => {
+            setElapsed(Math.max(0, Date.now() - new Date(startedAt).getTime()));
+        }, 1000);
+        return () => clearInterval(interval);
+    }, [startedAt]);
+    return <>{formatLatency(elapsed)}</>;
+}
+
 export function LiveRunsContent() {
     const router = useRouter();
     const [loading, setLoading] = useState(true);
@@ -566,6 +579,16 @@ export function LiveRunsContent() {
             setSelectedRun(updatedRun);
         }
     }, [runs, selectedRun]);
+
+    useEffect(() => {
+        if (!selectedRun) return;
+        const isActive = selectedRun.status === "RUNNING" || selectedRun.status === "QUEUED";
+        if (!isActive) return;
+        const interval = setInterval(() => {
+            fetchRunDetail(selectedRun);
+        }, 3000);
+        return () => clearInterval(interval);
+    }, [selectedRun, fetchRunDetail]);
 
     const handleRunClick = (run: Run) => {
         setSelectedRun(run);
@@ -1387,12 +1410,23 @@ export function LiveRunsContent() {
                                                                         {run.inputText}
                                                                     </p>
                                                                 </TableCell>
-                                                                <TableCell className="text-right">
-                                                                    {run.durationMs
-                                                                        ? formatLatency(
-                                                                              run.durationMs
-                                                                          )
-                                                                        : "-"}
+                                                                <TableCell className="text-right tabular-nums">
+                                                                    {run.status === "RUNNING" ||
+                                                                    run.status === "QUEUED" ? (
+                                                                        <span className="text-green-600 dark:text-green-400">
+                                                                            <LiveDurationCounter
+                                                                                startedAt={
+                                                                                    run.startedAt
+                                                                                }
+                                                                            />
+                                                                        </span>
+                                                                    ) : run.durationMs ? (
+                                                                        formatLatency(
+                                                                            run.durationMs
+                                                                        )
+                                                                    ) : (
+                                                                        "-"
+                                                                    )}
                                                                 </TableCell>
                                                                 <TableCell className="text-right">
                                                                     {run.stepsCount ??
@@ -1534,6 +1568,18 @@ export function LiveRunsContent() {
                                             >
                                                 {selectedRun.status}
                                             </Badge>
+                                            {(selectedRun.status === "RUNNING" ||
+                                                selectedRun.status === "QUEUED") && (
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className="relative flex size-2">
+                                                        <span className="absolute inline-flex size-full animate-ping rounded-full bg-green-400 opacity-75" />
+                                                        <span className="relative inline-flex size-2 rounded-full bg-green-500" />
+                                                    </span>
+                                                    <span className="text-xs font-medium text-green-600 dark:text-green-400">
+                                                        LIVE
+                                                    </span>
+                                                </div>
+                                            )}
                                             {selectedRun.source && (
                                                 <Badge
                                                     className={getSourceBadgeColor(
@@ -1569,10 +1615,17 @@ export function LiveRunsContent() {
                                                 <p className="text-muted-foreground text-xs">
                                                     Duration
                                                 </p>
-                                                <p className="text-base font-semibold">
-                                                    {selectedRun.durationMs
-                                                        ? formatLatency(selectedRun.durationMs)
-                                                        : "-"}
+                                                <p className="text-base font-semibold tabular-nums">
+                                                    {selectedRun.status === "RUNNING" ||
+                                                    selectedRun.status === "QUEUED" ? (
+                                                        <LiveDurationCounter
+                                                            startedAt={selectedRun.startedAt}
+                                                        />
+                                                    ) : selectedRun.durationMs ? (
+                                                        formatLatency(selectedRun.durationMs)
+                                                    ) : (
+                                                        "-"
+                                                    )}
                                                 </p>
                                             </div>
                                             <div className="bg-muted/50 rounded-lg p-3">

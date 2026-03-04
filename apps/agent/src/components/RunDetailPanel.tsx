@@ -239,9 +239,38 @@ export default function RunDetailPanel({
 }: RunDetailPanelProps) {
     const [detailTab, setDetailTab] = useState("overview");
     const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
+    const hasAutoSwitchedRef = useRef(false);
+    const isAgentKind = kind === "agent";
 
-    const { liveSteps, liveToolCalls, isStreaming } = useRunStream(agentSlug, runId, status, kind);
+    const { liveSteps, liveToolCalls, isStreaming, liveStatus } = useRunStream(
+        agentSlug,
+        runId,
+        status,
+        kind
+    );
     const { isPolling } = useRunPolling(kind, runDetail?.status || status, onRefresh);
+
+    const isRunning =
+        (liveStatus || status || "").toUpperCase() === "RUNNING" ||
+        (liveStatus || status || "").toUpperCase() === "QUEUED";
+
+    useEffect(() => {
+        if (isAgentKind && isRunning && !hasAutoSwitchedRef.current) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: auto-switch to trace tab once when a running run is opened
+            setDetailTab("trace");
+            hasAutoSwitchedRef.current = true;
+        }
+    }, [isAgentKind, isRunning]);
+
+    useEffect(() => {
+        if (
+            liveStatus &&
+            ["COMPLETED", "FAILED", "CANCELLED"].includes(liveStatus.toUpperCase()) &&
+            onRefresh
+        ) {
+            onRefresh();
+        }
+    }, [liveStatus, onRefresh]);
 
     const feedbackList = useMemo(() => {
         const feedback = runDetail?.feedback;
@@ -321,13 +350,12 @@ export default function RunDetailPanel({
         }
     }, [kind, deduplicatedWorkflowSteps, selectedStepId]);
 
-    // Reset selected step when run changes
+    // Reset selected step and auto-switch flag when run changes
     useEffect(() => {
         // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: reset step selection when a different run is selected
         setSelectedStepId(null);
+        hasAutoSwitchedRef.current = false;
     }, [runId]);
-
-    const isAgentKind = kind === "agent";
 
     return (
         <Tabs
@@ -439,9 +467,61 @@ export default function RunDetailPanel({
                                         {isAgentKind ? "Agent Response" : "Output"}
                                     </h3>
                                     <div className="bg-muted/20 flex-1 overflow-auto rounded-lg border p-3">
-                                        <pre className="font-mono text-xs whitespace-pre-wrap">
-                                            {effectiveOutput || "No output"}
-                                        </pre>
+                                        {isRunning && !effectiveOutput ? (
+                                            <div className="space-y-3 py-2">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="relative flex size-2">
+                                                        <span className="absolute inline-flex size-full animate-ping rounded-full bg-green-400 opacity-75" />
+                                                        <span className="relative inline-flex size-2 rounded-full bg-green-500" />
+                                                    </span>
+                                                    <span className="text-sm font-medium text-green-600 dark:text-green-400">
+                                                        Generating response...
+                                                    </span>
+                                                </div>
+                                                {(liveSteps.length > 0 ||
+                                                    liveToolCalls.length > 0) && (
+                                                    <div className="text-muted-foreground flex flex-wrap gap-3 text-xs">
+                                                        {liveSteps.length > 0 && (
+                                                            <span>
+                                                                {liveSteps.length} trace step
+                                                                {liveSteps.length !== 1 ? "s" : ""}
+                                                            </span>
+                                                        )}
+                                                        {liveToolCalls.length > 0 && (
+                                                            <span>
+                                                                {liveToolCalls.length} tool call
+                                                                {liveToolCalls.length !== 1
+                                                                    ? "s"
+                                                                    : ""}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                )}
+                                                <p className="text-muted-foreground text-xs">
+                                                    Switch to the{" "}
+                                                    <button
+                                                        type="button"
+                                                        className="text-primary underline"
+                                                        onClick={() => setDetailTab("trace")}
+                                                    >
+                                                        Trace
+                                                    </button>{" "}
+                                                    or{" "}
+                                                    <button
+                                                        type="button"
+                                                        className="text-primary underline"
+                                                        onClick={() => setDetailTab("tools")}
+                                                    >
+                                                        Tools
+                                                    </button>{" "}
+                                                    tab for live details.
+                                                </p>
+                                            </div>
+                                        ) : (
+                                            <pre className="font-mono text-xs whitespace-pre-wrap">
+                                                {effectiveOutput || "No output"}
+                                            </pre>
+                                        )}
                                     </div>
                                 </div>
                             </div>

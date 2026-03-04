@@ -185,6 +185,8 @@ export interface HydratedAgent {
     skillDocumentIds: string[];
     /** Tool health snapshot — expected vs loaded tools */
     toolHealth: ToolHealthSnapshot;
+    /** All tool names loaded on the resolved agent (for finish-tool pattern detection) */
+    resolvedToolNames: string[];
 }
 
 /**
@@ -260,6 +262,13 @@ export class AgentResolver {
     /** Temporary storage for current resolve options (used by hydrate) */
     private currentResolveOptions?: ResolveOptions;
 
+    /** In-memory cache for hydrated agents to avoid repeated DB+hydrate overhead */
+    private hydrationCache = new Map<
+        string,
+        { result: Omit<HydratedAgent, "record" | "source">; expiresAt: number }
+    >();
+    private static HYDRATION_CACHE_TTL_MS = 30_000;
+
     /**
      * Resolve an agent by slug or id
      *
@@ -322,12 +331,38 @@ export class AgentResolver {
 
         if (record) {
             // Enforce hard budget limit before running the agent (full hierarchy)
+            // Budget checks must always run live, never cached
             await this.checkBudgetLimit(record.id, {
                 userId: requestContext?.userId,
                 organizationId: record.workspace?.organizationId
             });
 
+            // Check hydration cache (keyed by slug:version:threadId:loadAllSkills)
+            const cacheKey = `${record.slug}:${record.version}:${threadId || "none"}:${loadAllSkills ? "all" : "prog"}`;
+            const cached = this.hydrationCache.get(cacheKey);
+            if (cached && cached.expiresAt > Date.now()) {
+                console.log(
+                    `[AgentResolver] Hydration cache HIT for "${record.slug}" v${record.version} (TTL ${Math.round((cached.expiresAt - Date.now()) / 1000)}s remaining)`
+                );
+                return { ...cached.result, record, source: "database" };
+            }
+
             const result = await this.hydrate(record, requestContext, threadId, loadAllSkills);
+
+            // Store in hydration cache
+            this.hydrationCache.set(cacheKey, {
+                result,
+                expiresAt: Date.now() + AgentResolver.HYDRATION_CACHE_TTL_MS
+            });
+
+            // Evict expired entries lazily (every ~10 resolves)
+            if (this.hydrationCache.size > 20) {
+                const now = Date.now();
+                for (const [key, entry] of this.hydrationCache) {
+                    if (entry.expiresAt <= now) this.hydrationCache.delete(key);
+                }
+            }
+
             return { ...result, record, source: "database" };
         }
 
@@ -349,7 +384,8 @@ export class AgentResolver {
                             loadedCount: 0,
                             missingTools: [],
                             filteredTools: []
-                        }
+                        },
+                        resolvedToolNames: []
                     };
                 }
             } catch {
@@ -377,6 +413,7 @@ export class AgentResolver {
         toolOriginMap: Record<string, string>;
         skillDocumentIds: string[];
         toolHealth: ToolHealthSnapshot;
+        resolvedToolNames: string[];
     }> {
         // Enrich context with Slack channel preferences for template interpolation
         const enrichedContext = await this.enrichContextWithSlackChannels(record, context || {});
@@ -592,7 +629,8 @@ export class AgentResolver {
                     "activate-skill",
                     "list-active-skills",
                     "rag-query",
-                    "document-search"
+                    "document-search",
+                    "turn-complete"
                 ];
                 // Also keep tools explicitly listed in metadata.alwaysLoadedTools
                 const alwaysLoaded = (metadata?.alwaysLoadedTools as string[]) || [];
@@ -866,6 +904,46 @@ export class AgentResolver {
             }
         }
 
+        // --- Tool Result Compression ---
+        const agentContextConfig = (record as Record<string, unknown>).contextConfig as
+            | Record<string, unknown>
+            | null
+            | undefined;
+        const compressionConfig = agentContextConfig?.toolResultCompression as
+            | { enabled?: boolean; threshold?: number }
+            | undefined;
+        if (compressionConfig?.enabled) {
+            const threshold = compressionConfig.threshold ?? 3000;
+            for (const toolKey of Object.keys(tools)) {
+                const original = tools[toolKey]!;
+                const originalExecute = original.execute;
+                tools[toolKey] = {
+                    ...original,
+                    execute: async (
+                        input: Record<string, unknown>,
+                        execCtx: Record<string, unknown>
+                    ) => {
+                        const result = await originalExecute(input, execCtx);
+                        if (result === undefined || result === null) return result;
+                        const str = typeof result === "string" ? result : JSON.stringify(result);
+                        if (str.length <= threshold) return result;
+                        if (typeof result === "object") {
+                            try {
+                                const truncated = JSON.stringify(result, (_, v) => {
+                                    if (typeof v === "string" && v.length > 500) {
+                                        return v.slice(0, 500) + "…[truncated]";
+                                    }
+                                    return v;
+                                });
+                                if (truncated.length <= threshold) return JSON.parse(truncated);
+                            } catch {}
+                        }
+                        return str.slice(0, threshold) + `\n…[truncated from ${str.length} chars]`;
+                    }
+                };
+            }
+        }
+
         const defaultOptions = this.buildDefaultOptions(record);
 
         const workflows = this.loadWorkflows(record.workflows);
@@ -874,10 +952,19 @@ export class AgentResolver {
         // Wire guardrail processors + memory processors at the Agent level
         const tenantId = organizationId || record.tenantId || undefined;
         const inputProcessors = [createInputGuardrailProcessor(record.id, tenantId)];
+        // Model-aware TokenLimiter: use contextConfig.maxContextTokens from agent,
+        // or fall back to hardcoded 12K for agents without contextConfig
+        const contextConfig = (record as Record<string, unknown>).contextConfig as
+            | { maxContextTokens?: number }
+            | null
+            | undefined;
+        const tokenLimit = contextConfig?.maxContextTokens
+            ? Math.min(contextConfig.maxContextTokens, 50_000) // cap at 50K for safety
+            : 12_000;
         const outputProcessors = [
             createOutputGuardrailProcessor(record.id, tenantId),
             new ToolCallFilter(),
-            new TokenLimiter(12_000)
+            new TokenLimiter(tokenLimit)
         ];
 
         // Create agent - using any to bypass strict typing issues with Mastra's Agent constructor
@@ -923,7 +1010,8 @@ export class AgentResolver {
             activeSkills,
             toolOriginMap,
             skillDocumentIds,
-            toolHealth
+            toolHealth,
+            resolvedToolNames: Object.keys(tools)
         };
     }
 
@@ -938,6 +1026,30 @@ export class AgentResolver {
      * Returns merged skill instructions, resolved skill tools, document IDs,
      * active skill metadata, discoverable skill manifests, and tool-to-skill mapping.
      */
+
+    /**
+     * Pre-warm the hydration cache for the most recently updated active agents.
+     * Fire-and-forget — errors are logged but never thrown.
+     */
+    async prewarm(limit = 5): Promise<void> {
+        try {
+            const topAgents = await prisma.agent.findMany({
+                where: { isActive: true },
+                orderBy: { updatedAt: "desc" },
+                take: limit,
+                select: { slug: true }
+            });
+
+            const results = await Promise.allSettled(
+                topAgents.map((a) => this.resolve({ slug: a.slug }))
+            );
+
+            const warmed = results.filter((r) => r.status === "fulfilled").length;
+            console.log(`[AgentResolver] Pre-warmed ${warmed}/${topAgents.length} agents`);
+        } catch (e) {
+            console.warn("[AgentResolver] Pre-warm failed:", e);
+        }
+    }
 
     /**
      * Check the full budget enforcement hierarchy before allowing a run.
@@ -1556,10 +1668,34 @@ export class AgentResolver {
      */
     private buildDefaultOptions(record: AgentRecordWithTools): object | undefined {
         const modelConfig = record.modelConfig as ModelConfig | null;
-        if (!modelConfig) return undefined;
+
+        const recordAny = record as Record<string, unknown>;
+        const agentTemperature = recordAny.temperature as number | null | undefined;
+        const agentMaxTokens = recordAny.maxTokens as number | null | undefined;
+
+        // Even without modelConfig, temperature/maxTokens from the record should be passed
+        const hasRecordSettings =
+            (agentTemperature !== null && agentTemperature !== undefined) ||
+            (agentMaxTokens !== null && agentMaxTokens !== undefined);
+
+        if (!modelConfig && !hasRecordSettings) return undefined;
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const options: any = {};
+
+        // Pass temperature and maxTokens from the agent record as modelSettings
+        const modelSettings: Record<string, unknown> = {};
+        if (agentTemperature !== null && agentTemperature !== undefined) {
+            modelSettings.temperature = agentTemperature;
+        }
+        if (agentMaxTokens !== null && agentMaxTokens !== undefined) {
+            modelSettings.maxOutputTokens = agentMaxTokens;
+        }
+        if (Object.keys(modelSettings).length > 0) {
+            options.modelSettings = modelSettings;
+        }
+
+        if (!modelConfig) return options;
 
         if (modelConfig.toolChoice !== undefined) {
             options.toolChoice = modelConfig.toolChoice;
@@ -1613,17 +1749,17 @@ export class AgentResolver {
                     budgetTokens
                 };
                 // Anthropic requires max_tokens > thinking.budgetTokens.
-                const agentMaxTokens = (record as Record<string, unknown>).maxTokens as
-                    | number
-                    | null
-                    | undefined;
-                if (agentMaxTokens && agentMaxTokens <= budgetTokens) {
+                const currentMaxTokens =
+                    (options.modelSettings?.maxOutputTokens as number | undefined) ??
+                    agentMaxTokens;
+                if (currentMaxTokens && currentMaxTokens <= budgetTokens) {
                     const adjustedMaxTokens = budgetTokens + 8192;
                     console.warn(
-                        `[AgentResolver] Agent "${record.slug}": maxTokens (${agentMaxTokens}) <= thinking.budgetTokens (${budgetTokens}). ` +
-                            `Adjusting maxTokens to ${adjustedMaxTokens} for Anthropic compatibility.`
+                        `[AgentResolver] Agent "${record.slug}": maxTokens (${currentMaxTokens}) <= thinking.budgetTokens (${budgetTokens}). ` +
+                            `Adjusting maxOutputTokens to ${adjustedMaxTokens} for Anthropic compatibility.`
                     );
-                    options.maxTokens = adjustedMaxTokens;
+                    if (!options.modelSettings) options.modelSettings = {};
+                    options.modelSettings.maxOutputTokens = adjustedMaxTokens;
                 }
             }
 

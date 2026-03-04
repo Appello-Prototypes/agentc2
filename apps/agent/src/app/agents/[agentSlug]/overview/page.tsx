@@ -733,7 +733,6 @@ export default function OverviewPage() {
                             )}
                         </CardContent>
                     </Card>
-
                 </div>
             </div>
         </div>

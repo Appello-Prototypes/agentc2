@@ -32,16 +32,28 @@ import {
 import { getApiBase } from "@/lib/utils";
 import { SkillBuilderPanel } from "@/components/skills/SkillBuilderPanel";
 import { SkillDetailSheet } from "@/components/skills/SkillDetailSheet";
+import type { ProviderParamGroup, ProviderParam } from "@repo/agentc2/agents/model-params";
+import {
+    getNestedValue,
+    setNestedValue,
+    isDependencyMet,
+    cleanProviderConfig
+} from "@repo/agentc2/agents/model-params";
 
 interface ModelConfig {
+    toolChoice?: "auto" | "required" | "none" | { type: "tool"; toolName: string };
+    reasoning?: { type: "enabled" | "disabled" };
+    anthropic?: Record<string, unknown>;
+    openai?: Record<string, unknown>;
+    // Deprecated flat fields (read for migration only)
     thinking?: {
         type: "enabled" | "disabled";
         budget_tokens?: number;
+        budgetTokens?: number;
     };
     parallelToolCalls?: boolean;
     reasoningEffort?: "low" | "medium" | "high";
-    cacheControl?: { type: "ephemeral" };
-    toolChoice?: "auto" | "required" | "none" | { type: "tool"; toolName: string };
+    cacheControl?: { type: "ephemeral" } | string;
 }
 
 interface RoutingConfig {
@@ -189,13 +201,12 @@ export default function ConfigurePage() {
     const [serverErrors, setServerErrors] = useState<Record<string, string>>({});
     const [collapsedToolGroups, setCollapsedToolGroups] = useState<Set<string>>(new Set());
 
-    // Extended thinking state (for form)
-    const [extendedThinking, setExtendedThinking] = useState(false);
-    const [thinkingBudget, setThinkingBudget] = useState(10000);
-    const [parallelToolCalls, setParallelToolCalls] = useState(false);
-    const [reasoningEffort, setReasoningEffort] = useState<string>("");
-    const [cacheControlEnabled, setCacheControlEnabled] = useState(false);
+    // Provider-keyed model config state (replaces individual flat-field state)
+    const [providerConfig, setProviderConfig] = useState<Record<string, unknown>>({});
     const [toolChoice, setToolChoice] = useState<string>("auto");
+    const [reasoning, setReasoning] = useState<string>("");
+    // Dynamic parameter schema fetched from /api/models/params
+    const [paramGroups, setParamGroups] = useState<ProviderParamGroup[]>([]);
 
     // Model routing state
     const [routingMode, setRoutingMode] = useState<"locked" | "auto">("locked");
@@ -271,6 +282,85 @@ export default function ConfigurePage() {
     // Form state
     const [formData, setFormData] = useState<Partial<Agent>>({});
     const [hasChanges, setHasChanges] = useState(false);
+
+    /**
+     * Extract provider-keyed config from a raw modelConfig object.
+     * Migrates deprecated flat fields into the provider-keyed structure.
+     */
+    const extractProviderConfig = useCallback(
+        (raw: ModelConfig | null | undefined, provider: string): Record<string, unknown> => {
+            if (!raw) return {};
+            const providerKeyed = (raw as Record<string, unknown>)[provider] as
+                | Record<string, unknown>
+                | undefined;
+            const base: Record<string, unknown> = providerKeyed ? { ...providerKeyed } : {};
+
+            if (provider === "anthropic") {
+                if (!base.thinking && raw.thinking?.type) {
+                    const t: Record<string, unknown> = { type: raw.thinking.type };
+                    if (raw.thinking.type === "enabled") {
+                        t.budgetTokens =
+                            raw.thinking.budget_tokens ?? raw.thinking.budgetTokens ?? 10000;
+                    }
+                    base.thinking = t;
+                }
+                if (base.cacheControl === undefined && raw.cacheControl) {
+                    base.cacheControl =
+                        typeof raw.cacheControl === "string"
+                            ? { type: raw.cacheControl }
+                            : raw.cacheControl;
+                }
+            }
+
+            if (provider === "openai") {
+                if (base.parallelToolCalls === undefined && raw.parallelToolCalls !== undefined) {
+                    base.parallelToolCalls = raw.parallelToolCalls;
+                }
+                if (base.reasoningEffort === undefined && raw.reasoningEffort) {
+                    base.reasoningEffort = raw.reasoningEffort;
+                }
+            }
+
+            return base;
+        },
+        []
+    );
+
+    /**
+     * Apply model config state from a raw modelConfig (used on load, save response, and reset).
+     */
+    const applyModelConfigState = useCallback(
+        (raw: ModelConfig | null | undefined, provider: string) => {
+            const pc = extractProviderConfig(raw, provider);
+            setProviderConfig(pc);
+            setToolChoice(typeof raw?.toolChoice === "string" ? raw.toolChoice : "auto");
+            setReasoning(raw?.reasoning?.type || "");
+        },
+        [extractProviderConfig]
+    );
+
+    // Fetch parameter schema when provider or model changes
+    useEffect(() => {
+        const provider = formData.modelProvider;
+        const model = formData.modelName;
+        if (!provider) {
+            setParamGroups([]);
+            return;
+        }
+        const params = new URLSearchParams({ provider });
+        if (model) params.set("model", model);
+
+        fetch(`${getApiBase()}/api/models/params?${params.toString()}`)
+            .then((r) => r.json())
+            .then((data) => {
+                if (data.success && data.groups) {
+                    setParamGroups(data.groups);
+                } else {
+                    setParamGroups([]);
+                }
+            })
+            .catch(() => setParamGroups([]));
+    }, [formData.modelProvider, formData.modelName]);
 
     // Fetch AI provider API key status
     const fetchAiProviderStatus = useCallback(async () => {
@@ -693,17 +783,10 @@ export default function ConfigurePage() {
                 );
             }
 
-            // Extract extended thinking settings from modelConfig
-            const modelConfig = agentData.modelConfig as ModelConfig | null;
-            const hasExtendedThinking = modelConfig?.thinking?.type === "enabled";
-            const budget = modelConfig?.thinking?.budget_tokens ?? 10000;
-            setExtendedThinking(hasExtendedThinking);
-            setThinkingBudget(budget);
-            setParallelToolCalls(modelConfig?.parallelToolCalls ?? false);
-            setReasoningEffort(modelConfig?.reasoningEffort || "");
-            setCacheControlEnabled(modelConfig?.cacheControl?.type === "ephemeral");
-            setToolChoice(
-                typeof modelConfig?.toolChoice === "string" ? modelConfig.toolChoice : "auto"
+            // Extract provider-keyed model config (with flat-field migration)
+            applyModelConfigState(
+                agentData.modelConfig as ModelConfig | null,
+                agentData.modelProvider || ""
             );
 
             // Routing config state is deferred to a useEffect that depends on
@@ -911,15 +994,23 @@ export default function ConfigurePage() {
                       }
                     : { mode: "locked" };
 
-            // Include extended thinking settings in the request
+            // Build provider-keyed modelConfig for the request
+            const provider = formData.modelProvider || "";
+            const cleanedProviderCfg = cleanProviderConfig(providerConfig);
+            const modelConfigPayload: Record<string, unknown> = {};
+            if (cleanedProviderCfg) {
+                modelConfigPayload[provider] = cleanedProviderCfg;
+            }
+            if (toolChoice && toolChoice !== "auto") {
+                modelConfigPayload.toolChoice = toolChoice;
+            }
+            if (reasoning) {
+                modelConfigPayload.reasoning = { type: reasoning };
+            }
+
             const requestBody = {
                 ...formData,
-                extendedThinking,
-                thinkingBudget,
-                parallelToolCalls,
-                reasoningEffort: reasoningEffort || null,
-                cacheControl: cacheControlEnabled,
-                toolChoice: toolChoice || null,
+                modelConfig: Object.keys(modelConfigPayload).length > 0 ? modelConfigPayload : null,
                 routingConfig: routingConfigPayload
             };
 
@@ -966,17 +1057,10 @@ export default function ConfigurePage() {
                 deploymentMode: agentData.deploymentMode ?? "singleton"
             };
 
-            // Update extended thinking state from response
-            const modelConfig = agentData.modelConfig as ModelConfig | null;
-            const hasExtendedThinking = modelConfig?.thinking?.type === "enabled";
-            const budget = modelConfig?.thinking?.budget_tokens ?? 10000;
-            setExtendedThinking(hasExtendedThinking);
-            setThinkingBudget(budget);
-            setParallelToolCalls(modelConfig?.parallelToolCalls ?? false);
-            setReasoningEffort(modelConfig?.reasoningEffort || "");
-            setCacheControlEnabled(modelConfig?.cacheControl?.type === "ephemeral");
-            setToolChoice(
-                typeof modelConfig?.toolChoice === "string" ? modelConfig.toolChoice : "auto"
+            // Update provider config state from response
+            applyModelConfigState(
+                agentData.modelConfig as ModelConfig | null,
+                agentData.modelProvider || ""
             );
 
             setAgent(updatedAgent);
@@ -1066,13 +1150,11 @@ export default function ConfigurePage() {
                         onClick={() => {
                             if (agent) {
                                 setFormData(agent);
-                                // Reset extended thinking state from agent's modelConfig
-                                const modelConfig = agent.modelConfig as ModelConfig | null;
-                                const hasExtendedThinking =
-                                    modelConfig?.thinking?.type === "enabled";
-                                const budget = modelConfig?.thinking?.budget_tokens ?? 10000;
-                                setExtendedThinking(hasExtendedThinking);
-                                setThinkingBudget(budget);
+                                // Reset provider config state from agent's modelConfig
+                                applyModelConfigState(
+                                    agent.modelConfig as ModelConfig | null,
+                                    agent.modelProvider || ""
+                                );
                                 // Reset routing config state
                                 const rc = agent.routingConfig as RoutingConfig | null;
                                 setRoutingMode(rc?.mode || "locked");
@@ -1574,15 +1656,9 @@ export default function ConfigurePage() {
                                                         providerModels[0].name
                                                     );
                                                 }
-                                                // Reset extended thinking if switching away from Anthropic
-                                                if (v !== "anthropic") {
-                                                    setExtendedThinking(false);
-                                                    setCacheControlEnabled(false);
-                                                    setHasChanges(true);
-                                                }
-                                                if (v !== "openai") {
-                                                    setParallelToolCalls(false);
-                                                    setReasoningEffort("");
+                                                // Reset provider config when switching providers
+                                                setProviderConfig({});
+                                                if (v !== formData.modelProvider) {
                                                     setHasChanges(true);
                                                 }
                                             }
@@ -1617,12 +1693,17 @@ export default function ConfigurePage() {
                                         onValueChange={(v) => {
                                             if (v) {
                                                 handleChange("modelName", v);
-                                                // Reset extended thinking if switching to non-Claude 4 model
+                                                // Reset provider config if switching to a model that doesn't support thinking
                                                 if (
                                                     !v.includes("opus-4") &&
                                                     !v.includes("sonnet-4")
                                                 ) {
-                                                    setExtendedThinking(false);
+                                                    setProviderConfig((prev) => {
+                                                        const next = { ...prev };
+                                                        delete (next as Record<string, unknown>)
+                                                            .thinking;
+                                                        return next;
+                                                    });
                                                     setHasChanges(true);
                                                 }
                                             }
@@ -1795,225 +1876,227 @@ export default function ConfigurePage() {
                                 </div>
                             </div>
 
-                            {/* Extended Thinking (Anthropic Claude 4+ only) */}
-                            {formData.modelProvider === "anthropic" &&
-                                (formData.modelName?.includes("opus-4") ||
-                                    formData.modelName?.includes("sonnet-4")) && (
-                                    <div className="border-primary/20 bg-primary/5 space-y-4 rounded-lg border p-4">
-                                        <div className="flex items-center justify-between">
-                                            <div>
-                                                <Label className="text-base font-medium">
-                                                    Extended Thinking
-                                                </Label>
-                                                <p className="text-muted-foreground text-xs">
-                                                    Enhanced reasoning for complex tasks (Claude 4
-                                                    only)
-                                                </p>
-                                            </div>
-                                            <Switch
-                                                checked={extendedThinking}
-                                                onCheckedChange={(checked) => {
-                                                    setExtendedThinking(checked);
-                                                    setHasChanges(true);
-                                                }}
-                                            />
-                                        </div>
-
-                                        {extendedThinking && (
-                                            <div className="space-y-2 pt-2">
-                                                <Label>
-                                                    Thinking Budget:{" "}
-                                                    {thinkingBudget.toLocaleString()} tokens
-                                                </Label>
-                                                <input
-                                                    type="range"
-                                                    min="1024"
-                                                    max="128000"
-                                                    step="1024"
-                                                    value={thinkingBudget}
-                                                    onChange={(e) => {
-                                                        setThinkingBudget(parseInt(e.target.value));
-                                                        setHasChanges(true);
-                                                    }}
-                                                    className="w-full"
-                                                />
-                                                <p className="text-muted-foreground text-xs">
-                                                    Higher budgets enable more thorough reasoning
-                                                    but increase latency and cost.
-                                                </p>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-
-                            {formData.modelProvider === "openai" && (
-                                <div className="space-y-4 rounded-lg border p-4">
-                                    <div className="flex items-center justify-between">
-                                        <div>
-                                            <Label className="text-base font-medium">
-                                                Parallel tool calls
-                                            </Label>
-                                            <p className="text-muted-foreground text-xs">
-                                                Allow OpenAI to call tools in parallel where
-                                                supported.
-                                            </p>
-                                        </div>
-                                        <Switch
-                                            checked={parallelToolCalls}
-                                            onCheckedChange={(checked) => {
-                                                setParallelToolCalls(checked);
-                                                setHasChanges(true);
-                                            }}
-                                        />
-                                    </div>
-
-                                    <div className="space-y-2">
-                                        <Label>Reasoning effort</Label>
-                                        <Select
-                                            value={reasoningEffort || "default"}
-                                            onValueChange={(value) => {
-                                                const nextValue = value ?? "default";
-                                                setReasoningEffort(
-                                                    nextValue === "default" ? "" : nextValue
-                                                );
-                                                setHasChanges(true);
-                                            }}
-                                        >
-                                            <SelectTrigger>
-                                                <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="default">Default</SelectItem>
-                                                <SelectItem value="low">Low</SelectItem>
-                                                <SelectItem value="medium">Medium</SelectItem>
-                                                <SelectItem value="high">High</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                        <p className="text-muted-foreground text-xs">
-                                            Higher effort improves reasoning but can increase
-                                            latency and cost.
-                                        </p>
-                                    </div>
+                            {/* Shared model options */}
+                            <div className="space-y-4 rounded-lg border p-4">
+                                <div className="space-y-2">
+                                    <Label>Tool Choice</Label>
+                                    <Select
+                                        value={toolChoice || "auto"}
+                                        onValueChange={(value) => {
+                                            setToolChoice(value ?? "auto");
+                                            setHasChanges(true);
+                                        }}
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="auto">Auto</SelectItem>
+                                            <SelectItem value="required">Required</SelectItem>
+                                            <SelectItem value="none">None</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    <p className="text-muted-foreground text-xs">
+                                        Controls whether tools must be used in generation.
+                                    </p>
                                 </div>
-                            )}
 
-                            {formData.modelProvider === "anthropic" && (
-                                <div className="space-y-4 rounded-lg border p-4">
-                                    <div className="flex items-center justify-between">
-                                        <div>
-                                            <Label className="text-base font-medium">
-                                                Prompt caching
-                                            </Label>
-                                            <p className="text-muted-foreground text-xs">
-                                                Use ephemeral cache control for repeated prompts.
-                                            </p>
-                                        </div>
-                                        <Switch
-                                            checked={cacheControlEnabled}
-                                            onCheckedChange={(checked) => {
-                                                setCacheControlEnabled(checked);
-                                                setHasChanges(true);
-                                            }}
-                                        />
-                                    </div>
+                                <div className="space-y-2">
+                                    <Label>Reasoning Mode</Label>
+                                    <Select
+                                        value={reasoning || "default"}
+                                        onValueChange={(value) => {
+                                            setReasoning(value === "default" ? "" : (value ?? ""));
+                                            setHasChanges(true);
+                                        }}
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="default">Default</SelectItem>
+                                            <SelectItem value="enabled">Enabled</SelectItem>
+                                            <SelectItem value="disabled">Disabled</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    <p className="text-muted-foreground text-xs">
+                                        Enable or disable shared reasoning across providers that
+                                        support it.
+                                    </p>
                                 </div>
-                            )}
-
-                            <div className="space-y-2">
-                                <Label>Tool choice</Label>
-                                <Select
-                                    value={toolChoice || "auto"}
-                                    onValueChange={(value) => {
-                                        setToolChoice(value ?? "auto");
-                                        setHasChanges(true);
-                                    }}
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="auto">Auto</SelectItem>
-                                        <SelectItem value="required">Required</SelectItem>
-                                        <SelectItem value="none">None</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                                <p className="text-muted-foreground text-xs">
-                                    Control whether tools must be used in generation.
-                                </p>
                             </div>
 
-                            {/* Provider-specific options hint */}
-                            {formData.modelProvider === "openai" && (
-                                <div className="bg-muted rounded-lg p-4">
-                                    <p className="text-muted-foreground text-sm">
-                                        💡 OpenAI models support function calling and JSON mode.
-                                        Configure tools in the Tools tab.
-                                    </p>
+                            {/* Dynamic provider-specific options */}
+                            {paramGroups.length > 0 && (
+                                <div className="space-y-4">
+                                    <Label className="text-base font-medium">
+                                        {formData.modelProvider
+                                            ? formData.modelProvider.charAt(0).toUpperCase() +
+                                              formData.modelProvider.slice(1)
+                                            : ""}{" "}
+                                        Options
+                                    </Label>
+                                    {paramGroups.map((group) => (
+                                        <div
+                                            key={group.label}
+                                            className="space-y-4 rounded-lg border p-4"
+                                        >
+                                            <Label className="text-muted-foreground text-sm font-medium">
+                                                {group.label}
+                                            </Label>
+                                            {group.params.map((param: ProviderParam) => {
+                                                if (
+                                                    param.dependsOn &&
+                                                    !isDependencyMet(
+                                                        providerConfig,
+                                                        param.dependsOn
+                                                    )
+                                                ) {
+                                                    return null;
+                                                }
+
+                                                const currentValue = getNestedValue(
+                                                    providerConfig,
+                                                    param.key
+                                                );
+
+                                                if (param.type === "boolean") {
+                                                    return (
+                                                        <div
+                                                            key={param.key}
+                                                            className="flex items-center justify-between"
+                                                        >
+                                                            <div>
+                                                                <Label className="text-sm font-medium">
+                                                                    {param.label}
+                                                                </Label>
+                                                                <p className="text-muted-foreground text-xs">
+                                                                    {param.description}
+                                                                </p>
+                                                            </div>
+                                                            <Switch
+                                                                checked={currentValue === true}
+                                                                onCheckedChange={(checked) => {
+                                                                    setProviderConfig((prev) =>
+                                                                        setNestedValue(
+                                                                            prev,
+                                                                            param.key,
+                                                                            checked
+                                                                        )
+                                                                    );
+                                                                    setHasChanges(true);
+                                                                }}
+                                                            />
+                                                        </div>
+                                                    );
+                                                }
+
+                                                if (param.type === "select") {
+                                                    return (
+                                                        <div key={param.key} className="space-y-2">
+                                                            <Label className="text-sm font-medium">
+                                                                {param.label}
+                                                            </Label>
+                                                            <Select
+                                                                value={
+                                                                    String(currentValue ?? "") ||
+                                                                    "___empty___"
+                                                                }
+                                                                onValueChange={(value) => {
+                                                                    const next =
+                                                                        value === "___empty___"
+                                                                            ? ""
+                                                                            : value;
+                                                                    setProviderConfig((prev) =>
+                                                                        setNestedValue(
+                                                                            prev,
+                                                                            param.key,
+                                                                            next
+                                                                        )
+                                                                    );
+                                                                    setHasChanges(true);
+                                                                }}
+                                                            >
+                                                                <SelectTrigger>
+                                                                    <SelectValue />
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    {(param.options || []).map(
+                                                                        (opt) => (
+                                                                            <SelectItem
+                                                                                key={
+                                                                                    opt.value ||
+                                                                                    "___empty___"
+                                                                                }
+                                                                                value={
+                                                                                    opt.value ||
+                                                                                    "___empty___"
+                                                                                }
+                                                                            >
+                                                                                {opt.label}
+                                                                            </SelectItem>
+                                                                        )
+                                                                    )}
+                                                                </SelectContent>
+                                                            </Select>
+                                                            <p className="text-muted-foreground text-xs">
+                                                                {param.description}
+                                                            </p>
+                                                        </div>
+                                                    );
+                                                }
+
+                                                if (param.type === "slider" && param.range) {
+                                                    const numVal =
+                                                        typeof currentValue === "number"
+                                                            ? currentValue
+                                                            : typeof param.default === "number"
+                                                              ? param.default
+                                                              : param.range.min;
+                                                    return (
+                                                        <div key={param.key} className="space-y-2">
+                                                            <Label className="text-sm font-medium">
+                                                                {param.label}:{" "}
+                                                                {numVal.toLocaleString()}
+                                                                {param.unit ? ` ${param.unit}` : ""}
+                                                            </Label>
+                                                            <input
+                                                                type="range"
+                                                                min={param.range.min}
+                                                                max={param.range.max}
+                                                                step={param.range.step}
+                                                                value={numVal}
+                                                                onChange={(e) => {
+                                                                    setProviderConfig((prev) =>
+                                                                        setNestedValue(
+                                                                            prev,
+                                                                            param.key,
+                                                                            parseInt(e.target.value)
+                                                                        )
+                                                                    );
+                                                                    setHasChanges(true);
+                                                                }}
+                                                                className="w-full"
+                                                            />
+                                                            <p className="text-muted-foreground text-xs">
+                                                                {param.description}
+                                                            </p>
+                                                        </div>
+                                                    );
+                                                }
+
+                                                return null;
+                                            })}
+                                        </div>
+                                    ))}
                                 </div>
                             )}
 
-                            {formData.modelProvider === "google" && (
+                            {paramGroups.length === 0 && formData.modelProvider && (
                                 <div className="bg-muted rounded-lg p-4">
                                     <p className="text-muted-foreground text-sm">
-                                        💡 Google Gemini models support multimodal inputs and
-                                        function calling.
-                                    </p>
-                                </div>
-                            )}
-
-                            {formData.modelProvider === "groq" && (
-                                <div className="bg-muted rounded-lg p-4">
-                                    <p className="text-muted-foreground text-sm">
-                                        ⚡ Groq provides ultra-fast inference for open-source models
-                                        (Llama, Mixtral, Gemma). Free tier available.
-                                    </p>
-                                </div>
-                            )}
-
-                            {formData.modelProvider === "deepseek" && (
-                                <div className="bg-muted rounded-lg p-4">
-                                    <p className="text-muted-foreground text-sm">
-                                        💰 DeepSeek offers extremely affordable models with strong
-                                        coding and reasoning abilities. DeepSeek R1 supports
-                                        extended thinking.
-                                    </p>
-                                </div>
-                            )}
-
-                            {formData.modelProvider === "mistral" && (
-                                <div className="bg-muted rounded-lg p-4">
-                                    <p className="text-muted-foreground text-sm">
-                                        🇪🇺 Mistral models include Codestral for coding tasks and
-                                        Mistral Nemo as a free open-source option.
-                                    </p>
-                                </div>
-                            )}
-
-                            {formData.modelProvider === "xai" && (
-                                <div className="bg-muted rounded-lg p-4">
-                                    <p className="text-muted-foreground text-sm">
-                                        🚀 xAI Grok models support vision and function calling. Grok
-                                        3 Mini supports extended thinking for reasoning.
-                                    </p>
-                                </div>
-                            )}
-
-                            {(formData.modelProvider === "togetherai" ||
-                                formData.modelProvider === "fireworks") && (
-                                <div className="bg-muted rounded-lg p-4">
-                                    <p className="text-muted-foreground text-sm">
-                                        🌐 Open-source model hosting with competitive pricing. Run
-                                        Llama, DeepSeek, Qwen, and Mixtral models at low cost.
-                                    </p>
-                                </div>
-                            )}
-
-                            {formData.modelProvider === "openrouter" && (
-                                <div className="bg-muted rounded-lg p-4">
-                                    <p className="text-muted-foreground text-sm">
-                                        🆓 OpenRouter provides access to 300+ models. Models ending
-                                        in &quot;:free&quot; have zero cost. Great for
-                                        budget-conscious workloads.
+                                        No provider-specific options available for{" "}
+                                        {formData.modelProvider}.
                                     </p>
                                 </div>
                             )}

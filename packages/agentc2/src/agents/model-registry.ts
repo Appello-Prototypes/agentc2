@@ -63,8 +63,7 @@ export const MODEL_ALIASES: Record<string, Record<string, string>> = {
         "claude-sonnet-4-5": "claude-sonnet-4-5-20250929",
         "claude-sonnet-4-5-20250514": "claude-sonnet-4-5-20250929",
         "claude-opus-4-5": "claude-opus-4-5-20251101",
-        "claude-opus-4-5-20250514": "claude-opus-4-5-20251101",
-        "claude-sonnet-4-6": "claude-sonnet-4-20250514"
+        "claude-opus-4-5-20250514": "claude-opus-4-5-20251101"
     }
 };
 
@@ -218,17 +217,25 @@ function isSnapshotVariant(modelId: string): boolean {
 // This metadata provides pricing, capabilities, and category.
 
 const ANTHROPIC_MODEL_METADATA: Record<string, Partial<ModelMetadata>> = {
-    // Claude 4.x family (supports adaptive thinking via 4.6 aliases)
-    "claude-opus-4-20250514": {
+    // Claude 4.6 family (supports adaptive thinking natively)
+    "claude-sonnet-4-6": {
         category: "flagship",
         capabilities: { vision: true, extendedThinking: true, adaptiveThinking: true },
+        contextWindow: 200000,
+        pricing: { inputPer1M: 3.0, outputPer1M: 15.0 },
+        sortOrder: 4
+    },
+    // Claude 4.0 family (extended thinking only, NO adaptive thinking)
+    "claude-opus-4-20250514": {
+        category: "flagship",
+        capabilities: { vision: true, extendedThinking: true, adaptiveThinking: false },
         contextWindow: 200000,
         pricing: { inputPer1M: 15.0, outputPer1M: 75.0 },
         sortOrder: 10
     },
     "claude-sonnet-4-20250514": {
         category: "flagship",
-        capabilities: { vision: true, extendedThinking: true, adaptiveThinking: true },
+        capabilities: { vision: true, extendedThinking: true, adaptiveThinking: false },
         contextWindow: 200000,
         pricing: { inputPer1M: 3.0, outputPer1M: 15.0 },
         sortOrder: 11
@@ -1555,6 +1562,10 @@ const OPENAI_FALLBACK_MODELS: ModelDefinition[] = [
 });
 
 const ANTHROPIC_FALLBACK_MODELS: ModelDefinition[] = [
+    {
+        id: "claude-sonnet-4-6",
+        displayName: "Claude Sonnet 4.6"
+    },
     {
         id: "claude-opus-4-5-20251101",
         displayName: "Claude Opus 4.5"

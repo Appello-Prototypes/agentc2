@@ -32,6 +32,19 @@ export type {
     AnthropicThinkingConfig
 } from "./model-config-types";
 
+// Provider parameter schema for dynamic UI rendering
+export {
+    PROVIDER_PARAMS,
+    SHARED_PARAMS,
+    getParamsForProvider,
+    getNestedValue,
+    setNestedValue,
+    isDependencyMet,
+    cleanProviderConfig,
+    getProvidersWithParams
+} from "./model-params";
+export type { ProviderParam, ProviderParamGroup, ProviderParamOption } from "./model-params";
+
 // Model registry — centralized, API-driven model information
 export {
     getModelsForApi,
