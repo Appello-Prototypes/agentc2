@@ -38,6 +38,7 @@ import {
     buttonVariants
 } from "@repo/ui";
 import { getApiBase } from "@/lib/utils";
+import { ArchiveDeleteActions } from "@/components/ArchiveDeleteActions";
 
 type ViewMode = "grid" | "list" | "table";
 
@@ -65,6 +66,7 @@ interface NetworkSummaryItem {
     modelName: string;
     isPublished: boolean;
     isActive: boolean;
+    isArchived: boolean;
     createdAt: string;
     updatedAt: string;
     primitiveCount: number;
@@ -156,7 +158,7 @@ function isInteractiveTarget(event: MouseEvent<HTMLElement>) {
     return !!target?.closest("a,button");
 }
 
-function NetworkCardView({ network }: { network: NetworkSummaryItem }) {
+function NetworkCardView({ network, onRefresh }: { network: NetworkSummaryItem; onRefresh: () => void }) {
     const router = useRouter();
     const handleCardClick = (event: MouseEvent<HTMLDivElement>) => {
         if (isInteractiveTarget(event)) return;
@@ -171,13 +173,30 @@ function NetworkCardView({ network }: { network: NetworkSummaryItem }) {
                         <CardTitle>{network.name}</CardTitle>
                         <CardDescription>{network.description}</CardDescription>
                     </div>
-                    <div className="flex flex-col items-end gap-1">
-                        <Badge variant={network.isActive ? "default" : "secondary"}>
-                            {network.isActive ? "Active" : "Inactive"}
-                        </Badge>
-                        <Badge variant="outline">
-                            {network.isPublished ? "Published" : "Draft"}
-                        </Badge>
+                    <div className="flex items-center gap-2">
+                        <div className="flex flex-col items-end gap-1">
+                            {network.isArchived ? (
+                                <Badge variant="outline" className="border-orange-300 text-orange-600">
+                                    Archived
+                                </Badge>
+                            ) : (
+                                <Badge variant={network.isActive ? "default" : "secondary"}>
+                                    {network.isActive ? "Active" : "Inactive"}
+                                </Badge>
+                            )}
+                            <Badge variant="outline">
+                                {network.isPublished ? "Published" : "Draft"}
+                            </Badge>
+                        </div>
+                        <ArchiveDeleteActions
+                            entityType="network"
+                            entityId={network.id}
+                            entityName={network.name}
+                            entitySlug={network.slug}
+                            isArchived={network.isArchived}
+                            isSystem={false}
+                            onComplete={onRefresh}
+                        />
                     </div>
                 </div>
             </CardHeader>
@@ -237,7 +256,7 @@ function NetworkCardView({ network }: { network: NetworkSummaryItem }) {
     );
 }
 
-function NetworkListView({ network }: { network: NetworkSummaryItem }) {
+function NetworkListView({ network, onRefresh }: { network: NetworkSummaryItem; onRefresh: () => void }) {
     const router = useRouter();
     const handleCardClick = (event: MouseEvent<HTMLDivElement>) => {
         if (isInteractiveTarget(event)) return;
@@ -250,9 +269,15 @@ function NetworkListView({ network }: { network: NetworkSummaryItem }) {
                 <div>
                     <div className="flex items-center gap-2">
                         <h3 className="text-base font-semibold">{network.name}</h3>
-                        <Badge variant={network.isActive ? "default" : "secondary"}>
-                            {network.isActive ? "Active" : "Inactive"}
-                        </Badge>
+                        {network.isArchived ? (
+                            <Badge variant="outline" className="border-orange-300 text-orange-600">
+                                Archived
+                            </Badge>
+                        ) : (
+                            <Badge variant={network.isActive ? "default" : "secondary"}>
+                                {network.isActive ? "Active" : "Inactive"}
+                            </Badge>
+                        )}
                         <Badge variant="outline">
                             {network.isPublished ? "Published" : "Draft"}
                         </Badge>
@@ -263,7 +288,7 @@ function NetworkListView({ network }: { network: NetworkSummaryItem }) {
                         {network.stats.totalRuns} runs
                     </p>
                 </div>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                     <Link
                         href={`/networks/${network.slug}`}
                         className={buttonVariants({ variant: "outline", size: "sm" })}
@@ -282,13 +307,22 @@ function NetworkListView({ network }: { network: NetworkSummaryItem }) {
                     >
                         Runs
                     </Link>
+                    <ArchiveDeleteActions
+                        entityType="network"
+                        entityId={network.id}
+                        entityName={network.name}
+                        entitySlug={network.slug}
+                        isArchived={network.isArchived}
+                        isSystem={false}
+                        onComplete={onRefresh}
+                    />
                 </div>
             </CardContent>
         </Card>
     );
 }
 
-function NetworkTableView({ networks }: { networks: NetworkSummaryItem[] }) {
+function NetworkTableView({ networks, onRefresh }: { networks: NetworkSummaryItem[]; onRefresh: () => void }) {
     return (
         <Card>
             <Table>
@@ -303,6 +337,7 @@ function NetworkTableView({ networks }: { networks: NetworkSummaryItem[] }) {
                         <TableHead className="text-right">Avg Latency</TableHead>
                         <TableHead>Published</TableHead>
                         <TableHead>Last Run</TableHead>
+                        <TableHead className="w-10"></TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -329,12 +364,27 @@ function NetworkTableView({ networks }: { networks: NetworkSummaryItem[] }) {
                                     : "—"}
                             </TableCell>
                             <TableCell>
-                                <Badge variant="outline">
-                                    {network.isPublished ? "Published" : "Draft"}
-                                </Badge>
+                                {network.isArchived ? (
+                                    "Archived"
+                                ) : (
+                                    <Badge variant="outline">
+                                        {network.isPublished ? "Published" : "Draft"}
+                                    </Badge>
+                                )}
                             </TableCell>
                             <TableCell className="text-muted-foreground">
                                 {formatRelativeTime(network.stats.lastRunAt)}
+                            </TableCell>
+                            <TableCell>
+                                <ArchiveDeleteActions
+                                    entityType="network"
+                                    entityId={network.id}
+                                    entityName={network.name}
+                                    entitySlug={network.slug}
+                                    isArchived={network.isArchived}
+                                    isSystem={false}
+                                    onComplete={onRefresh}
+                                />
                             </TableCell>
                         </TableRow>
                     ))}
@@ -353,6 +403,7 @@ export default function NetworksPage() {
     const [searchQuery, setSearchQuery] = useState("");
     const [statusFilter, setStatusFilter] = useState("all");
     const [publishedFilter, setPublishedFilter] = useState("all");
+    const [showArchived, setShowArchived] = useState(false);
 
     const [createOpen, setCreateOpen] = useState(false);
     const [name, setName] = useState("");
@@ -376,7 +427,9 @@ export default function NetworksPage() {
     const fetchStats = async () => {
         try {
             setLoading(true);
-            const res = await fetch(`${getApiBase()}/api/networks/stats`);
+            const params = new URLSearchParams();
+            if (showArchived) params.set("includeArchived", "true");
+            const res = await fetch(`${getApiBase()}/api/networks/stats?${params.toString()}`);
             const data = await res.json();
             if (data.success) {
                 setSummary(data.summary);
@@ -412,7 +465,7 @@ export default function NetworksPage() {
             }
         };
         fetchModels();
-    }, []);
+    }, [showArchived]);
 
     useEffect(() => {
         if (!selectedNetwork && networks.length > 0) {
@@ -456,6 +509,8 @@ export default function NetworksPage() {
 
     const filteredNetworks = useMemo(() => {
         return networks.filter((network) => {
+            if (!showArchived && network.isArchived) return false;
+
             if (
                 searchQuery &&
                 !network.name.toLowerCase().includes(searchQuery.toLowerCase()) &&
@@ -472,7 +527,7 @@ export default function NetworksPage() {
 
             return true;
         });
-    }, [networks, searchQuery, statusFilter, publishedFilter]);
+    }, [networks, searchQuery, statusFilter, publishedFilter, showArchived]);
 
     const selectedNetworkStats = networks.find(
         (network) => network.slug === selectedNetwork
@@ -793,6 +848,13 @@ export default function NetworksPage() {
                                     <SelectItem value="unpublished">Draft</SelectItem>
                                 </SelectContent>
                             </Select>
+                            <Button
+                                variant={showArchived ? "secondary" : "outline"}
+                                size="sm"
+                                onClick={() => setShowArchived(!showArchived)}
+                            >
+                                {showArchived ? "Hide Archived" : "Show Archived"}
+                            </Button>
                             {(searchQuery ||
                                 statusFilter !== "all" ||
                                 publishedFilter !== "all") && (
@@ -820,17 +882,28 @@ export default function NetworksPage() {
                                 </CardContent>
                             </Card>
                         ) : viewMode === "table" ? (
-                            <NetworkTableView networks={filteredNetworks} />
+                            <NetworkTableView
+                                networks={filteredNetworks}
+                                onRefresh={fetchStats}
+                            />
                         ) : viewMode === "list" ? (
                             <div className="space-y-3">
                                 {filteredNetworks.map((network) => (
-                                    <NetworkListView key={network.id} network={network} />
+                                    <NetworkListView
+                                        key={network.id}
+                                        network={network}
+                                        onRefresh={fetchStats}
+                                    />
                                 ))}
                             </div>
                         ) : (
                             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
                                 {filteredNetworks.map((network) => (
-                                    <NetworkCardView key={network.id} network={network} />
+                                    <NetworkCardView
+                                        key={network.id}
+                                        network={network}
+                                        onRefresh={fetchStats}
+                                    />
                                 ))}
                             </div>
                         )}

@@ -24,9 +24,14 @@ export async function GET(request: NextRequest) {
         const startDate = from ? new Date(from) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
         const endDate = to ? new Date(to) : new Date();
 
-        // Get all active agents
+        const includeArchived = searchParams.get("includeArchived") === "true";
+
+        // Get agents (exclude archived by default)
         const agents = await prisma.agent.findMany({
-            where: { isActive: true, workspace: { organizationId: authContext.organizationId } },
+            where: {
+                workspace: { organizationId: authContext.organizationId },
+                ...(includeArchived ? {} : { isArchived: false })
+            },
             select: {
                 id: true,
                 slug: true,
@@ -37,6 +42,7 @@ export async function GET(request: NextRequest) {
                 modelName: true,
                 memoryEnabled: true,
                 isActive: true,
+                isArchived: true,
                 createdAt: true,
                 updatedAt: true,
                 tools: {
@@ -211,6 +217,7 @@ export async function GET(request: NextRequest) {
                 memoryEnabled: agent.memoryEnabled,
                 toolCount: agent.tools.length,
                 isActive: agent.isActive,
+                isArchived: agent.isArchived,
                 createdAt: agent.createdAt,
                 updatedAt: agent.updatedAt,
                 stats: {

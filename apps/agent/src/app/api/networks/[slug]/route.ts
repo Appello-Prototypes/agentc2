@@ -256,6 +256,65 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
 }
 
+export async function PATCH(
+    request: NextRequest,
+    { params }: { params: Promise<{ slug: string }> }
+) {
+    try {
+        const { slug } = await params;
+        const body = await request.json();
+        const { action } = body as { action: string };
+
+        if (action !== "archive" && action !== "unarchive") {
+            return NextResponse.json(
+                { success: false, error: "Invalid action. Use 'archive' or 'unarchive'." },
+                { status: 400 }
+            );
+        }
+
+        const existing = await prisma.network.findFirst({
+            where: { OR: [{ slug }, { id: slug }] }
+        });
+
+        if (!existing) {
+            return NextResponse.json(
+                { success: false, error: `Network '${slug}' not found` },
+                { status: 404 }
+            );
+        }
+
+        if (existing.type === "SYSTEM") {
+            return NextResponse.json(
+                { success: false, error: "SYSTEM networks cannot be archived" },
+                { status: 403 }
+            );
+        }
+
+        const updateData =
+            action === "archive"
+                ? {
+                      isArchived: true,
+                      archivedAt: new Date(),
+                      isActive: false,
+                      isPublished: false
+                  }
+                : { isArchived: false, archivedAt: null, isActive: true };
+
+        const network = await prisma.network.update({
+            where: { id: existing.id },
+            data: updateData
+        });
+
+        return NextResponse.json({ success: true, network, action });
+    } catch (error) {
+        console.error("[Network Archive] Error:", error);
+        return NextResponse.json(
+            { success: false, error: "Failed to archive network" },
+            { status: 500 }
+        );
+    }
+}
+
 export async function DELETE(
     _request: NextRequest,
     { params }: { params: Promise<{ slug: string }> }

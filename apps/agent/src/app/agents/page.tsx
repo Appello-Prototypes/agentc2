@@ -65,6 +65,7 @@ import {
     TableCell
 } from "@repo/ui";
 import { FlaskConicalIcon } from "lucide-react";
+import { ArchiveDeleteActions } from "@/components/ArchiveDeleteActions";
 
 interface AgentStats {
     runs: number;
@@ -96,6 +97,7 @@ interface Agent {
     modelProvider: string;
     modelName: string;
     isActive: boolean;
+    isArchived: boolean;
     type: "SYSTEM" | "USER" | "DEMO";
     visibility?: "PRIVATE" | "ORGANIZATION" | "PUBLIC";
     toolCount?: number;
@@ -267,7 +269,15 @@ function SparklineMetric({
     );
 }
 
-function AgentCardView({ agent, onClick }: { agent: Agent; onClick: () => void }) {
+function AgentCardView({
+    agent,
+    onClick,
+    onArchiveDelete
+}: {
+    agent: Agent;
+    onClick: () => void;
+    onArchiveDelete: () => void;
+}) {
     const trends = agent.trends ?? [];
     const trendLabels = trends.map((point) => point.date);
     const runTrend = trends.map((point) => point.runs);
@@ -291,10 +301,17 @@ function AgentCardView({ agent, onClick }: { agent: Agent; onClick: () => void }
                             {agent.description || "No description"}
                         </CardDescription>
                     </div>
-                    <div className="ml-2 flex shrink-0 flex-col items-end gap-1">
+                    <div className="ml-2 flex shrink-0 items-start gap-1">
+                        <div className="flex flex-col items-end gap-1">
+                        {agent.isArchived ? (
+                            <Badge variant="outline" className="border-orange-300 text-orange-600">
+                                Archived
+                            </Badge>
+                        ) : (
                         <Badge variant={agent.isActive ? "default" : "secondary"}>
                             {agent.isActive ? "Active" : "Inactive"}
                         </Badge>
+                        )}
                         {agent.type === "SYSTEM" && (
                             <Badge variant="outline" className="text-xs">
                                 SYSTEM
@@ -334,6 +351,16 @@ function AgentCardView({ agent, onClick }: { agent: Agent; onClick: () => void }
                                 {Math.round(agent.healthScore.score * 100)}%
                             </div>
                         )}
+                        </div>
+                        <ArchiveDeleteActions
+                            entityType="agent"
+                            entityId={agent.id}
+                            entityName={agent.name}
+                            entitySlug={agent.slug}
+                            isArchived={agent.isArchived}
+                            isSystem={agent.type === "SYSTEM"}
+                            onComplete={onArchiveDelete}
+                        />
                     </div>
                 </div>
             </CardHeader>
@@ -425,7 +452,15 @@ function AgentCardView({ agent, onClick }: { agent: Agent; onClick: () => void }
     );
 }
 
-function AgentListView({ agent, onClick }: { agent: Agent; onClick: () => void }) {
+function AgentListView({
+    agent,
+    onClick,
+    onArchiveDelete
+}: {
+    agent: Agent;
+    onClick: () => void;
+    onArchiveDelete: () => void;
+}) {
     return (
         <Card
             className="hover:border-primary cursor-pointer transition-all hover:shadow-md"
@@ -436,12 +471,21 @@ function AgentListView({ agent, onClick }: { agent: Agent; onClick: () => void }
                 <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                         <h3 className="truncate font-medium">{agent.name}</h3>
+                        {agent.isArchived ? (
+                            <Badge
+                                variant="outline"
+                                className="border-orange-300 text-xs text-orange-600"
+                            >
+                                Archived
+                            </Badge>
+                        ) : (
                         <Badge
                             variant={agent.isActive ? "default" : "secondary"}
                             className="text-xs"
                         >
                             {agent.isActive ? "Active" : "Inactive"}
                         </Badge>
+                        )}
                         {agent.type === "SYSTEM" && (
                             <Badge variant="outline" className="text-xs">
                                 SYSTEM
@@ -507,6 +551,16 @@ function AgentListView({ agent, onClick }: { agent: Agent; onClick: () => void }
                         </Badge>
                     )}
                 </div>
+
+                <ArchiveDeleteActions
+                    entityType="agent"
+                    entityId={agent.id}
+                    entityName={agent.name}
+                    entitySlug={agent.slug}
+                    isArchived={agent.isArchived}
+                    isSystem={agent.type === "SYSTEM"}
+                    onComplete={onArchiveDelete}
+                />
             </CardContent>
         </Card>
     );
@@ -514,10 +568,12 @@ function AgentListView({ agent, onClick }: { agent: Agent; onClick: () => void }
 
 function AgentTableView({
     agents,
-    onAgentClick
+    onAgentClick,
+    onArchiveDelete
 }: {
     agents: Agent[];
     onAgentClick: (agent: Agent) => void;
+    onArchiveDelete: () => void;
 }) {
     return (
         <Card>
@@ -534,6 +590,7 @@ function AgentTableView({
                         <TableHead className="text-right">Tokens</TableHead>
                         <TableHead className="text-right">Cost</TableHead>
                         <TableHead>Status</TableHead>
+                        <TableHead className="w-10"></TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -601,9 +658,29 @@ function AgentTableView({
                                 ${agent.stats.totalCostUsd.toFixed(4)}
                             </TableCell>
                             <TableCell>
-                                <Badge variant={agent.isActive ? "default" : "secondary"}>
-                                    {agent.isActive ? "Active" : "Inactive"}
-                                </Badge>
+                                {agent.isArchived ? (
+                                    <Badge
+                                        variant="outline"
+                                        className="border-orange-300 text-orange-600"
+                                    >
+                                        Archived
+                                    </Badge>
+                                ) : (
+                                    <Badge variant={agent.isActive ? "default" : "secondary"}>
+                                        {agent.isActive ? "Active" : "Inactive"}
+                                    </Badge>
+                                )}
+                            </TableCell>
+                            <TableCell>
+                                <ArchiveDeleteActions
+                                    entityType="agent"
+                                    entityId={agent.id}
+                                    entityName={agent.name}
+                                    entitySlug={agent.slug}
+                                    isArchived={agent.isArchived}
+                                    isSystem={agent.type === "SYSTEM"}
+                                    onComplete={onArchiveDelete}
+                                />
                             </TableCell>
                         </TableRow>
                     ))}
@@ -706,28 +783,34 @@ export default function AgentsPage() {
     const [typeFilter, setTypeFilter] = useState<string>("all");
     const [visibilityFilter, setVisibilityFilter] = useState<string>("all");
     const [statusFilter, setStatusFilter] = useState<string>("all");
+    const [showArchived, setShowArchived] = useState(false);
     const [viewMode, setViewMode] = useState<ViewMode>("grid");
     const [activeTab, setActiveTab] = useState("agents");
     const [runStatusFilter, setRunStatusFilter] = useState<string>("all");
 
-    // Fetch workspace stats
-    useEffect(() => {
-        async function fetchWorkspaceStats() {
-            try {
-                const res = await fetch(`${getApiBase()}/api/agents-overview/stats`);
-                const data = await res.json();
-                if (data.success) {
-                    setAgents(data.agents);
-                    setSummary(data.summary);
-                }
-            } catch (error) {
-                console.error("Failed to fetch workspace stats:", error);
-            } finally {
-                setLoading(false);
+    const fetchWorkspaceStats = async () => {
+        try {
+            const params = new URLSearchParams();
+            if (showArchived) params.set("includeArchived", "true");
+            const res = await fetch(
+                `${getApiBase()}/api/agents-overview/stats?${params.toString()}`
+            );
+            const data = await res.json();
+            if (data.success) {
+                setAgents(data.agents);
+                setSummary(data.summary);
             }
+        } catch (error) {
+            console.error("Failed to fetch workspace stats:", error);
+        } finally {
+            setLoading(false);
         }
+    };
+
+    useEffect(() => {
         fetchWorkspaceStats();
-    }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [showArchived]);
 
     // Fetch runs when Runs tab is active
     useEffect(() => {
@@ -779,6 +862,10 @@ export default function AgentsPage() {
             return false;
         }
         if (statusFilter === "inactive" && agent.isActive) {
+            return false;
+        }
+        // When not showing archived, hide them; when showing, keep them visible
+        if (!showArchived && agent.isArchived) {
             return false;
         }
         return true;
@@ -992,6 +1079,13 @@ export default function AgentsPage() {
                                     <SelectItem value="inactive">Inactive</SelectItem>
                                 </SelectContent>
                             </Select>
+                            <Button
+                                variant={showArchived ? "secondary" : "outline"}
+                                size="sm"
+                                onClick={() => setShowArchived(!showArchived)}
+                            >
+                                {showArchived ? "Hide Archived" : "Show Archived"}
+                            </Button>
                         </div>
 
                         {/* Agents */}
@@ -1042,6 +1136,7 @@ export default function AgentsPage() {
                                         <AgentTableView
                                             agents={primaryAgents}
                                             onAgentClick={handleAgentClick}
+                                            onArchiveDelete={fetchWorkspaceStats}
                                         />
                                     ) : viewMode === "list" ? (
                                         <div className="space-y-3">
@@ -1050,6 +1145,7 @@ export default function AgentsPage() {
                                                     key={agent.id}
                                                     agent={agent}
                                                     onClick={() => handleAgentClick(agent)}
+                                                    onArchiveDelete={fetchWorkspaceStats}
                                                 />
                                             ))}
                                         </div>
@@ -1060,6 +1156,7 @@ export default function AgentsPage() {
                                                     key={agent.id}
                                                     agent={agent}
                                                     onClick={() => handleAgentClick(agent)}
+                                                    onArchiveDelete={fetchWorkspaceStats}
                                                 />
                                             ))}
                                         </div>
@@ -1098,6 +1195,7 @@ export default function AgentsPage() {
                                             <AgentTableView
                                                 agents={demoAgents}
                                                 onAgentClick={handleAgentClick}
+                                                onArchiveDelete={fetchWorkspaceStats}
                                             />
                                         ) : viewMode === "list" ? (
                                             <div className="space-y-3">
@@ -1106,6 +1204,7 @@ export default function AgentsPage() {
                                                         key={agent.id}
                                                         agent={agent}
                                                         onClick={() => handleAgentClick(agent)}
+                                                        onArchiveDelete={fetchWorkspaceStats}
                                                     />
                                                 ))}
                                             </div>
@@ -1116,6 +1215,7 @@ export default function AgentsPage() {
                                                         key={agent.id}
                                                         agent={agent}
                                                         onClick={() => handleAgentClick(agent)}
+                                                        onArchiveDelete={fetchWorkspaceStats}
                                                     />
                                                 ))}
                                             </div>

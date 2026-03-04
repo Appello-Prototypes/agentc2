@@ -163,6 +163,30 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
                 );
             }
 
+            // Enforce unique agent names within the org
+            if (body.name !== undefined && body.name !== existing.name) {
+                const orgId = authResult.context.organizationId;
+                if (orgId) {
+                    const nameConflict = await prisma.agent.findFirst({
+                        where: {
+                            name: body.name,
+                            id: { not: existing.id },
+                            workspace: { organizationId: orgId }
+                        },
+                        select: { id: true }
+                    });
+                    if (nameConflict) {
+                        return NextResponse.json(
+                            {
+                                success: false,
+                                error: `An agent named "${body.name}" already exists in this organization`
+                            },
+                            { status: 409 }
+                        );
+                    }
+                }
+            }
+
             // Build update data
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const updateData: any = {};
@@ -664,6 +688,99 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             {
                 success: false,
                 error: error instanceof Error ? error.message : "Failed to update agent"
+            },
+            { status: 500 }
+        );
+    }
+}
+
+/**
+ * PATCH /api/agents/[id]
+ *
+ * Archive or unarchive an agent
+ */
+export async function PATCH(
+    request: NextRequest,
+    { params }: { params: Promise<{ id: string }> }
+) {
+    try {
+        const { id } = await params;
+        const authResult = await requireAuth(request);
+        if (authResult.response) {
+            return authResult.response;
+        }
+        const roleResult = await requireOrgRole(
+            authResult.context.userId,
+            authResult.context.organizationId
+        );
+        if (roleResult.response) {
+            return roleResult.response;
+        }
+        const accessResult = await requireAgentAccess(authResult.context.organizationId, id);
+        if (accessResult.response) {
+            return accessResult.response;
+        }
+
+        const body = await request.json();
+        const { action } = body as { action: string };
+
+        if (action !== "archive" && action !== "unarchive") {
+            return NextResponse.json(
+                { success: false, error: "Invalid action. Use 'archive' or 'unarchive'." },
+                { status: 400 }
+            );
+        }
+
+        const existing = await prisma.agent.findFirst({
+            where: { OR: [{ slug: id }, { id }] }
+        });
+
+        if (!existing) {
+            return NextResponse.json(
+                { success: false, error: `Agent '${id}' not found` },
+                { status: 404 }
+            );
+        }
+
+        if (existing.type === "SYSTEM") {
+            return NextResponse.json(
+                { success: false, error: "SYSTEM agents cannot be archived" },
+                { status: 403 }
+            );
+        }
+
+        const updateData =
+            action === "archive"
+                ? { isArchived: true, archivedAt: new Date(), isActive: false }
+                : { isArchived: false, archivedAt: null, isActive: true };
+
+        const agent = await prisma.agent.update({
+            where: { id: existing.id },
+            data: updateData
+        });
+
+        recordActivity({
+            type: action === "archive" ? "AGENT_UPDATED" : "AGENT_UPDATED",
+            agentId: existing.id,
+            agentSlug: existing.slug,
+            agentName: existing.name,
+            summary: `Agent "${existing.name}" ${action === "archive" ? "archived" : "unarchived"}`,
+            status: "info",
+            source: "api",
+            workspaceId: existing.workspaceId || undefined
+        });
+
+        return NextResponse.json({
+            success: true,
+            agent,
+            action
+        });
+    } catch (error) {
+        console.error("[Agent Archive] Error:", error);
+        return NextResponse.json(
+            {
+                success: false,
+                error: error instanceof Error ? error.message : "Failed to archive agent"
             },
             { status: 500 }
         );

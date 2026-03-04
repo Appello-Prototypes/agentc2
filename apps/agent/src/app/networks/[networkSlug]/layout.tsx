@@ -8,6 +8,7 @@ import type { IconName } from "@repo/ui";
 import { getApiBase } from "@/lib/utils";
 import { DetailPageShell } from "@/components/DetailPageShell";
 import { ShareEmbedDialog } from "@/components/ShareEmbedDialog";
+import { ArchiveDeleteActions } from "@/components/ArchiveDeleteActions";
 
 interface NetworkDetail {
     id: string;
@@ -17,6 +18,8 @@ interface NetworkDetail {
     version: number;
     isPublished: boolean;
     isActive: boolean;
+    isArchived: boolean;
+    type?: "SYSTEM" | "USER";
     runCount: number;
     primitiveCount: number;
     visibility: string;
@@ -132,6 +135,18 @@ export default function NetworkLayout({ children }: { children: React.ReactNode 
                                     />
                                     Share
                                 </Button>
+                            </div>
+                            <div className="mt-2 flex gap-2">
+                                <ArchiveDeleteActions
+                                    entityType="network"
+                                    entityId={network.id}
+                                    entityName={network.name}
+                                    entitySlug={network.slug}
+                                    isArchived={network.isArchived}
+                                    isSystem={network.type === "SYSTEM"}
+                                    variant="buttons"
+                                    redirectTo="/networks"
+                                />
                             </div>
                         </div>
 

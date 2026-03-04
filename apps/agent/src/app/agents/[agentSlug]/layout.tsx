@@ -19,6 +19,7 @@ import type { IconName } from "@repo/ui";
 import { getApiBase } from "@/lib/utils";
 import { DetailPageShell } from "@/components/DetailPageShell";
 import { ShareEmbedDialog } from "@/components/ShareEmbedDialog";
+import { ArchiveDeleteActions } from "@/components/ArchiveDeleteActions";
 
 interface Agent {
     id: string;
@@ -28,6 +29,7 @@ interface Agent {
     modelProvider: string;
     modelName: string;
     isActive: boolean;
+    isArchived: boolean;
     type: "SYSTEM" | "USER" | "DEMO";
     deploymentMode?: string;
     visibility: string;
@@ -270,6 +272,18 @@ export default function AgentDetailLayout({ children }: { children: React.ReactN
                                     />
                                     Share
                                 </Button>
+                            </div>
+                            <div className="flex gap-2">
+                                <ArchiveDeleteActions
+                                    entityType="agent"
+                                    entityId={agent.id}
+                                    entityName={agent.name}
+                                    entitySlug={agent.slug}
+                                    isArchived={agent.isArchived}
+                                    isSystem={agent.type === "SYSTEM"}
+                                    variant="buttons"
+                                    redirectTo="/agents"
+                                />
                             </div>
                             <Button
                                 variant="outline"

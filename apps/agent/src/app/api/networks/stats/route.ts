@@ -14,11 +14,16 @@ export async function GET(request: NextRequest) {
         const from = searchParams.get("from");
         const to = searchParams.get("to");
 
+        const includeArchived = searchParams.get("includeArchived") === "true";
+
         const startDate = from ? new Date(from) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
         const endDate = to ? new Date(to) : new Date();
 
         const networks = await prisma.network.findMany({
-            where: { workspace: { organizationId: authContext.organizationId } },
+            where: {
+                workspace: { organizationId: authContext.organizationId },
+                ...(includeArchived ? {} : { isArchived: false })
+            },
             orderBy: { createdAt: "desc" },
             include: {
                 _count: { select: { primitives: true } }
@@ -171,6 +176,7 @@ export async function GET(request: NextRequest) {
                 modelName: network.modelName,
                 isPublished: network.isPublished,
                 isActive: network.isActive,
+                isArchived: network.isArchived,
                 createdAt: network.createdAt,
                 updatedAt: network.updatedAt,
                 primitiveCount:

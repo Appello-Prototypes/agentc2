@@ -14,11 +14,16 @@ export async function GET(request: NextRequest) {
         const from = searchParams.get("from");
         const to = searchParams.get("to");
 
+        const includeArchived = searchParams.get("includeArchived") === "true";
+
         const startDate = from ? new Date(from) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
         const endDate = to ? new Date(to) : new Date();
 
         const workflows = await prisma.workflow.findMany({
-            where: { workspace: { organizationId: authContext.organizationId } },
+            where: {
+                workspace: { organizationId: authContext.organizationId },
+                ...(includeArchived ? {} : { isArchived: false })
+            },
             orderBy: { createdAt: "desc" },
             select: {
                 id: true,
@@ -28,6 +33,7 @@ export async function GET(request: NextRequest) {
                 version: true,
                 isPublished: true,
                 isActive: true,
+                isArchived: true,
                 createdAt: true,
                 updatedAt: true,
                 definitionJson: true
@@ -164,6 +170,7 @@ export async function GET(request: NextRequest) {
                 version: workflow.version,
                 isPublished: workflow.isPublished,
                 isActive: workflow.isActive,
+                isArchived: workflow.isArchived,
                 createdAt: workflow.createdAt,
                 updatedAt: workflow.updatedAt,
                 stepCount,

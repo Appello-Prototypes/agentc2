@@ -37,6 +37,7 @@ import {
     buttonVariants
 } from "@repo/ui";
 import { getApiBase } from "@/lib/utils";
+import { ArchiveDeleteActions } from "@/components/ArchiveDeleteActions";
 
 type ViewMode = "grid" | "list" | "table";
 
@@ -60,6 +61,7 @@ interface WorkflowSummaryItem {
     version: number;
     isPublished: boolean;
     isActive: boolean;
+    isArchived: boolean;
     createdAt: string;
     updatedAt: string;
     stepCount: number;
@@ -142,7 +144,13 @@ function isInteractiveTarget(event: MouseEvent<HTMLElement>) {
     return !!target?.closest("a,button");
 }
 
-function WorkflowCardView({ workflow }: { workflow: WorkflowSummaryItem }) {
+function WorkflowCardView({
+    workflow,
+    onRefresh
+}: {
+    workflow: WorkflowSummaryItem;
+    onRefresh: () => void;
+}) {
     const router = useRouter();
     const handleCardClick = (event: MouseEvent<HTMLDivElement>) => {
         if (isInteractiveTarget(event)) return;
@@ -158,12 +166,30 @@ function WorkflowCardView({ workflow }: { workflow: WorkflowSummaryItem }) {
                         <CardDescription>{workflow.description}</CardDescription>
                     </div>
                     <div className="flex flex-col items-end gap-1">
-                        <Badge variant={workflow.isActive ? "default" : "secondary"}>
-                            {workflow.isActive ? "Active" : "Inactive"}
-                        </Badge>
+                        {workflow.isArchived ? (
+                            <Badge
+                                variant="outline"
+                                className="border-orange-300 text-orange-600"
+                            >
+                                Archived
+                            </Badge>
+                        ) : (
+                            <Badge variant={workflow.isActive ? "default" : "secondary"}>
+                                {workflow.isActive ? "Active" : "Inactive"}
+                            </Badge>
+                        )}
                         <Badge variant="outline">
                             {workflow.isPublished ? "Published" : "Draft"}
                         </Badge>
+                        <ArchiveDeleteActions
+                            entityType="workflow"
+                            entityId={workflow.id}
+                            entityName={workflow.name}
+                            entitySlug={workflow.slug}
+                            isArchived={workflow.isArchived}
+                            isSystem={false}
+                            onComplete={onRefresh}
+                        />
                     </div>
                 </div>
             </CardHeader>
@@ -223,7 +249,13 @@ function WorkflowCardView({ workflow }: { workflow: WorkflowSummaryItem }) {
     );
 }
 
-function WorkflowListView({ workflow }: { workflow: WorkflowSummaryItem }) {
+function WorkflowListView({
+    workflow,
+    onRefresh
+}: {
+    workflow: WorkflowSummaryItem;
+    onRefresh: () => void;
+}) {
     const router = useRouter();
     const handleCardClick = (event: MouseEvent<HTMLDivElement>) => {
         if (isInteractiveTarget(event)) return;
@@ -236,9 +268,18 @@ function WorkflowListView({ workflow }: { workflow: WorkflowSummaryItem }) {
                 <div>
                     <div className="flex items-center gap-2">
                         <h3 className="text-base font-semibold">{workflow.name}</h3>
-                        <Badge variant={workflow.isActive ? "default" : "secondary"}>
-                            {workflow.isActive ? "Active" : "Inactive"}
-                        </Badge>
+                        {workflow.isArchived ? (
+                            <Badge
+                                variant="outline"
+                                className="border-orange-300 text-orange-600"
+                            >
+                                Archived
+                            </Badge>
+                        ) : (
+                            <Badge variant={workflow.isActive ? "default" : "secondary"}>
+                                {workflow.isActive ? "Active" : "Inactive"}
+                            </Badge>
+                        )}
                         <Badge variant="outline">
                             {workflow.isPublished ? "Published" : "Draft"}
                         </Badge>
@@ -268,13 +309,28 @@ function WorkflowListView({ workflow }: { workflow: WorkflowSummaryItem }) {
                     >
                         Runs
                     </Link>
+                    <ArchiveDeleteActions
+                        entityType="workflow"
+                        entityId={workflow.id}
+                        entityName={workflow.name}
+                        entitySlug={workflow.slug}
+                        isArchived={workflow.isArchived}
+                        isSystem={false}
+                        onComplete={onRefresh}
+                    />
                 </div>
             </CardContent>
         </Card>
     );
 }
 
-function WorkflowTableView({ workflows }: { workflows: WorkflowSummaryItem[] }) {
+function WorkflowTableView({
+    workflows,
+    onRefresh
+}: {
+    workflows: WorkflowSummaryItem[];
+    onRefresh: () => void;
+}) {
     return (
         <Card>
             <Table>
@@ -288,6 +344,7 @@ function WorkflowTableView({ workflows }: { workflows: WorkflowSummaryItem[] }) 
                         <TableHead className="text-right">Avg Latency</TableHead>
                         <TableHead>Published</TableHead>
                         <TableHead>Last Run</TableHead>
+                        <TableHead className="w-10"></TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -318,6 +375,17 @@ function WorkflowTableView({ workflows }: { workflows: WorkflowSummaryItem[] }) 
                             <TableCell className="text-muted-foreground">
                                 {formatRelativeTime(workflow.stats.lastRunAt)}
                             </TableCell>
+                            <TableCell>
+                                <ArchiveDeleteActions
+                                    entityType="workflow"
+                                    entityId={workflow.id}
+                                    entityName={workflow.name}
+                                    entitySlug={workflow.slug}
+                                    isArchived={workflow.isArchived}
+                                    isSystem={false}
+                                    onComplete={onRefresh}
+                                />
+                            </TableCell>
                         </TableRow>
                     ))}
                 </TableBody>
@@ -335,6 +403,7 @@ export default function WorkflowsPage() {
     const [searchQuery, setSearchQuery] = useState("");
     const [statusFilter, setStatusFilter] = useState("all");
     const [publishedFilter, setPublishedFilter] = useState("all");
+    const [showArchived, setShowArchived] = useState(false);
 
     const [createOpen, setCreateOpen] = useState(false);
     const [name, setName] = useState("");
@@ -352,7 +421,11 @@ export default function WorkflowsPage() {
     const fetchStats = async () => {
         try {
             setLoading(true);
-            const res = await fetch(`${getApiBase()}/api/workflows/stats`);
+            const params = new URLSearchParams();
+            if (showArchived) params.set("includeArchived", "true");
+            const res = await fetch(
+                `${getApiBase()}/api/workflows/stats?${params.toString()}`
+            );
             const data = await res.json();
             if (data.success) {
                 setSummary(data.summary);
@@ -365,7 +438,7 @@ export default function WorkflowsPage() {
 
     useEffect(() => {
         fetchStats();
-    }, []);
+    }, [showArchived]);
 
     useEffect(() => {
         if (!selectedWorkflow && workflows.length > 0) {
@@ -409,6 +482,8 @@ export default function WorkflowsPage() {
 
     const filteredWorkflows = useMemo(() => {
         return workflows.filter((workflow) => {
+            if (!showArchived && workflow.isArchived) return false;
+
             if (
                 searchQuery &&
                 !workflow.name.toLowerCase().includes(searchQuery.toLowerCase()) &&
@@ -425,7 +500,7 @@ export default function WorkflowsPage() {
 
             return true;
         });
-    }, [workflows, searchQuery, statusFilter, publishedFilter]);
+    }, [workflows, searchQuery, statusFilter, publishedFilter, showArchived]);
 
     const selectedWorkflowStats = workflows.find(
         (workflow) => workflow.slug === selectedWorkflow
@@ -648,9 +723,17 @@ export default function WorkflowsPage() {
                                     <SelectItem value="unpublished">Draft</SelectItem>
                                 </SelectContent>
                             </Select>
+                            <Button
+                                variant={showArchived ? "secondary" : "outline"}
+                                size="sm"
+                                onClick={() => setShowArchived(!showArchived)}
+                            >
+                                {showArchived ? "Hide Archived" : "Show Archived"}
+                            </Button>
                             {(searchQuery ||
                                 statusFilter !== "all" ||
-                                publishedFilter !== "all") && (
+                                publishedFilter !== "all" ||
+                                showArchived) && (
                                 <Button
                                     variant="ghost"
                                     size="sm"
@@ -658,6 +741,7 @@ export default function WorkflowsPage() {
                                         setSearchQuery("");
                                         setStatusFilter("all");
                                         setPublishedFilter("all");
+                                        setShowArchived(false);
                                     }}
                                 >
                                     Clear Filters
@@ -678,17 +762,28 @@ export default function WorkflowsPage() {
                                 </CardContent>
                             </Card>
                         ) : viewMode === "table" ? (
-                            <WorkflowTableView workflows={filteredWorkflows} />
+                            <WorkflowTableView
+                                workflows={filteredWorkflows}
+                                onRefresh={fetchStats}
+                            />
                         ) : viewMode === "list" ? (
                             <div className="space-y-3">
                                 {filteredWorkflows.map((workflow) => (
-                                    <WorkflowListView key={workflow.id} workflow={workflow} />
+                                    <WorkflowListView
+                                        key={workflow.id}
+                                        workflow={workflow}
+                                        onRefresh={fetchStats}
+                                    />
                                 ))}
                             </div>
                         ) : (
                             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
                                 {filteredWorkflows.map((workflow) => (
-                                    <WorkflowCardView key={workflow.id} workflow={workflow} />
+                                    <WorkflowCardView
+                                        key={workflow.id}
+                                        workflow={workflow}
+                                        onRefresh={fetchStats}
+                                    />
                                 ))}
                             </div>
                         )}

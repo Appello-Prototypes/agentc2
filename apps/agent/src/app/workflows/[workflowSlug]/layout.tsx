@@ -8,6 +8,7 @@ import type { IconName } from "@repo/ui";
 import { getApiBase } from "@/lib/utils";
 import { DetailPageShell } from "@/components/DetailPageShell";
 import { ShareEmbedDialog } from "@/components/ShareEmbedDialog";
+import { ArchiveDeleteActions } from "@/components/ArchiveDeleteActions";
 
 interface WorkflowDetail {
     id: string;
@@ -17,6 +18,8 @@ interface WorkflowDetail {
     version: number;
     isPublished: boolean;
     isActive: boolean;
+    isArchived: boolean;
+    type?: "SYSTEM" | "USER";
     runCount: number;
     visibility: string;
     publicToken: string | null;
@@ -129,6 +132,18 @@ export default function WorkflowLayout({ children }: { children: React.ReactNode
                                     />
                                     Share
                                 </Button>
+                            </div>
+                            <div className="mt-2 flex gap-2">
+                                <ArchiveDeleteActions
+                                    entityType="workflow"
+                                    entityId={workflow.id}
+                                    entityName={workflow.name}
+                                    entitySlug={workflow.slug}
+                                    isArchived={workflow.isArchived}
+                                    isSystem={workflow.type === "SYSTEM"}
+                                    variant="buttons"
+                                    redirectTo="/workflows"
+                                />
                             </div>
                         </div>
 

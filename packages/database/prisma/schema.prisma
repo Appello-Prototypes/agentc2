@@ -814,9 +814,11 @@ model Agent {
 
     // Metadata
     metadata          Json?
-    isActive          Boolean @default(true)
-    isOnboardingAgent Boolean @default(false) // Auto-created during onboarding
-    version           Int     @default(1)
+    isActive          Boolean   @default(true)
+    isArchived        Boolean   @default(false)
+    archivedAt        DateTime?
+    isOnboardingAgent Boolean   @default(false) // Auto-created during onboarding
+    version           Int       @default(1)
 
     // Audit
     createdAt DateTime @default(now())
@@ -2578,9 +2580,11 @@ model Workflow {
     retryConfig Json?
 
     // Status
-    isPublished Boolean @default(false)
-    isActive    Boolean @default(true)
-    version     Int     @default(1)
+    isPublished Boolean   @default(false)
+    isActive    Boolean   @default(true)
+    isArchived  Boolean   @default(false)
+    archivedAt  DateTime?
+    version     Int       @default(1)
 
     // Public embed access
     visibility  AgentVisibility @default(PRIVATE)
@@ -2767,8 +2771,10 @@ model Network {
 
     // Status
     isPublished Boolean @default(false)
-    isActive    Boolean @default(true)
-    version     Int     @default(1)
+    isActive    Boolean   @default(true)
+    isArchived  Boolean   @default(false)
+    archivedAt  DateTime?
+    version     Int       @default(1)
 
     // Public embed access
     visibility  AgentVisibility @default(PRIVATE)

@@ -175,6 +175,63 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
 }
 
+export async function PATCH(
+    request: NextRequest,
+    { params }: { params: Promise<{ slug: string }> }
+) {
+    try {
+        const { slug } = await params;
+        const body = await request.json();
+        const { action } = body as { action: string };
+
+        if (action !== "archive" && action !== "unarchive") {
+            return NextResponse.json(
+                { success: false, error: "Invalid action. Use 'archive' or 'unarchive'." },
+                { status: 400 }
+            );
+        }
+
+        const existing = await findWorkflow(slug);
+
+        if (!existing) {
+            return NextResponse.json(
+                { success: false, error: `Workflow '${slug}' not found` },
+                { status: 404 }
+            );
+        }
+
+        if (existing.type === "SYSTEM") {
+            return NextResponse.json(
+                { success: false, error: "SYSTEM workflows cannot be archived" },
+                { status: 403 }
+            );
+        }
+
+        const updateData =
+            action === "archive"
+                ? {
+                      isArchived: true,
+                      archivedAt: new Date(),
+                      isActive: false,
+                      isPublished: false
+                  }
+                : { isArchived: false, archivedAt: null, isActive: true };
+
+        const workflow = await prisma.workflow.update({
+            where: { id: existing.id },
+            data: updateData
+        });
+
+        return NextResponse.json({ success: true, workflow, action });
+    } catch (error) {
+        console.error("[Workflow Archive] Error:", error);
+        return NextResponse.json(
+            { success: false, error: "Failed to archive workflow" },
+            { status: 500 }
+        );
+    }
+}
+
 export async function DELETE(
     _request: NextRequest,
     { params }: { params: Promise<{ slug: string }> }

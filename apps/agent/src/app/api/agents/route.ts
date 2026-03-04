@@ -274,6 +274,26 @@ export async function POST(request: NextRequest) {
         }
 
         if (USE_DB_AGENTS) {
+            // Enforce unique agent names within the org
+            if (organizationId) {
+                const nameConflict = await prisma.agent.findFirst({
+                    where: {
+                        name,
+                        workspace: { organizationId }
+                    },
+                    select: { id: true }
+                });
+                if (nameConflict) {
+                    return NextResponse.json(
+                        {
+                            success: false,
+                            error: `An agent named "${name}" already exists in this organization`
+                        },
+                        { status: 409 }
+                    );
+                }
+            }
+
             // Use new Agent model
             const baseSlug = body.slug || generateSlug(name);
             const slug = await generateUniqueAgentSlug(baseSlug, workspaceId);

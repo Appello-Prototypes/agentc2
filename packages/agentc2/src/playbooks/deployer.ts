@@ -18,6 +18,15 @@ function generateUniqueSlug(baseSlug: string, existingSlugs: Set<string>): strin
     return `${baseSlug}-${counter}`;
 }
 
+function generateUniqueName(baseName: string, existingNames: Set<string>): string {
+    if (!existingNames.has(baseName)) return baseName;
+    let counter = 2;
+    while (existingNames.has(`${baseName} (${counter})`)) {
+        counter++;
+    }
+    return `${baseName} (${counter})`;
+}
+
 /**
  * Recursively walk a workflow definitionJson and remap slug references
  * so deployed workflows point to deployed agents/workflows instead of
@@ -87,20 +96,17 @@ export async function deployPlaybook(opts: DeployPlaybookOptions) {
             data: { integrationStatus: integrationStatus as unknown as Prisma.InputJsonValue }
         });
 
-        const targetOrg = await prisma.organization.findUniqueOrThrow({
-            where: { id: opts.targetOrgId },
-            select: { slug: true }
-        });
-
         const existingAgents = await prisma.agent.findMany({
-            select: { slug: true }
+            where: { workspaceId: opts.targetWorkspaceId },
+            select: { slug: true, name: true }
         });
         const existingAgentSlugs = new Set(existingAgents.map((a) => a.slug));
+        const existingAgentNames = new Set(existingAgents.map((a) => a.name));
         const suffix = installation.id.slice(-6);
 
         const resolveSlug = (baseSlug: string, existingSlugs: Set<string>): string => {
-            const orgSuffixed = `${baseSlug}-${targetOrg.slug}`;
-            return generateUniqueSlug(orgSuffixed, existingSlugs);
+            const suffixed = `${baseSlug}-${suffix}`;
+            return generateUniqueSlug(suffixed, existingSlugs);
         };
 
         const createdAgentIds: string[] = [];
@@ -131,14 +137,19 @@ export async function deployPlaybook(opts: DeployPlaybookOptions) {
             campaigns.forEach((c) => existingCampaignSlugs.add(c.slug));
         }
 
-        // Pre-compute slug maps so cross-references (subAgents, workflows,
+        // Pre-compute slug and name maps so cross-references (subAgents, workflows,
         // definitionJson) can be remapped to the deployed slugs.
         const agentSlugMap = new Map<string, string>();
+        const agentNameMap = new Map<string, string>();
         for (const agentSnapshot of manifest.agents) {
-            const orgSuffixed = `${agentSnapshot.slug}-${targetOrg.slug}`;
-            const deployedSlug = generateUniqueSlug(orgSuffixed, existingAgentSlugs);
+            const suffixed = `${agentSnapshot.slug}-${suffix}`;
+            const deployedSlug = generateUniqueSlug(suffixed, existingAgentSlugs);
             existingAgentSlugs.add(deployedSlug);
             agentSlugMap.set(agentSnapshot.slug, deployedSlug);
+
+            const deployedName = generateUniqueName(agentSnapshot.name, existingAgentNames);
+            existingAgentNames.add(deployedName);
+            agentNameMap.set(agentSnapshot.slug, deployedName);
         }
 
         const workflowSlugMap = new Map<string, string>();
@@ -234,10 +245,11 @@ export async function deployPlaybook(opts: DeployPlaybookOptions) {
             );
 
             const agentMeta = (agentSnapshot.metadata as Record<string, unknown>) ?? {};
+            const deployedName = agentNameMap.get(agentSnapshot.slug) ?? agentSnapshot.name;
             const agent = await prisma.agent.create({
                 data: {
                     slug: deployedSlug,
-                    name: agentSnapshot.name,
+                    name: deployedName,
                     description: agentSnapshot.description,
                     instructions: agentSnapshot.instructions,
                     instructionsTemplate: agentSnapshot.instructionsTemplate,
