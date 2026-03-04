@@ -6,14 +6,17 @@ on:
     types: [created]
   pull_request:
     types: [opened, synchronize]
+  issues:
+    types: [opened, assigned]
 
 jobs:
   # Interactive Claude responses to @claude mentions
   claude-interactive:
     runs-on: ubuntu-latest
     if: |
-      (github.event_name == 'issue_comment' || github.event_name == 'pull_request_review_comment') &&
-      contains(github.event.comment.body, '@claude')
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'issues' && contains(github.event.issue.body, '@claude'))
     permissions:
       contents: write
       pull-requests: write
@@ -22,14 +25,14 @@ jobs:
       actions: read
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Run Claude Code
         uses: anthropics/claude-code-action@v1
         with:
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
 
   # Automated PR analysis and review
   claude-pr-review:
@@ -39,14 +42,14 @@ jobs:
       group: claude-review-${{ github.event.pull_request.number }}
       cancel-in-progress: true
     permissions:
-      contents: read
+      contents: write
       pull-requests: write
       issues: write
       id-token: write
       actions: read
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha }}
@@ -59,8 +62,8 @@ jobs:
         continue-on-error: true
         uses: anthropics/claude-code-action@v1
         with:
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          initial_prompt: |
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
             Analyze this pull request and generate a comprehensive summary, then update the PR description.
 
             PR Details:
@@ -73,7 +76,7 @@ jobs:
             1. Use git diff to analyze all changed files comparing HEAD with origin/${{ github.event.pull_request.base.ref }}
             2. Generate a summary following this structure:
 
-            ## 🤖 Claude Code Analysis
+            ## Claude Code Analysis
 
             ### Changes Overview
             [Concise bullet points describing the main changes]
@@ -95,8 +98,8 @@ jobs:
         continue-on-error: true
         uses: anthropics/claude-code-action@v1
         with:
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          initial_prompt: |
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
             Perform a comprehensive code review of this pull request.
 
             PR Information:
