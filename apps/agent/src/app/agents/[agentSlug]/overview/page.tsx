@@ -734,45 +734,6 @@ export default function OverviewPage() {
                         </CardContent>
                     </Card>
 
-                    {/* Quick Actions */}
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Quick Actions</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-2">
-                            <Button
-                                variant="outline"
-                                className="w-full justify-start"
-                                onClick={() => router.push(`/agents/${agentSlug}/test`)}
-                            >
-                                Run Test
-                            </Button>
-                            <Button
-                                variant="outline"
-                                className="w-full justify-start"
-                                onClick={() => router.push(`/agents/${agentSlug}/traces`)}
-                            >
-                                View Latest Trace
-                            </Button>
-                            <Button
-                                variant="outline"
-                                className="w-full justify-start"
-                                onClick={() => router.push(`/agents/${agentSlug}/configure`)}
-                            >
-                                Edit Configuration
-                            </Button>
-                            <Button
-                                variant="outline"
-                                className="w-full justify-start"
-                                onClick={() => router.push(`/agents/${agentSlug}/versions`)}
-                            >
-                                Compare Versions
-                            </Button>
-                            <Button variant="outline" className="w-full justify-start text-red-600">
-                                Disable Agent
-                            </Button>
-                        </CardContent>
-                    </Card>
                 </div>
             </div>
         </div>
