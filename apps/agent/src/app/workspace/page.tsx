@@ -987,6 +987,10 @@ export default function UnifiedChatPage() {
     const embedConfig = useEmbedConfig();
     const greeting = useGreeting(session?.user?.name);
 
+    const isDevelopment = process.env.NODE_ENV === "development";
+    const debugParam = searchParams.get("debug") === "true";
+    const showDebugBar = isDevelopment || debugParam;
+
     // Scope localStorage conversations by user so they don't leak across accounts
     useEffect(() => {
         if (session?.user?.id) {
@@ -1871,12 +1875,14 @@ export default function UnifiedChatPage() {
                 </div>
 
                 {/* Debug info bar */}
-                <DebugInfoBar
-                    threadId={threadId}
-                    runId={currentRunId}
-                    agentSlug={selectedAgentSlug}
-                    turnIndex={currentTurnIndex}
-                />
+                {showDebugBar && (
+                    <DebugInfoBar
+                        threadId={threadId}
+                        runId={currentRunId}
+                        agentSlug={selectedAgentSlug}
+                        turnIndex={currentTurnIndex}
+                    />
+                )}
 
                 {/* Messages */}
                 <div className="min-h-0 flex-1">
