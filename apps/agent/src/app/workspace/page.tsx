@@ -1870,13 +1870,15 @@ export default function UnifiedChatPage() {
                     </Button>
                 </div>
 
-                {/* Debug info bar */}
-                <DebugInfoBar
-                    threadId={threadId}
-                    runId={currentRunId}
-                    agentSlug={selectedAgentSlug}
-                    turnIndex={currentTurnIndex}
-                />
+                {/* Debug info bar - only shown in development or with ?debug=true query param */}
+                {(process.env.NODE_ENV !== "production" || searchParams.get("debug") === "true") && (
+                    <DebugInfoBar
+                        threadId={threadId}
+                        runId={currentRunId}
+                        agentSlug={selectedAgentSlug}
+                        turnIndex={currentTurnIndex}
+                    />
+                )}
 
                 {/* Messages */}
                 <div className="min-h-0 flex-1">
