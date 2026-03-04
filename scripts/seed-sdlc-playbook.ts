@@ -1199,6 +1199,29 @@ async function main() {
                         mergeMethod: "squash"
                     }
                 }
+            },
+            {
+                id: "output-summary",
+                type: "transform",
+                name: "Output Summary",
+                config: {
+                    issueUrl: "{{steps.intake.issueUrl}}",
+                    issueNumber: "{{steps.intake.issueNumber}}",
+                    analysisSummary: "{{steps['analyze-wait'].summary}}",
+                    analysisAgentId: "{{steps['analyze-launch'].agentId}}",
+                    analysisDurationMs: "{{steps['analyze-wait'].durationMs}}",
+                    auditVerdict: "{{steps['fix-audit'].verdict}}",
+                    auditSeverity: "{{steps['fix-audit'].severity}}",
+                    auditSummary: "{{steps['fix-audit'].summary}}",
+                    implementationSummary: "{{steps['implement-wait'].summary}}",
+                    implementationBranch: "{{steps['implement-wait'].branchName}}",
+                    implementationAgentId: "{{steps['implement-launch'].agentId}}",
+                    implementationDurationMs: "{{steps['implement-wait'].durationMs}}",
+                    prUrl: "{{steps['create-pr'].htmlUrl}}",
+                    prNumber: "{{steps['create-pr'].prNumber}}",
+                    mergeCommitSha: "{{steps.merge.sha}}",
+                    repository: "{{input.repository}}"
+                }
             }
         ]
     };

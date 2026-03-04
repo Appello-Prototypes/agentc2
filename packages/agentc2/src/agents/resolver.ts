@@ -949,8 +949,7 @@ export class AgentResolver {
                                     }
                                 }
                                 const trimmed = JSON.stringify(shallow);
-                                if (trimmed.length <= threshold * 1.5)
-                                    return JSON.parse(trimmed);
+                                if (trimmed.length <= threshold * 1.5) return JSON.parse(trimmed);
                             } catch {}
                         }
                         return {
