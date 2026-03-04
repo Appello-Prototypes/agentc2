@@ -1204,7 +1204,7 @@ async function main() {
                 id: "output-summary",
                 type: "transform",
                 name: "Output Summary",
-                config: {
+                inputMapping: {
                     issueUrl: "{{steps.intake.issueUrl}}",
                     issueNumber: "{{steps.intake.issueNumber}}",
                     analysisSummary: "{{steps['analyze-wait'].summary}}",
