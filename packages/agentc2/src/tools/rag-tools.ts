@@ -74,7 +74,15 @@ export const ragQueryTool = createTool({
             topK: topK ?? undefined,
             minScore: minScore ?? undefined
         });
-        return { success: true, results, resultCount: results.length };
+        return {
+            success: true,
+            results: results.map((r) => ({
+                text: r.text,
+                score: r.score,
+                metadata: JSON.parse(JSON.stringify(r.metadata))
+            })),
+            resultCount: results.length
+        };
     }
 });
 

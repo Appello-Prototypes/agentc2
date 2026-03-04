@@ -951,7 +951,6 @@ export class AgentResolver {
         // --- Mastra Processors ---
         // Wire guardrail processors + memory processors at the Agent level
         const tenantId = organizationId || record.tenantId || undefined;
-        const inputProcessors = [createInputGuardrailProcessor(record.id, tenantId)];
         // Model-aware TokenLimiter: use contextConfig.maxContextTokens from agent,
         // or fall back to hardcoded 12K for agents without contextConfig
         const contextConfig = (record as Record<string, unknown>).contextConfig as
@@ -961,6 +960,10 @@ export class AgentResolver {
         const tokenLimit = contextConfig?.maxContextTokens
             ? Math.min(contextConfig.maxContextTokens, 50_000) // cap at 50K for safety
             : 12_000;
+        const inputProcessors = [
+            createInputGuardrailProcessor(record.id, tenantId),
+            new TokenLimiter(tokenLimit)
+        ];
         const outputProcessors = [
             createOutputGuardrailProcessor(record.id, tenantId),
             new ToolCallFilter(),

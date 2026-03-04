@@ -93,7 +93,7 @@ export const backlogGetTool = createTool({
                 description: backlog.description,
                 totalTasks: total,
                 tasksByStatus,
-                createdAt: backlog.createdAt
+                createdAt: backlog.createdAt.toISOString()
             }
         };
     }
@@ -159,8 +159,8 @@ export const backlogAddTaskTool = createTool({
                     title: existing.title,
                     status: existing.status,
                     priority: existing.priority,
-                    dueDate: existing.dueDate,
-                    createdAt: existing.createdAt
+                    dueDate: existing.dueDate?.toISOString() ?? null,
+                    createdAt: existing.createdAt.toISOString()
                 }
             };
         }
@@ -202,8 +202,8 @@ export const backlogAddTaskTool = createTool({
                 title: task.title,
                 priority: task.priority,
                 status: task.status,
-                dueDate: task.dueDate,
-                createdAt: task.createdAt
+                dueDate: task.dueDate?.toISOString() ?? null,
+                createdAt: task.createdAt.toISOString()
             }
         };
     }
@@ -273,13 +273,13 @@ export const backlogListTasksTool = createTool({
                 description: t.description,
                 status: t.status,
                 priority: t.priority,
-                dueDate: t.dueDate,
+                dueDate: t.dueDate?.toISOString() ?? null,
                 source: t.source,
-                lastAttemptAt: t.lastAttemptAt,
+                lastAttemptAt: t.lastAttemptAt?.toISOString() ?? null,
                 lastAttemptNote: t.lastAttemptNote,
                 result: t.result,
                 tags: t.tags,
-                createdAt: t.createdAt
+                createdAt: t.createdAt.toISOString()
             })),
             total: tasks.length
         };
@@ -387,7 +387,7 @@ export const backlogUpdateTaskTool = createTool({
                 priority: updated.priority,
                 lastAttemptNote: updated.lastAttemptNote,
                 result: updated.result,
-                completedAt: updated.completedAt
+                completedAt: updated.completedAt?.toISOString() ?? null
             }
         };
     }
@@ -459,7 +459,7 @@ export const backlogCompleteTaskTool = createTool({
                 title: updated.title,
                 status: updated.status,
                 result: updated.result,
-                completedAt: updated.completedAt
+                completedAt: updated.completedAt?.toISOString() ?? null
             }
         };
     }
