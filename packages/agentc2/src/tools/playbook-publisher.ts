@@ -1,6 +1,6 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import { prisma } from "@repo/database";
+import { prisma, Prisma } from "@repo/database";
 
 const baseOutputSchema = z.object({ success: z.boolean().optional() }).passthrough();
 
@@ -137,6 +137,7 @@ export const playbookGetFullTool = createTool({
                 version: playbook.version,
                 autoBootEnabled: playbook.autoBootEnabled,
                 bootDocument: playbook.bootDocument,
+                setupConfig: playbook.setupConfig,
                 publisherOrg: playbook.publisherOrg,
                 components: playbook.components,
                 versions: playbook.versions,
@@ -535,6 +536,75 @@ export const playbookSubmitReviewTool = createTool({
             success: true,
             status: updated.status,
             message: `Playbook "${updated.name}" submitted for review`
+        };
+    }
+});
+
+export const playbookSetSetupConfigTool = createTool({
+    id: "playbook-set-setup-config",
+    description:
+        "Set the installation wizard setup config for a playbook. Defines optional config steps " +
+        "that buyers complete during installation (e.g., repo-select, channel-select, text-input). " +
+        "Pass null to clear the setup config.",
+    inputSchema: z.object({
+        slug: z.string().describe("Playbook slug"),
+        organizationId: z.string().describe("Publisher organization ID"),
+        setupConfig: z
+            .object({
+                headline: z.string().optional().describe("Wizard headline shown to the installer"),
+                description: z
+                    .string()
+                    .optional()
+                    .describe("Wizard description shown to the installer"),
+                steps: z
+                    .array(
+                        z.object({
+                            id: z.string().describe("Unique step ID (e.g. 'repo-select')"),
+                            type: z
+                                .string()
+                                .describe(
+                                    "Step type: repo-select, webhook-create, text-input, number-input, channel-select, integration-prompt"
+                                ),
+                            label: z.string().describe("Display label for the step"),
+                            description: z
+                                .string()
+                                .describe("Help text explaining what this step does"),
+                            provider: z
+                                .string()
+                                .optional()
+                                .describe(
+                                    "Integration provider key (for integration-prompt type steps)"
+                                ),
+                            config: z
+                                .record(z.unknown())
+                                .optional()
+                                .describe("Additional step configuration")
+                        })
+                    )
+                    .optional()
+                    .describe("Array of setup steps")
+            })
+            .nullable()
+            .describe("Setup config object, or null to clear")
+    }),
+    outputSchema: baseOutputSchema,
+    execute: async ({ slug, organizationId, setupConfig }) => {
+        await requirePlaybookOwner(slug, organizationId);
+
+        await prisma.playbook.update({
+            where: { slug },
+            data: {
+                setupConfig: setupConfig === null ? Prisma.JsonNull : (setupConfig as any)
+            }
+        });
+
+        const stepCount = setupConfig?.steps?.length ?? 0;
+        return {
+            success: true,
+            message: setupConfig
+                ? `Setup config updated: ${stepCount} step(s) defined`
+                : "Setup config cleared",
+            stepCount
         };
     }
 });

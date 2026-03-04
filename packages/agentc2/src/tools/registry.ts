@@ -120,7 +120,8 @@ import {
     playbookRemoveBootTaskTool,
     playbookPackageTool,
     playbookSubmitReviewTool,
-    playbookSetAutoBootTool
+    playbookSetAutoBootTool,
+    playbookSetSetupConfigTool
 } from "./playbook-publisher";
 import {
     communityListBoardsTool,
@@ -757,6 +758,7 @@ export const toolCategoryMap: Record<string, string> = {
     "playbook-package": "Playbook Publishing",
     "playbook-submit-review": "Playbook Publishing",
     "playbook-set-auto-boot": "Playbook Publishing",
+    "playbook-set-setup-config": "Playbook Publishing",
 
     // Community
     "community-list-boards": "Community",
@@ -1076,6 +1078,7 @@ export const toolBehaviorMap: Record<string, ToolBehaviorMeta> = {
     "playbook-package": { behavior: "mutation" },
     "playbook-submit-review": { behavior: "mutation" },
     "playbook-set-auto-boot": { behavior: "mutation" },
+    "playbook-set-setup-config": { behavior: "mutation" },
 
     // YouTube
     "youtube-ingest-to-knowledge": { behavior: "mutation" },
@@ -1645,6 +1648,7 @@ export const toolRegistry: Record<string, any> = {
     "playbook-package": playbookPackageTool,
     "playbook-submit-review": playbookSubmitReviewTool,
     "playbook-set-auto-boot": playbookSetAutoBootTool,
+    "playbook-set-setup-config": playbookSetSetupConfigTool,
 
     // Community tools
     "community-list-boards": communityListBoardsTool,

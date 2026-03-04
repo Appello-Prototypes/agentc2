@@ -290,6 +290,57 @@ export const playbookToolDefinitions: McpToolDefinition[] = [
         category: "playbook-publishing"
     },
 
+    {
+        name: "playbook-set-setup-config",
+        description:
+            "Set the installation wizard setup config for a playbook. Defines optional config steps that buyers complete during installation.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                slug: { type: "string", description: "Playbook slug" },
+                organizationId: { type: "string", description: "Publisher organization ID" },
+                setupConfig: {
+                    type: "object",
+                    description:
+                        "Setup config object with headline, description, and steps array. Pass null to clear.",
+                    properties: {
+                        headline: { type: "string", description: "Wizard headline" },
+                        description: { type: "string", description: "Wizard description" },
+                        steps: {
+                            type: "array",
+                            description: "Array of setup steps",
+                            items: {
+                                type: "object",
+                                properties: {
+                                    id: { type: "string", description: "Unique step ID" },
+                                    type: {
+                                        type: "string",
+                                        description:
+                                            "Step type: repo-select, webhook-create, text-input, number-input, channel-select, integration-prompt"
+                                    },
+                                    label: { type: "string", description: "Display label" },
+                                    description: { type: "string", description: "Help text" },
+                                    provider: {
+                                        type: "string",
+                                        description: "Integration provider key (optional)"
+                                    },
+                                    config: {
+                                        type: "object",
+                                        description: "Additional step configuration (optional)"
+                                    }
+                                },
+                                required: ["id", "type", "label", "description"]
+                            }
+                        }
+                    }
+                }
+            },
+            required: ["slug", "organizationId", "setupConfig"]
+        },
+        invoke_url: "/api/mcp",
+        category: "playbook-publishing"
+    },
+
     // Setup Wizard tools
     {
         name: "playbook-installation-setup",
@@ -390,6 +441,7 @@ export const playbookToolRoutes: McpToolRoute[] = [
     { kind: "registry", name: "playbook-package", enforceOrg: true, enforceUser: true },
     { kind: "registry", name: "playbook-submit-review", enforceOrg: true },
     { kind: "registry", name: "playbook-set-auto-boot", enforceOrg: true },
+    { kind: "registry", name: "playbook-set-setup-config", enforceOrg: true },
     { kind: "registry", name: "playbook-installation-setup", enforceOrg: true },
     { kind: "registry", name: "playbook-installation-verify", enforceOrg: true, enforceUser: true },
     { kind: "registry", name: "playbook-installation-activate", enforceOrg: true },

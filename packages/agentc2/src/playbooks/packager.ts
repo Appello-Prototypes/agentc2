@@ -13,7 +13,8 @@ import type {
     ScorecardSnapshot,
     BootConfig,
     BootTaskTemplate,
-    RepackageMode
+    RepackageMode,
+    SetupConfig
 } from "./types";
 import { sanitizeManifest, detectHardcodedUrls } from "./sanitizer";
 import { validateManifest } from "./manifest";
@@ -415,10 +416,11 @@ async function buildManifest(opts: ManifestBuildOptions): Promise<ManifestBuildR
         .map((a) => a.scorecard!);
 
     let bootConfig: BootConfig | undefined;
+    let setupConfig: SetupConfig | undefined;
     if (opts.playbookId) {
         const playbook = await prisma.playbook.findUnique({
             where: { id: opts.playbookId },
-            select: { bootDocument: true, autoBootEnabled: true }
+            select: { bootDocument: true, autoBootEnabled: true, setupConfig: true }
         });
         const bootTasks = await prisma.playbookBootTask.findMany({
             where: { playbookId: opts.playbookId },
@@ -437,6 +439,9 @@ async function buildManifest(opts: ManifestBuildOptions): Promise<ManifestBuildR
             ),
             autoBootEnabled: playbook?.autoBootEnabled ?? false
         };
+        if (playbook?.setupConfig) {
+            setupConfig = playbook.setupConfig as SetupConfig;
+        }
     }
 
     const rawManifest: PlaybookManifest = {
@@ -452,7 +457,8 @@ async function buildManifest(opts: ManifestBuildOptions): Promise<ManifestBuildR
         scorecards: allScorecards,
         requiredIntegrations: Array.from(requiredIntegrations),
         entryPoint: entryPoint!,
-        bootConfig
+        bootConfig,
+        setupConfig
     };
 
     const { manifest: sanitizedManifest, warnings: sanitizeWarnings } = sanitizeManifest(
@@ -641,10 +647,10 @@ export async function repackagePlaybook(opts: RepackagePlaybookOptions) {
     let processedSkillIds = new Set<string>();
 
     if (mode === "boot-only" && previousManifest) {
-        // Keep components from previous version, only update bootConfig
+        // Keep components from previous version, only update bootConfig + setupConfig
         const playbook = await prisma.playbook.findUnique({
             where: { id: opts.playbookId },
-            select: { bootDocument: true, autoBootEnabled: true }
+            select: { bootDocument: true, autoBootEnabled: true, setupConfig: true }
         });
         const bootTasks = await prisma.playbookBootTask.findMany({
             where: { playbookId: opts.playbookId },
@@ -664,13 +670,20 @@ export async function repackagePlaybook(opts: RepackagePlaybookOptions) {
                     })
                 ),
                 autoBootEnabled: playbook?.autoBootEnabled ?? false
-            }
+            },
+            setupConfig: playbook?.setupConfig
+                ? (playbook.setupConfig as SetupConfig)
+                : undefined
         };
         requiredIntegrations = previousManifest.requiredIntegrations;
     } else if (mode === "components-only" && previousManifest) {
-        // Re-snapshot components but preserve bootConfig
+        // Re-snapshot components but preserve bootConfig + setupConfig
         const result = await buildManifest({ ...opts, playbookId: opts.playbookId });
-        manifest = { ...result.manifest, bootConfig: previousManifest.bootConfig };
+        manifest = {
+            ...result.manifest,
+            bootConfig: previousManifest.bootConfig,
+            setupConfig: previousManifest.setupConfig
+        };
         warnings = result.warnings;
         requiredIntegrations = result.requiredIntegrations;
         processedAgentIds = result.processedAgentIds;
