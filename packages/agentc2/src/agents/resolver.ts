@@ -937,8 +937,27 @@ export class AgentResolver {
                                 });
                                 if (truncated.length <= threshold) return JSON.parse(truncated);
                             } catch {}
+                            // Trim arrays to fit within threshold
+                            try {
+                                const shallow = { ...(result as Record<string, unknown>) };
+                                for (const [k, v] of Object.entries(shallow)) {
+                                    if (Array.isArray(v) && v.length > 3) {
+                                        shallow[k] = [
+                                            ...v.slice(0, 3),
+                                            `…[${v.length - 3} more items]`
+                                        ];
+                                    }
+                                }
+                                const trimmed = JSON.stringify(shallow);
+                                if (trimmed.length <= threshold * 1.5)
+                                    return JSON.parse(trimmed);
+                            } catch {}
                         }
-                        return str.slice(0, threshold) + `\n…[truncated from ${str.length} chars]`;
+                        return {
+                            _truncated: true,
+                            _originalChars: str.length,
+                            content: str.slice(0, threshold)
+                        };
                     }
                 };
             }
