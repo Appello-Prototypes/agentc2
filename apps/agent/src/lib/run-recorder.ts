@@ -34,6 +34,32 @@ import { inngest } from "./inngest";
 import { recordActivity, inputPreview } from "@repo/agentc2/activity/service";
 import { calculateBilledCost } from "@repo/agentc2/budget";
 
+const SENSITIVE_KEYS =
+    /^(password|secret|token|credential|pin|passphrase|apiKey|api_key|accessToken|access_token|refreshToken|refresh_token)$/i;
+const MEMORY_TOOL_IDS = new Set([
+    "updateWorkingMemory",
+    "memory-write",
+    "update-working-memory",
+    "working-memory-update"
+]);
+
+function redactSensitiveFields(obj: unknown): unknown {
+    if (obj === null || obj === undefined) return obj;
+    if (typeof obj !== "object") return obj;
+    if (Array.isArray(obj)) return obj.map(redactSensitiveFields);
+    const result: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
+        if (SENSITIVE_KEYS.test(key) && value !== null && value !== undefined) {
+            result[key] = "[REDACTED]";
+        } else if (typeof value === "object" && value !== null) {
+            result[key] = redactSensitiveFields(value);
+        } else {
+            result[key] = value;
+        }
+    }
+    return result;
+}
+
 /**
  * Source of the agent run (which production channel)
  */
@@ -573,6 +599,7 @@ export async function startRun(options: StartRunOptions): Promise<RunRecorderHan
                 }
             }
 
+            const shouldRedact = MEMORY_TOOL_IDS.has(toolCall.toolKey);
             await prisma.agentToolCall.create({
                 data: {
                     runId: run.id,
@@ -581,10 +608,14 @@ export async function startRun(options: StartRunOptions): Promise<RunRecorderHan
                     toolKey: toolCall.toolKey,
                     mcpServerId,
                     toolSource,
-                    inputJson: (toolCall.input || {}) as Prisma.InputJsonValue,
+                    inputJson: (shouldRedact
+                        ? redactSensitiveFields(toolCall.input || {})
+                        : toolCall.input || {}) as Prisma.InputJsonValue,
                     outputJson:
                         toolCall.output !== undefined
-                            ? (toolCall.output as Prisma.InputJsonValue)
+                            ? ((shouldRedact
+                                  ? redactSensitiveFields(toolCall.output)
+                                  : toolCall.output) as Prisma.InputJsonValue)
                             : undefined,
                     success: toolCall.success,
                     error: toolCall.error,
@@ -1209,6 +1240,7 @@ function buildTurnMethods(
                 }
             }
 
+            const shouldRedact = MEMORY_TOOL_IDS.has(toolCall.toolKey);
             await prisma.agentToolCall.create({
                 data: {
                     runId,
@@ -1218,10 +1250,14 @@ function buildTurnMethods(
                     toolKey: toolCall.toolKey,
                     mcpServerId,
                     toolSource,
-                    inputJson: (toolCall.input || {}) as Prisma.InputJsonValue,
+                    inputJson: (shouldRedact
+                        ? redactSensitiveFields(toolCall.input || {})
+                        : toolCall.input || {}) as Prisma.InputJsonValue,
                     outputJson:
                         toolCall.output !== undefined
-                            ? (toolCall.output as Prisma.InputJsonValue)
+                            ? ((shouldRedact
+                                  ? redactSensitiveFields(toolCall.output)
+                                  : toolCall.output) as Prisma.InputJsonValue)
                             : undefined,
                     success: toolCall.success,
                     error: toolCall.error,

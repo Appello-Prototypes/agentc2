@@ -44,6 +44,7 @@ export async function authenticateRequest(
         }
 
         const orgSlugHeader = request!.headers.get("x-organization-slug")?.trim();
+        const orgIdHeader = request!.headers.get("x-organization-id")?.trim();
 
         const resolveOrgContext = async (orgSlug: string, userIdHint?: string | null) => {
             const org = await prisma.organization.findUnique({
@@ -83,6 +84,22 @@ export async function authenticateRequest(
                 "[api-auth] DEPRECATED: Global MCP_API_KEY used for authentication. " +
                     "Migrate to per-org API keys via /api/organizations/[orgId]/mcp-api-key"
             );
+            // X-Organization-Id takes priority (injected by agent workspace context)
+            if (orgIdHeader) {
+                const org = await prisma.organization.findUnique({
+                    where: { id: orgIdHeader },
+                    select: { id: true }
+                });
+                if (org) {
+                    const ownerMembership = await prisma.membership.findFirst({
+                        where: { organizationId: org.id, role: "owner" },
+                        select: { userId: true }
+                    });
+                    if (ownerMembership) {
+                        return { userId: ownerMembership.userId, organizationId: org.id };
+                    }
+                }
+            }
             const orgSlug = orgSlugHeader || process.env.MCP_API_ORGANIZATION_SLUG;
             if (orgSlug) {
                 const context = await resolveOrgContext(orgSlug);

@@ -102,6 +102,14 @@ export interface AgentStepHooks {
         modelProvider?: string;
         totalTokens?: number;
         costUsd?: number;
+        toolCalls?: Array<{
+            toolName: string;
+            args: Record<string, unknown>;
+            output?: unknown;
+            durationMs?: number;
+            error?: string;
+        }>;
+        steps?: Array<Record<string, unknown>>;
     }) => Promise<void>;
     onAgentFail?: (info: {
         stepId: string;

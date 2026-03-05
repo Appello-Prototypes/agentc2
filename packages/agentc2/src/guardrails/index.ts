@@ -71,7 +71,11 @@ const SECRET_PATTERNS = [
     /\bwhsec_[a-zA-Z0-9]{32,}\b/, // Stripe webhook secrets
     /\bATATT3x[a-zA-Z0-9_-]{20,}\b/, // Atlassian API tokens
     /\bnpx_[a-zA-Z0-9]{36,}\b/, // npm tokens
-    /\bpypi-[a-zA-Z0-9]{50,}\b/ // PyPI tokens
+    /\bpypi-[a-zA-Z0-9]{50,}\b/, // PyPI tokens
+    /\bpassword\s*[:=]\s*\S{4,}/i, // Password echoing (password: value)
+    /\busername\s*[:=]\s*\S{3,}/i, // Username echoing (username: value)
+    /\blogin\s*[:=]\s*\S{3,}/i, // Login echoing (login: value)
+    /\bcredentials?\s*\([^)]{3,}\)/i // Credentials with parenthetical values
 ];
 
 // Prompt injection patterns — basic structural markers

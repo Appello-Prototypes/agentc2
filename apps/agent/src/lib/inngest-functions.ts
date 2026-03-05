@@ -8620,24 +8620,65 @@ export const asyncWorkflowExecuteFunction = inngest.createFunction(
                     output,
                     durationMs,
                     modelName,
-                    totalTokens
+                    totalTokens,
+                    toolCalls,
+                    steps
                 }) => {
                     if (!agentRunId) return;
                     try {
+                        const outputText =
+                            typeof output === "string"
+                                ? output.slice(0, 5000)
+                                : JSON.stringify(output).slice(0, 5000);
                         await prisma.agentRun.update({
                             where: { id: agentRunId },
                             data: {
                                 status: "COMPLETED",
-                                outputText:
-                                    typeof output === "string"
-                                        ? output.slice(0, 5000)
-                                        : JSON.stringify(output).slice(0, 5000),
+                                outputText,
                                 completedAt: new Date(),
                                 durationMs,
                                 modelName,
                                 totalTokens
                             }
                         });
+                        await prisma.agentTrace.updateMany({
+                            where: { runId: agentRunId },
+                            data: {
+                                status: "COMPLETED" as RunStatus,
+                                outputText,
+                                durationMs,
+                                tokensJson: {
+                                    prompt: 0,
+                                    completion: 0,
+                                    total: totalTokens || 0
+                                } as Prisma.InputJsonValue,
+                                ...(steps && steps.length > 0
+                                    ? { stepsJson: steps as Prisma.InputJsonValue }
+                                    : {})
+                            }
+                        });
+                        if (toolCalls && toolCalls.length > 0) {
+                            for (const tc of toolCalls) {
+                                try {
+                                    await prisma.agentToolCall.create({
+                                        data: {
+                                            runId: agentRunId,
+                                            toolKey: tc.toolName || "unknown",
+                                            inputJson: (tc.args || {}) as Prisma.InputJsonValue,
+                                            outputJson:
+                                                tc.output !== undefined
+                                                    ? (tc.output as Prisma.InputJsonValue)
+                                                    : undefined,
+                                            durationMs: tc.durationMs ?? undefined,
+                                            success: !tc.error,
+                                            error: tc.error || undefined
+                                        }
+                                    });
+                                } catch {
+                                    // best-effort
+                                }
+                            }
+                        }
                     } catch (err) {
                         console.warn(
                             `[Inngest] Failed to complete agent sub-run ${agentRunId}:`,
@@ -8654,6 +8695,14 @@ export const asyncWorkflowExecuteFunction = inngest.createFunction(
                                 status: "FAILED",
                                 failureReason: error.message?.slice(0, 2000),
                                 completedAt: new Date(),
+                                durationMs
+                            }
+                        });
+                        await prisma.agentTrace.updateMany({
+                            where: { runId: agentRunId },
+                            data: {
+                                status: "FAILED",
+                                outputText: error.message?.slice(0, 2000) || "Agent step failed",
                                 durationMs
                             }
                         });

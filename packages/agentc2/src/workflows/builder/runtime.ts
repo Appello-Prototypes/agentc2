@@ -302,6 +302,45 @@ async function executeAgentStep(
         const durationMs = Date.now() - stepStart;
 
         if (hooks?.onAgentComplete) {
+            const extractedToolCalls: Array<{
+                toolName: string;
+                args: Record<string, unknown>;
+                output?: unknown;
+                durationMs?: number;
+                error?: string;
+            }> = [];
+            const executionSteps: Array<Record<string, unknown>> = [];
+
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const steps = (response as any).steps;
+            if (Array.isArray(steps)) {
+                for (const s of steps) {
+                    const tcs = s.toolCalls || [];
+                    const trs = s.toolResults || [];
+                    for (let i = 0; i < tcs.length; i++) {
+                        const tc = tcs[i];
+                        const tr = trs[i];
+                        const toolName = tc?.toolName || tc?.name || "unknown";
+                        const args =
+                            tc?.args && typeof tc.args === "object"
+                                ? (tc.args as Record<string, unknown>)
+                                : {};
+                        extractedToolCalls.push({
+                            toolName,
+                            args,
+                            output: tr?.result ?? tr?.output,
+                            error: tr?.error ? String(tr.error) : undefined
+                        });
+                        executionSteps.push({
+                            type: "tool_call",
+                            tool: toolName,
+                            input: args,
+                            output: tr?.result ?? tr?.output
+                        });
+                    }
+                }
+            }
+
             await hooks.onAgentComplete({
                 stepId: step.id,
                 agentRunId,
@@ -310,7 +349,9 @@ async function executeAgentStep(
                 durationMs,
                 modelName: response.response?.modelId,
                 totalTokens: response.usage ? (response.usage.totalTokens ?? 0) : undefined,
-                costUsd: undefined
+                costUsd: undefined,
+                toolCalls: extractedToolCalls.length > 0 ? extractedToolCalls : undefined,
+                steps: executionSteps.length > 0 ? executionSteps : undefined
             });
         }
 

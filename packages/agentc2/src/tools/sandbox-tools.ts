@@ -871,6 +871,11 @@ const ORG_SCOPED_TOOL_IDS = new Set([
     "live-runs",
     "live-metrics",
     "live-stats",
+    "agent-overview",
+    "agent-analytics",
+    "agent-costs",
+    "agent-budget-get",
+    "agent-budget-update",
     "audit-logs-list",
     "conversation-list",
     "conversation-get"

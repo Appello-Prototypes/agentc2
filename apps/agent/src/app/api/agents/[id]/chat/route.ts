@@ -1657,10 +1657,24 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                                 try {
                                     const { enforceOutputGuardrails } =
                                         await import("@repo/agentc2/guardrails");
-                                    await enforceOutputGuardrails(agentId, capturedFullOutput, {
-                                        runId: capturedRun?.runId,
-                                        tenantId: record?.tenantId || undefined
-                                    });
+                                    const guardrailResult = await enforceOutputGuardrails(
+                                        agentId,
+                                        capturedFullOutput,
+                                        {
+                                            runId: capturedRun?.runId,
+                                            tenantId: record?.tenantId || undefined
+                                        }
+                                    );
+                                    if (guardrailResult.blocked && capturedRun?.runId) {
+                                        const secretViolation = guardrailResult.violations.find(
+                                            (v) => v.guardrailKey === "output.secretLeakage"
+                                        );
+                                        if (secretViolation) {
+                                            console.warn(
+                                                `[Agent Chat] CREDENTIAL_LEAK detected on run ${capturedRun.runId}: ${secretViolation.message}`
+                                            );
+                                        }
+                                    }
                                 } catch (e) {
                                     console.warn("[Agent Chat] Output guardrail check failed:", e);
                                 }

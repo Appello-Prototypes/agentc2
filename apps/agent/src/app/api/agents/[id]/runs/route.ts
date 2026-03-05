@@ -488,7 +488,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                     timestamp: new Date().toISOString()
                 });
             } else {
-                const result = await agent.generate(input);
+                const result = await agent.generate(input, {
+                    maxSteps: effectiveMaxSteps
+                });
 
                 responseText = result.text;
 

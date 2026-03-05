@@ -250,6 +250,7 @@ export async function managedGenerate(
 
     const allSteps: StepSummary[] = [];
     const toolCallHistory: ToolCallRecord[] = [];
+    const duplicateCallTracker = new Map<string, { count: number; cachedResult: unknown }>();
     let totalPromptTokens = 0;
     let totalCompletionTokens = 0;
     let currentStep = 0;
@@ -426,6 +427,31 @@ export async function managedGenerate(
             });
         }
 
+        // Duplicate tool call detection: track tool+args combos
+        if (hasToolCall) {
+            let duplicateDetected = false;
+            for (let i = 0; i < stepToolCalls.length; i++) {
+                const toolName = resolveToolName(stepToolCalls[i]) || "unknown";
+                const args = resolveToolArgs(stepToolCalls[i]);
+                const key = `${toolName}::${JSON.stringify(args)}`;
+                const entry = duplicateCallTracker.get(key);
+                const result = resolveToolResult(stepToolResults[i]);
+                if (entry) {
+                    entry.count++;
+                    entry.cachedResult = result;
+                    if (entry.count >= 3) {
+                        abortReason = `Duplicate tool call loop: ${toolName} called ${entry.count} times with identical args`;
+                        console.warn(`[ManagedGenerate] ${abortReason}`);
+                        duplicateDetected = true;
+                        break;
+                    }
+                } else {
+                    duplicateCallTracker.set(key, { count: 1, cachedResult: result });
+                }
+            }
+            if (duplicateDetected) break;
+        }
+
         // Add the assistant response and tool results to our managed messages
         if (response.text) {
             messages.push({ role: "assistant", content: response.text });
@@ -491,6 +517,27 @@ export async function managedGenerate(
                         `Analyze the error messages above. If it's a permission or connection issue, ` +
                         `do NOT retry the same tool — choose an alternative approach or inform the user. ` +
                         `If the arguments were wrong, fix them and retry once.`
+                });
+            }
+
+            // Nudge on duplicate tool calls (2nd call with same args)
+            const duplicateNames: string[] = [];
+            for (let i = 0; i < stepToolCalls.length; i++) {
+                const toolName = resolveToolName(stepToolCalls[i]) || "unknown";
+                const args = resolveToolArgs(stepToolCalls[i]);
+                const key = `${toolName}::${JSON.stringify(args)}`;
+                const entry = duplicateCallTracker.get(key);
+                if (entry && entry.count === 2) {
+                    duplicateNames.push(toolName);
+                }
+            }
+            if (duplicateNames.length > 0) {
+                messages.push({
+                    role: "user",
+                    content:
+                        `[System] You have called ${duplicateNames.join(", ")} with identical arguments multiple times. ` +
+                        `The results are the same each time. Do NOT call ${duplicateNames.length === 1 ? "it" : "them"} again with the same arguments. ` +
+                        `Choose a different approach, try different arguments, or report what you found.`
                 });
             }
         }

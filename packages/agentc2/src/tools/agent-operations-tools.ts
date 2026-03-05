@@ -6,13 +6,16 @@ const baseOutputSchema = z.object({ success: z.boolean().optional() }).passthrou
 const getInternalBaseUrl = () =>
     process.env.MASTRA_API_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
 
-const buildHeaders = () => {
+const buildHeaders = (organizationId?: string) => {
     const headers: Record<string, string> = {
         "Content-Type": "application/json"
     };
     const apiKey = process.env.MASTRA_API_KEY || process.env.MCP_API_KEY;
     if (apiKey) {
         headers["X-API-Key"] = apiKey;
+    }
+    if (organizationId) {
+        headers["X-Organization-Id"] = organizationId;
     }
     const orgSlug =
         process.env.MASTRA_ORGANIZATION_SLUG ||
@@ -29,6 +32,7 @@ const callInternalApi = async (
         method?: string;
         query?: Record<string, unknown>;
         body?: Record<string, unknown>;
+        organizationId?: string;
     }
 ) => {
     const url = new URL(path, getInternalBaseUrl());
@@ -42,7 +46,7 @@ const callInternalApi = async (
 
     const response = await fetch(url.toString(), {
         method: options?.method ?? "GET",
-        headers: buildHeaders(),
+        headers: buildHeaders(options?.organizationId),
         body: options?.body ? JSON.stringify(options.body) : undefined
     });
     const data = await response.json();
@@ -80,12 +84,14 @@ export const agentOverviewTool = createTool({
     inputSchema: z.object({
         agentId: z.string(),
         from: z.string().optional(),
-        to: z.string().optional()
+        to: z.string().optional(),
+        organizationId: z.string().optional().describe("Organization ID (injected by platform)")
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ agentId, from, to }) => {
+    execute: async ({ agentId, from, to, organizationId }) => {
         return callInternalApi(`/api/agents/${agentId}/overview`, {
-            query: { from, to }
+            query: { from, to },
+            organizationId
         });
     }
 });
@@ -96,12 +102,14 @@ export const agentAnalyticsTool = createTool({
     inputSchema: z.object({
         agentId: z.string(),
         from: z.string().optional(),
-        to: z.string().optional()
+        to: z.string().optional(),
+        organizationId: z.string().optional().describe("Organization ID (injected by platform)")
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ agentId, from, to }) => {
+    execute: async ({ agentId, from, to, organizationId }) => {
         return callInternalApi(`/api/agents/${agentId}/analytics`, {
-            query: { from, to }
+            query: { from, to },
+            organizationId
         });
     }
 });
@@ -113,12 +121,14 @@ export const agentCostsTool = createTool({
         agentId: z.string(),
         from: z.string().optional(),
         to: z.string().optional(),
-        source: z.string().optional()
+        source: z.string().optional(),
+        organizationId: z.string().optional().describe("Organization ID (injected by platform)")
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ agentId, from, to, source }) => {
+    execute: async ({ agentId, from, to, source, organizationId }) => {
         return callInternalApi(`/api/agents/${agentId}/costs`, {
-            query: { from, to, source }
+            query: { from, to, source },
+            organizationId
         });
     }
 });
@@ -127,11 +137,12 @@ export const agentBudgetGetTool = createTool({
     id: "agent-budget-get",
     description: "Get budget policy for an agent.",
     inputSchema: z.object({
-        agentId: z.string()
+        agentId: z.string(),
+        organizationId: z.string().optional().describe("Organization ID (injected by platform)")
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ agentId }) => {
-        return callInternalApi(`/api/agents/${agentId}/budget`);
+    execute: async ({ agentId, organizationId }) => {
+        return callInternalApi(`/api/agents/${agentId}/budget`, { organizationId });
     }
 });
 
@@ -143,13 +154,22 @@ export const agentBudgetUpdateTool = createTool({
         enabled: z.boolean().optional(),
         monthlyLimitUsd: z.number().optional().nullable(),
         alertAtPct: z.number().optional().nullable(),
-        hardLimit: z.boolean().optional()
+        hardLimit: z.boolean().optional(),
+        organizationId: z.string().optional().describe("Organization ID (injected by platform)")
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ agentId, enabled, monthlyLimitUsd, alertAtPct, hardLimit }) => {
+    execute: async ({
+        agentId,
+        enabled,
+        monthlyLimitUsd,
+        alertAtPct,
+        hardLimit,
+        organizationId
+    }) => {
         return callInternalApi(`/api/agents/${agentId}/budget`, {
             method: "PUT",
-            body: { enabled, monthlyLimitUsd, alertAtPct, hardLimit }
+            body: { enabled, monthlyLimitUsd, alertAtPct, hardLimit },
+            organizationId
         });
     }
 });
