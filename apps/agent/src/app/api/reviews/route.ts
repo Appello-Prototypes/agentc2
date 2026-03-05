@@ -9,8 +9,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
 import { resolveEngagement, type EngagementDecision } from "@repo/agentc2/workflows";
 import { inngest } from "@/lib/inngest";
-import { auth } from "@repo/auth";
-import { headers } from "next/headers";
+import { authenticateRequest } from "@/lib/api-auth";
 
 const SOURCE_TYPE_MAP: Record<string, string> = {
     workflow: "workflow-review",
@@ -20,38 +19,28 @@ const SOURCE_TYPE_MAP: Record<string, string> = {
     campaign: "campaign"
 };
 
-async function getAuthUser(): Promise<{
-    userId: string | null;
-    userName: string | null;
-}> {
-    try {
-        const session = await auth.api.getSession({ headers: await headers() });
-        return {
-            userId: session?.user?.id ?? null,
-            userName: session?.user?.name ?? null
-        };
-    } catch {
-        return { userId: null, userName: null };
-    }
-}
-
 export async function GET(request: NextRequest) {
     try {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
         const url = new URL(request.url);
         const action = url.searchParams.get("action");
         const type = url.searchParams.get("type");
         const source = url.searchParams.get("source");
 
         if (action === "metrics") {
-            return await getMetrics(source);
+            return await getMetrics(source, authContext.organizationId);
         }
 
         if (action === "daily-counts") {
-            return await getDailyCounts(url, source);
+            return await getDailyCounts(url, source, authContext.organizationId);
         }
 
         if (type === "learning") {
-            return await getLearningProposals(url);
+            return await getLearningProposals(url, authContext.organizationId);
         }
 
         const status = url.searchParams.get("status") || "pending";
@@ -61,6 +50,7 @@ export async function GET(request: NextRequest) {
 
         const reviews = await prisma.approvalRequest.findMany({
             where: {
+                organizationId: authContext.organizationId,
                 ...sourceTypeFilter,
                 ...(status !== "all" ? { status } : {})
             },
@@ -121,14 +111,17 @@ export async function GET(request: NextRequest) {
     }
 }
 
-async function getLearningProposals(url: URL) {
+async function getLearningProposals(url: URL, organizationId: string) {
     const status = url.searchParams.get("status") || "AWAITING_APPROVAL";
     const limit = Math.min(Number(url.searchParams.get("limit")) || 50, 100);
 
     const statusFilter = status === "all" ? {} : { status: status as "AWAITING_APPROVAL" };
 
     const sessions = await prisma.learningSession.findMany({
-        where: statusFilter,
+        where: {
+            ...statusFilter,
+            agent: { workspace: { organizationId } }
+        },
         include: {
             agent: { select: { id: true, slug: true, name: true, version: true } },
             proposals: {
@@ -193,7 +186,7 @@ async function getLearningProposals(url: URL) {
     return NextResponse.json({ success: true, learningProposals: items, total: items.length });
 }
 
-async function getMetrics(sourceFilter?: string | null) {
+async function getMetrics(sourceFilter: string | null | undefined, organizationId: string) {
     const now = Date.now();
     const sevenDaysAgo = new Date(now - 7 * 24 * 60 * 60 * 1000);
     const todayStart = new Date();
@@ -206,11 +199,12 @@ async function getMetrics(sourceFilter?: string | null) {
 
     const [pendingItems, recentDecisions, resolved24h] = await Promise.all([
         prisma.approvalRequest.findMany({
-            where: { ...sourceTypeWhere, status: "pending" },
+            where: { organizationId, ...sourceTypeWhere, status: "pending" },
             select: { createdAt: true, sourceType: true }
         }),
         prisma.approvalRequest.findMany({
             where: {
+                organizationId,
                 ...sourceTypeWhere,
                 status: { not: "pending" },
                 decidedAt: { gte: sevenDaysAgo }
@@ -219,6 +213,7 @@ async function getMetrics(sourceFilter?: string | null) {
         }),
         prisma.approvalRequest.count({
             where: {
+                organizationId,
                 ...sourceTypeWhere,
                 status: { not: "pending" },
                 decidedAt: { gte: last24h }
@@ -281,7 +276,11 @@ async function getMetrics(sourceFilter?: string | null) {
     });
 }
 
-async function getDailyCounts(url: URL, sourceFilter?: string | null) {
+async function getDailyCounts(
+    url: URL,
+    sourceFilter: string | null | undefined,
+    organizationId: string
+) {
     const days = Math.min(Number(url.searchParams.get("days")) || 30, 90);
     const since = new Date();
     since.setDate(since.getDate() - days);
@@ -293,6 +292,7 @@ async function getDailyCounts(url: URL, sourceFilter?: string | null) {
 
     const records = await prisma.approvalRequest.findMany({
         where: {
+            organizationId,
             ...sourceTypeWhere,
             createdAt: { gte: since }
         },
@@ -322,18 +322,46 @@ async function getDailyCounts(url: URL, sourceFilter?: string | null) {
 
 export async function POST(request: NextRequest) {
     try {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
         const body = await request.json();
-        const { userId, userName } = await getAuthUser();
-        const decidedBy = userName || userId || "web-ui";
+        const authUser = await prisma.user.findUnique({
+            where: { id: authContext.userId },
+            select: { name: true }
+        });
+        const decidedBy = authUser?.name || authContext.userId;
 
         // Learning proposal approve/reject
         if (body.type === "learning") {
-            return await handleLearningDecision(body);
+            return await handleLearningDecision(body, authContext.organizationId);
         }
 
         if (Array.isArray(body.items)) {
+            const itemIds = body.items.map(
+                (item: { approvalRequestId: string }) => item.approvalRequestId
+            );
+            const validApprovals = await prisma.approvalRequest.findMany({
+                where: {
+                    id: { in: itemIds },
+                    organizationId: authContext.organizationId
+                },
+                select: { id: true }
+            });
+            const validIds = new Set(validApprovals.map((a) => a.id));
+
             const results: Array<{ id: string; success: boolean; error?: string }> = [];
             for (const item of body.items) {
+                if (!validIds.has(item.approvalRequestId)) {
+                    results.push({
+                        id: item.approvalRequestId,
+                        success: false,
+                        error: "Not found"
+                    });
+                    continue;
+                }
                 try {
                     const result = await resolveBySourceType({
                         approvalRequestId: item.approvalRequestId,
@@ -374,6 +402,16 @@ export async function POST(request: NextRequest) {
             return NextResponse.json(
                 { success: false, error: "approvalRequestId and decision are required" },
                 { status: 400 }
+            );
+        }
+
+        const ownershipCheck = await prisma.approvalRequest.findFirst({
+            where: { id: approvalRequestId, organizationId: authContext.organizationId }
+        });
+        if (!ownershipCheck) {
+            return NextResponse.json(
+                { success: false, error: "Approval request not found" },
+                { status: 404 }
             );
         }
 
@@ -470,11 +508,14 @@ async function resolveBySourceType(params: {
     return { success: result.resumed, error: result.error };
 }
 
-async function handleLearningDecision(body: {
-    sessionId: string;
-    decision: "approve" | "reject";
-    rationale?: string;
-}) {
+async function handleLearningDecision(
+    body: {
+        sessionId: string;
+        decision: "approve" | "reject";
+        rationale?: string;
+    },
+    organizationId: string
+) {
     const { sessionId, decision, rationale } = body;
 
     if (!sessionId || !decision) {
@@ -484,8 +525,11 @@ async function handleLearningDecision(body: {
         );
     }
 
-    const session = await prisma.learningSession.findUnique({
-        where: { id: sessionId },
+    const session = await prisma.learningSession.findFirst({
+        where: {
+            id: sessionId,
+            agent: { workspace: { organizationId } }
+        },
         include: {
             proposals: { where: { isSelected: true } }
         }

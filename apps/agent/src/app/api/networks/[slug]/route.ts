@@ -8,10 +8,14 @@ import {
     detectJsonChange,
     type FieldChange
 } from "@/lib/changelog";
+import { authenticateRequest } from "@/lib/api-auth";
 
-async function findNetwork(slug: string) {
+async function findNetwork(slug: string, organizationId: string) {
     return prisma.network.findFirst({
-        where: { OR: [{ slug }, { id: slug }] },
+        where: {
+            OR: [{ slug }, { id: slug }],
+            workspace: { organizationId }
+        },
         include: {
             primitives: {
                 include: {
@@ -24,13 +28,15 @@ async function findNetwork(slug: string) {
     });
 }
 
-export async function GET(
-    _request: NextRequest,
-    { params }: { params: Promise<{ slug: string }> }
-) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
     try {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
         const { slug } = await params;
-        const network = await findNetwork(slug);
+        const network = await findNetwork(slug, authContext.organizationId);
 
         if (!network) {
             return NextResponse.json(
@@ -71,9 +77,14 @@ export async function GET(
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
     try {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
         const { slug } = await params;
         const body = await request.json();
-        const existing = await findNetwork(slug);
+        const existing = await findNetwork(slug, authContext.organizationId);
 
         if (!existing) {
             return NextResponse.json(
@@ -278,6 +289,11 @@ export async function PATCH(
     { params }: { params: Promise<{ slug: string }> }
 ) {
     try {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
         const { slug } = await params;
         const body = await request.json();
         const { action } = body as { action: string };
@@ -290,7 +306,10 @@ export async function PATCH(
         }
 
         const existing = await prisma.network.findFirst({
-            where: { OR: [{ slug }, { id: slug }] }
+            where: {
+                OR: [{ slug }, { id: slug }],
+                workspace: { organizationId: authContext.organizationId }
+            }
         });
 
         if (!existing) {
@@ -333,13 +352,21 @@ export async function PATCH(
 }
 
 export async function DELETE(
-    _request: NextRequest,
+    request: NextRequest,
     { params }: { params: Promise<{ slug: string }> }
 ) {
     try {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
         const { slug } = await params;
         const existing = await prisma.network.findFirst({
-            where: { OR: [{ slug }, { id: slug }] }
+            where: {
+                OR: [{ slug }, { id: slug }],
+                workspace: { organizationId: authContext.organizationId }
+            }
         });
 
         if (!existing) {

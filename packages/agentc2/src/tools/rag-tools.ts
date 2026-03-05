@@ -89,7 +89,7 @@ export const ragQueryTool = createTool({
 export const ragIngestTool = createTool({
     id: "rag-ingest",
     description:
-        "Ingest a document into the knowledge base. Creates a Document record and embeds content into the RAG vector store for semantic search.",
+        "Ingest a document into the knowledge base. Creates a Document record and queues content for vector embedding. IMPORTANT: Embedding runs asynchronously — the document record is returned immediately but rag-query may not find it for several seconds. Check the returned embeddedAt field: null means embedding is still in progress. Use onConflict:'update' to overwrite an existing document with the same slug.",
     inputSchema: z.object({
         content: z.string().describe("Document content to ingest"),
         type: z

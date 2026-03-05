@@ -29,6 +29,7 @@ import { remoteComputeToolDefinitions, remoteComputeToolRoutes } from "./remote-
 import { supportToolDefinitions, supportToolRoutes } from "./support";
 import { orgGuardrailToolDefinitions, orgGuardrailToolRoutes } from "./org-guardrails";
 import { platformDocsToolDefinitions, platformDocsToolRoutes } from "./platform-docs";
+import { platformContextToolDefinitions, platformContextToolRoutes } from "./platform-context";
 import { instanceToolDefinitions, instanceToolRoutes } from "./instances";
 import { searchToolDefinitions, searchToolRoutes } from "./search";
 import { sessionOpsToolDefinitions, sessionOpsToolRoutes } from "./session-ops";
@@ -72,6 +73,7 @@ export const mcpToolDefinitions: McpToolDefinition[] = [
     ...supportToolDefinitions,
     ...orgGuardrailToolDefinitions,
     ...platformDocsToolDefinitions,
+    ...platformContextToolDefinitions,
     ...instanceToolDefinitions,
     ...searchToolDefinitions,
     ...sessionOpsToolDefinitions,
@@ -112,6 +114,7 @@ export const mcpToolRoutes: McpToolRoute[] = [
     ...supportToolRoutes,
     ...orgGuardrailToolRoutes,
     ...platformDocsToolRoutes,
+    ...platformContextToolRoutes,
     ...instanceToolRoutes,
     ...searchToolRoutes,
     ...sessionOpsToolRoutes,

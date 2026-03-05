@@ -1,6 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { headers } from "next/headers";
-import { auth } from "@repo/auth";
 import { createSkill, listSkills, type CreateSkillInput } from "@repo/agentc2/skills";
 import { authenticateRequest } from "@/lib/api-auth";
 import { getDefaultWorkspaceIdForUser } from "@/lib/organization";
@@ -10,15 +8,8 @@ import { getDefaultWorkspaceIdForUser } from "@/lib/organization";
  */
 export async function GET(request: NextRequest) {
     try {
-        const apiAuth = await authenticateRequest(request);
-        let userId = apiAuth?.userId;
-
-        if (!userId) {
-            const session = await auth.api.getSession({ headers: await headers() });
-            userId = session?.user?.id;
-        }
-
-        if (!userId) {
+        const authCtx = await authenticateRequest(request);
+        if (!authCtx) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
@@ -30,10 +21,18 @@ export async function GET(request: NextRequest) {
         const take = parseInt(searchParams.get("take") || "50", 10);
         const workspaceId =
             searchParams.get("workspaceId") ||
-            (await getDefaultWorkspaceIdForUser(userId)) ||
+            (await getDefaultWorkspaceIdForUser(authCtx.userId)) ||
             undefined;
 
-        const result = await listSkills({ workspaceId, category, type, tags, skip, take });
+        const result = await listSkills({
+            workspaceId,
+            organizationId: authCtx.organizationId,
+            category,
+            type,
+            tags,
+            skip,
+            take
+        });
 
         return NextResponse.json(result);
     } catch (error) {
@@ -50,15 +49,8 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
     try {
-        const apiAuth = await authenticateRequest(request);
-        let userId = apiAuth?.userId;
-
-        if (!userId) {
-            const session = await auth.api.getSession({ headers: await headers() });
-            userId = session?.user?.id;
-        }
-
-        if (!userId) {
+        const authCtx = await authenticateRequest(request);
+        if (!authCtx) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
@@ -74,7 +66,7 @@ export async function POST(request: NextRequest) {
         }
 
         const workspaceId =
-            body.workspaceId || (await getDefaultWorkspaceIdForUser(userId)) || undefined;
+            body.workspaceId || (await getDefaultWorkspaceIdForUser(authCtx.userId)) || undefined;
 
         const input: CreateSkillInput = {
             slug,
@@ -86,8 +78,9 @@ export async function POST(request: NextRequest) {
             tags,
             metadata,
             workspaceId,
+            organizationId: authCtx.organizationId,
             type,
-            createdBy: userId
+            createdBy: authCtx.userId
         };
 
         const skill = await createSkill(input);

@@ -7,6 +7,19 @@ interface RouteParams {
     params: Promise<{ id: string }>;
 }
 
+async function getOrgMemberIds(userId: string): Promise<string[]> {
+    const membership = await prisma.membership.findFirst({
+        where: { userId },
+        select: { organizationId: true }
+    });
+    if (!membership) return [userId];
+    const members = await prisma.membership.findMany({
+        where: { organizationId: membership.organizationId },
+        select: { userId: true }
+    });
+    return members.map((m) => m.userId);
+}
+
 /**
  * POST /api/campaigns/templates/[id]/schedules
  * Create a schedule for a campaign template
@@ -19,6 +32,19 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     try {
         const { id: templateId } = await params;
+        const memberIds = await getOrgMemberIds(session.user.id);
+
+        const template = await prisma.campaignTemplate.findFirst({
+            where: {
+                id: templateId,
+                OR: [{ createdBy: { in: memberIds } }, { isSystem: true }]
+            },
+            select: { id: true }
+        });
+        if (!template) {
+            return NextResponse.json({ error: "Template not found" }, { status: 404 });
+        }
+
         const body = await request.json();
         const { name, cronExpr, timezone, inputJson } = body;
 

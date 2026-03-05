@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
+import { authenticateRequest } from "@/lib/api-auth";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
 
@@ -12,6 +13,22 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
  * navigating — avoids edge cases where redirect + Set-Cookie race.
  */
 export async function GET(request: NextRequest) {
+    const authContext = await authenticateRequest(request);
+    if (!authContext) {
+        return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
+
+    const membership = await prisma.membership.findFirst({
+        where: { userId: authContext.userId, organizationId: authContext.organizationId },
+        select: { role: true }
+    });
+    if (!membership || !["owner", "admin"].includes(membership.role)) {
+        return NextResponse.json(
+            { success: false, error: "Insufficient permissions: admin or owner role required" },
+            { status: 403 }
+        );
+    }
+
     const token = request.nextUrl.searchParams.get("token");
     if (!token) {
         return NextResponse.json({ error: "Missing token" }, { status: 400 });

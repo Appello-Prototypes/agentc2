@@ -1,13 +1,19 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
 import { getWhatsAppService, isWhatsAppInitialized } from "../_service";
+import { authenticateRequest } from "@/lib/api-auth";
 
 /**
  * GET /api/channels/whatsapp/status
  *
  * Get WhatsApp connection status.
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
+    const authContext = await authenticateRequest(request);
+    if (!authContext) {
+        return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
+
     try {
         const enabled = process.env.WHATSAPP_ENABLED === "true";
 
@@ -70,7 +76,12 @@ export async function GET() {
  * Body:
  * - action: "connect" | "disconnect" | "logout"
  */
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+    const authContext = await authenticateRequest(request);
+    if (!authContext) {
+        return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
+
     try {
         const enabled = process.env.WHATSAPP_ENABLED === "true";
 

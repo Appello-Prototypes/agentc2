@@ -168,6 +168,9 @@ model Organization {
     // Org-wide guardrail policy
     orgGuardrailPolicy OrgGuardrailPolicy?
 
+    // Skills (org-level ownership for tenant isolation)
+    skills Skill[]
+
     // Dark Factory
     pipelinePolicy    PipelinePolicy?
     repositoryConfigs RepositoryConfig[]
@@ -1219,11 +1222,13 @@ model MastraThread {
 // RAG Vector Store - Managed by @mastra/pg PgVector, NOT by Prisma.
 // Declared here with @@ignore so `prisma db push` does not drop the table.
 model RagDocument {
-    id        Int                          @id @default(autoincrement())
-    vectorId  String                       @unique @map("vector_id")
-    embedding Unsupported("vector(1536)")?
-    metadata  Json?                        @default("{}")
+    id             Int                          @id @default(autoincrement())
+    vectorId       String                       @unique @map("vector_id")
+    embedding      Unsupported("vector(1536)")?
+    metadata       Json?                        @default("{}")
+    organizationId String?                      @map("organization_id")
 
+    @@index([organizationId])
     @@map("rag_documents")
     @@ignore
 }
@@ -3264,7 +3269,7 @@ model RagChunk {
 
 model Document {
     id          String  @id @default(cuid())
-    slug        String  @unique
+    slug        String
     name        String
     description String? @db.Text
     content     String  @db.Text
@@ -3293,6 +3298,7 @@ model Document {
     updatedAt DateTime @updatedAt
     createdBy String?
 
+    @@unique([organizationId, slug])
     @@index([workspaceId])
     @@index([organizationId])
     @@index([category])
@@ -3332,6 +3338,9 @@ model Skill {
     workspaceId String?
     workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
 
+    organizationId String?
+    organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
     version  Int            @default(1)
     versions SkillVersion[]
 
@@ -3349,8 +3358,9 @@ model Skill {
     installCount Int     @default(0)
     rating       Float?
 
-    @@unique([slug]) // Global slug uniqueness for federation and publishing
+    @@unique([organizationId, slug])
     @@index([workspaceId])
+    @@index([organizationId])
     @@index([category])
     @@index([isPublic])
     @@map("skill")
@@ -4319,6 +4329,8 @@ enum ActivityEventType {
 
     // Communication
     SLACK_MESSAGE_HANDLED
+    WHATSAPP_MESSAGE_HANDLED
+    TELEGRAM_MESSAGE_HANDLED
     EMAIL_PROCESSED
 
     // Platform

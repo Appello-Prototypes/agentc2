@@ -7,11 +7,17 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
+import { authenticateRequest } from "@/lib/api-auth";
 
 type RouteContext = { params: Promise<{ skillId: string }> };
 
 export async function GET(request: NextRequest, context: RouteContext) {
     try {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
         const { skillId } = await context.params;
         const agentId = request.nextUrl.searchParams.get("agentId");
 

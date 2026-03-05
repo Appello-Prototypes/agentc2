@@ -71,7 +71,7 @@ async function populateMcpSkillTools() {
                 continue;
             }
 
-            const skill = await prisma.skill.findUnique({
+            const skill = await prisma.skill.findFirst({
                 where: { slug: skillSlug },
                 select: { id: true, slug: true }
             });
@@ -182,7 +182,7 @@ async function populateFromKnownTools() {
     };
 
     for (const [skillSlug, toolIds] of Object.entries(knownTools)) {
-        const skill = await prisma.skill.findUnique({
+        const skill = await prisma.skill.findFirst({
             where: { slug: skillSlug },
             select: { id: true }
         });

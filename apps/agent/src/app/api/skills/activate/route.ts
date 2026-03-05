@@ -11,9 +11,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
 import { addThreadSkillActivations } from "@repo/agentc2/skills";
+import { authenticateRequest } from "@/lib/api-auth";
 
 export async function POST(request: NextRequest) {
     try {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
         const body = await request.json();
         const { skillSlugs, threadId, agentId } = body as {
             skillSlugs?: string[];

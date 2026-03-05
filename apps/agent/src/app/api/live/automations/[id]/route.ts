@@ -339,6 +339,21 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         }
 
         if (parsed.sourceType === "schedule") {
+            const existing = await prisma.agentSchedule.findUnique({
+                where: { id: parsed.sourceId },
+                select: { agent: { select: { workspace: { select: { organizationId: true } } } } }
+            });
+            if (
+                !existing ||
+                (existing.agent?.workspace?.organizationId &&
+                    existing.agent.workspace.organizationId !== workspaceContext.organizationId)
+            ) {
+                return NextResponse.json(
+                    { success: false, error: "Automation not found" },
+                    { status: 404 }
+                );
+            }
+
             if (updateData.isActive === false && typeof isArchived !== "boolean") {
                 updateData.nextRunAt = null;
             }
@@ -359,6 +374,25 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         }
 
         if (parsed.sourceType === "trigger") {
+            const existing = await prisma.agentTrigger.findUnique({
+                where: { id: parsed.sourceId },
+                select: {
+                    agent: { select: { workspace: { select: { organizationId: true } } } },
+                    workflow: { select: { workspace: { select: { organizationId: true } } } },
+                    network: { select: { workspace: { select: { organizationId: true } } } }
+                }
+            });
+            const ownerOrgId =
+                existing?.agent?.workspace?.organizationId ??
+                existing?.workflow?.workspace?.organizationId ??
+                existing?.network?.workspace?.organizationId;
+            if (!existing || (ownerOrgId && ownerOrgId !== workspaceContext.organizationId)) {
+                return NextResponse.json(
+                    { success: false, error: "Automation not found" },
+                    { status: 404 }
+                );
+            }
+
             const trigger = await prisma.agentTrigger.update({
                 where: { id: parsed.sourceId },
                 data: updateData

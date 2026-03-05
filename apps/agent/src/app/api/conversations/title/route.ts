@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { openai } from "@ai-sdk/openai";
 import { generateText } from "ai";
+import { authenticateRequest } from "@/lib/api-auth";
 
 /**
  * POST /api/conversations/title
@@ -13,6 +14,11 @@ import { generateText } from "ai";
  */
 export async function POST(request: NextRequest) {
     try {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
         const { message } = await request.json();
 
         if (!message || typeof message !== "string") {

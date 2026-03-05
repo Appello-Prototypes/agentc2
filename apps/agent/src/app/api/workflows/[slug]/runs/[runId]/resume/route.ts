@@ -6,6 +6,7 @@ import {
     type WorkflowDefinition
 } from "@repo/agentc2/workflows";
 import { refreshWorkflowMetrics } from "@/lib/metrics";
+import { authenticateRequest } from "@/lib/api-auth";
 
 function mapStepStatus(status: "completed" | "failed" | "suspended") {
     if (status === "failed") return "FAILED";
@@ -18,11 +19,19 @@ export async function POST(
     { params }: { params: Promise<{ slug: string; runId: string }> }
 ) {
     try {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
         const { slug, runId } = await params;
         const body = await request.json();
 
         const workflow = await prisma.workflow.findFirst({
-            where: { OR: [{ slug }, { id: slug }] }
+            where: {
+                OR: [{ slug }, { id: slug }],
+                workspace: { organizationId: authContext.organizationId }
+            }
         });
 
         if (!workflow) {

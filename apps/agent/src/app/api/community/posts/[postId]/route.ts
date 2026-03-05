@@ -119,15 +119,44 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     try {
         const auth = await requireAuth(request);
         if (auth.response) return auth.response;
+        const { userId, organizationId } = auth.context;
         const { postId } = await context.params;
 
         const post = await prisma.communityPost.findUnique({
             where: { id: postId },
-            select: { id: true, isPinned: true, isLocked: true }
+            select: {
+                id: true,
+                isPinned: true,
+                isLocked: true,
+                authorUserId: true,
+                board: { select: { organizationId: true } }
+            }
         });
 
         if (!post) {
             return NextResponse.json({ success: false, error: "Post not found" }, { status: 404 });
+        }
+
+        const isAuthor = post.authorUserId === userId;
+        let isOrgAdmin = false;
+        if (!isAuthor && post.board?.organizationId) {
+            const membership = await prisma.membership.findUnique({
+                where: {
+                    userId_organizationId: {
+                        userId,
+                        organizationId: post.board.organizationId
+                    }
+                },
+                select: { role: true }
+            });
+            isOrgAdmin = membership?.role === "admin" || membership?.role === "owner";
+        }
+
+        if (!isAuthor && !isOrgAdmin) {
+            return NextResponse.json(
+                { success: false, error: "Only the post author or org admins can pin/lock posts" },
+                { status: 403 }
+            );
         }
 
         const body = await request.json();

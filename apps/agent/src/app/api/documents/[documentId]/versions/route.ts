@@ -39,11 +39,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
             return NextResponse.json({ error: "Document not found" }, { status: 404 });
         }
 
-        if (
-            existing.organizationId &&
-            organizationId &&
-            existing.organizationId !== organizationId
-        ) {
+        if (existing.organizationId && existing.organizationId !== organizationId) {
             return NextResponse.json({ error: "Document not found" }, { status: 404 });
         }
 

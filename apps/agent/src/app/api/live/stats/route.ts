@@ -1,5 +1,6 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
+import { authenticateRequest } from "@/lib/api-auth";
 
 /**
  * GET /api/live/stats
@@ -7,11 +8,16 @@ import { prisma } from "@repo/database";
  * Returns production statistics for all agents, filtered to PROD runs only.
  * Used by the Live dashboard to show real-time production metrics.
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
     try {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
         // Get all agents with their production run stats
         const agents = await prisma.agent.findMany({
-            where: { isActive: true },
+            where: { isActive: true, workspace: { organizationId: authContext.organizationId } },
             select: {
                 id: true,
                 slug: true,

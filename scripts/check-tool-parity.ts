@@ -13,10 +13,12 @@
  *   bun run scripts/check-tool-parity.ts
  *   bun run scripts/check-tool-parity.ts --json          # JSON output
  *   bun run scripts/check-tool-parity.ts --skip-api      # Skip live Concierge check
+ *   bun run scripts/check-tool-parity.ts --check-concierges  # Verify all concierge agents have minimum tools
  */
 
 import { toolRegistry, toolCategoryMap } from "../packages/agentc2/src/tools/registry";
 import { mcpToolDefinitions } from "../packages/agentc2/src/tools/mcp-schemas/index";
+import { prisma } from "../packages/database/src";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -25,6 +27,7 @@ import { mcpToolDefinitions } from "../packages/agentc2/src/tools/mcp-schemas/in
 const args = new Set(process.argv.slice(2));
 const jsonMode = args.has("--json");
 const skipApi = args.has("--skip-api");
+const checkConcierges = args.has("--check-concierges");
 
 /**
  * Normalise MCP schema names to registry-style hyphenated IDs.
@@ -266,4 +269,80 @@ if (jsonMode) {
     console.log("========================================\n");
 }
 
-process.exit(report.hasGaps ? 1 : 0);
+// ---------------------------------------------------------------------------
+// Concierge agent tool parity (--check-concierges)
+// ---------------------------------------------------------------------------
+
+const CONCIERGE_REQUIRED_TOOLS = [
+    "workflow-execute",
+    "workflow-list-runs",
+    "workflow-get-run",
+    "workflow-resume",
+    "network-execute",
+    "backlog-get",
+    "backlog-list-tasks",
+    "backlog-add-task",
+    "backlog-update-task",
+    "backlog-complete-task",
+    "rag-query",
+    "turn-complete",
+    "search-skills",
+    "activate-skill",
+    "list-active-skills"
+];
+
+let conciergeGaps = false;
+
+if (checkConcierges) {
+    const concierges = await prisma.agent.findMany({
+        where: {
+            OR: [
+                { slug: { startsWith: "bigjim2" } },
+                { slug: { startsWith: "workspace-concierge" } }
+            ],
+            isActive: true
+        },
+        include: { tools: { select: { toolId: true } } }
+    });
+
+    if (!jsonMode) {
+        console.log("\n========================================");
+        console.log("  Concierge Tool Parity Check");
+        console.log("========================================\n");
+        console.log(`Found ${concierges.length} concierge agent(s)\n`);
+    }
+
+    const conciergeReport: Record<string, string[]> = {};
+
+    for (const agent of concierges) {
+        const toolIds = new Set(agent.tools.map((t) => t.toolId));
+        const missing = CONCIERGE_REQUIRED_TOOLS.filter((t) => !toolIds.has(t));
+        if (missing.length > 0) {
+            conciergeGaps = true;
+            conciergeReport[agent.slug] = missing;
+            if (!jsonMode) {
+                console.log(`❌ ${agent.slug}: missing ${missing.length} tools`);
+                missing.forEach((t) => console.log(`   - ${t}`));
+                console.log();
+            }
+        } else if (!jsonMode) {
+            console.log(
+                `✅ ${agent.slug}: all ${CONCIERGE_REQUIRED_TOOLS.length} required tools present`
+            );
+        }
+    }
+
+    if (jsonMode) {
+        console.log(JSON.stringify({ conciergeReport, conciergeGaps }, null, 2));
+    } else {
+        console.log("\n========================================");
+        console.log(
+            conciergeGaps ? "RESULT: CONCIERGE GAPS FOUND" : "RESULT: ALL CONCIERGES OK ✅"
+        );
+        console.log("========================================\n");
+    }
+
+    await prisma.$disconnect();
+}
+
+process.exit(report.hasGaps || conciergeGaps ? 1 : 0);

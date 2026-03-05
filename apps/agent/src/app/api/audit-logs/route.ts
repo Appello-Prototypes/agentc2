@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { queryAuditLogs, type AuditAction } from "@/lib/audit-log";
+import { authenticateRequest } from "@/lib/api-auth";
 
 /**
  * GET /api/audit-logs
@@ -17,6 +18,11 @@ import { queryAuditLogs, type AuditAction } from "@/lib/audit-log";
  */
 export async function GET(request: NextRequest) {
     try {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
         const { searchParams } = new URL(request.url);
 
         const entityType = searchParams.get("entityType") || undefined;
@@ -28,6 +34,7 @@ export async function GET(request: NextRequest) {
         const cursor = searchParams.get("cursor") || undefined;
 
         const result = await queryAuditLogs({
+            tenantId: authContext.organizationId,
             entityType,
             entityId,
             action,

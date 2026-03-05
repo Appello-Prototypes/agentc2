@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
+import { authenticateRequest } from "@/lib/api-auth";
+import { resolveChannelCredentials } from "@/lib/channel-credentials";
 
 /**
  * POST /api/channels/telegram/send
  *
  * Send a message to a Telegram chat.
+ * Uses DB-first credential resolution with env-var fallback.
  *
  * Body:
  * - chatId: string - The chat ID to send to
@@ -11,6 +14,11 @@ import { NextRequest, NextResponse } from "next/server";
  * - replyToMessageId?: number - Optional message ID to reply to
  */
 export async function POST(request: NextRequest) {
+    const authContext = await authenticateRequest(request);
+    if (!authContext) {
+        return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
+
     try {
         const body = await request.json();
         const { chatId, text, replyToMessageId } = body;
@@ -22,7 +30,11 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const botToken = process.env.TELEGRAM_BOT_TOKEN;
+        const { credentials } = await resolveChannelCredentials(
+            "telegram-bot",
+            authContext.organizationId
+        );
+        const botToken = credentials.TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
         if (!botToken) {
             return NextResponse.json(
                 { error: "TELEGRAM_BOT_TOKEN not configured" },

@@ -12,15 +12,13 @@ import { authenticateRequest } from "@/lib/api-auth";
  * Unauthenticated: uses env vars only (backward compatible).
  */
 export async function GET(request: NextRequest) {
+    const authContext = await authenticateRequest(request);
+    if (!authContext) {
+        return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
+
     try {
-        // Try to authenticate to get org context (optional - env fallback works without auth)
-        let organizationId: string | undefined;
-        try {
-            const authContext = await authenticateRequest(request);
-            organizationId = authContext?.organizationId;
-        } catch {
-            // Auth failed - continue with env-only mode
-        }
+        const organizationId = authContext.organizationId;
 
         const results = await runAllDiagnostics(organizationId);
         return NextResponse.json(results);

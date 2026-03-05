@@ -1,13 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
 import { getVoiceService, isVoiceInitialized } from "../_service";
+import { authenticateRequest } from "@/lib/api-auth";
 
 /**
  * GET /api/channels/voice/status
  *
  * Get voice channel status.
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
+    const authContext = await authenticateRequest(request);
+    if (!authContext) {
+        return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
+
     try {
         const enabled = process.env.TWILIO_ENABLED === "true";
 

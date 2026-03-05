@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { finalizeConversationRun } from "@/lib/run-recorder";
+import { authenticateRequest } from "@/lib/api-auth";
 
 /**
  * POST /api/agents/[id]/chat/finalize
@@ -13,6 +14,11 @@ import { finalizeConversationRun } from "@/lib/run-recorder";
  */
 export async function POST(request: NextRequest) {
     try {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
         // Handle both JSON and sendBeacon (which sends as text/plain)
         let runId: string | undefined;
 

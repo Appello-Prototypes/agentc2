@@ -150,6 +150,8 @@ export {
 } from "./organization-tools";
 export { goalCreateTool, goalListTool, goalGetTool } from "./goal-tools";
 
+export { platformContextTool } from "./platform-context-tool";
+
 // Tool registry for stored agents
 export {
     toolRegistry,

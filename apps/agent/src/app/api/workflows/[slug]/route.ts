@@ -7,21 +7,27 @@ import {
     detectJsonChange,
     type FieldChange
 } from "@/lib/changelog";
+import { authenticateRequest } from "@/lib/api-auth";
 
-async function findWorkflow(slug: string) {
+async function findWorkflow(slug: string, organizationId: string) {
     return prisma.workflow.findFirst({
-        where: { OR: [{ slug }, { id: slug }] }
+        where: { OR: [{ slug }, { id: slug }], workspace: { organizationId } }
     });
 }
 
-export async function GET(
-    _request: NextRequest,
-    { params }: { params: Promise<{ slug: string }> }
-) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
     try {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
         const { slug } = await params;
         const workflow = await prisma.workflow.findFirst({
-            where: { OR: [{ slug }, { id: slug }] },
+            where: {
+                OR: [{ slug }, { id: slug }],
+                workspace: { organizationId: authContext.organizationId }
+            },
             include: {
                 _count: { select: { runs: true } }
             }
@@ -52,9 +58,14 @@ export async function GET(
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
     try {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
         const { slug } = await params;
         const body = await request.json();
-        const existing = await findWorkflow(slug);
+        const existing = await findWorkflow(slug, authContext.organizationId);
 
         if (!existing) {
             return NextResponse.json(
@@ -196,6 +207,11 @@ export async function PATCH(
     { params }: { params: Promise<{ slug: string }> }
 ) {
     try {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
         const { slug } = await params;
         const body = await request.json();
         const { action } = body as { action: string };
@@ -207,7 +223,7 @@ export async function PATCH(
             );
         }
 
-        const existing = await findWorkflow(slug);
+        const existing = await findWorkflow(slug, authContext.organizationId);
 
         if (!existing) {
             return NextResponse.json(
@@ -249,12 +265,17 @@ export async function PATCH(
 }
 
 export async function DELETE(
-    _request: NextRequest,
+    request: NextRequest,
     { params }: { params: Promise<{ slug: string }> }
 ) {
     try {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
         const { slug } = await params;
-        const existing = await findWorkflow(slug);
+        const existing = await findWorkflow(slug, authContext.organizationId);
 
         if (!existing) {
             return NextResponse.json(

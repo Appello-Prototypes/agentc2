@@ -223,6 +223,14 @@ interface Run {
     triggerType?: string;
     suspendedStep?: string | null;
     environment?: string | null;
+    evalScore?: number | null;
+    evalTier?: string | null;
+    hasLearnedLesson?: boolean;
+}
+
+interface AgentTrend {
+    trend: "up" | "down" | "flat";
+    recentAvg: number;
 }
 
 interface RunCounts {
@@ -259,6 +267,66 @@ const formatTokens = sharedFormatTokens;
 const formatModelLabel = sharedFormatModelLabel;
 const getStatusBadgeVariant = sharedGetStatusBadgeVariant;
 const getSourceBadgeColor = sharedGetSourceBadgeColor;
+
+function getScoreColor(score: number): string {
+    if (score >= 0.8)
+        return "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30";
+    if (score >= 0.6)
+        return "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30";
+    return "bg-red-500/15 text-red-700 dark:text-red-400 border-red-500/30";
+}
+
+function EvalScoreCell({ run, trend }: { run: Run; trend?: AgentTrend }) {
+    if (run.evalScore == null) {
+        if (run.status === "RUNNING" || run.status === "QUEUED") return null;
+        return <span className="text-muted-foreground text-xs">-</span>;
+    }
+
+    const pct = Math.round(run.evalScore * 100);
+    const trendArrow = trend?.trend === "up" ? "\u2197" : trend?.trend === "down" ? "\u2198" : null;
+    const trendColor =
+        trend?.trend === "up" ? "text-emerald-500" : trend?.trend === "down" ? "text-red-500" : "";
+
+    return (
+        <div className="flex items-center justify-center gap-1">
+            <Badge
+                variant="outline"
+                className={`text-xs tabular-nums ${getScoreColor(run.evalScore)}`}
+            >
+                {pct}
+            </Badge>
+            {trendArrow && (
+                <span
+                    className={`text-xs font-medium ${trendColor}`}
+                    title={`Agent trend: ${trend!.trend} (avg ${Math.round(trend!.recentAvg * 100)})`}
+                >
+                    {trendArrow}
+                </span>
+            )}
+            {run.hasLearnedLesson && (
+                <span
+                    className="text-violet-500 dark:text-violet-400"
+                    title="Learned lesson applied from this run"
+                >
+                    <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                    >
+                        <path d="M9 18h6" />
+                        <path d="M10 22h4" />
+                        <path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z" />
+                    </svg>
+                </span>
+            )}
+        </div>
+    );
+}
 
 function LiveDurationCounter({ startedAt }: { startedAt: string }) {
     const [elapsed, setElapsed] = useState(() =>
@@ -306,6 +374,7 @@ export function LiveRunsContent() {
 
     const [budgetAlerts, setBudgetAlerts] = useState<BudgetAlert[]>([]);
     const [budgetBannerDismissed, setBudgetBannerDismissed] = useState(false);
+    const [agentTrends, setAgentTrends] = useState<Record<string, AgentTrend>>({});
     const [selectedRun, setSelectedRun] = useState<Run | null>(null);
     const [runDetail, setRunDetail] = useState<RunDetail | null>(null);
     const [runDetailLoading, setRunDetailLoading] = useState(false);
@@ -413,6 +482,9 @@ export function LiveRunsContent() {
                 setLastUpdatedAt(new Date());
                 if (data.budgetAlerts?.length > 0) {
                     setBudgetAlerts(data.budgetAlerts);
+                }
+                if (data.agentTrends) {
+                    setAgentTrends(data.agentTrends);
                 }
                 if (data.pagination) {
                     setHasMore(data.pagination.hasMore);
@@ -1311,6 +1383,7 @@ export function LiveRunsContent() {
                                                 <TableHead>Kind</TableHead>
                                                 <TableHead>Name</TableHead>
                                                 <TableHead>Status</TableHead>
+                                                <TableHead className="text-center">Score</TableHead>
                                                 <TableHead>Source</TableHead>
                                                 <TableHead>Input</TableHead>
                                                 <TableHead className="text-right">
@@ -1328,7 +1401,7 @@ export function LiveRunsContent() {
                                                     {groupBy !== "none" && (
                                                         <TableRow>
                                                             <TableCell
-                                                                colSpan={10}
+                                                                colSpan={11}
                                                                 className="text-muted-foreground bg-muted/30 text-xs font-semibold uppercase"
                                                             >
                                                                 {group.label} ({group.runs.length})
@@ -1391,6 +1464,18 @@ export function LiveRunsContent() {
                                                                             </Badge>
                                                                         )}
                                                                     </div>
+                                                                </TableCell>
+                                                                <TableCell className="text-center">
+                                                                    <EvalScoreCell
+                                                                        run={run}
+                                                                        trend={
+                                                                            run.agentId
+                                                                                ? agentTrends[
+                                                                                      run.agentId
+                                                                                  ]
+                                                                                : undefined
+                                                                        }
+                                                                    />
                                                                 </TableCell>
                                                                 <TableCell>
                                                                     {run.source ? (

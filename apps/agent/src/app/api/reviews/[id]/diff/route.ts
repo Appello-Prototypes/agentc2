@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
+import { authenticateRequest } from "@/lib/api-auth";
 
 /**
  * GET /api/reviews/[id]/diff
@@ -7,12 +8,17 @@ import { prisma } from "@repo/database";
  * Fetch PR diff from GitHub for a review that has a linked PR.
  * Uses the GitHub API with the configured PAT.
  */
-export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
         const { id } = await params;
 
-        const approval = await prisma.approvalRequest.findUnique({
-            where: { id },
+        const approval = await prisma.approvalRequest.findFirst({
+            where: { id, organizationId: authContext.organizationId },
             select: {
                 reviewContext: true,
                 githubRepo: true,

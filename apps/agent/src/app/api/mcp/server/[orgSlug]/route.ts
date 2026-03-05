@@ -80,6 +80,10 @@ async function authenticateRequest(
     // Also accept global MCP_API_KEY
     const globalKey = process.env.MCP_API_KEY;
     if (globalKey && token === globalKey) {
+        console.warn(
+            "[MCP Server] DEPRECATED: Global MCP_API_KEY used for authentication. " +
+                "Migrate to per-org API keys via /api/organizations/[orgId]/mcp-api-key"
+        );
         return {
             organizationId: org.id,
             authHeaders: {

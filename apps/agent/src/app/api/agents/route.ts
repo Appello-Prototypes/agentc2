@@ -4,7 +4,11 @@ import { prisma, Prisma } from "@repo/database";
 import { agentResolver } from "@repo/agentc2/agents";
 import { recordActivity } from "@repo/agentc2/activity/service";
 import { auth } from "@repo/auth";
-import { getDefaultWorkspaceIdForUser, getUserOrganizationId } from "@/lib/organization";
+import {
+    getDefaultWorkspaceIdForUser,
+    getUserOrganizationId,
+    validateWorkspaceOwnership
+} from "@/lib/organization";
 import { authenticateRequest } from "@/lib/api-auth";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { RATE_LIMIT_POLICIES } from "@/lib/security/rate-limit-policy";
@@ -245,13 +249,39 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
-        const session = await auth.api.getSession({
-            headers: await headers()
-        });
-        const workspaceId = session?.user
-            ? await getDefaultWorkspaceIdForUser(session.user.id)
-            : null;
-        const organizationId = session?.user ? await getUserOrganizationId(session.user.id) : null;
+
+        const apiAuth = await authenticateRequest(request);
+        let userId = apiAuth?.userId;
+        let organizationId: string | null | undefined = apiAuth?.organizationId;
+
+        if (!userId) {
+            const session = await auth.api.getSession({
+                headers: await headers()
+            });
+            userId = session?.user?.id;
+            if (userId && !organizationId) {
+                organizationId = await getUserOrganizationId(userId);
+            }
+        }
+
+        if (!userId) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
+        const workspaceId = body.workspaceId || (await getDefaultWorkspaceIdForUser(userId));
+
+        if (body.workspaceId && organizationId) {
+            const isValidWorkspace = await validateWorkspaceOwnership(
+                body.workspaceId,
+                organizationId
+            );
+            if (!isValidWorkspace) {
+                return NextResponse.json(
+                    { success: false, error: "Invalid workspaceId" },
+                    { status: 403 }
+                );
+            }
+        }
 
         if (organizationId) {
             const rateKey = `orgMutation:agentCreate:${organizationId}`;

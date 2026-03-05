@@ -19,6 +19,7 @@ export interface CreateSkillInput {
     tags?: string[];
     metadata?: Record<string, unknown>;
     workspaceId?: string;
+    organizationId?: string;
     type?: "USER" | "SYSTEM";
     createdBy?: string;
 }
@@ -37,6 +38,7 @@ export interface UpdateSkillInput {
 
 export interface ListSkillsInput {
     workspaceId?: string;
+    organizationId?: string;
     category?: string;
     tags?: string[];
     type?: "USER" | "SYSTEM";
@@ -59,6 +61,7 @@ export async function createSkill(input: CreateSkillInput) {
             tags: input.tags || [],
             metadata: (input.metadata || {}) as Prisma.InputJsonValue,
             workspaceId: input.workspaceId,
+            organizationId: input.organizationId,
             type: input.type || "USER",
             createdBy: input.createdBy
         }
@@ -135,23 +138,43 @@ export async function updateSkill(idOrSlug: string, input: UpdateSkillInput) {
 }
 
 /**
- * Delete a skill (cascades to versions, junctions)
+ * Delete a skill (cascades to versions, junctions).
+ * When organizationId is provided, verifies the skill belongs to the org before deleting.
  */
-export async function deleteSkill(idOrSlug: string) {
+export async function deleteSkill(idOrSlug: string, organizationId?: string) {
     const id = await resolveSkillId(idOrSlug);
+    if (organizationId) {
+        const skill = await prisma.skill.findUnique({
+            where: { id },
+            select: { organizationId: true, type: true }
+        });
+        if (skill && skill.organizationId !== organizationId && skill.type !== "SYSTEM") {
+            throw new Error("Skill does not belong to your organization");
+        }
+    }
     await prisma.skill.delete({
         where: { id }
     });
 }
 
 /**
- * Get a single skill by ID or slug with its documents and tools
+ * Get a single skill by ID or slug with its documents and tools.
+ * When organizationId is provided, only returns skills owned by that org or SYSTEM skills.
  */
-export async function getSkill(idOrSlug: string) {
+export async function getSkill(idOrSlug: string, organizationId?: string) {
+    const where: Record<string, unknown> = {
+        OR: [{ id: idOrSlug }, { slug: idOrSlug }]
+    };
+    if (organizationId) {
+        where.AND = [
+            {
+                OR: [{ organizationId }, { organizationId: null, type: "SYSTEM" }]
+            }
+        ];
+    }
+
     const skill = await prisma.skill.findFirst({
-        where: {
-            OR: [{ id: idOrSlug }, { slug: idOrSlug }]
-        },
+        where,
         include: {
             documents: {
                 include: {
@@ -180,9 +203,13 @@ export async function getSkill(idOrSlug: string) {
 export async function listSkills(input: ListSkillsInput = {}) {
     const where: Record<string, unknown> = {};
 
-    // Workspace scoping: show skills from the user's workspace + global skills (no workspace)
-    // SYSTEM skills are always visible regardless of workspace
-    if (input.workspaceId) {
+    // Organization scoping: show skills from the caller's org + SYSTEM skills (organizationId: null)
+    if (input.organizationId) {
+        where.OR = [
+            { organizationId: input.organizationId },
+            { organizationId: null, type: "SYSTEM" }
+        ];
+    } else if (input.workspaceId) {
         where.OR = [{ workspaceId: input.workspaceId }, { workspaceId: null }, { type: "SYSTEM" }];
     }
     if (input.category) where.category = input.category;
@@ -518,7 +545,7 @@ export async function detachFromAgent(agentIdOrSlug: string, skillIdOrSlug: stri
  */
 export async function forkSkill(
     idOrSlug: string,
-    options?: { slug?: string; name?: string; createdBy?: string }
+    options?: { slug?: string; name?: string; createdBy?: string; organizationId?: string }
 ) {
     const sourceId = await resolveSkillId(idOrSlug);
     const source = await prisma.skill.findUniqueOrThrow({
@@ -550,6 +577,7 @@ export async function forkSkill(
                 }
             } as unknown as Prisma.InputJsonValue,
             workspaceId: source.workspaceId,
+            organizationId: options?.organizationId ?? source.organizationId,
             type: "USER",
             createdBy: options?.createdBy
         }

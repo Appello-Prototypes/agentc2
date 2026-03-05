@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { headers } from "next/headers";
-import { auth } from "@repo/auth";
 import { prisma } from "@repo/database";
 import { skillAttachToAgent, skillDetachFromAgent } from "@repo/agentc2/skills";
-import { authenticateRequest } from "@/lib/api-auth";
+import { requireAuth, requireAgentAccess } from "@/lib/authz";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -13,19 +11,15 @@ type RouteContext = { params: Promise<{ id: string }> };
  */
 export async function POST(request: NextRequest, context: RouteContext) {
     try {
-        const apiAuth = await authenticateRequest(request);
-        let userId = apiAuth?.userId;
-
-        if (!userId) {
-            const session = await auth.api.getSession({ headers: await headers() });
-            userId = session?.user?.id;
-        }
-
-        if (!userId) {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-        }
+        const auth = await requireAuth(request);
+        if (auth.response) return auth.response;
+        const { context: authContext } = auth;
 
         const { id: agentId } = await context.params;
+
+        const access = await requireAgentAccess(authContext.organizationId, agentId);
+        if (access.response) return access.response;
+
         const { skillId, pinned } = await request.json();
 
         if (!skillId) {
@@ -54,19 +48,15 @@ export async function POST(request: NextRequest, context: RouteContext) {
  */
 export async function DELETE(request: NextRequest, context: RouteContext) {
     try {
-        const apiAuth = await authenticateRequest(request);
-        let userId = apiAuth?.userId;
-
-        if (!userId) {
-            const session = await auth.api.getSession({ headers: await headers() });
-            userId = session?.user?.id;
-        }
-
-        if (!userId) {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-        }
+        const auth = await requireAuth(request);
+        if (auth.response) return auth.response;
+        const { context: authContext } = auth;
 
         const { id: agentId } = await context.params;
+
+        const access = await requireAgentAccess(authContext.organizationId, agentId);
+        if (access.response) return access.response;
+
         const { skillId } = await request.json();
 
         if (!skillId) {
@@ -93,19 +83,15 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
  */
 export async function PATCH(request: NextRequest, context: RouteContext) {
     try {
-        const apiAuth = await authenticateRequest(request);
-        let userId = apiAuth?.userId;
-
-        if (!userId) {
-            const session = await auth.api.getSession({ headers: await headers() });
-            userId = session?.user?.id;
-        }
-
-        if (!userId) {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-        }
+        const auth = await requireAuth(request);
+        if (auth.response) return auth.response;
+        const { context: authContext } = auth;
 
         const { id: agentId } = await context.params;
+
+        const access = await requireAgentAccess(authContext.organizationId, agentId);
+        if (access.response) return access.response;
+
         const { skillId, pinned } = await request.json();
 
         if (!skillId || typeof pinned !== "boolean") {

@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { headers } from "next/headers";
-import { auth } from "@repo/auth";
-import { getSkillVersions } from "@repo/agentc2/skills";
+import { getSkill, getSkillVersions } from "@repo/agentc2/skills";
 import { authenticateRequest } from "@/lib/api-auth";
 
 type RouteContext = { params: Promise<{ skillId: string }> };
@@ -13,20 +11,19 @@ type RouteContext = { params: Promise<{ skillId: string }> };
  */
 export async function GET(request: NextRequest, context: RouteContext) {
     try {
-        const apiAuth = await authenticateRequest(request);
-        let userId = apiAuth?.userId;
-
-        if (!userId) {
-            const session = await auth.api.getSession({ headers: await headers() });
-            userId = session?.user?.id;
-        }
-
-        if (!userId) {
+        const authCtx = await authenticateRequest(request);
+        if (!authCtx) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
         const { skillId } = await context.params;
-        const versions = await getSkillVersions(skillId);
+
+        const skill = await getSkill(skillId, authCtx.organizationId);
+        if (!skill) {
+            return NextResponse.json({ error: "Skill not found" }, { status: 404 });
+        }
+
+        const versions = await getSkillVersions(skill.id);
 
         return NextResponse.json({ versions });
     } catch (error) {

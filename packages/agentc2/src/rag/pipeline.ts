@@ -137,6 +137,18 @@ export async function ingestDocument(
         ids: vectorIds
     });
 
+    // After vector upsert, update the organization_id column for database-level filtering
+    if (organizationId) {
+        try {
+            await prisma.$executeRawUnsafe(
+                `UPDATE rag_documents SET organization_id = $1 WHERE metadata->>'organizationId' = $1 AND organization_id IS NULL`,
+                organizationId
+            );
+        } catch (e) {
+            console.warn("[ingestDocument] Failed to set organization_id column:", e);
+        }
+    }
+
     // Dual-write: store chunk text in RagChunk table for full-text search
     try {
         await prisma.ragChunk.createMany({

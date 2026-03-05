@@ -45,6 +45,7 @@ const PROVIDER_ENV_KEYS: Record<string, string[]> = {
         "ELEVENLABS_DEFAULT_AGENT_SLUG"
     ],
     "telegram-bot": [
+        "TELEGRAM_ENABLED",
         "TELEGRAM_BOT_TOKEN",
         "TELEGRAM_WEBHOOK_SECRET",
         "TELEGRAM_DEFAULT_AGENT_SLUG",

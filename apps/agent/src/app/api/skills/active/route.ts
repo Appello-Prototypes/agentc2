@@ -8,9 +8,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
 import { getThreadSkillState } from "@repo/agentc2/skills";
+import { authenticateRequest } from "@/lib/api-auth";
 
 export async function GET(request: NextRequest) {
     try {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
         const threadId = request.nextUrl.searchParams.get("threadId");
 
         if (!threadId) {

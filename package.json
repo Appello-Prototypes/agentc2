@@ -30,6 +30,7 @@
     "db:studio": "turbo db:studio",
     "db:seed": "turbo db:seed",
     "db:seed-admin": "bun run packages/database/prisma/seed-admin.ts",
+    "db:seed-test-user": "bun run scripts/seed-test-user.ts",
     "format": "prettier --write .",
     "add-shadcn": "./scripts/add-shadcn.sh",
     "storybook": "turbo storybook",

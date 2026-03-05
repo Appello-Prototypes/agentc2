@@ -19,6 +19,30 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     try {
         const authResult = await requireAuth(request);
         if (authResult.response) return authResult.response;
+        const { context } = authResult;
+
+        const platformOrgSlug = process.env.PLATFORM_ORG_SLUG || "agentc2";
+        const platformOrg = await prisma.organization.findUnique({
+            where: { slug: platformOrgSlug },
+            select: { id: true }
+        });
+        const isPlatformMember = platformOrg
+            ? await prisma.membership.findUnique({
+                  where: {
+                      userId_organizationId: {
+                          userId: context.userId,
+                          organizationId: platformOrg.id
+                      }
+                  }
+              })
+            : null;
+
+        if (!isPlatformMember) {
+            return NextResponse.json(
+                { success: false, error: "Forbidden: platform admin access required" },
+                { status: 403 }
+            );
+        }
 
         const { id } = await params;
         const body = await request.json();

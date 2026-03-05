@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
+import { authenticateRequest } from "@/lib/api-auth";
 import {
     buildUnifiedTriggerId,
     extractTriggerConfig,
@@ -74,9 +75,12 @@ function buildTriggerTrigger(
     };
 }
 
-async function findWorkflow(slug: string) {
+async function findWorkflow(slug: string, organizationId: string) {
     return prisma.workflow.findFirst({
-        where: { OR: [{ slug }, { id: slug }] },
+        where: {
+            OR: [{ slug }, { id: slug }],
+            workspace: { organizationId }
+        },
         select: { id: true, slug: true }
     });
 }
@@ -85,10 +89,15 @@ async function findWorkflow(slug: string) {
  * GET /api/workflows/[slug]/execution-triggers/[triggerId]
  */
 export async function GET(
-    _request: NextRequest,
+    request: NextRequest,
     { params }: { params: Promise<{ slug: string; triggerId: string }> }
 ) {
     try {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
         const { slug, triggerId } = await params;
         const parsed = parseUnifiedTriggerId(triggerId);
         if (!parsed) {
@@ -98,7 +107,7 @@ export async function GET(
             );
         }
 
-        const workflow = await findWorkflow(slug);
+        const workflow = await findWorkflow(slug, authContext.organizationId);
         if (!workflow) {
             return NextResponse.json(
                 { success: false, error: `Workflow '${slug}' not found` },
@@ -138,6 +147,11 @@ export async function PATCH(
     { params }: { params: Promise<{ slug: string; triggerId: string }> }
 ) {
     try {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
         const { slug, triggerId } = await params;
         const parsed = parseUnifiedTriggerId(triggerId);
         if (!parsed) {
@@ -147,7 +161,7 @@ export async function PATCH(
             );
         }
 
-        const workflow = await findWorkflow(slug);
+        const workflow = await findWorkflow(slug, authContext.organizationId);
         if (!workflow) {
             return NextResponse.json(
                 { success: false, error: `Workflow '${slug}' not found` },
@@ -267,10 +281,15 @@ export async function PATCH(
  * DELETE /api/workflows/[slug]/execution-triggers/[triggerId]
  */
 export async function DELETE(
-    _request: NextRequest,
+    request: NextRequest,
     { params }: { params: Promise<{ slug: string; triggerId: string }> }
 ) {
     try {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
         const { slug, triggerId } = await params;
         const parsed = parseUnifiedTriggerId(triggerId);
         if (!parsed) {
@@ -280,7 +299,7 @@ export async function DELETE(
             );
         }
 
-        const workflow = await findWorkflow(slug);
+        const workflow = await findWorkflow(slug, authContext.organizationId);
         if (!workflow) {
             return NextResponse.json(
                 { success: false, error: `Workflow '${slug}' not found` },

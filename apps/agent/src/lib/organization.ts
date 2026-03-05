@@ -50,6 +50,17 @@ export async function getDefaultWorkspaceIdForUser(userId: string, preferredOrgI
     return workspace?.id ?? null;
 }
 
+export async function validateWorkspaceOwnership(
+    workspaceId: string,
+    organizationId: string
+): Promise<boolean> {
+    const workspace = await prisma.workspace.findFirst({
+        where: { id: workspaceId, organizationId },
+        select: { id: true }
+    });
+    return !!workspace;
+}
+
 export async function userHasPermission(
     userId: string,
     organizationId: string,

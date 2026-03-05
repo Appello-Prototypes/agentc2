@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
 import { auditLog } from "@/lib/audit-log";
+import { authenticateRequest } from "@/lib/api-auth";
 
 /**
  * GET /api/organizations/[orgId]/workspaces
@@ -12,6 +13,11 @@ export async function GET(
     { params }: { params: Promise<{ orgId: string }> }
 ) {
     try {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
         const { orgId } = await params;
 
         // Find organization
@@ -25,6 +31,23 @@ export async function GET(
             return NextResponse.json(
                 { success: false, error: `Organization '${orgId}' not found` },
                 { status: 404 }
+            );
+        }
+
+        // Verify caller is a member of this organization
+        const membership = await prisma.membership.findUnique({
+            where: {
+                userId_organizationId: {
+                    userId: authContext.userId,
+                    organizationId: organization.id
+                }
+            }
+        });
+
+        if (!membership) {
+            return NextResponse.json(
+                { success: false, error: "Not a member of this organization" },
+                { status: 403 }
             );
         }
 
@@ -81,6 +104,11 @@ export async function POST(
     { params }: { params: Promise<{ orgId: string }> }
 ) {
     try {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
         const { orgId } = await params;
         const body = await request.json();
         const { name, slug, environment, description, isDefault } = body;
@@ -116,6 +144,23 @@ export async function POST(
             return NextResponse.json(
                 { success: false, error: `Organization '${orgId}' not found` },
                 { status: 404 }
+            );
+        }
+
+        // Verify caller is a member of this organization
+        const membership = await prisma.membership.findUnique({
+            where: {
+                userId_organizationId: {
+                    userId: authContext.userId,
+                    organizationId: organization.id
+                }
+            }
+        });
+
+        if (!membership) {
+            return NextResponse.json(
+                { success: false, error: "Not a member of this organization" },
+                { status: 403 }
             );
         }
 

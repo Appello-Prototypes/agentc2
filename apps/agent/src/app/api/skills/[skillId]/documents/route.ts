@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { headers } from "next/headers";
-import { auth } from "@repo/auth";
-import { skillAttachDocument, skillDetachDocument } from "@repo/agentc2/skills";
+import { getSkill, skillAttachDocument, skillDetachDocument } from "@repo/agentc2/skills";
 import { authenticateRequest } from "@/lib/api-auth";
 
 type RouteContext = { params: Promise<{ skillId: string }> };
@@ -12,26 +10,25 @@ type RouteContext = { params: Promise<{ skillId: string }> };
  */
 export async function POST(request: NextRequest, context: RouteContext) {
     try {
-        const apiAuth = await authenticateRequest(request);
-        let userId = apiAuth?.userId;
-
-        if (!userId) {
-            const session = await auth.api.getSession({ headers: await headers() });
-            userId = session?.user?.id;
-        }
-
-        if (!userId) {
+        const authCtx = await authenticateRequest(request);
+        if (!authCtx) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
         const { skillId } = await context.params;
+
+        const skill = await getSkill(skillId, authCtx.organizationId);
+        if (!skill) {
+            return NextResponse.json({ error: "Skill not found" }, { status: 404 });
+        }
+
         const { documentId, role } = await request.json();
 
         if (!documentId) {
             return NextResponse.json({ error: "documentId is required" }, { status: 400 });
         }
 
-        const junction = await skillAttachDocument(skillId, documentId, role);
+        const junction = await skillAttachDocument(skill.id, documentId, role);
 
         return NextResponse.json(junction, { status: 201 });
     } catch (error) {
@@ -49,26 +46,25 @@ export async function POST(request: NextRequest, context: RouteContext) {
  */
 export async function DELETE(request: NextRequest, context: RouteContext) {
     try {
-        const apiAuth = await authenticateRequest(request);
-        let userId = apiAuth?.userId;
-
-        if (!userId) {
-            const session = await auth.api.getSession({ headers: await headers() });
-            userId = session?.user?.id;
-        }
-
-        if (!userId) {
+        const authCtx = await authenticateRequest(request);
+        if (!authCtx) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
         const { skillId } = await context.params;
+
+        const skill = await getSkill(skillId, authCtx.organizationId);
+        if (!skill) {
+            return NextResponse.json({ error: "Skill not found" }, { status: 404 });
+        }
+
         const { documentId } = await request.json();
 
         if (!documentId) {
             return NextResponse.json({ error: "documentId is required" }, { status: 400 });
         }
 
-        await skillDetachDocument(skillId, documentId);
+        await skillDetachDocument(skill.id, documentId);
 
         return NextResponse.json({ success: true });
     } catch (error) {

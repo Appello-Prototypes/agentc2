@@ -103,6 +103,7 @@ import {
     type ConnectionQuality
 } from "@/hooks/useRealtimeVoice";
 import { useEmbedConfig } from "@/hooks/useEmbedConfig";
+import { useOrganization } from "@/components/OrganizationProvider";
 
 // ─── Inline sub-components ───────────────────────────────────────────────────
 
@@ -985,6 +986,8 @@ export default function UnifiedChatPage() {
     const searchParams = useSearchParams();
     const { data: session } = useSession();
     const embedConfig = useEmbedConfig();
+    const { activeOrganization } = useOrganization();
+    const isAdmin = activeOrganization?.role === "admin" || activeOrganization?.role === "owner";
     const greeting = useGreeting(session?.user?.name);
 
     // Scope localStorage conversations by user so they don't leak across accounts
@@ -1867,13 +1870,15 @@ export default function UnifiedChatPage() {
                             </Button>
                         </div>
 
-                        {/* Debug info bar */}
-                        <DebugInfoBar
-                            threadId={threadId}
-                            runId={currentRunId}
-                            agentSlug={selectedAgentSlug}
-                            turnIndex={currentTurnIndex}
-                        />
+                        {/* Debug info bar — admin only, hidden in embed mode */}
+                        {isAdmin && !embedConfig && (
+                            <DebugInfoBar
+                                threadId={threadId}
+                                runId={currentRunId}
+                                agentSlug={selectedAgentSlug}
+                                turnIndex={currentTurnIndex}
+                            />
+                        )}
 
                         {/* Messages */}
                         <div className="min-h-0 flex-1">

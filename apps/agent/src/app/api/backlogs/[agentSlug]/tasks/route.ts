@@ -8,17 +8,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma, type Prisma, type BacklogTaskStatus } from "@repo/database";
 import { recordActivity } from "@repo/agentc2/activity/service";
+import { authenticateRequest } from "@/lib/api-auth";
 
 export async function GET(
     request: NextRequest,
     { params }: { params: Promise<{ agentSlug: string }> }
 ) {
     try {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
         const { agentSlug } = await params;
         const { searchParams } = new URL(request.url);
 
         const agent = await prisma.agent.findFirst({
-            where: { slug: agentSlug },
+            where: {
+                OR: [{ slug: agentSlug }, { id: agentSlug }],
+                workspace: { organizationId: authContext.organizationId }
+            },
             select: { id: true }
         });
 
@@ -73,11 +82,19 @@ export async function POST(
     { params }: { params: Promise<{ agentSlug: string }> }
 ) {
     try {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
         const { agentSlug } = await params;
         const body = await request.json();
 
         const agent = await prisma.agent.findFirst({
-            where: { slug: agentSlug },
+            where: {
+                OR: [{ slug: agentSlug }, { id: agentSlug }],
+                workspace: { organizationId: authContext.organizationId }
+            },
             select: { id: true, slug: true, name: true, tenantId: true, workspaceId: true }
         });
 

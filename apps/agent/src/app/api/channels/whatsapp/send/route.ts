@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getWhatsAppService } from "../_service";
+import { authenticateRequest } from "@/lib/api-auth";
 
 /**
  * POST /api/channels/whatsapp/send
@@ -12,6 +13,11 @@ import { getWhatsAppService } from "../_service";
  * - replyToMessageId?: string - Optional message ID to reply to
  */
 export async function POST(request: NextRequest) {
+    const authContext = await authenticateRequest(request);
+    if (!authContext) {
+        return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
+
     try {
         const enabled = process.env.WHATSAPP_ENABLED === "true";
 

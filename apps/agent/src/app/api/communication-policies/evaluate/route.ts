@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { evaluateCommunicationPolicy } from "@repo/agentc2";
+import { authenticateRequest } from "@/lib/api-auth";
 
 export async function POST(request: NextRequest) {
     try {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
         const body = await request.json();
         const {
             fromAgentSlug,

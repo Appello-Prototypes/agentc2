@@ -474,14 +474,11 @@ export async function POST(
             );
         }
 
-        // Try to authenticate for org context
-        let organizationId: string | undefined;
-        try {
-            const authContext = await authenticateRequest(request);
-            organizationId = authContext?.organizationId;
-        } catch {
-            // Continue without org context
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
         }
+        const organizationId = authContext.organizationId;
 
         let body: TestRequest = {};
         try {

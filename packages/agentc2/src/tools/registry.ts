@@ -396,6 +396,7 @@ import {
     teardownComputeTool
 } from "./remote-compute-tools";
 import { platformDocsTool } from "./platform-docs-tool";
+import { platformContextTool } from "./platform-context-tool";
 import {
     instanceListTool,
     instanceGetTool,
@@ -674,6 +675,7 @@ export const toolCategoryMap: Record<string, string> = {
     "campaign-write-aar": "Campaigns",
     "tool-registry-list": "Utilities",
     "platform-docs": "Platform Documentation",
+    "platform-context": "Platform Documentation",
     "instance-list": "Agent Instances",
     "instance-get": "Agent Instances",
     "instance-create": "Agent Instances",
@@ -1488,6 +1490,7 @@ export const toolRegistry: Record<string, any> = {
     // Tool introspection
     "tool-registry-list": toolRegistryListTool,
     "platform-docs": platformDocsTool,
+    "platform-context": platformContextTool,
     "instance-list": instanceListTool,
     "instance-get": instanceGetTool,
     "instance-create": instanceCreateTool,

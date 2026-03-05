@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, randomBytes } from "crypto";
+import { createCipheriv, createDecipheriv, hkdfSync, randomBytes } from "crypto";
 import { MCPClient, InternalMastraMCPClient, type MastraMCPServerDefinition } from "@mastra/mcp";
 import { fileURLToPath } from "url";
 import { dirname, resolve } from "path";
@@ -96,7 +96,7 @@ async function invalidateMcpToolsCache(organizationId?: string | null) {
 }
 
 type EncryptedPayload = {
-    __enc: "v1";
+    __enc: "v1" | "v2";
     iv: string;
     tag: string;
     data: string;
@@ -113,29 +113,40 @@ const getEncryptionKey = () => {
     return buffer;
 };
 
+function deriveOrgKey(masterKey: Buffer, organizationId: string): Buffer {
+    return Buffer.from(
+        hkdfSync("sha256", masterKey, organizationId, "agentc2-credential-encryption", 32)
+    );
+}
+
 const isEncryptedPayload = (value: unknown): value is EncryptedPayload => {
     if (!value || typeof value !== "object" || Array.isArray(value)) return false;
     const payload = value as Record<string, unknown>;
     return (
-        payload.__enc === "v1" &&
+        (payload.__enc === "v1" || payload.__enc === "v2") &&
         typeof payload.iv === "string" &&
         typeof payload.tag === "string" &&
         typeof payload.data === "string"
     );
 };
 
-const decryptCredentials = (value: unknown) => {
+const decryptCredentials = (value: unknown, organizationId?: string) => {
     if (!value || typeof value !== "object" || Array.isArray(value)) return value;
     if (!isEncryptedPayload(value)) return value;
 
-    const key = getEncryptionKey();
-    if (!key) {
+    const masterKey = getEncryptionKey();
+    if (!masterKey) {
         console.error(
             "[MCP] CREDENTIAL_ENCRYPTION_KEY is not set — cannot decrypt integration credentials. " +
                 "MCP servers requiring credentials will fail to connect."
         );
         return {};
     }
+
+    const key =
+        value.__enc === "v2" && organizationId
+            ? deriveOrgKey(masterKey, organizationId)
+            : masterKey;
 
     try {
         const iv = Buffer.from(value.iv, "base64");
@@ -156,11 +167,12 @@ const decryptCredentials = (value: unknown) => {
     }
 };
 
-const encryptCredentials = (value: Record<string, unknown> | null) => {
+const encryptCredentials = (value: Record<string, unknown> | null, organizationId?: string) => {
     if (!value || isEncryptedPayload(value)) return value;
-    const key = getEncryptionKey();
-    if (!key) return value;
+    const masterKey = getEncryptionKey();
+    if (!masterKey) return value;
 
+    const key = organizationId ? deriveOrgKey(masterKey, organizationId) : masterKey;
     const iv = randomBytes(12);
     const cipher = createCipheriv("aes-256-gcm", key, iv);
     const plaintext = JSON.stringify(value);
@@ -168,7 +180,7 @@ const encryptCredentials = (value: Record<string, unknown> | null) => {
     const tag = cipher.getAuthTag();
 
     return {
-        __enc: "v1",
+        __enc: organizationId ? ("v2" as const) : ("v1" as const),
         iv: iv.toString("base64"),
         tag: tag.toString("base64"),
         data: encrypted.toString("base64")
@@ -3229,7 +3241,10 @@ function buildServerConfigs(options: {
         for (const connection of providerConnections) {
             const isDefault = connection.id === defaultConnection?.id;
             const serverId = resolveServerId(providerKey, connection, isDefault);
-            const decryptedCredentials = decryptCredentials(connection.credentials);
+            const decryptedCredentials = decryptCredentials(
+                connection.credentials,
+                connection.organizationId
+            );
             const credentials =
                 decryptedCredentials &&
                 typeof decryptedCredentials === "object" &&
@@ -3958,7 +3973,10 @@ async function resolveServerDefinitionById(options: {
             const resolvedServerId = resolveServerId(providerKey, connection, isDefault);
             if (resolvedServerId !== serverId) continue;
 
-            const decryptedCredentials = decryptCredentials(connection.credentials);
+            const decryptedCredentials = decryptCredentials(
+                connection.credentials,
+                connection.organizationId
+            );
             const credentials =
                 decryptedCredentials &&
                 typeof decryptedCredentials === "object" &&
@@ -4068,7 +4086,10 @@ export async function exportMcpConfig(options: {
         for (const connection of providerConnections) {
             const isDefault = connection.id === defaultConnection?.id;
             const serverId = resolveServerId(providerKey, connection, isDefault);
-            const decryptedCredentials = decryptCredentials(connection.credentials);
+            const decryptedCredentials = decryptCredentials(
+                connection.credentials,
+                connection.organizationId
+            );
             const credentials =
                 decryptedCredentials &&
                 typeof decryptedCredentials === "object" &&
@@ -4253,7 +4274,7 @@ export async function importMcpConfig(options: {
             }
 
             const credentials = buildCredentialsForProvider(provider, serverConfig);
-            const encryptedCredentials = encryptCredentials(credentials);
+            const encryptedCredentials = encryptCredentials(credentials, organizationId);
             const isDefault = provider.key.toLowerCase() === serverName.toLowerCase();
 
             if (isDefault) {

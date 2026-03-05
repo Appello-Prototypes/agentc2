@@ -1867,6 +1867,96 @@ Every critical step includes a revision cycle powered by the \`dowhile\` workflo
         console.log("Playbook already published");
     }
 
+    // ── 9. SDLC Triage Network (fallback for workflow engine) ──────────
+
+    console.log("\nEnsuring SDLC Triage network...");
+
+    const triageNetworkSlug = orgSlug("sdlc-triage-network");
+
+    let triageNetwork = await prisma.network.findUnique({
+        where: { slug: triageNetworkSlug }
+    });
+
+    if (!triageNetwork) {
+        triageNetwork = await prisma.network.create({
+            data: {
+                slug: triageNetworkSlug,
+                name: "SDLC Triage Network",
+                description:
+                    "Multi-agent network that mirrors the SDLC triage workflow topology. " +
+                    "Provides a fallback execution path via the network engine when workflow-execute is unavailable.",
+                instructions:
+                    "You are the SDLC Triage router. Given an incoming ticket, first delegate to the Classifier agent " +
+                    "to determine type/priority/complexity. Then route based on classification:\n" +
+                    "- 'bug' → delegate to the Planner agent for root cause analysis and fix plan\n" +
+                    "- 'feature' → delegate to the Planner agent for design and phased implementation plan\n" +
+                    "- anything else → delegate to the Planner agent for a KB article or user guidance\n\n" +
+                    "After the Planner produces output, delegate to the Auditor for quality review. " +
+                    "Report the full pipeline result including classification, plan, and audit verdict.",
+                modelProvider: "openai",
+                modelName: "gpt-4o",
+                temperature: 0.3,
+                topologyJson: {
+                    nodes: [
+                        { id: "classifier", label: "Classifier", type: "agent" },
+                        { id: "planner", label: "Planner", type: "agent" },
+                        { id: "auditor", label: "Auditor", type: "agent" },
+                        { id: "reviewer", label: "Reviewer", type: "agent" }
+                    ],
+                    edges: [
+                        { from: "classifier", to: "planner" },
+                        { from: "planner", to: "auditor" },
+                        { from: "auditor", to: "reviewer" }
+                    ]
+                },
+                memoryConfig: {
+                    lastMessages: 40,
+                    semanticRecall: false
+                },
+                maxSteps: 12,
+                isPublished: true,
+                isActive: true,
+                workspaceId: workspace.id,
+                visibility: "ORGANIZATION",
+                createdBy: "seed-sdlc-playbook"
+            }
+        });
+
+        const primitiveAgents = [
+            {
+                slug: orgSlug("sdlc-classifier"),
+                desc: "Classifies tickets by type, priority, and complexity"
+            },
+            {
+                slug: orgSlug("sdlc-planner"),
+                desc: "Analyzes codebases and creates implementation plans"
+            },
+            {
+                slug: orgSlug("sdlc-auditor"),
+                desc: "Reviews plans and code for quality and completeness"
+            },
+            { slug: orgSlug("sdlc-reviewer"), desc: "Reviews PRs and calculates trust scores" }
+        ];
+
+        for (const pa of primitiveAgents) {
+            const agentRecord = agents[pa.slug];
+            if (agentRecord) {
+                await prisma.networkPrimitive.create({
+                    data: {
+                        networkId: triageNetwork.id,
+                        primitiveType: "agent",
+                        agentId: agentRecord.id,
+                        description: pa.desc
+                    }
+                });
+            }
+        }
+
+        console.log("Created SDLC Triage network:", triageNetwork.slug);
+    } else {
+        console.log("SDLC Triage network exists:", triageNetwork.slug);
+    }
+
     console.log("\n✔ SDLC Flywheel seed complete!");
     console.log("  Organization:", org.slug, "(", org.id, ")");
     console.log("  Workspace:", workspace.slug, "(", workspace.id, ")");
@@ -1874,6 +1964,7 @@ Every critical step includes a revision cycle powered by the \`dowhile\` workflo
     console.log("  Skills:", Object.keys(skills).join(", "));
     console.log("  Agents:", Object.keys(agents).join(", "));
     console.log("  Workflows:", Object.keys(workflows).join(", "));
+    console.log("  Network:", triageNetwork.slug, "(", triageNetwork.id, ")");
     console.log("  Playbook:", playbook.slug, "(", playbook.id, ")");
 }
 

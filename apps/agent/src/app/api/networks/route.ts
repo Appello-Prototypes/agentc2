@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
 import { buildNetworkTopologyFromPrimitives, isNetworkTopologyEmpty } from "@repo/agentc2/networks";
+import { authenticateRequest } from "@/lib/api-auth";
 
 function generateSlug(name: string): string {
     return name
@@ -9,9 +10,15 @@ function generateSlug(name: string): string {
         .replace(/^-|-$/g, "");
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
     try {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
         const networks = await prisma.network.findMany({
+            where: { workspace: { organizationId: authContext.organizationId } },
             orderBy: { createdAt: "desc" },
             include: {
                 _count: { select: { runs: true, primitives: true } }
@@ -45,6 +52,11 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
     try {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
         const body = await request.json();
         const { name, slug, description } = body;
 
@@ -59,8 +71,11 @@ export async function POST(request: NextRequest) {
         }
 
         const networkSlug = slug || generateSlug(name);
-        const existing = await prisma.network.findUnique({
-            where: { slug: networkSlug }
+        const existing = await prisma.network.findFirst({
+            where: {
+                slug: networkSlug,
+                workspace: { organizationId: authContext.organizationId }
+            }
         });
 
         if (existing) {
@@ -77,6 +92,12 @@ export async function POST(request: NextRequest) {
                 ? buildNetworkTopologyFromPrimitives(primitives)
                 : baseTopology;
 
+        let workspaceId = body.workspaceId;
+        if (!workspaceId) {
+            const { getDefaultWorkspaceIdForUser } = await import("@/lib/organization");
+            workspaceId = await getDefaultWorkspaceIdForUser(authContext.userId);
+        }
+
         const network = await prisma.network.create({
             data: {
                 slug: networkSlug,
@@ -91,8 +112,8 @@ export async function POST(request: NextRequest) {
                 maxSteps: body.maxSteps ?? 10,
                 isPublished: body.isPublished ?? false,
                 isActive: body.isActive ?? true,
-                workspaceId: body.workspaceId || null,
-                ownerId: body.ownerId || null,
+                workspaceId,
+                ownerId: body.ownerId || authContext.userId,
                 type: body.type || "USER"
             }
         });

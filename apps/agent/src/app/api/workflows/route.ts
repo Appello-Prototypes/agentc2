@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
+import { authenticateRequest } from "@/lib/api-auth";
 
 function generateSlug(name: string): string {
     return name
@@ -8,9 +9,15 @@ function generateSlug(name: string): string {
         .replace(/^-|-$/g, "");
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
     try {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
         const workflows = await prisma.workflow.findMany({
+            where: { workspace: { organizationId: authContext.organizationId } },
             orderBy: { createdAt: "desc" },
             include: {
                 _count: { select: { runs: true } }
@@ -43,6 +50,11 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
     try {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
         const body = await request.json();
         const { name, slug, description } = body;
 
@@ -53,9 +65,16 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        const { getDefaultWorkspaceIdForUser } = await import("@/lib/organization");
+        const workspaceId =
+            body.workspaceId || (await getDefaultWorkspaceIdForUser(authContext.userId));
+
         const workflowSlug = slug || generateSlug(name);
         const existing = await prisma.workflow.findFirst({
-            where: { slug: workflowSlug, workspaceId: body.workspaceId ?? null }
+            where: {
+                slug: workflowSlug,
+                workspace: { organizationId: authContext.organizationId }
+            }
         });
 
         if (existing) {
@@ -80,8 +99,8 @@ export async function POST(request: NextRequest) {
                 retryConfig: body.retryConfig || null,
                 isPublished: body.isPublished ?? false,
                 isActive: body.isActive ?? true,
-                workspaceId: body.workspaceId || null,
-                ownerId: body.ownerId || null,
+                workspaceId: workspaceId || null,
+                ownerId: body.ownerId || authContext.userId,
                 type: body.type || "USER"
             }
         });

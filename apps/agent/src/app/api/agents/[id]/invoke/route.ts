@@ -138,6 +138,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             );
         }
 
+        // Enrich context with authenticated org/user so tools get proper scoping
+        const enrichedContext = {
+            ...(context || {}),
+            tenantId: context?.tenantId || authResult.context.organizationId,
+            userId: context?.userId || authResult.context.userId
+        };
+
         // Model routing (pre-resolve)
         const { modelOverride: routedModelOverride, isReasoningModel } = await resolveModelOverride(
             id,
@@ -153,8 +160,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         try {
             ({ agent, record, source } = await agentResolver.resolve({
                 slug: id,
-                requestContext: context,
-                threadId: context?.threadId || context?.thread?.id,
+                requestContext: enrichedContext,
+                threadId: enrichedContext.threadId || context?.thread?.id,
                 modelOverride: routedModelOverride
             }));
         } catch (resolveError) {

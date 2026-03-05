@@ -8,13 +8,35 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma, type Prisma } from "@repo/database";
 import { recordActivity } from "@repo/agentc2/activity/service";
+import { authenticateRequest } from "@/lib/api-auth";
 
 export async function PATCH(
     request: NextRequest,
     { params }: { params: Promise<{ agentSlug: string; taskId: string }> }
 ) {
     try {
-        const { taskId } = await params;
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
+        const { agentSlug, taskId } = await params;
+
+        const agent = await prisma.agent.findFirst({
+            where: {
+                OR: [{ slug: agentSlug }, { id: agentSlug }],
+                workspace: { organizationId: authContext.organizationId }
+            },
+            select: { id: true }
+        });
+
+        if (!agent) {
+            return NextResponse.json(
+                { success: false, error: `Agent not found: ${agentSlug}` },
+                { status: 404 }
+            );
+        }
+
         const body = await request.json();
 
         const task = await prisma.backlogTask.findUnique({
@@ -107,7 +129,27 @@ export async function DELETE(
     { params }: { params: Promise<{ agentSlug: string; taskId: string }> }
 ) {
     try {
-        const { taskId } = await params;
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
+        const { agentSlug, taskId } = await params;
+
+        const agent = await prisma.agent.findFirst({
+            where: {
+                OR: [{ slug: agentSlug }, { id: agentSlug }],
+                workspace: { organizationId: authContext.organizationId }
+            },
+            select: { id: true }
+        });
+
+        if (!agent) {
+            return NextResponse.json(
+                { success: false, error: `Agent not found: ${agentSlug}` },
+                { status: 404 }
+            );
+        }
 
         await prisma.backlogTask.delete({ where: { id: taskId } });
 

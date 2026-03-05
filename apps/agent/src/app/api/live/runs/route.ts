@@ -33,6 +33,9 @@ interface UnifiedRun {
     promptTokens?: number | null;
     completionTokens?: number | null;
     failureReason?: string | null;
+    evalScore?: number | null;
+    evalTier?: string | null;
+    hasLearnedLesson?: boolean;
 }
 
 /**
@@ -83,6 +86,7 @@ export async function GET(request: NextRequest) {
         let agentTotal = 0;
         let workflowTotal = 0;
         let networkTotal = 0;
+        const agentTrends = new Map<string, { trend: "up" | "down" | "flat"; recentAvg: number }>();
 
         // --- Agent runs ---
         let budgetAlerts: Array<{
@@ -150,7 +154,18 @@ export async function GET(request: NextRequest) {
                             }
                         },
                         toolCalls: { select: { toolKey: true } },
-                        _count: { select: { toolCalls: true } }
+                        _count: { select: { toolCalls: true } },
+                        evaluation: {
+                            select: {
+                                overallGrade: true,
+                                evaluationTier: true,
+                                recommendations: {
+                                    where: { status: "graduated" },
+                                    select: { id: true },
+                                    take: 1
+                                }
+                            }
+                        }
                     },
                     orderBy: { startedAt: "desc" },
                     take: kind === "all" ? limit : limit,
@@ -220,11 +235,48 @@ export async function GET(request: NextRequest) {
                         run.completionTokens ??
                         (run.trace?.tokensJson?.completion as number | undefined) ??
                         0,
-                    failureReason: run.failureReason || null
+                    failureReason: run.failureReason || null,
+                    evalScore: run.evaluation?.overallGrade ?? null,
+                    evalTier: run.evaluation?.evaluationTier ?? null,
+                    hasLearnedLesson: (run.evaluation?.recommendations?.length ?? 0) > 0
                 });
             }
 
-            budgetAlerts = await getBudgetAlerts();
+            budgetAlerts = await getBudgetAlerts(authContext.organizationId);
+
+            const agentIdsInPage = Array.from(
+                new Set(agentRuns.map((r) => r.agentId).filter(Boolean))
+            ) as string[];
+            if (agentIdsInPage.length > 0) {
+                const recentEvals = await prisma.agentEvaluation.findMany({
+                    where: {
+                        agentId: { in: agentIdsInPage },
+                        overallGrade: { not: null }
+                    },
+                    orderBy: { createdAt: "desc" },
+                    take: agentIdsInPage.length * 20,
+                    select: { agentId: true, overallGrade: true }
+                });
+                for (const aid of agentIdsInPage) {
+                    const evals = recentEvals
+                        .filter((e) => e.agentId === aid)
+                        .map((e) => e.overallGrade!);
+                    if (evals.length < 2) continue;
+                    const recentHalf = evals.slice(0, Math.ceil(evals.length / 2));
+                    const olderHalf = evals.slice(Math.ceil(evals.length / 2));
+                    const recentAvg = recentHalf.reduce((a, b) => a + b, 0) / recentHalf.length;
+                    const olderAvg = olderHalf.reduce((a, b) => a + b, 0) / olderHalf.length;
+                    agentTrends.set(aid, {
+                        trend:
+                            recentAvg > olderAvg + 0.02
+                                ? "up"
+                                : recentAvg < olderAvg - 0.02
+                                  ? "down"
+                                  : "flat",
+                        recentAvg: Math.round(recentAvg * 100) / 100
+                    });
+                }
+            }
         }
 
         // --- Workflow runs ---
@@ -401,6 +453,7 @@ export async function GET(request: NextRequest) {
                     }
                 },
                 budgetAlerts,
+                agentTrends: Object.fromEntries(agentTrends),
                 pagination: {
                     limit,
                     offset,
@@ -425,6 +478,7 @@ export async function GET(request: NextRequest) {
                 }
             },
             budgetAlerts,
+            agentTrends: Object.fromEntries(agentTrends),
             pagination: {
                 limit,
                 offset,
@@ -440,14 +494,18 @@ export async function GET(request: NextRequest) {
     }
 }
 
-async function getBudgetAlerts() {
+async function getBudgetAlerts(organizationId: string) {
     try {
         const startOfMonth = new Date();
         startOfMonth.setDate(1);
         startOfMonth.setHours(0, 0, 0, 0);
 
         const policies = await prisma.budgetPolicy.findMany({
-            where: { enabled: true, hardLimit: true },
+            where: {
+                enabled: true,
+                hardLimit: true,
+                agent: { workspace: { organizationId } }
+            },
             include: { agent: { select: { id: true, slug: true, name: true } } }
         });
 

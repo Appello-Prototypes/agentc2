@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
 import { matchesTriggerFilter } from "@/lib/trigger-utils";
 import { parseUnifiedTriggerId } from "@/lib/unified-triggers";
+import { authenticateRequest } from "@/lib/api-auth";
 
 /**
  * POST /api/networks/[slug]/execution-triggers/[triggerId]/test
@@ -13,6 +14,11 @@ export async function POST(
     { params }: { params: Promise<{ slug: string; triggerId: string }> }
 ) {
     try {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
         const { slug, triggerId } = await params;
         const parsed = parseUnifiedTriggerId(triggerId);
         if (!parsed) {
@@ -26,7 +32,10 @@ export async function POST(
         const { payload } = body as { payload?: Record<string, unknown> };
 
         const network = await prisma.network.findFirst({
-            where: { OR: [{ slug }, { id: slug }] },
+            where: {
+                OR: [{ slug }, { id: slug }],
+                workspace: { organizationId: authContext.organizationId }
+            },
             select: { id: true, slug: true }
         });
 

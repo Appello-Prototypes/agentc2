@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
+import { authenticateRequest } from "@/lib/api-auth";
 
 async function resolveEntityId(entityType: string, idOrSlug: string): Promise<string | null> {
     if (entityType === "agent") {
@@ -33,6 +34,11 @@ async function resolveEntityId(entityType: string, idOrSlug: string): Promise<st
  */
 export async function GET(request: NextRequest) {
     try {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
         const { searchParams } = new URL(request.url);
         const entityType = searchParams.get("entityType");
         const entityIdOrSlug = searchParams.get("entityId");

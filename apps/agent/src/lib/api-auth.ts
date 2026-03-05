@@ -79,6 +79,10 @@ export async function authenticateRequest(
         // Check against MCP_API_KEY env var
         const validApiKey = process.env.MCP_API_KEY;
         if (validApiKey && apiKey === validApiKey) {
+            console.warn(
+                "[api-auth] DEPRECATED: Global MCP_API_KEY used for authentication. " +
+                    "Migrate to per-org API keys via /api/organizations/[orgId]/mcp-api-key"
+            );
             const orgSlug = orgSlugHeader || process.env.MCP_API_ORGANIZATION_SLUG;
             if (orgSlug) {
                 const context = await resolveOrgContext(orgSlug);

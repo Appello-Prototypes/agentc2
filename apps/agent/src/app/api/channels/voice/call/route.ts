@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getVoiceService } from "../_service";
+import { authenticateRequest } from "@/lib/api-auth";
 
 /**
  * POST /api/channels/voice/call
@@ -15,6 +16,11 @@ import { getVoiceService } from "../_service";
  * - elevenlabsAgentId?: string - ElevenLabs agent ID for stream mode
  */
 export async function POST(request: NextRequest) {
+    const authContext = await authenticateRequest(request);
+    if (!authContext) {
+        return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
+
     try {
         const enabled = process.env.TWILIO_ENABLED === "true";
 
@@ -79,7 +85,12 @@ export async function POST(request: NextRequest) {
  *
  * Get active calls.
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
+    const authContext = await authenticateRequest(request);
+    if (!authContext) {
+        return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
+
     try {
         const enabled = process.env.TWILIO_ENABLED === "true";
 

@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { prisma } from "@repo/database";
 import { auth } from "@repo/auth";
 import { getUserOrganizationId } from "@/lib/organization";
+import { authenticateRequest } from "@/lib/api-auth";
 
 /**
  * GET /api/mcp/tools/[tool]
@@ -556,6 +557,11 @@ export async function POST(
     { params }: { params: Promise<{ tool: string }> }
 ) {
     try {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
         const { tool } = await params;
         const body = await request.json();
 

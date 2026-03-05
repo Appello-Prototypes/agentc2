@@ -6,8 +6,6 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { headers } from "next/headers";
-import { auth } from "@repo/auth";
 import { forkSkill } from "@repo/agentc2/skills";
 import { authenticateRequest } from "@/lib/api-auth";
 
@@ -15,15 +13,8 @@ type RouteContext = { params: Promise<{ skillId: string }> };
 
 export async function POST(request: NextRequest, context: RouteContext) {
     try {
-        const apiAuth = await authenticateRequest(request);
-        let userId = apiAuth?.userId;
-
-        if (!userId) {
-            const session = await auth.api.getSession({ headers: await headers() });
-            userId = session?.user?.id;
-        }
-
-        if (!userId) {
+        const authCtx = await authenticateRequest(request);
+        if (!authCtx) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
@@ -34,7 +25,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
         const forked = await forkSkill(skillId, {
             slug,
             name,
-            createdBy: userId
+            createdBy: authCtx.userId,
+            organizationId: authCtx.organizationId
         });
 
         return NextResponse.json({ skill: forked }, { status: 201 });

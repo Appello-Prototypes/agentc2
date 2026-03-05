@@ -37,13 +37,22 @@ export const memoryRecallTool = createTool({
                 similarity: z.number().optional()
             })
         ),
-        searchQuery: z.string()
+        searchQuery: z.string(),
+        error: z.string().optional()
     }),
     execute: async ({ query, threadId = "default", resourceId, organizationId, topK = 5 }) => {
         try {
             if (!organizationId) {
+                if (process.env.NODE_ENV === "production") {
+                    return {
+                        found: false,
+                        results: [],
+                        searchQuery: query,
+                        error: "organizationId is required for memory recall in production"
+                    };
+                }
                 console.warn(
-                    "[memory-recall] organizationId missing — thread isolation may be compromised"
+                    "[memory-recall] organizationId missing — thread isolation compromised"
                 );
             }
             const effectiveThreadId =

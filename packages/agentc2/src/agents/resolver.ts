@@ -504,6 +504,15 @@ export class AgentResolver {
                 ? getAllMcpTools(organizationId)
                 : Promise.resolve({})
         ]);
+
+        const resolvedNames = new Set(Object.keys(registryTools));
+        const unresolved = toolNames.filter((n) => !resolvedNames.has(n));
+        if (unresolved.length > 0) {
+            console.warn(
+                `[AgentResolver] Agent ${record.slug}: ${unresolved.length} tools failed to load: ${unresolved.join(", ")}`
+            );
+        }
+
         const {
             skillInstructions,
             skillTools,

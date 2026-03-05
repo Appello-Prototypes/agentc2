@@ -45,7 +45,16 @@ export async function listPublicSkills(options?: {
     return { skills, total };
 }
 
-export async function publishSkill(skillId: string) {
+export async function publishSkill(skillId: string, organizationId?: string) {
+    if (organizationId) {
+        const skill = await prisma.skill.findUnique({
+            where: { id: skillId },
+            select: { organizationId: true }
+        });
+        if (skill && skill.organizationId !== organizationId) {
+            throw new Error("Skill does not belong to your organization");
+        }
+    }
     return prisma.skill.update({
         where: { id: skillId },
         data: { isPublic: true }

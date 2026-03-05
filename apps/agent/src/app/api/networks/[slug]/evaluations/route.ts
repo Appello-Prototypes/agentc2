@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma, Prisma } from "@repo/database";
+import { authenticateRequest } from "@/lib/api-auth";
 
 /**
  * GET /api/networks/[slug]/evaluations
@@ -8,13 +9,21 @@ import { prisma, Prisma } from "@repo/database";
  */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
     try {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
         const { slug } = await params;
         const { searchParams } = new URL(request.url);
         const limit = Math.min(parseInt(searchParams.get("limit") || "50"), 200);
         const cursor = searchParams.get("cursor");
 
         const network = await prisma.network.findFirst({
-            where: { OR: [{ slug }, { id: slug }] }
+            where: {
+                OR: [{ slug }, { id: slug }],
+                workspace: { organizationId: authContext.organizationId }
+            }
         });
 
         if (!network) {
@@ -102,13 +111,21 @@ export async function POST(
     { params }: { params: Promise<{ slug: string }> }
 ) {
     try {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
         const { slug } = await params;
         const body = await request.json().catch(() => ({}));
         const limit = Math.min(body.limit || 10, 50);
         const runIds: string[] | undefined = body.runIds;
 
         const network = await prisma.network.findFirst({
-            where: { OR: [{ slug }, { id: slug }] }
+            where: {
+                OR: [{ slug }, { id: slug }],
+                workspace: { organizationId: authContext.organizationId }
+            }
         });
 
         if (!network) {

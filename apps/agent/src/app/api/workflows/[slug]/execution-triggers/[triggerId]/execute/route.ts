@@ -8,6 +8,7 @@ import {
     parseUnifiedTriggerId
 } from "@/lib/unified-triggers";
 import { createTriggerEventRecord } from "@/lib/trigger-events";
+import { authenticateRequest } from "@/lib/api-auth";
 
 /**
  * POST /api/workflows/[slug]/execution-triggers/[triggerId]/execute
@@ -19,6 +20,11 @@ export async function POST(
     { params }: { params: Promise<{ slug: string; triggerId: string }> }
 ) {
     try {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
         const { slug, triggerId } = await params;
         const parsed = parseUnifiedTriggerId(triggerId);
         if (!parsed) {
@@ -32,7 +38,10 @@ export async function POST(
         const { payload } = body as { payload?: Record<string, unknown> };
 
         const workflow = await prisma.workflow.findFirst({
-            where: { OR: [{ slug }, { id: slug }] },
+            where: {
+                OR: [{ slug }, { id: slug }],
+                workspace: { organizationId: authContext.organizationId }
+            },
             select: { id: true, slug: true, isActive: true, workspaceId: true }
         });
 

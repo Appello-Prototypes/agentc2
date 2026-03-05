@@ -56,10 +56,12 @@ const buildHeaders = () => {
     if (apiKey) {
         headers["X-API-Key"] = apiKey;
     }
-    const orgSlug = process.env.MASTRA_ORGANIZATION_SLUG || process.env.MCP_API_ORGANIZATION_SLUG;
-    if (orgSlug) {
-        headers["X-Organization-Slug"] = orgSlug;
-    }
+    const orgSlug =
+        process.env.MASTRA_ORGANIZATION_SLUG ||
+        process.env.MCP_API_ORGANIZATION_SLUG ||
+        process.env.PLATFORM_ORG_SLUG ||
+        "agentc2";
+    headers["X-Organization-Slug"] = orgSlug;
     return headers;
 };
 
@@ -138,12 +140,32 @@ export const workflowExecuteTool = createTool({
             }
         });
 
-        const { executeWorkflowDefinition } = await import("../workflows/builder");
-        const result = await executeWorkflowDefinition({
-            definition: workflow.definitionJson as unknown as WorkflowDefinition,
-            input,
-            requestContext
-        });
+        let result;
+        try {
+            const { executeWorkflowDefinition } = await import("../workflows/builder");
+            result = await executeWorkflowDefinition({
+                definition: workflow.definitionJson as unknown as WorkflowDefinition,
+                input,
+                requestContext
+            });
+        } catch (execError) {
+            await prisma.workflowRun.update({
+                where: { id: run.id },
+                data: {
+                    status: RunStatus.FAILED,
+                    outputJson: Prisma.DbNull,
+                    completedAt: new Date(),
+                    durationMs: Date.now() - run.createdAt.getTime()
+                }
+            });
+            const errorMessage = execError instanceof Error ? execError.message : String(execError);
+            return {
+                success: false,
+                runId: run.id,
+                status: "failed",
+                error: errorMessage
+            };
+        }
 
         const durationMs = result.steps.reduce((sum, step) => sum + (step.durationMs || 0), 0);
 

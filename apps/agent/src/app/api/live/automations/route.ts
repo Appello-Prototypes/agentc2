@@ -41,6 +41,20 @@ export async function GET(request: NextRequest) {
 
         const shouldInclude = (type: string) => !primitiveType || primitiveType === type;
 
+        const orgWorkspaceIds = (
+            await prisma.workspace.findMany({
+                where: { organizationId: workspaceContext.organizationId },
+                select: { id: true }
+            })
+        ).map((w) => w.id);
+
+        const orgMemberIds = (
+            await prisma.membership.findMany({
+                where: { organizationId: workspaceContext.organizationId },
+                select: { userId: true }
+            })
+        ).map((m) => m.userId);
+
         // ── Agent Schedules ──
         const schedules = shouldInclude("agent")
             ? await prisma.agentSchedule.findMany({
@@ -99,7 +113,10 @@ export async function GET(request: NextRequest) {
             ? await prisma.campaignSchedule.findMany({
                   where: {
                       isActive: true,
-                      ...(entityId ? { templateId: entityId } : {})
+                      ...(entityId ? { templateId: entityId } : {}),
+                      template: {
+                          OR: [{ createdBy: { in: orgMemberIds } }, { isSystem: true }]
+                      }
                   },
                   include: {
                       template: { select: { id: true, slug: true, name: true } }
@@ -113,7 +130,10 @@ export async function GET(request: NextRequest) {
             ? await prisma.campaignTrigger.findMany({
                   where: {
                       isActive: true,
-                      ...(entityId ? { templateId: entityId } : {})
+                      ...(entityId ? { templateId: entityId } : {}),
+                      template: {
+                          OR: [{ createdBy: { in: orgMemberIds } }, { isSystem: true }]
+                      }
                   },
                   include: {
                       template: { select: { id: true, slug: true, name: true } }
@@ -129,7 +149,11 @@ export async function GET(request: NextRequest) {
                       status: "ACTIVE",
                       evalCronExpr: { not: "" },
                       ...(entityId ? { id: entityId } : {}),
-                      ...(entitySlug ? { slug: entitySlug } : {})
+                      ...(entitySlug ? { slug: entitySlug } : {}),
+                      OR: [
+                          { workspaceId: { in: orgWorkspaceIds } },
+                          { tenantId: workspaceContext.organizationId }
+                      ]
                   },
                   select: {
                       id: true,

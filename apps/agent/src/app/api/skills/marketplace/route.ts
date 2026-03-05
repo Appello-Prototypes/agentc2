@@ -44,13 +44,12 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: "skillId is required" }, { status: 400 });
         }
 
-        const skill = await publishSkill(body.skillId);
+        const skill = await publishSkill(body.skillId, authResult.context!.organizationId);
         return NextResponse.json({ skill }, { status: 200 });
     } catch (error) {
         console.error("[marketplace] Error:", error);
-        return NextResponse.json(
-            { error: error instanceof Error ? error.message : "Internal error" },
-            { status: 500 }
-        );
+        const message = error instanceof Error ? error.message : "Internal error";
+        const status = message.includes("does not belong") ? 403 : 500;
+        return NextResponse.json({ error: message }, { status });
     }
 }

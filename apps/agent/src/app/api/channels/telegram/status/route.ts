@@ -1,15 +1,27 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
+import { authenticateRequest } from "@/lib/api-auth";
+import { resolveChannelCredentials } from "@/lib/channel-credentials";
 
 /**
  * GET /api/channels/telegram/status
  *
  * Get Telegram bot status and session count.
+ * Uses DB-first credential resolution with env-var fallback.
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
+    const authContext = await authenticateRequest(request);
+    if (!authContext) {
+        return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
+
     try {
-        const botToken = process.env.TELEGRAM_BOT_TOKEN;
-        const enabled = process.env.TELEGRAM_ENABLED === "true";
+        const { credentials, source } = await resolveChannelCredentials(
+            "telegram-bot",
+            authContext.organizationId
+        );
+        const botToken = credentials.TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
+        const enabled = (credentials.TELEGRAM_ENABLED || process.env.TELEGRAM_ENABLED) === "true";
 
         if (!enabled) {
             return NextResponse.json({
@@ -54,6 +66,7 @@ export async function GET() {
         return NextResponse.json({
             enabled: true,
             status: "connected",
+            credentialSource: source,
             bot: {
                 id: result.result.id,
                 username: result.result.username,
@@ -90,14 +103,24 @@ export async function GET() {
  * POST /api/channels/telegram/status
  *
  * Set or remove webhook URL.
+ * Uses DB-first credential resolution with env-var fallback.
  *
  * Body:
  * - webhookUrl: string | null - URL to set, or null to remove
  * - secretToken?: string - Optional secret token for webhook verification
  */
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+    const authContext = await authenticateRequest(request);
+    if (!authContext) {
+        return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
+
     try {
-        const botToken = process.env.TELEGRAM_BOT_TOKEN;
+        const { credentials } = await resolveChannelCredentials(
+            "telegram-bot",
+            authContext.organizationId
+        );
+        const botToken = credentials.TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
         if (!botToken) {
             return NextResponse.json(
                 { error: "TELEGRAM_BOT_TOKEN not configured" },
@@ -109,7 +132,6 @@ export async function POST(request: Request) {
         const { webhookUrl, secretToken } = body;
 
         if (webhookUrl === null) {
-            // Remove webhook
             const response = await fetch(`https://api.telegram.org/bot${botToken}/deleteWebhook`);
             const result = await response.json();
 
@@ -119,7 +141,6 @@ export async function POST(request: Request) {
             });
         }
 
-        // Set webhook
         const params: Record<string, string> = { url: webhookUrl };
         if (secretToken) {
             params.secret_token = secretToken;

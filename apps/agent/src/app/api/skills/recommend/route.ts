@@ -8,9 +8,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
 import { recommendSkills } from "@repo/agentc2/skills";
+import { authenticateRequest } from "@/lib/api-auth";
 
 export async function GET(request: NextRequest) {
     try {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
         const agentId = request.nextUrl.searchParams.get("agentId");
         const maxResults = parseInt(request.nextUrl.searchParams.get("maxResults") || "10", 10);
 
@@ -23,7 +29,10 @@ export async function GET(request: NextRequest) {
 
         // Get agent instructions
         const agent = await prisma.agent.findFirst({
-            where: { OR: [{ id: agentId }, { slug: agentId }] },
+            where: {
+                OR: [{ id: agentId }, { slug: agentId }],
+                workspace: { organizationId: authContext.organizationId }
+            },
             select: { id: true, slug: true, instructions: true, description: true }
         });
 

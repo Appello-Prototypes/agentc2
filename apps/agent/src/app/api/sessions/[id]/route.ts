@@ -1,16 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
 import { readScratchpad, completeSession } from "@repo/agentc2";
+import { authenticateRequest } from "@/lib/api-auth";
 
-export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
         const { id } = await params;
         const session = await prisma.agentSession.findUnique({
             where: { id },
-            include: { participants: true }
+            include: { participants: true, workspace: { select: { organizationId: true } } }
         });
 
         if (!session) {
+            return NextResponse.json(
+                { success: false, error: "Session not found" },
+                { status: 404 }
+            );
+        }
+
+        if (session.workspace?.organizationId !== authContext.organizationId) {
             return NextResponse.json(
                 { success: false, error: "Session not found" },
                 { status: 404 }
@@ -57,7 +70,25 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
         const { id } = await params;
+
+        const session = await prisma.agentSession.findUnique({
+            where: { id },
+            select: { workspace: { select: { organizationId: true } } }
+        });
+
+        if (!session || session.workspace?.organizationId !== authContext.organizationId) {
+            return NextResponse.json(
+                { success: false, error: "Session not found" },
+                { status: 404 }
+            );
+        }
+
         const body = await request.json();
         const { status } = body;
 

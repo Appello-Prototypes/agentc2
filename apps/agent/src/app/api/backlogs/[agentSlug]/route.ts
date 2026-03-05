@@ -6,16 +6,25 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
+import { authenticateRequest } from "@/lib/api-auth";
 
 export async function GET(
     request: NextRequest,
     { params }: { params: Promise<{ agentSlug: string }> }
 ) {
     try {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
         const { agentSlug } = await params;
 
         const agent = await prisma.agent.findFirst({
-            where: { slug: agentSlug },
+            where: {
+                OR: [{ slug: agentSlug }, { id: agentSlug }],
+                workspace: { organizationId: authContext.organizationId }
+            },
             select: { id: true, slug: true, name: true }
         });
 

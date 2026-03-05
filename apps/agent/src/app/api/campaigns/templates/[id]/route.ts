@@ -6,6 +6,19 @@ interface RouteParams {
     params: Promise<{ id: string }>;
 }
 
+async function getOrgMemberIds(userId: string): Promise<string[]> {
+    const membership = await prisma.membership.findFirst({
+        where: { userId },
+        select: { organizationId: true }
+    });
+    if (!membership) return [userId];
+    const members = await prisma.membership.findMany({
+        where: { organizationId: membership.organizationId },
+        select: { userId: true }
+    });
+    return members.map((m) => m.userId);
+}
+
 /**
  * GET /api/campaigns/templates/[id]
  * Get a single template with its campaigns and schedules
@@ -18,9 +31,13 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     try {
         const { id } = await params;
+        const memberIds = await getOrgMemberIds(session.user.id);
 
-        const template = await prisma.campaignTemplate.findUnique({
-            where: { id },
+        const template = await prisma.campaignTemplate.findFirst({
+            where: {
+                id,
+                OR: [{ createdBy: { in: memberIds } }, { isSystem: true }]
+            },
             include: {
                 campaigns: {
                     orderBy: { createdAt: "desc" },
@@ -67,6 +84,19 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     try {
         const { id } = await params;
+        const memberIds = await getOrgMemberIds(session.user.id);
+
+        const existing = await prisma.campaignTemplate.findFirst({
+            where: {
+                id,
+                OR: [{ createdBy: { in: memberIds } }, { isSystem: true }]
+            },
+            select: { id: true }
+        });
+        if (!existing) {
+            return NextResponse.json({ error: "Template not found" }, { status: 404 });
+        }
+
         const body = await request.json();
 
         const allowedFields = [
@@ -117,6 +147,19 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
     try {
         const { id } = await params;
+        const memberIds = await getOrgMemberIds(session.user.id);
+
+        const existing = await prisma.campaignTemplate.findFirst({
+            where: {
+                id,
+                OR: [{ createdBy: { in: memberIds } }, { isSystem: true }]
+            },
+            select: { id: true }
+        });
+        if (!existing) {
+            return NextResponse.json({ error: "Template not found" }, { status: 404 });
+        }
+
         await prisma.campaignTemplate.delete({ where: { id } });
         return NextResponse.json({ message: "Template deleted" });
     } catch (error) {

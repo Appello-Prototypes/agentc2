@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
-import { requireAuth } from "@/lib/authz";
+import { requireAuth, requirePulseAccess } from "@/lib/authz";
 
 export async function PUT(
     request: NextRequest,
@@ -9,8 +9,23 @@ export async function PUT(
     try {
         const auth = await requireAuth(request);
         if (auth.response) return auth.response;
+        const { userId, organizationId } = auth.context;
 
-        const { memberId } = await params;
+        const { pulseId, memberId } = await params;
+
+        const access = await requirePulseAccess(pulseId, userId, organizationId);
+        if (access.response) return access.response;
+
+        const existing = await prisma.pulseMember.findFirst({
+            where: { id: memberId, pulseId }
+        });
+        if (!existing) {
+            return NextResponse.json(
+                { success: false, error: "Member not found in this pulse" },
+                { status: 404 }
+            );
+        }
+
         const body = await request.json();
         const { role, capacityLevel, maxStepsOverride, frequencyOverride } = body;
 
@@ -44,8 +59,22 @@ export async function DELETE(
     try {
         const auth = await requireAuth(request);
         if (auth.response) return auth.response;
+        const { userId, organizationId } = auth.context;
 
-        const { memberId } = await params;
+        const { pulseId, memberId } = await params;
+
+        const access = await requirePulseAccess(pulseId, userId, organizationId);
+        if (access.response) return access.response;
+
+        const existing = await prisma.pulseMember.findFirst({
+            where: { id: memberId, pulseId }
+        });
+        if (!existing) {
+            return NextResponse.json(
+                { success: false, error: "Member not found in this pulse" },
+                { status: 404 }
+            );
+        }
 
         await prisma.pulseMember.delete({ where: { id: memberId } });
 

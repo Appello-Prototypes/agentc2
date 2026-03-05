@@ -130,7 +130,9 @@ export async function createDocument(input: CreateDocumentInput) {
     const slug = validateSlug(input.slug);
     const onConflict = input.onConflict || "error";
 
-    const existing = await prisma.document.findUnique({ where: { slug } });
+    const existing = await prisma.document.findFirst({
+        where: { slug, ...(input.organizationId ? { organizationId: input.organizationId } : {}) }
+    });
 
     if (existing) {
         if (onConflict === "skip") {
@@ -220,21 +222,12 @@ export async function updateDocument(idOrSlug: string, input: UpdateDocumentInpu
 
     // If content changed, create version and re-embed
     if (contentChanged) {
-        // Create version snapshot
-        await prisma.documentVersion.create({
-            data: {
-                documentId: id,
-                version: existing.version,
-                content: existing.content,
-                changeSummary: input.changeSummary,
-                createdBy: input.createdBy
-            }
-        });
+        // Atomically create version snapshot + update document to avoid race on unique(documentId, version)
+        const ragOrgId = existing.organizationId || undefined;
 
-        // Delete old vectors
+        // Delete old vectors before re-ingesting
         await ragDelete(existing.slug);
 
-        const ragOrgId = existing.organizationId || undefined;
         const ragResult = await ragIngest(input.content!, {
             organizationId: ragOrgId,
             type: (input.contentType || existing.contentType) as DocumentType,
@@ -243,22 +236,41 @@ export async function updateDocument(idOrSlug: string, input: UpdateDocumentInpu
             chunkOptions: input.chunkOptions
         });
 
-        // Update record with new content and vector info
-        const document = await prisma.document.update({
-            where: { id },
-            data: {
-                name: input.name,
-                description: input.description,
-                content: input.content,
-                contentType: input.contentType,
-                category: input.category,
-                tags: input.tags,
-                metadata: input.metadata ? (input.metadata as Prisma.InputJsonValue) : undefined,
-                vectorIds: ragResult.vectorIds,
-                chunkCount: ragResult.chunksIngested,
-                embeddedAt: new Date(),
-                version: existing.version + 1
-            }
+        const document = await prisma.$transaction(async (tx) => {
+            // Use the latest version from inside the transaction to avoid races
+            const current = await tx.document.findUniqueOrThrow({
+                where: { id },
+                select: { version: true, content: true }
+            });
+
+            await tx.documentVersion.create({
+                data: {
+                    documentId: id,
+                    version: current.version,
+                    content: current.content,
+                    changeSummary: input.changeSummary,
+                    createdBy: input.createdBy
+                }
+            });
+
+            return tx.document.update({
+                where: { id },
+                data: {
+                    name: input.name,
+                    description: input.description,
+                    content: input.content,
+                    contentType: input.contentType,
+                    category: input.category,
+                    tags: input.tags,
+                    metadata: input.metadata
+                        ? (input.metadata as Prisma.InputJsonValue)
+                        : undefined,
+                    vectorIds: ragResult.vectorIds,
+                    chunkCount: ragResult.chunksIngested,
+                    embeddedAt: new Date(),
+                    version: current.version + 1
+                }
+            });
         });
 
         return document;
@@ -283,15 +295,17 @@ export async function updateDocument(idOrSlug: string, input: UpdateDocumentInpu
 /**
  * Delete a document and its vectors
  */
-export async function deleteDocument(idOrSlug: string) {
-    const id = await resolveDocumentId(idOrSlug);
+export async function deleteDocument(idOrSlug: string, organizationId?: string) {
+    const id = await resolveDocumentId(idOrSlug, organizationId);
     const existing = await prisma.document.findUniqueOrThrow({
         where: { id }
     });
 
+    const effectiveOrgId = organizationId || existing.organizationId || undefined;
+
     // Delete vectors from RAG store (resilient -- don't block DB delete if vectors fail)
     try {
-        await ragDelete(existing.slug);
+        await ragDelete(existing.slug, effectiveOrgId);
     } catch (error) {
         console.warn(`[DocumentService] Failed to delete vectors for "${existing.slug}":`, error);
     }

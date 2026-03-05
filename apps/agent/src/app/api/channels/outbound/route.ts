@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import type { ChannelType, SendResult } from "@repo/agentc2/channels";
 import { agentResolver } from "@repo/agentc2/agents";
 import { prisma } from "@repo/database";
+import { authenticateRequest } from "@/lib/api-auth";
 
 /**
  * POST /api/channels/outbound
@@ -21,6 +22,11 @@ import { prisma } from "@repo/database";
  * - elevenlabsAgentId?: string - ElevenLabs agent ID for stream mode
  */
 export async function POST(request: NextRequest) {
+    const authContext = await authenticateRequest(request);
+    if (!authContext) {
+        return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
+
     try {
         const body = await request.json();
         const {
@@ -123,6 +129,11 @@ export async function POST(request: NextRequest) {
  * Get outbound message history.
  */
 export async function GET(request: NextRequest) {
+    const authContext = await authenticateRequest(request);
+    if (!authContext) {
+        return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
+
     try {
         const { searchParams } = new URL(request.url);
         const channel = searchParams.get("channel");

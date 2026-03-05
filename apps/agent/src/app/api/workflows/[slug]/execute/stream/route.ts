@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma, Prisma } from "@repo/database";
 import {
     executeWorkflowDefinition,
@@ -8,6 +8,7 @@ import {
 import { refreshWorkflowMetrics } from "@/lib/metrics";
 import { resolveRunEnvironment, resolveRunTriggerType } from "@/lib/run-metadata";
 import { createTriggerEventRecord } from "@/lib/trigger-events";
+import { authenticateRequest } from "@/lib/api-auth";
 
 function mapStepStatus(status: "completed" | "failed" | "suspended") {
     if (status === "failed") return "FAILED";
@@ -19,6 +20,11 @@ export async function POST(
     request: NextRequest,
     { params }: { params: Promise<{ slug: string }> }
 ) {
+    const authContext = await authenticateRequest(request);
+    if (!authContext) {
+        return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
+
     const encoder = new TextEncoder();
 
     const stream = new ReadableStream({
@@ -33,7 +39,10 @@ export async function POST(
                 const body = await request.json();
 
                 const workflow = await prisma.workflow.findFirst({
-                    where: { OR: [{ slug }, { id: slug }] },
+                    where: {
+                        OR: [{ slug }, { id: slug }],
+                        workspace: { organizationId: authContext.organizationId }
+                    },
                     include: { workspace: { select: { environment: true } } }
                 });
 

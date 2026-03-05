@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { agentResolver } from "@repo/agentc2/agents";
+import { authenticateRequest } from "@/lib/api-auth";
 
 function extractJson(text: string) {
     const match = text.match(/\{[\s\S]*\}/);
@@ -30,6 +31,11 @@ export async function POST(
     { params }: { params: Promise<{ slug: string }> }
 ) {
     try {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
         const { slug } = await params;
         const body = await request.json();
         const { prompt, definitionJson, selected } = body;

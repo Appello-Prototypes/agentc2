@@ -72,7 +72,10 @@ export async function GET(request: NextRequest, context: RouteContext) {
             queryVector: embedding,
             topK: 200,
             minScore: -1,
-            filter: { documentId: document.slug },
+            filter: {
+                documentId: document.slug,
+                ...(userOrgId ? { organizationId: userOrgId } : {})
+            },
             includeVector: true
         });
 

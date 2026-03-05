@@ -1,6 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { headers } from "next/headers";
-import { auth } from "@repo/auth";
 import { getSkill, updateSkill, deleteSkill, type UpdateSkillInput } from "@repo/agentc2/skills";
 import { authenticateRequest } from "@/lib/api-auth";
 
@@ -11,20 +9,13 @@ type RouteContext = { params: Promise<{ skillId: string }> };
  */
 export async function GET(request: NextRequest, context: RouteContext) {
     try {
-        const apiAuth = await authenticateRequest(request);
-        let userId = apiAuth?.userId;
-
-        if (!userId) {
-            const session = await auth.api.getSession({ headers: await headers() });
-            userId = session?.user?.id;
-        }
-
-        if (!userId) {
+        const authCtx = await authenticateRequest(request);
+        if (!authCtx) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
         const { skillId } = await context.params;
-        const skill = await getSkill(skillId);
+        const skill = await getSkill(skillId, authCtx.organizationId);
 
         if (!skill) {
             return NextResponse.json({ error: "Skill not found" }, { status: 404 });
@@ -45,19 +36,18 @@ export async function GET(request: NextRequest, context: RouteContext) {
  */
 export async function PUT(request: NextRequest, context: RouteContext) {
     try {
-        const apiAuth = await authenticateRequest(request);
-        let userId = apiAuth?.userId;
-
-        if (!userId) {
-            const session = await auth.api.getSession({ headers: await headers() });
-            userId = session?.user?.id;
-        }
-
-        if (!userId) {
+        const authCtx = await authenticateRequest(request);
+        if (!authCtx) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
         const { skillId } = await context.params;
+
+        const existing = await getSkill(skillId, authCtx.organizationId);
+        if (!existing) {
+            return NextResponse.json({ error: "Skill not found" }, { status: 404 });
+        }
+
         const body = await request.json();
 
         const input: UpdateSkillInput = {
@@ -69,7 +59,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
             tags: body.tags,
             metadata: body.metadata,
             changeSummary: body.changeSummary,
-            createdBy: userId
+            createdBy: authCtx.userId
         };
 
         const skill = await updateSkill(skillId, input);
@@ -89,21 +79,14 @@ export async function PUT(request: NextRequest, context: RouteContext) {
  */
 export async function DELETE(request: NextRequest, context: RouteContext) {
     try {
-        const apiAuth = await authenticateRequest(request);
-        let userId = apiAuth?.userId;
-
-        if (!userId) {
-            const session = await auth.api.getSession({ headers: await headers() });
-            userId = session?.user?.id;
-        }
-
-        if (!userId) {
+        const authCtx = await authenticateRequest(request);
+        if (!authCtx) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
         const { skillId } = await context.params;
 
-        await deleteSkill(skillId);
+        await deleteSkill(skillId, authCtx.organizationId);
 
         return NextResponse.json({ success: true });
     } catch (error) {

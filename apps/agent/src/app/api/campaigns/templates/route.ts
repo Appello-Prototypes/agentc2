@@ -2,6 +2,19 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
 import { getDemoSession } from "@/lib/standalone-auth";
 
+async function getOrgMemberIds(userId: string): Promise<string[]> {
+    const membership = await prisma.membership.findFirst({
+        where: { userId },
+        select: { organizationId: true }
+    });
+    if (!membership) return [userId];
+    const members = await prisma.membership.findMany({
+        where: { organizationId: membership.organizationId },
+        select: { userId: true }
+    });
+    return members.map((m) => m.userId);
+}
+
 /**
  * GET /api/campaigns/templates
  * List all campaign templates
@@ -13,7 +26,12 @@ export async function GET(request: NextRequest) {
     }
 
     try {
+        const memberIds = await getOrgMemberIds(session.user.id);
+
         const templates = await prisma.campaignTemplate.findMany({
+            where: {
+                OR: [{ createdBy: { in: memberIds } }, { isSystem: true }]
+            },
             orderBy: { createdAt: "desc" },
             include: {
                 _count: { select: { campaigns: true, schedules: true } }

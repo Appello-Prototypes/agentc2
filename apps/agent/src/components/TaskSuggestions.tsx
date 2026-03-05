@@ -234,7 +234,7 @@ async function buildSuggestionsFromPlatform(apiBase: string): Promise<Suggestion
     const workflowCards: SuggestionCard[] = publishedWorkflows.slice(0, 3).map((wf) => ({
         title: wf.name,
         description: truncate(wf.description, 45) || "Automated workflow",
-        prompt: `Run the "${wf.name}" workflow.${wf.description ? ` ${wf.description}` : ""}`,
+        prompt: `Execute workflow "${wf.slug}" using the workflow-execute tool.${wf.description ? ` ${wf.description}` : ""}`,
         agentSlug: conciergeSlug,
         icon: deriveIcon(wf.name, wf.description, "workflow")
     }));
@@ -245,7 +245,7 @@ async function buildSuggestionsFromPlatform(apiBase: string): Promise<Suggestion
     const networkCards: SuggestionCard[] = publishedNetworks.slice(0, 2).map((net) => ({
         title: net.name,
         description: truncate(net.description, 45) || `${net.primitiveCount} agents coordinated`,
-        prompt: `Using the "${net.name}" network, help me get started.${net.description ? ` ${net.description}` : ""}`,
+        prompt: `Execute network "${net.slug}" using the network-execute tool.${net.description ? ` ${net.description}` : ""}`,
         agentSlug: conciergeSlug,
         icon: deriveIcon(net.name, net.description, "network")
     }));

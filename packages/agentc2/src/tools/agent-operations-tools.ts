@@ -14,10 +14,12 @@ const buildHeaders = () => {
     if (apiKey) {
         headers["X-API-Key"] = apiKey;
     }
-    const orgSlug = process.env.MASTRA_ORGANIZATION_SLUG || process.env.MCP_API_ORGANIZATION_SLUG;
-    if (orgSlug) {
-        headers["X-Organization-Slug"] = orgSlug;
-    }
+    const orgSlug =
+        process.env.MASTRA_ORGANIZATION_SLUG ||
+        process.env.MCP_API_ORGANIZATION_SLUG ||
+        process.env.PLATFORM_ORG_SLUG ||
+        "agentc2";
+    headers["X-Organization-Slug"] = orgSlug;
     return headers;
 };
 

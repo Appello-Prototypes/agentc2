@@ -32,11 +32,10 @@ export async function POST(request: NextRequest) {
             title,
             description,
             labels,
-            targetOrganizationId,
             workflowId
         } = body;
 
-        const orgId = targetOrganizationId || authResult.organizationId;
+        const orgId = authResult.organizationId;
 
         if (!sourceType || !sourceId || !repository) {
             return NextResponse.json(

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
 import { queryBimElements } from "@repo/agentc2/bim";
+import { authenticateRequest } from "@/lib/api-auth";
 
 function parseListParam(value: string | null) {
     if (!value) {
@@ -14,6 +15,11 @@ function parseListParam(value: string | null) {
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
         const { id } = await params;
         const searchParams = request.nextUrl.searchParams;
         const versionIdParam = searchParams.get("versionId");
@@ -21,7 +27,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         let versionId = versionIdParam;
         if (!versionId) {
             const latestVersion = await prisma.bimModelVersion.findFirst({
-                where: { modelId: id },
+                where: {
+                    modelId: id,
+                    model: { workspace: { organizationId: authContext.organizationId } }
+                },
                 orderBy: { version: "desc" }
             });
             versionId = latestVersion?.id || null;

@@ -8,10 +8,17 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@repo/database";
 import { agentResolver, type RequestContext } from "@repo/agentc2/agents";
+import { authenticateRequest } from "@/lib/api-auth";
 
 export async function POST(request: NextRequest) {
     try {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
         const body = await request.json();
         const { slug, requestContext } = body as {
             slug: string;
@@ -20,6 +27,14 @@ export async function POST(request: NextRequest) {
 
         if (!slug) {
             return NextResponse.json({ error: "slug is required" }, { status: 400 });
+        }
+
+        const orgAgent = await prisma.agent.findFirst({
+            where: { slug, workspace: { organizationId: authContext.organizationId } },
+            select: { id: true }
+        });
+        if (!orgAgent) {
+            return NextResponse.json({ error: "Agent not found" }, { status: 404 });
         }
 
         const { agent, record, source } = await agentResolver.resolve({

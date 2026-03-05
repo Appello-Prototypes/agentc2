@@ -124,7 +124,7 @@ Write concise changelogs that explain what changed and why:
 async function main() {
     console.log("Seeding Playbook Authoring skill...");
 
-    const existing = await prisma.skill.findUnique({
+    const existing = await prisma.skill.findFirst({
         where: { slug: SKILL_SLUG }
     });
 

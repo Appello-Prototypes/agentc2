@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
 import { createSession } from "@repo/agentc2";
+import { authenticateRequest } from "@/lib/api-auth";
 
 export async function GET(request: NextRequest) {
     try {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
         const { searchParams } = new URL(request.url);
         const status = searchParams.get("status");
         const workspaceId = searchParams.get("workspaceId");
@@ -12,7 +18,8 @@ export async function GET(request: NextRequest) {
         const sessions = await prisma.agentSession.findMany({
             where: {
                 ...(status ? { status } : {}),
-                ...(workspaceId ? { workspaceId } : {})
+                ...(workspaceId ? { workspaceId } : {}),
+                workspace: { organizationId: authContext.organizationId }
             },
             include: { participants: true },
             orderBy: { createdAt: "desc" },
@@ -53,6 +60,11 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
     try {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
         const body = await request.json();
         const {
             name,
@@ -61,9 +73,7 @@ export async function POST(request: NextRequest) {
             orchestratorSlug,
             scratchpadTemplate,
             maxPeerCalls,
-            maxDepth,
-            workspaceId,
-            organizationId
+            maxDepth
         } = body;
 
         if (!name || !agentSlugs || agentSlugs.length < 2) {
@@ -72,6 +82,11 @@ export async function POST(request: NextRequest) {
                 { status: 400 }
             );
         }
+
+        const workspace = await prisma.workspace.findFirst({
+            where: { organizationId: authContext.organizationId, isDefault: true },
+            select: { id: true }
+        });
 
         const session = await createSession({
             name,
@@ -84,8 +99,8 @@ export async function POST(request: NextRequest) {
                 `# Session Scratchpad\n- **Task**: ${task || "(pending)"}\n- **Status**: active\n- **Findings**:\n- **Decisions**:\n- **Open Questions**:`,
             maxPeerCalls,
             maxDepth,
-            workspaceId,
-            organizationId
+            workspaceId: workspace?.id,
+            organizationId: authContext.organizationId
         });
 
         return NextResponse.json({ success: true, session }, { status: 201 });

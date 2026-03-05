@@ -52,8 +52,11 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
         }
 
         fetchOrgs();
+
+        const interval = setInterval(fetchOrgs, 60_000);
         return () => {
             cancelled = true;
+            clearInterval(interval);
         };
     }, []);
 

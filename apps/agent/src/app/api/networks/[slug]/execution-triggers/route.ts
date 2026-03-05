@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import { prisma } from "@repo/database";
 import { encryptString } from "@/lib/credential-crypto";
+import { authenticateRequest } from "@/lib/api-auth";
 import {
     UNIFIED_TRIGGER_TYPES,
     buildUnifiedTriggerId,
@@ -76,9 +77,12 @@ function buildNetworkTrigger(
     };
 }
 
-async function findNetwork(slug: string) {
+async function findNetwork(slug: string, organizationId: string) {
     return prisma.network.findFirst({
-        where: { OR: [{ slug }, { id: slug }] },
+        where: {
+            OR: [{ slug }, { id: slug }],
+            workspace: { organizationId }
+        },
         select: { id: true, slug: true, workspaceId: true }
     });
 }
@@ -88,8 +92,13 @@ async function findNetwork(slug: string) {
  */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
     try {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
         const { slug } = await params;
-        const network = await findNetwork(slug);
+        const network = await findNetwork(slug, authContext.organizationId);
         if (!network) {
             return NextResponse.json(
                 { success: false, error: `Network '${slug}' not found` },
@@ -171,8 +180,13 @@ export async function POST(
     { params }: { params: Promise<{ slug: string }> }
 ) {
     try {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
         const { slug } = await params;
-        const network = await findNetwork(slug);
+        const network = await findNetwork(slug, authContext.organizationId);
         if (!network) {
             return NextResponse.json(
                 { success: false, error: `Network '${slug}' not found` },

@@ -74,7 +74,10 @@ export function OrgSwitcher() {
 
     return (
         <DropdownMenu>
-            <DropdownMenuTrigger className="hover:bg-accent flex items-center gap-2 rounded-md px-2 py-1.5 transition-colors outline-none">
+            <DropdownMenuTrigger
+                aria-label="Switch organization"
+                className="hover:bg-accent flex items-center gap-2 rounded-md px-2 py-1.5 transition-colors outline-none"
+            >
                 <OrgAvatar
                     name={activeOrganization.name}
                     logoUrl={activeOrganization.logoUrl}
