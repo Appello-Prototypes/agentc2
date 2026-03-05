@@ -1803,6 +1803,7 @@ export function getToolsByNames(names: string[]): Record<string, any> {
  *
  * Checks both the static registry and MCP tools.
  * MCP tools are identified by underscore naming: serverName_toolName
+ * Enforces IntegrationTool enablement gating for MCP tools.
  *
  * @param names - Array of tool names (e.g., ["calculator", "hubspot_hubspot-get-contacts"])
  * @returns Record of tool name to tool instance
@@ -1853,6 +1854,37 @@ export async function getToolsByNamesAsync(
                 }
             } catch (error) {
                 console.warn("[ToolRegistry] Failed to load federation tools:", error);
+            }
+        }
+    }
+
+    // Gate MCP tools against IntegrationTool enablement
+    if (organizationId) {
+        const mcpToolNames = Object.keys(result).filter(
+            (n) => n.includes("_") && !n.startsWith("federation:")
+        );
+        if (mcpToolNames.length > 0) {
+            try {
+                const { prisma } = await import("@repo/database");
+                const disabledTools = await prisma.integrationTool.findMany({
+                    where: {
+                        toolId: { in: mcpToolNames },
+                        isEnabled: false,
+                        connection: { organizationId }
+                    },
+                    select: { toolId: true }
+                });
+                const disabledSet = new Set(disabledTools.map((t: { toolId: string }) => t.toolId));
+                if (disabledSet.size > 0) {
+                    for (const toolId of disabledSet) {
+                        delete result[toolId];
+                    }
+                    console.log(
+                        `[ToolRegistry] Gated ${disabledSet.size} disabled tool(s) for org ${organizationId}`
+                    );
+                }
+            } catch (error) {
+                console.warn("[ToolRegistry] IntegrationTool gate check failed:", error);
             }
         }
     }

@@ -160,13 +160,33 @@ export async function POST(request: NextRequest, { params }: Params) {
             };
         });
 
+        // Check IntegrationTool enablement for connected providers
+        const toolWarnings: Array<{ provider: string; message: string }> = [];
+        for (const mapping of connectedMappings) {
+            if (!mapping.connectionId) continue;
+            const disabledTools = await prisma.integrationTool.findMany({
+                where: {
+                    connectionId: mapping.connectionId,
+                    isEnabled: false
+                },
+                select: { toolId: true, name: true }
+            });
+            if (disabledTools.length > 0) {
+                toolWarnings.push({
+                    provider: mapping.provider,
+                    message: `${disabledTools.length} tool(s) disabled: ${disabledTools.map((t) => t.name).join(", ")}`
+                });
+            }
+        }
+
         const allPassed = testResults.every((r: { success: boolean }) => r.success);
         const disconnected = integrationStatus.filter((m: { connected: boolean }) => !m.connected);
 
         return NextResponse.json({
             allPassed: allPassed && disconnected.length === 0,
             results: testResults,
-            disconnected: disconnected.map((m: { provider: string }) => m.provider)
+            disconnected: disconnected.map((m: { provider: string }) => m.provider),
+            toolWarnings
         });
     } catch (error) {
         console.error("[setup/verify]", error);

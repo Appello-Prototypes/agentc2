@@ -225,6 +225,9 @@ export interface IntegrationMapping {
     provider: string;
     connected: boolean;
     connectionId?: string;
+    toolsReady?: boolean;
+    disabledTools?: string[];
+    missingTools?: string[];
 }
 
 export interface DeployPlaybookOptions {

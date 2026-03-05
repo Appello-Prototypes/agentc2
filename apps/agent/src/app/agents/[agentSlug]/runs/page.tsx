@@ -531,10 +531,12 @@ export default function RunsPage() {
     }, [agentSlug, statusFilter, sourceFilter, searchQuery, versionIdParam]);
 
     const fetchRunDetail = useCallback(
-        async (run: Run) => {
-            setRunDetailLoading(true);
-            setDetailTab("overview");
-            setRunDetail(null);
+        async (run: Run, isInitial = false) => {
+            if (isInitial) {
+                setRunDetailLoading(true);
+                setDetailTab("overview");
+                setRunDetail(null);
+            }
             try {
                 const res = await fetch(`${getApiBase()}/api/agents/${agentSlug}/runs/${run.id}`);
                 const data = await res.json();
@@ -544,7 +546,9 @@ export default function RunsPage() {
             } catch (error) {
                 console.error("Failed to fetch run detail:", error);
             } finally {
-                setRunDetailLoading(false);
+                if (isInitial) {
+                    setRunDetailLoading(false);
+                }
             }
         },
         [agentSlug]
@@ -562,7 +566,7 @@ export default function RunsPage() {
 
     const handleRunClick = (run: Run) => {
         setSelectedRun(run);
-        fetchRunDetail(run);
+        fetchRunDetail(run, true);
     };
 
     const sortedRuns = useMemo(() => {

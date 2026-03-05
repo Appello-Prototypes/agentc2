@@ -36,6 +36,9 @@ interface IntegrationInfo {
     category: string;
     connected: boolean;
     connectionId: string | null;
+    toolsReady?: boolean;
+    disabledTools?: string[];
+    missingTools?: string[];
 }
 
 interface ConfigStepInfo {
@@ -488,20 +491,59 @@ function IntegrationChecklistItem({
     onConnect: () => void;
 }) {
     const hasVerifyError = verifyResult && !verifyResult.success;
+    const hasDisabledTools = integration.disabledTools && integration.disabledTools.length > 0;
+    const hasMissingTools = integration.missingTools && integration.missingTools.length > 0;
+    const toolIssues = hasDisabledTools || hasMissingTools;
+
+    const getStatusIcon = () => {
+        if (!integration.connected) {
+            return (
+                <div className="flex h-5 w-5 items-center justify-center rounded-full border-2 border-dashed border-zinc-500" />
+            );
+        }
+        if (toolIssues) {
+            return <XCircleIcon className="h-5 w-5 text-amber-500" />;
+        }
+        return <CheckCircle2Icon className="h-5 w-5 text-green-500" />;
+    };
+
+    const getStatusLabel = () => {
+        if (!integration.connected) return null;
+        if (hasMissingTools) {
+            return (
+                <Badge className="border-amber-500/20 bg-amber-500/10 text-[10px] text-amber-600">
+                    Tools Not Validated
+                </Badge>
+            );
+        }
+        if (hasDisabledTools) {
+            return (
+                <Badge className="border-amber-500/20 bg-amber-500/10 text-[10px] text-amber-600">
+                    Tools Disabled
+                </Badge>
+            );
+        }
+        if (integration.toolsReady) {
+            return (
+                <Badge className="border-emerald-500/20 bg-emerald-500/10 text-[10px] text-emerald-600">
+                    Ready
+                </Badge>
+            );
+        }
+        return null;
+    };
 
     return (
         <div
             className={`flex items-center gap-3 rounded-md border p-3 ${
-                hasVerifyError ? "border-red-500/30 bg-red-500/5" : ""
+                hasVerifyError
+                    ? "border-red-500/30 bg-red-500/5"
+                    : toolIssues
+                      ? "border-amber-500/30 bg-amber-500/5"
+                      : ""
             }`}
         >
-            <div className="shrink-0">
-                {integration.connected ? (
-                    <CheckCircle2Icon className="h-5 w-5 text-green-500" />
-                ) : (
-                    <div className="flex h-5 w-5 items-center justify-center rounded-full border-2 border-dashed border-zinc-500" />
-                )}
-            </div>
+            <div className="shrink-0">{getStatusIcon()}</div>
 
             <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
@@ -509,6 +551,7 @@ function IntegrationChecklistItem({
                     <Badge variant="secondary" className="text-[10px] capitalize">
                         {integration.category}
                     </Badge>
+                    {getStatusLabel()}
                 </div>
                 {hasVerifyError && (
                     <p className="mt-0.5 text-xs text-red-400">{verifyResult.error}</p>
@@ -516,6 +559,16 @@ function IntegrationChecklistItem({
                 {verifyResult?.success && verifyResult.toolCount && (
                     <p className="text-muted-foreground mt-0.5 text-xs">
                         {verifyResult.toolCount} tools available
+                    </p>
+                )}
+                {hasDisabledTools && (
+                    <p className="mt-0.5 text-xs text-amber-600">
+                        {integration.disabledTools!.length} required tool(s) disabled
+                    </p>
+                )}
+                {hasMissingTools && (
+                    <p className="mt-0.5 text-xs text-amber-600">
+                        {integration.missingTools!.length} required tool(s) not yet discovered
                     </p>
                 )}
             </div>
@@ -527,7 +580,18 @@ function IntegrationChecklistItem({
                 </Button>
             )}
 
-            {integration.connected && (
+            {integration.connected && hasDisabledTools && (
+                <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => window.open(`/mcp/providers/${integration.provider}`, "_blank")}
+                >
+                    Enable Tools
+                    <ArrowRightIcon className="ml-1.5 h-3 w-3" />
+                </Button>
+            )}
+
+            {integration.connected && !toolIssues && (
                 <Button size="sm" variant="ghost" onClick={onConnect}>
                     <RefreshCwIcon className="h-3.5 w-3.5" />
                 </Button>

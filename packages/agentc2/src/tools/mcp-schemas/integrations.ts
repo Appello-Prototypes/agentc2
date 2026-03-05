@@ -123,6 +123,109 @@ export const integrationToolDefinitions: McpToolDefinition[] = [
         },
         invoke_url: "/api/mcp",
         category: "integrations"
+    },
+    {
+        name: "integration-tools-list",
+        description:
+            "List all discovered tools for a provider with enable/disable status, health, and usage counts. " +
+            "Returns IntegrationTool records (auto-populated on connection). " +
+            "Use this to see what capabilities an integration exposes and which are enabled.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                providerKey: {
+                    type: "string",
+                    description:
+                        "Provider key (e.g. 'hubspot', 'github', 'slack'). Use integration-providers-list to find keys."
+                }
+            },
+            required: ["providerKey"]
+        },
+        invoke_url: "/api/mcp",
+        category: "integrations"
+    },
+    {
+        name: "integration-tools-toggle",
+        description:
+            "Enable or disable one or more tools for an integration. " +
+            "Disabled tools are blocked at runtime and will not be available to agents. " +
+            "Returns warnings if disabling tools that active agents depend on.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                providerKey: {
+                    type: "string",
+                    description: "Provider key (e.g. 'hubspot')"
+                },
+                toolIds: {
+                    type: "array",
+                    items: { type: "string" },
+                    description:
+                        "Array of tool IDs to toggle (e.g. ['hubspot_hubspot-get-contacts']). Use integration-tools-list to find IDs."
+                },
+                isEnabled: {
+                    type: "boolean",
+                    description: "true to enable, false to disable"
+                }
+            },
+            required: ["providerKey", "toolIds", "isEnabled"]
+        },
+        invoke_url: "/api/mcp",
+        category: "integrations"
+    },
+    {
+        name: "integration-tools-rediscover",
+        description:
+            "Trigger tool re-discovery for a provider. Refreshes the list of available tools from the MCP server " +
+            "and syncs IntegrationTool records. Use after connecting or when tools seem stale.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                providerKey: {
+                    type: "string",
+                    description: "Provider key (e.g. 'hubspot')"
+                }
+            },
+            required: ["providerKey"]
+        },
+        invoke_url: "/api/mcp",
+        category: "integrations"
+    },
+    {
+        name: "integration-used-by",
+        description:
+            "Show which agents, skills, and playbooks depend on tools from this integration. " +
+            "Useful before disconnecting or disabling tools to understand impact.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                providerKey: {
+                    type: "string",
+                    description: "Provider key (e.g. 'hubspot')"
+                }
+            },
+            required: ["providerKey"]
+        },
+        invoke_url: "/api/mcp",
+        category: "integrations"
+    },
+    {
+        name: "integration-runtime-config",
+        description:
+            "View the compiled runtime MCP server configuration for a connection (secrets redacted). " +
+            "Shows transport type, server ID, credential shape, OAuth status, and tool count.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                connectionId: {
+                    type: "string",
+                    description: "Connection ID. Use integration-connections-list to find IDs."
+                }
+            },
+            required: ["connectionId"]
+        },
+        invoke_url: "/api/mcp",
+        category: "integrations"
     }
 ];
 
@@ -173,6 +276,42 @@ export const integrationToolRoutes: McpToolRoute[] = [
         name: "integration-connection-test",
         method: "POST",
         path: "/api/integrations/connections/{connectionId}/test",
+        pathParams: ["connectionId"]
+    },
+    {
+        kind: "internal",
+        name: "integration-tools-list",
+        method: "GET",
+        path: "/api/integrations/providers/{providerKey}/tools",
+        pathParams: ["providerKey"]
+    },
+    {
+        kind: "internal",
+        name: "integration-tools-toggle",
+        method: "PATCH",
+        path: "/api/integrations/providers/{providerKey}/tools",
+        pathParams: ["providerKey"],
+        bodyParams: ["toolIds", "isEnabled"]
+    },
+    {
+        kind: "internal",
+        name: "integration-tools-rediscover",
+        method: "POST",
+        path: "/api/integrations/providers/{providerKey}/tools",
+        pathParams: ["providerKey"]
+    },
+    {
+        kind: "internal",
+        name: "integration-used-by",
+        method: "GET",
+        path: "/api/integrations/providers/{providerKey}/used-by",
+        pathParams: ["providerKey"]
+    },
+    {
+        kind: "internal",
+        name: "integration-runtime-config",
+        method: "GET",
+        path: "/api/integrations/connections/{connectionId}/runtime",
         pathParams: ["connectionId"]
     }
 ];

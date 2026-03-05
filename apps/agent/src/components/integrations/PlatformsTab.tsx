@@ -33,7 +33,14 @@ import { getApiBase } from "@/lib/utils";
 /*  Types                                                              */
 /* ================================================================== */
 
-type ProviderStatus = "connected" | "disconnected" | "missing_auth";
+type ProviderStatus =
+    | "connected"
+    | "disconnected"
+    | "missing_auth"
+    | "needs_auth"
+    | "needs_validation"
+    | "degraded"
+    | "error";
 
 type ConnectionSummary = {
     id: string;
@@ -115,12 +122,16 @@ const CATEGORY_META: Record<string, { color: string; label: string }> = {
     design: { color: "bg-violet-500/10 text-violet-600 border-violet-500/30", label: "Design" },
     web: { color: "bg-purple-500/10 text-purple-600 border-purple-500/30", label: "Web" },
     automation: { color: "bg-cyan-500/10 text-cyan-600 border-cyan-500/30", label: "Automation" },
-    ai: { color: "bg-indigo-500/10 text-indigo-600 border-indigo-500/30", label: "AI" }
+    ai: { color: "bg-indigo-500/10 text-indigo-600 border-indigo-500/30", label: "AI" },
+    infrastructure: {
+        color: "bg-slate-500/10 text-slate-600 border-slate-500/30",
+        label: "Infrastructure"
+    }
 };
 
 const CATEGORY_ORDER = [
-    "productivity",
     "communication",
+    "productivity",
     "crm",
     "knowledge",
     "data",
@@ -129,7 +140,8 @@ const CATEGORY_ORDER = [
     "support",
     "design",
     "web",
-    "automation"
+    "automation",
+    "infrastructure"
 ];
 
 function CategoryBadge({ category }: { category: string }) {
@@ -160,12 +172,16 @@ function AuthBadge({ authType }: { authType: string }) {
 }
 
 function StatusDot({ status }: { status: ProviderStatus }) {
-    const color =
-        status === "connected"
-            ? "bg-green-500"
-            : status === "missing_auth"
-              ? "bg-yellow-500"
-              : "bg-gray-400";
+    const colorMap: Record<string, string> = {
+        connected: "bg-green-500",
+        missing_auth: "bg-yellow-500",
+        needs_auth: "bg-yellow-500",
+        needs_validation: "bg-blue-500",
+        degraded: "bg-amber-500",
+        error: "bg-red-500",
+        disconnected: "bg-gray-400"
+    };
+    const color = colorMap[status] ?? "bg-gray-400";
     return <span className={`inline-block h-2 w-2 rounded-full ${color}`} />;
 }
 
@@ -228,6 +244,10 @@ function isProviderConnected(p: IntegrationProvider) {
     return (
         p.status === "connected" ||
         p.status === "missing_auth" ||
+        p.status === "needs_auth" ||
+        p.status === "needs_validation" ||
+        p.status === "degraded" ||
+        p.status === "error" ||
         p.connections.some((c) => c.isActive)
     );
 }
@@ -526,12 +546,7 @@ export function PlatformsTab({ providers }: { providers: IntegrationProvider[] }
 
     const platformProviders = useMemo(
         () =>
-            providers.filter(
-                (p) =>
-                    p.providerType !== "ai-model" &&
-                    p.providerType !== "webhook" &&
-                    p.maturityLevel !== "internal"
-            ),
+            providers.filter((p) => p.providerType !== "ai-model" && p.providerType !== "webhook"),
         [providers]
     );
 

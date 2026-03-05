@@ -394,12 +394,37 @@ model IntegrationConnection {
     calendarEvents          CalendarEvent[]
     slackChannelPreferences SlackChannelPreference[]
     integrationEvents       IntegrationEvent[]
+    integrationTools        IntegrationTool[]
 
     @@index([organizationId])
     @@index([providerId])
     @@index([userId])
     @@index([agentTriggerId])
     @@map("integration_connection")
+}
+
+// Integration Tool - Discovered tool from an integration connection with enablement gating
+model IntegrationTool {
+    id               String                @id @default(cuid())
+    connectionId     String
+    connection       IntegrationConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+    providerKey      String
+    toolId           String
+    name             String
+    description      String?               @db.Text
+    inputSchema      Json?
+    isEnabled        Boolean               @default(true)
+    validationStatus String                @default("unknown") // "healthy", "degraded", "error", "unknown"
+    lastValidatedAt  DateTime?
+    errorMessage     String?               @db.Text
+    metadata         Json?
+    createdAt        DateTime              @default(now())
+    updatedAt        DateTime              @updatedAt
+
+    @@unique([connectionId, toolId])
+    @@index([providerKey])
+    @@index([connectionId, isEnabled])
+    @@map("integration_tool")
 }
 
 // Integration Event - Lifecycle event log for integration connections

@@ -5,10 +5,24 @@ import { getBlueprint, hasBlueprint } from "@repo/agentc2/integrations";
 import { getConnectionMissingFields, getConnectionCredentials } from "@/lib/integrations";
 import { authenticateRequest } from "@/lib/api-auth";
 
+/**
+ * Unified integration status model:
+ * - "connected"        — Auth valid, tools discovered, at least one tool enabled
+ * - "needs_auth"       — No credentials or expired token
+ * - "needs_validation" — Connected but not tested / tools not discovered
+ * - "degraded"         — Some tools failing health checks
+ * - "error"            — Connection test failed
+ * - "disconnected"     — No connection exists
+ *
+ * Backward-compatible: "missing_auth" maps to "needs_auth"
+ */
 const resolveProviderStatus = (options: {
     authType: string;
     hasConnections: boolean;
     hasMissing: boolean;
+    hasError?: boolean;
+    hasDegradedTools?: boolean;
+    needsValidation?: boolean;
 }) => {
     if (options.authType === "none") {
         return "connected";
@@ -17,7 +31,16 @@ const resolveProviderStatus = (options: {
         return "disconnected";
     }
     if (options.hasMissing) {
-        return "missing_auth";
+        return "needs_auth";
+    }
+    if (options.hasError) {
+        return "error";
+    }
+    if (options.needsValidation) {
+        return "needs_validation";
+    }
+    if (options.hasDegradedTools) {
+        return "degraded";
     }
     return "connected";
 };
@@ -138,10 +161,14 @@ export async function GET(request: NextRequest) {
             });
 
             const hasMissing = connectionDetails.some((detail) => detail.missingFields.length > 0);
+            const hasError = providerConnections.some(
+                (c) => c.errorMessage && c.errorMessage.length > 0
+            );
             const status = resolveProviderStatus({
                 authType: provider.authType,
                 hasConnections: providerConnections.length > 0,
-                hasMissing
+                hasMissing,
+                hasError
             });
 
             // Look up provisioned resources for this provider

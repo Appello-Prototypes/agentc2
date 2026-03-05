@@ -26,7 +26,8 @@ export { provisionIntegration } from "./provisioner";
 export {
     deprovisionIntegration,
     syncBlueprintVersions,
-    rediscoverToolsForConnection
+    rediscoverToolsForConnection,
+    syncIntegrationToolRecords
 } from "./provisioner";
 export type { DeprovisionResult, BlueprintSyncResult, ToolRediscoveryResult } from "./provisioner";
 

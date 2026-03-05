@@ -566,7 +566,6 @@ export default function IntegrationsHubPage() {
         [providers]
     );
 
-    // Count platform providers (non-AI, non-webhook) for the badge
     const platformProviderCount = useMemo(
         () =>
             providers.filter((p) => p.providerType !== "ai-model" && p.providerType !== "webhook")
@@ -598,10 +597,10 @@ export default function IntegrationsHubPage() {
             <div className="container mx-auto space-y-6 py-6">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                     <div>
-                        <h1 className="text-3xl font-bold">Integrations Hub</h1>
+                        <h1 className="text-3xl font-bold">Integrations</h1>
                         <p className="text-muted-foreground">
-                            Connect AI tools, manage platforms, and configure MCP servers in one
-                            place.
+                            Browse, connect, and manage all your integrations. Click any integration
+                            to set it up and start using it.
                         </p>
                     </div>
                 </div>
@@ -617,8 +616,16 @@ export default function IntegrationsHubPage() {
                 )}
 
                 {!loading && !error && (
-                    <Tabs defaultValue="connect" className="w-full">
+                    <Tabs defaultValue="platforms" className="w-full">
                         <TabsList className="flex w-full overflow-x-auto sm:grid sm:grid-cols-5">
+                            <TabsTrigger value="platforms">
+                                All Integrations
+                                {platformProviderCount > 0 && (
+                                    <Badge variant="secondary" className="ml-2">
+                                        {platformProviderCount}
+                                    </Badge>
+                                )}
+                            </TabsTrigger>
                             <TabsTrigger value="connect">Connect Your Tools</TabsTrigger>
                             <TabsTrigger value="ai-providers">
                                 AI Providers
@@ -636,14 +643,6 @@ export default function IntegrationsHubPage() {
                                     </Badge>
                                 )}
                             </TabsTrigger>
-                            <TabsTrigger value="platforms">
-                                Platforms
-                                {platformProviderCount > 0 && (
-                                    <Badge variant="secondary" className="ml-2">
-                                        {platformProviderCount}
-                                    </Badge>
-                                )}
-                            </TabsTrigger>
                             <TabsTrigger value="webhooks">
                                 Webhooks
                                 {webhooks.length > 0 && (
@@ -654,12 +653,17 @@ export default function IntegrationsHubPage() {
                             </TabsTrigger>
                         </TabsList>
 
-                        {/* ── Connect Your Tools (NEW default) ──────────── */}
+                        {/* ── All Integrations (default) ─────────────── */}
+                        <TabsContent value="platforms" className="mt-4">
+                            <PlatformsTab providers={providers} />
+                        </TabsContent>
+
+                        {/* ── Connect Your Tools ───────────────────────── */}
                         <TabsContent value="connect" className="mt-4">
                             <ConnectToolsTab />
                         </TabsContent>
 
-                        {/* ── AI Providers (unchanged) ──────────────────── */}
+                        {/* ── AI Providers ─────────────────────────────── */}
                         <TabsContent value="ai-providers" className="mt-4">
                             <Card>
                                 <CardHeader>
@@ -676,7 +680,7 @@ export default function IntegrationsHubPage() {
                             </Card>
                         </TabsContent>
 
-                        {/* ── MCP Servers (unchanged) ───────────────────── */}
+                        {/* ── MCP Servers ──────────────────────────────── */}
                         <TabsContent value="mcp" className="mt-4">
                             <Card>
                                 <CardHeader className="flex flex-row items-start justify-between gap-4">
@@ -717,12 +721,7 @@ export default function IntegrationsHubPage() {
                             </Card>
                         </TabsContent>
 
-                        {/* ── Platforms (NEW - replaces OAuth + Channels) ── */}
-                        <TabsContent value="platforms" className="mt-4">
-                            <PlatformsTab providers={providers} />
-                        </TabsContent>
-
-                        {/* ── Webhooks (unchanged) ──────────────────────── */}
+                        {/* ── Webhooks ─────────────────────────────────── */}
                         <TabsContent value="webhooks" className="mt-4">
                             <WebhooksTab
                                 webhooks={webhooks}

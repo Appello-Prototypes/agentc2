@@ -518,9 +518,11 @@ export function LiveRunsContent() {
         pageSize
     ]);
 
-    const fetchRunDetail = useCallback(async (run: Run) => {
-        setRunDetailLoading(true);
-        setRunDetail(null);
+    const fetchRunDetail = useCallback(async (run: Run, isInitial = false) => {
+        if (isInitial) {
+            setRunDetailLoading(true);
+            setRunDetail(null);
+        }
         try {
             let url: string;
             if (run.kind === "workflow") {
@@ -612,7 +614,9 @@ export function LiveRunsContent() {
         } catch (error) {
             console.error("Failed to fetch run detail:", error);
         } finally {
-            setRunDetailLoading(false);
+            if (isInitial) {
+                setRunDetailLoading(false);
+            }
         }
     }, []);
 
@@ -664,7 +668,7 @@ export function LiveRunsContent() {
 
     const handleRunClick = (run: Run) => {
         setSelectedRun(run);
-        fetchRunDetail(run);
+        fetchRunDetail(run, true);
     };
 
     const sortedRuns = useMemo(() => {
@@ -1345,13 +1349,13 @@ export function LiveRunsContent() {
                         </div>
                     </CardHeader>
                     <CardContent>
-                        {runsLoading ? (
+                        {runsLoading && runs.length === 0 ? (
                             <div className="space-y-3">
                                 {Array.from({ length: 6 }).map((_, i) => (
                                     <Skeleton key={i} className="h-14 w-full" />
                                 ))}
                             </div>
-                        ) : runs.length === 0 ? (
+                        ) : runs.length === 0 && !runsLoading ? (
                             <div className="py-12 text-center">
                                 {fetchError ? (
                                     <>

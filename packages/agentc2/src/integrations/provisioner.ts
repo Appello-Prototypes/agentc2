@@ -75,11 +75,16 @@ export async function provisionIntegration(
 
         // 3. Discover tools from MCP server
         let toolIds: string[] = [];
+        let discoveredDefs: DiscoveredToolDef[] = [];
         let discoveryStatus: "complete" | "failed" | "pending" = "pending";
         if (blueprint.skill.toolDiscovery === "dynamic") {
             try {
                 const organizationId = connection.organizationId;
-                toolIds = await discoverMcpTools(organizationId, connection.provider.key);
+                discoveredDefs = await discoverMcpToolsWithDefinitions(
+                    organizationId,
+                    connection.provider.key
+                );
+                toolIds = discoveredDefs.map((d) => d.toolId);
                 discoveryStatus = toolIds.length > 0 ? "complete" : "failed";
             } catch (err) {
                 console.warn(
@@ -91,6 +96,11 @@ export async function provisionIntegration(
         } else if (blueprint.skill.staticTools) {
             toolIds = blueprint.skill.staticTools;
             discoveryStatus = "complete";
+        }
+
+        // 3b. Sync IntegrationTool records for this connection
+        if (discoveredDefs.length > 0) {
+            await syncIntegrationToolRecords(connectionId, connection.provider.key, discoveredDefs);
         }
 
         // 4. Upsert Skill
@@ -653,8 +663,12 @@ export async function rediscoverToolsForConnection(
 
     if (!skill) return null;
 
-    // Discover current tools
-    const currentTools = await discoverMcpTools(connection.organizationId, providerKey);
+    // Discover current tools with full definitions
+    const discoveredDefs = await discoverMcpToolsWithDefinitions(
+        connection.organizationId,
+        providerKey
+    );
+    const currentTools = discoveredDefs.map((d) => d.toolId);
 
     const existingToolIds = new Set(skill.tools.map((t) => t.toolId));
     const discoveredSet = new Set(currentTools);
@@ -690,6 +704,11 @@ export async function rediscoverToolsForConnection(
         }
     }
 
+    // Sync IntegrationTool records
+    if (discoveredDefs.length > 0) {
+        await syncIntegrationToolRecords(connectionId, providerKey, discoveredDefs);
+    }
+
     // Update skill metadata with last sync time
     if (added.length > 0 || removed.length > 0) {
         const meta = skill.metadata as Record<string, unknown> | null;
@@ -713,18 +732,109 @@ export async function rediscoverToolsForConnection(
     };
 }
 
+// ── IntegrationTool Sync ─────────────────────────────────────────────────────
+
+interface DiscoveredToolDef {
+    toolId: string;
+    name: string;
+    description: string;
+    inputSchema: Record<string, unknown> | null;
+}
+
+/**
+ * Upsert IntegrationTool records for a connection based on discovered MCP tools.
+ * New tools default to isEnabled: true. Removed tools are marked as error status.
+ */
+export async function syncIntegrationToolRecords(
+    connectionId: string,
+    providerKey: string,
+    discoveredTools: DiscoveredToolDef[]
+): Promise<{ added: number; updated: number; removed: number }> {
+    const existing = await prisma.integrationTool.findMany({
+        where: { connectionId },
+        select: { id: true, toolId: true }
+    });
+
+    const existingMap = new Map(existing.map((t) => [t.toolId, t.id]));
+    const discoveredSet = new Set(discoveredTools.map((t) => t.toolId));
+
+    let added = 0;
+    let updated = 0;
+    let removed = 0;
+
+    for (const tool of discoveredTools) {
+        const humanName =
+            tool.name ||
+            tool.toolId
+                .split("_")
+                .slice(1)
+                .join(" ")
+                .replace(/-/g, " ")
+                .replace(/\b\w/g, (c) => c.toUpperCase());
+
+        if (existingMap.has(tool.toolId)) {
+            await prisma.integrationTool.update({
+                where: { id: existingMap.get(tool.toolId)! },
+                data: {
+                    name: humanName,
+                    description: tool.description || null,
+                    inputSchema: (tool.inputSchema as Prisma.InputJsonValue) ?? Prisma.JsonNull,
+                    validationStatus: "healthy",
+                    lastValidatedAt: new Date(),
+                    errorMessage: null
+                }
+            });
+            updated++;
+        } else {
+            await prisma.integrationTool.create({
+                data: {
+                    connectionId,
+                    providerKey,
+                    toolId: tool.toolId,
+                    name: humanName,
+                    description: tool.description || null,
+                    inputSchema: (tool.inputSchema as Prisma.InputJsonValue) ?? Prisma.JsonNull,
+                    isEnabled: true,
+                    validationStatus: "healthy",
+                    lastValidatedAt: new Date()
+                }
+            });
+            added++;
+        }
+    }
+
+    // Mark removed tools
+    for (const [toolId, id] of existingMap) {
+        if (!discoveredSet.has(toolId)) {
+            await prisma.integrationTool.update({
+                where: { id },
+                data: {
+                    validationStatus: "error",
+                    errorMessage: "Tool no longer available from MCP server"
+                }
+            });
+            removed++;
+        }
+    }
+
+    if (added > 0 || removed > 0) {
+        console.log(
+            `[Provisioner] IntegrationTool sync for ${providerKey}: +${added} ~${updated} -${removed}`
+        );
+    }
+
+    return { added, updated, removed };
+}
+
 // ── MCP Tool Discovery ──────────────────────────────────────────────────────
 
 /**
- * Discover MCP tools available for the organization.
- * Uses the existing listMcpToolDefinitions infrastructure which handles
- * per-org MCP server connections, credential decryption, etc.
- *
- * @param organizationId - The org whose MCP connections to query
- * @param providerKey - Filter tools by this provider prefix
- * @returns Array of tool IDs matching the provider
+ * Discover MCP tools available for the organization (returns full definitions).
  */
-async function discoverMcpTools(organizationId: string, providerKey: string): Promise<string[]> {
+async function discoverMcpToolsWithDefinitions(
+    organizationId: string,
+    providerKey: string
+): Promise<DiscoveredToolDef[]> {
     const retryDelays = [0, 2000, 5000];
 
     for (let attempt = 0; attempt < retryDelays.length; attempt++) {
@@ -740,7 +850,14 @@ async function discoverMcpTools(organizationId: string, providerKey: string): Pr
             }
 
             const prefix = `${providerKey}_`;
-            const matched = allTools.filter((t) => t.name.startsWith(prefix)).map((t) => t.name);
+            const matched = allTools
+                .filter((t) => t.name.startsWith(prefix))
+                .map((t) => ({
+                    toolId: t.name,
+                    name: t.description || t.name,
+                    description: t.description || "",
+                    inputSchema: t.parameters as Record<string, unknown> | null
+                }));
 
             if (matched.length === 0 && attempt < retryDelays.length - 1) continue;
             return matched;
@@ -756,4 +873,18 @@ async function discoverMcpTools(organizationId: string, providerKey: string): Pr
     }
 
     return [];
+}
+
+/**
+ * Discover MCP tools available for the organization.
+ * Uses the existing listMcpToolDefinitions infrastructure which handles
+ * per-org MCP server connections, credential decryption, etc.
+ *
+ * @param organizationId - The org whose MCP connections to query
+ * @param providerKey - Filter tools by this provider prefix
+ * @returns Array of tool IDs matching the provider
+ */
+async function discoverMcpTools(organizationId: string, providerKey: string): Promise<string[]> {
+    const defs = await discoverMcpToolsWithDefinitions(organizationId, providerKey);
+    return defs.map((d) => d.toolId);
 }
