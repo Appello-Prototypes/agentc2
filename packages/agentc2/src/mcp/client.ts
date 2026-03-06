@@ -2914,7 +2914,12 @@ function buildServerDefinitionForProvider(options: {
         case "playwright":
             return {
                 command: "npx",
-                args: ["-y", "@playwright/mcp@latest"]
+                args: [
+                    "-y",
+                    "@playwright/mcp@latest",
+                    "--headless",
+                    "--no-sandbox"
+                ]
             };
         case "youtube-transcript":
             return {
