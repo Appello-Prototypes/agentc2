@@ -1,10 +1,8 @@
-import { NextResponse } from "next/server";
-import { headers } from "next/headers";
-import { auth } from "@repo/auth";
+import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@repo/database";
 import { getMcpTools } from "@repo/agentc2/mcp";
-import { getUserOrganizationId } from "@/lib/organization";
-import { resolveConnectionServerId } from "@/lib/integrations";
+import { authenticateRequest } from "@/lib/api-auth";
+import { resolveConnectionServerId, computeEffectiveDefault } from "@/lib/integrations";
 
 /**
  * GET /api/integrations/connections/[connectionId]/actions
@@ -12,24 +10,15 @@ import { resolveConnectionServerId } from "@/lib/integrations";
  * List actions and triggers for a connection.
  */
 export async function GET(
-    _request: Request,
+    request: Request,
     { params }: { params: Promise<{ connectionId: string }> }
 ) {
     try {
-        const session = await auth.api.getSession({
-            headers: await headers()
-        });
-        if (!session?.user) {
+        const authContext = await authenticateRequest(request as NextRequest);
+        if (!authContext) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
         }
-
-        const organizationId = await getUserOrganizationId(session.user.id);
-        if (!organizationId) {
-            return NextResponse.json(
-                { success: false, error: "Organization membership required" },
-                { status: 403 }
-            );
-        }
+        const organizationId = authContext.organizationId;
 
         const { connectionId } = await params;
         const connection = await prisma.integrationConnection.findFirst({
@@ -48,10 +37,18 @@ export async function GET(
             connection.provider.providerType === "mcp" ||
             connection.provider.providerType === "custom"
         ) {
-            const serverId = resolveConnectionServerId(connection.provider.key, connection);
+            const isEffectiveDefault = await computeEffectiveDefault(
+                connection,
+                connection.provider.key
+            );
+            const serverId = resolveConnectionServerId(
+                connection.provider.key,
+                connection,
+                isEffectiveDefault
+            );
             const { tools } = await getMcpTools({
                 organizationId,
-                userId: session.user.id
+                userId: authContext.userId
             });
             const actions = Object.entries(tools)
                 .filter(([name]) => name.startsWith(`${serverId}_`))

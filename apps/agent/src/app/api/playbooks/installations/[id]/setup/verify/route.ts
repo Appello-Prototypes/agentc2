@@ -3,7 +3,11 @@ import { requireAuth } from "@/lib/authz";
 import { prisma } from "@repo/database";
 import { mapIntegrations } from "@repo/agentc2";
 import { testMcpServer } from "@repo/agentc2/mcp";
-import { resolveConnectionServerId, getConnectionCredentials } from "@/lib/integrations";
+import {
+    resolveConnectionServerId,
+    getConnectionCredentials,
+    computeEffectiveDefault
+} from "@/lib/integrations";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -79,9 +83,14 @@ export async function POST(request: NextRequest, { params }: Params) {
                         connection.provider.providerType === "mcp" ||
                         connection.provider.providerType === "custom"
                     ) {
+                        const isEffectiveDefault = await computeEffectiveDefault(
+                            connection,
+                            connection.provider.key
+                        );
                         const serverId = resolveConnectionServerId(
                             connection.provider.key,
-                            connection
+                            connection,
+                            isEffectiveDefault
                         );
                         const testResult = await testMcpServer({
                             serverId,

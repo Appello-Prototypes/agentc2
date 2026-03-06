@@ -1,14 +1,12 @@
-import { NextResponse } from "next/server";
-import { headers } from "next/headers";
-import { auth } from "@repo/auth";
+import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@repo/database";
 import { getMcpToolsForServer } from "@repo/agentc2/mcp";
 import {
     rediscoverToolsForConnection,
     syncIntegrationToolRecords
 } from "@repo/agentc2/integrations";
-import { getUserOrganizationId } from "@/lib/organization";
 import { resolveConnectionServerId } from "@/lib/integrations";
+import { authenticateRequest } from "@/lib/api-auth";
 
 /**
  * GET /api/integrations/providers/[providerKey]/tools
@@ -17,24 +15,15 @@ import { resolveConnectionServerId } from "@/lib/integrations";
  * Falls back to live MCP tool discovery if no IntegrationTool records exist yet.
  */
 export async function GET(
-    _request: Request,
+    request: Request,
     { params }: { params: Promise<{ providerKey: string }> }
 ) {
     try {
-        const session = await auth.api.getSession({
-            headers: await headers()
-        });
-        if (!session?.user) {
+        const authContext = await authenticateRequest(request as NextRequest);
+        if (!authContext) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
         }
-
-        const organizationId = await getUserOrganizationId(session.user.id);
-        if (!organizationId) {
-            return NextResponse.json(
-                { success: false, error: "Organization membership required" },
-                { status: 403 }
-            );
-        }
+        const organizationId = authContext.organizationId;
 
         const { providerKey } = await params;
         const provider = await prisma.integrationProvider.findFirst({
@@ -52,7 +41,7 @@ export async function GET(
                 organizationId,
                 providerId: provider.id,
                 isActive: true,
-                OR: [{ scope: "org" }, { scope: "user", userId: session.user.id }]
+                OR: [{ scope: "org" }, { scope: "user", userId: authContext.userId }]
             },
             orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }]
         });
@@ -74,7 +63,7 @@ export async function GET(
             const liveTools = await getMcpToolsForServer({
                 serverId,
                 organizationId,
-                userId: session.user.id,
+                userId: authContext.userId,
                 allowEnvFallback: false
             }).catch(() => ({}));
 
@@ -149,24 +138,15 @@ export async function GET(
  * Trigger manual tool re-discovery for a provider's active connections.
  */
 export async function POST(
-    _request: Request,
+    request: Request,
     { params }: { params: Promise<{ providerKey: string }> }
 ) {
     try {
-        const session = await auth.api.getSession({
-            headers: await headers()
-        });
-        if (!session?.user) {
+        const authContext = await authenticateRequest(request as NextRequest);
+        if (!authContext) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
         }
-
-        const organizationId = await getUserOrganizationId(session.user.id);
-        if (!organizationId) {
-            return NextResponse.json(
-                { success: false, error: "Organization membership required" },
-                { status: 403 }
-            );
-        }
+        const organizationId = authContext.organizationId;
 
         const { providerKey } = await params;
         const provider = await prisma.integrationProvider.findFirst({
@@ -184,7 +164,7 @@ export async function POST(
                 organizationId,
                 providerId: provider.id,
                 isActive: true,
-                OR: [{ scope: "org" }, { scope: "user", userId: session.user.id }]
+                OR: [{ scope: "org" }, { scope: "user", userId: authContext.userId }]
             }
         });
 
@@ -232,20 +212,11 @@ export async function PATCH(
     { params }: { params: Promise<{ providerKey: string }> }
 ) {
     try {
-        const session = await auth.api.getSession({
-            headers: await headers()
-        });
-        if (!session?.user) {
+        const authContext = await authenticateRequest(request as NextRequest);
+        if (!authContext) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
         }
-
-        const organizationId = await getUserOrganizationId(session.user.id);
-        if (!organizationId) {
-            return NextResponse.json(
-                { success: false, error: "Organization membership required" },
-                { status: 403 }
-            );
-        }
+        const organizationId = authContext.organizationId;
 
         const { providerKey } = await params;
         const body = await request.json();

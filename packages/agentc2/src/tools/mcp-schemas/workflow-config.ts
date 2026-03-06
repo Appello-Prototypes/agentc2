@@ -16,13 +16,21 @@ export const workflowConfigToolDefinitions: McpToolDefinition[] = [
     },
     {
         name: "workflow-validate",
-        description: "Validate a workflow definition.",
+        description:
+            "Validate a workflow definition. Provide either definitionJson (raw definition) or workflowSlug (to validate an existing workflow by slug).",
         inputSchema: {
             type: "object",
             properties: {
-                definitionJson: { type: "object", description: "Workflow definition JSON" }
-            },
-            required: ["definitionJson"]
+                definitionJson: {
+                    type: "object",
+                    description: "Workflow definition JSON (mutually exclusive with workflowSlug)"
+                },
+                workflowSlug: {
+                    type: "string",
+                    description:
+                        "Slug or ID of an existing workflow to validate (mutually exclusive with definitionJson)"
+                }
+            }
         },
         invoke_url: "/api/mcp",
         category: "workflow-config"
@@ -61,7 +69,7 @@ export const workflowConfigToolRoutes: McpToolRoute[] = [
         name: "workflow-validate",
         method: "POST",
         path: "/api/workflows/validate",
-        bodyParams: ["definitionJson"]
+        bodyParams: ["definitionJson", "workflowSlug"]
     },
     {
         kind: "internal",

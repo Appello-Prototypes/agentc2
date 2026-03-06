@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { headers } from "next/headers";
-import { auth } from "@repo/auth";
 import { prisma } from "@repo/database";
 import { invalidateMcpCacheForOrg, resetMcpClients } from "@repo/agentc2/mcp";
 import { invalidateMcpToolsCacheForOrg } from "@repo/agentc2/tools";
 import { clearModelCache } from "@repo/agentc2/agents/model-registry";
 import { auditLog } from "@/lib/audit-log";
-import { getUserOrganizationId } from "@/lib/organization";
+import { authenticateRequest } from "@/lib/api-auth";
 import { decryptCredentials, encryptCredentials } from "@/lib/credential-crypto";
 import { getConnectionMissingFields } from "@/lib/integrations";
 
@@ -25,20 +23,11 @@ export async function GET(
     { params }: { params: Promise<{ connectionId: string }> }
 ) {
     try {
-        const session = await auth.api.getSession({
-            headers: await headers()
-        });
-        if (!session?.user) {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
         }
-
-        const organizationId = await getUserOrganizationId(session.user.id);
-        if (!organizationId) {
-            return NextResponse.json(
-                { success: false, error: "Organization membership required" },
-                { status: 403 }
-            );
-        }
+        const organizationId = authContext.organizationId;
 
         const { connectionId } = await params;
         const connection = await resolveConnection(connectionId, organizationId);
@@ -56,7 +45,7 @@ export async function GET(
             action: "DATA_ACCESS",
             entityType: "IntegrationConnection",
             entityId: connectionId,
-            userId: session.user.id,
+            userId: authContext.userId,
             metadata: { organizationId, providerId: connection.providerId }
         });
 
@@ -88,23 +77,14 @@ export async function PATCH(
     { params }: { params: Promise<{ connectionId: string }> }
 ) {
     try {
-        const session = await auth.api.getSession({
-            headers: await headers()
-        });
-        if (!session?.user) {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
         }
-
-        const organizationId = await getUserOrganizationId(session.user.id);
-        if (!organizationId) {
-            return NextResponse.json(
-                { success: false, error: "Organization membership required" },
-                { status: 403 }
-            );
-        }
+        const organizationId = authContext.organizationId;
 
         const membership = await prisma.membership.findFirst({
-            where: { userId: session.user.id, organizationId }
+            where: { userId: authContext.userId, organizationId }
         });
         if (!membership || !["owner", "admin"].includes(membership.role)) {
             return NextResponse.json(
@@ -165,7 +145,7 @@ export async function PATCH(
             }
         });
 
-        await auditLog.integrationUpdate(connection.id, session.user.id, organizationId, {
+        await auditLog.integrationUpdate(connection.id, authContext.userId, organizationId, {
             name,
             isDefault,
             isActive,
@@ -199,23 +179,14 @@ export async function DELETE(
     { params }: { params: Promise<{ connectionId: string }> }
 ) {
     try {
-        const session = await auth.api.getSession({
-            headers: await headers()
-        });
-        if (!session?.user) {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
         }
-
-        const organizationId = await getUserOrganizationId(session.user.id);
-        if (!organizationId) {
-            return NextResponse.json(
-                { success: false, error: "Organization membership required" },
-                { status: 403 }
-            );
-        }
+        const organizationId = authContext.organizationId;
 
         const membership = await prisma.membership.findFirst({
-            where: { userId: session.user.id, organizationId }
+            where: { userId: authContext.userId, organizationId }
         });
         if (!membership || !["owner", "admin"].includes(membership.role)) {
             return NextResponse.json(
@@ -263,7 +234,7 @@ export async function DELETE(
             });
         }
 
-        await auditLog.integrationDelete(connection.id, session.user.id, organizationId, {
+        await auditLog.integrationDelete(connection.id, authContext.userId, organizationId, {
             providerId: connection.providerId,
             deprovisioned
         });

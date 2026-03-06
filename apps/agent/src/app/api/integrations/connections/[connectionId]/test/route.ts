@@ -1,13 +1,12 @@
-import { NextResponse } from "next/server";
-import { headers } from "next/headers";
-import { auth } from "@repo/auth";
+import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@repo/database";
 import { testMcpServer, type McpServerTestResult } from "@repo/agentc2/mcp";
-import { getUserOrganizationId } from "@/lib/organization";
+import { authenticateRequest } from "@/lib/api-auth";
 import {
     getConnectionMissingFields,
     getConnectionCredentials,
-    resolveConnectionServerId
+    resolveConnectionServerId,
+    computeEffectiveDefault
 } from "@/lib/integrations";
 
 /**
@@ -16,24 +15,15 @@ import {
  * Test a connection by validating credentials and listing tools (MCP).
  */
 export async function POST(
-    _request: Request,
+    request: Request,
     { params }: { params: Promise<{ connectionId: string }> }
 ) {
     try {
-        const session = await auth.api.getSession({
-            headers: await headers()
-        });
-        if (!session?.user) {
+        const authContext = await authenticateRequest(request as NextRequest);
+        if (!authContext) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
         }
-
-        const organizationId = await getUserOrganizationId(session.user.id);
-        if (!organizationId) {
-            return NextResponse.json(
-                { success: false, error: "Organization membership required" },
-                { status: 403 }
-            );
-        }
+        const organizationId = authContext.organizationId;
 
         const { connectionId } = await params;
         const connection = await prisma.integrationConnection.findFirst({
@@ -71,13 +61,49 @@ export async function POST(
             connection.provider.providerType === "mcp" ||
             connection.provider.providerType === "custom"
         ) {
-            const serverId = resolveConnectionServerId(connection.provider.key, connection);
+            // Clear any previous errorMessage before testing so the connection
+            // is visible to getIntegrationConnections (which filters by errorMessage)
+            if (connection.errorMessage) {
+                await prisma.integrationConnection.update({
+                    where: { id: connection.id },
+                    data: { errorMessage: null }
+                });
+            }
+
+            // Credential-only providers (e.g. Cursor) use native tools, not MCP.
+            // Validate them with a direct API call instead of MCP handshake.
+            const credentialOnlyResult = await testCredentialOnlyProvider(
+                connection.provider.key,
+                getConnectionCredentials(connection)
+            );
+            if (credentialOnlyResult !== null) {
+                await prisma.integrationConnection.update({
+                    where: { id: connection.id },
+                    data: {
+                        lastTestedAt: new Date(),
+                        errorMessage: credentialOnlyResult.success
+                            ? null
+                            : credentialOnlyResult.error || "Credential validation failed"
+                    }
+                });
+                return NextResponse.json(credentialOnlyResult);
+            }
+
+            const isEffectiveDefault = await computeEffectiveDefault(
+                connection,
+                connection.provider.key
+            );
+            const serverId = resolveConnectionServerId(
+                connection.provider.key,
+                connection,
+                isEffectiveDefault
+            );
             // ATLAS (supergateway/SSE) and other remote MCP servers may need >10s to connect
             const timeoutMs = connection.provider.key === "atlas" ? 60000 : 30000;
             const testResult: McpServerTestResult = await testMcpServer({
                 serverId,
                 organizationId,
-                userId: session.user.id,
+                userId: authContext.userId,
                 allowEnvFallback: false,
                 timeoutMs
             });
@@ -131,5 +157,53 @@ export async function POST(
             },
             { status: 500 }
         );
+    }
+}
+
+/**
+ * Test credential-only providers that don't expose MCP servers.
+ * Returns a result object if this provider is credential-only, or null
+ * to fall through to the standard MCP test path.
+ */
+async function testCredentialOnlyProvider(
+    providerKey: string,
+    credentials: Record<string, unknown>
+): Promise<{ success: boolean; error?: string; detail?: string } | null> {
+    switch (providerKey) {
+        case "cursor": {
+            const apiKey = (credentials.CURSOR_API_KEY as string) || (credentials.apiKey as string);
+            if (!apiKey) {
+                return { success: false, error: "CURSOR_API_KEY not found in credentials" };
+            }
+            try {
+                const basicAuth = Buffer.from(`${apiKey}:`).toString("base64");
+                const resp = await fetch("https://api.cursor.com/v0/agents", {
+                    method: "GET",
+                    headers: {
+                        Authorization: `Basic ${basicAuth}`,
+                        "Content-Type": "application/json"
+                    },
+                    signal: AbortSignal.timeout(10_000)
+                });
+                if (resp.ok || resp.status === 200) {
+                    return {
+                        success: true,
+                        detail: `Cursor API key valid (HTTP ${resp.status})`
+                    };
+                }
+                const body = await resp.text().catch(() => "");
+                return {
+                    success: false,
+                    error: `Cursor API returned HTTP ${resp.status}: ${body.slice(0, 200)}`
+                };
+            } catch (err) {
+                return {
+                    success: false,
+                    error: `Cursor API unreachable: ${err instanceof Error ? err.message : String(err)}`
+                };
+            }
+        }
+        default:
+            return null;
     }
 }

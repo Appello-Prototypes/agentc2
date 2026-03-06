@@ -5,6 +5,7 @@ const VALID_STEP_TYPES = [
     "branch",
     "parallel",
     "foreach",
+    "dowhile",
     "human",
     "transform",
     "delay"
@@ -162,6 +163,30 @@ function validateSteps(steps: unknown[], errors: string[], ids: Set<string>, pat
                 ) {
                     errors.push(
                         `Foreach step '${stepRef}' config.concurrency must be a positive number`
+                    );
+                }
+                break;
+            }
+            case "dowhile": {
+                const hasCondition =
+                    (typeof config.condition === "string" && config.condition) ||
+                    (typeof config.conditionExpression === "string" && config.conditionExpression);
+                if (!hasCondition) {
+                    errors.push(
+                        `DoWhile step '${stepRef}' requires config.condition or config.conditionExpression string`
+                    );
+                }
+                if (!Array.isArray(config.steps)) {
+                    errors.push(`DoWhile step '${stepRef}' requires config.steps array`);
+                } else {
+                    validateSteps(config.steps as unknown[], errors, ids, `${stepRef}.dowhile`);
+                }
+                if (
+                    config.maxIterations !== undefined &&
+                    (typeof config.maxIterations !== "number" || config.maxIterations < 1)
+                ) {
+                    errors.push(
+                        `DoWhile step '${stepRef}' config.maxIterations must be a positive number`
                     );
                 }
                 break;

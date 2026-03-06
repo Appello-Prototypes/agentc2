@@ -1,8 +1,6 @@
-import { NextResponse } from "next/server";
-import { headers } from "next/headers";
-import { auth } from "@repo/auth";
+import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@repo/database";
-import { getUserOrganizationId } from "@/lib/organization";
+import { authenticateRequest } from "@/lib/api-auth";
 
 /**
  * GET /api/integrations/providers/[providerKey]/used-by
@@ -10,24 +8,15 @@ import { getUserOrganizationId } from "@/lib/organization";
  * Returns agents, skills, and playbook installations that reference tools from this provider.
  */
 export async function GET(
-    _request: Request,
+    request: Request,
     { params }: { params: Promise<{ providerKey: string }> }
 ) {
     try {
-        const session = await auth.api.getSession({
-            headers: await headers()
-        });
-        if (!session?.user) {
+        const authContext = await authenticateRequest(request as NextRequest);
+        if (!authContext) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
         }
-
-        const organizationId = await getUserOrganizationId(session.user.id);
-        if (!organizationId) {
-            return NextResponse.json(
-                { success: false, error: "Organization membership required" },
-                { status: 403 }
-            );
-        }
+        const organizationId = authContext.organizationId;
 
         const { providerKey } = await params;
         const prefix = `${providerKey}_`;

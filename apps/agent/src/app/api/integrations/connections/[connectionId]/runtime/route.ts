@@ -1,9 +1,11 @@
-import { NextResponse } from "next/server";
-import { headers } from "next/headers";
-import { auth } from "@repo/auth";
+import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@repo/database";
-import { getUserOrganizationId } from "@/lib/organization";
-import { resolveConnectionServerId, getConnectionCredentials } from "@/lib/integrations";
+import { authenticateRequest } from "@/lib/api-auth";
+import {
+    resolveConnectionServerId,
+    getConnectionCredentials,
+    computeEffectiveDefault
+} from "@/lib/integrations";
 
 const REDACT_PATTERNS = [/key/i, /token/i, /secret/i, /password/i, /credential/i, /auth/i];
 
@@ -32,24 +34,15 @@ function redactObject(obj: Record<string, unknown>): Record<string, unknown> {
  * Returns the compiled runtime configuration for this connection (with redacted secrets).
  */
 export async function GET(
-    _request: Request,
+    request: Request,
     { params }: { params: Promise<{ connectionId: string }> }
 ) {
     try {
-        const session = await auth.api.getSession({
-            headers: await headers()
-        });
-        if (!session?.user) {
+        const authContext = await authenticateRequest(request as NextRequest);
+        if (!authContext) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
         }
-
-        const organizationId = await getUserOrganizationId(session.user.id);
-        if (!organizationId) {
-            return NextResponse.json(
-                { success: false, error: "Organization membership required" },
-                { status: 403 }
-            );
-        }
+        const organizationId = authContext.organizationId;
 
         const { connectionId } = await params;
         const connection = await prisma.integrationConnection.findFirst({
@@ -64,7 +57,15 @@ export async function GET(
             );
         }
 
-        const serverId = resolveConnectionServerId(connection.provider.key, connection);
+        const isEffectiveDefault = await computeEffectiveDefault(
+            connection,
+            connection.provider.key
+        );
+        const serverId = resolveConnectionServerId(
+            connection.provider.key,
+            connection,
+            isEffectiveDefault
+        );
         const credentials = getConnectionCredentials(connection);
         const redactedCredentials = redactObject(credentials);
 

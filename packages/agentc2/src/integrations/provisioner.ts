@@ -742,6 +742,46 @@ interface DiscoveredToolDef {
 }
 
 /**
+ * Safely serialize a value that may contain Zod schema objects into a plain
+ * JSON-compatible representation. Zod objects have a `_def` property with
+ * type metadata; we extract the relevant fields instead of storing the
+ * full class instance which is not JSON-serializable.
+ */
+function safeSerializeSchema(value: unknown): unknown {
+    if (value === null || value === undefined) return value;
+    if (typeof value !== "object") return value;
+
+    const obj = value as Record<string, unknown>;
+
+    // Detect Zod type: has _def with typeName
+    if (obj._def && typeof obj._def === "object") {
+        const def = obj._def as Record<string, unknown>;
+        const result: Record<string, unknown> = {
+            type: (def.typeName as string)?.replace(/^Zod/, "").toLowerCase() || "unknown"
+        };
+        if (def.description) result.description = def.description;
+        // Handle ZodOptional wrapper
+        if (def.typeName === "ZodOptional" && def.innerType) {
+            result.optional = true;
+            const inner = safeSerializeSchema(def.innerType);
+            if (typeof inner === "object" && inner !== null) {
+                Object.assign(result, inner);
+            }
+        }
+        return result;
+    }
+
+    // Plain object: recurse
+    if (Array.isArray(value)) return value.map(safeSerializeSchema);
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(obj)) {
+        if (k === "spa" || typeof v === "function") continue;
+        out[k] = safeSerializeSchema(v);
+    }
+    return out;
+}
+
+/**
  * Upsert IntegrationTool records for a connection based on discovered MCP tools.
  * New tools default to isEnabled: true. Removed tools are marked as error status.
  */
@@ -778,7 +818,9 @@ export async function syncIntegrationToolRecords(
                 data: {
                     name: humanName,
                     description: tool.description || null,
-                    inputSchema: (tool.inputSchema as Prisma.InputJsonValue) ?? Prisma.JsonNull,
+                    inputSchema:
+                        (safeSerializeSchema(tool.inputSchema) as Prisma.InputJsonValue) ??
+                        Prisma.JsonNull,
                     validationStatus: "healthy",
                     lastValidatedAt: new Date(),
                     errorMessage: null
@@ -793,7 +835,9 @@ export async function syncIntegrationToolRecords(
                     toolId: tool.toolId,
                     name: humanName,
                     description: tool.description || null,
-                    inputSchema: (tool.inputSchema as Prisma.InputJsonValue) ?? Prisma.JsonNull,
+                    inputSchema:
+                        (safeSerializeSchema(tool.inputSchema) as Prisma.InputJsonValue) ??
+                        Prisma.JsonNull,
                     isEnabled: true,
                     validationStatus: "healthy",
                     lastValidatedAt: new Date()

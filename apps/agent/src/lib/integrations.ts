@@ -1,11 +1,59 @@
 import type { IntegrationConnection, IntegrationProvider } from "@repo/database";
+import { prisma } from "@repo/database";
 import { decryptCredentials } from "@/lib/credential-crypto";
 
+/**
+ * Resolve the MCP server ID for a connection, matching the logic used by the
+ * MCP client in `packages/agentc2/src/mcp/client.ts`.
+ *
+ * When `isEffectiveDefault` is provided it overrides `connection.isDefault`.
+ * Use {@link computeEffectiveDefault} to determine this value.
+ */
 export const resolveConnectionServerId = (
     providerKey: string,
-    connection: IntegrationConnection
+    connection: IntegrationConnection,
+    isEffectiveDefault?: boolean
 ) => {
-    return connection.isDefault ? providerKey : `${providerKey}__${connection.id.slice(0, 8)}`;
+    const isDefault = isEffectiveDefault !== undefined ? isEffectiveDefault : connection.isDefault;
+    return isDefault ? providerKey : `${providerKey}__${connection.id.slice(0, 8)}`;
+};
+
+/**
+ * Determine whether a connection is the "effective default" for its provider.
+ *
+ * The MCP client treats the first connection as the default when no connection
+ * has `isDefault = true`. This helper replicates that logic so that serverId
+ * generation is consistent with MCP resolution.
+ */
+export const computeEffectiveDefault = async (
+    connection: { id: string; isDefault: boolean; organizationId: string },
+    providerKey: string
+): Promise<boolean> => {
+    if (connection.isDefault) return true;
+
+    const explicitDefault = await prisma.integrationConnection.findFirst({
+        where: {
+            organizationId: connection.organizationId,
+            provider: { key: providerKey },
+            isDefault: true,
+            isActive: true
+        },
+        select: { id: true }
+    });
+
+    if (explicitDefault) return false;
+
+    const firstConnection = await prisma.integrationConnection.findFirst({
+        where: {
+            organizationId: connection.organizationId,
+            provider: { key: providerKey },
+            isActive: true
+        },
+        orderBy: { createdAt: "asc" },
+        select: { id: true }
+    });
+
+    return firstConnection?.id === connection.id;
 };
 
 export const getConnectionCredentials = (connection: IntegrationConnection) => {
