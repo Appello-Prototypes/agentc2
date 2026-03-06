@@ -409,6 +409,11 @@ import {
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { getMcpTools, truncateMcpResult } from "../mcp/client";
+import {
+    compressPlaywrightResult,
+    isPlaywrightTool,
+    isSnapshotProducingTool
+} from "../mcp/playwright-compression";
 
 /**
  * Logical category for each built-in tool.
@@ -1724,6 +1729,10 @@ function wrapMcpToolsWithTruncation(tools: Record<string, any>): Record<string, 
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 execute: async (...args: any[]) => {
                     const result = await originalExecute(...args);
+                    // Playwright tools: compress snapshots before truncation
+                    if (isPlaywrightTool(name) && isSnapshotProducingTool(name)) {
+                        return compressPlaywrightResult(result);
+                    }
                     return truncateMcpResult(result);
                 }
             };

@@ -24,3 +24,10 @@ export {
     type McpConfigImpactAgent,
     type McpConfigImpactServer
 } from "./client";
+
+export {
+    compressPlaywrightResult,
+    compressSnapshot,
+    isPlaywrightTool,
+    isSnapshotProducingTool
+} from "./playwright-compression";
