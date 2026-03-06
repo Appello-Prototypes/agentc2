@@ -91,7 +91,12 @@ export const integrationToolDefinitions: McpToolDefinition[] = [
                 isDefault: { type: "boolean", description: "Set as default connection" },
                 isActive: { type: "boolean", description: "Enable or disable the connection" },
                 credentials: { type: "object", description: "Updated credentials payload" },
-                metadata: { type: "object", description: "Updated metadata" }
+                metadata: { type: "object", description: "Updated metadata" },
+                accessPolicy: {
+                    type: "string",
+                    description:
+                        "Access policy: 'org-wide' (all org agents), 'owner-only' (creator only), or 'role-restricted' (admins only)"
+                }
             },
             required: ["connectionId"]
         },
@@ -262,7 +267,7 @@ export const integrationToolRoutes: McpToolRoute[] = [
         method: "PATCH",
         path: "/api/integrations/connections/{connectionId}",
         pathParams: ["connectionId"],
-        bodyParams: ["name", "isDefault", "isActive", "credentials", "metadata"]
+        bodyParams: ["name", "isDefault", "isActive", "credentials", "metadata", "accessPolicy"]
     },
     {
         kind: "internal",

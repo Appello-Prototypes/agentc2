@@ -58,7 +58,7 @@ export async function PATCH(
             }
         });
 
-        if (!task) {
+        if (!task || task.backlog.agent.id !== agent.id) {
             return NextResponse.json(
                 { success: false, error: `Task not found: ${taskId}` },
                 { status: 404 }
@@ -147,6 +147,18 @@ export async function DELETE(
         if (!agent) {
             return NextResponse.json(
                 { success: false, error: `Agent not found: ${agentSlug}` },
+                { status: 404 }
+            );
+        }
+
+        const task = await prisma.backlogTask.findUnique({
+            where: { id: taskId },
+            include: { backlog: { select: { agentId: true } } }
+        });
+
+        if (!task || task.backlog.agentId !== agent.id) {
+            return NextResponse.json(
+                { success: false, error: `Task not found: ${taskId}` },
                 { status: 404 }
             );
         }

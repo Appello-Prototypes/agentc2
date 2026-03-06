@@ -30,6 +30,7 @@ import { createTriggerEventRecord } from "@/lib/trigger-events";
 import { getUserOrganizationId, getDefaultWorkspaceIdForUser } from "@/lib/organization";
 import { orgScopedResourceId, orgScopedThreadId } from "@repo/agentc2/tenant-scope";
 import { requireAgentAccess, requireAuth } from "@/lib/authz";
+import { authenticateRequest } from "@/lib/api-auth";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { RATE_LIMIT_POLICIES } from "@/lib/security/rate-limit-policy";
 import { enforceCsrf } from "@/lib/security/http-security";
@@ -166,13 +167,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             runId: existingRunId
         } = body;
 
-        // Determine source based on mode parameter in requestContext
-        // "live" mode = production run (PROD), otherwise test run (TEST)
         const mode = requestContext?.mode || "test";
         const runSource: RunSource = mode === "live" ? "api" : "test";
 
-        // Resolve organization and workspace context for the user
-        const rawUserId = requestContext?.userId || `anon-${Date.now()}`;
+        const rawUserId = authResult.context.userId;
         let resolvedOrgId: string | null = null;
         let enrichedRequestContext = requestContext;
         const tOrg = performance.now();
@@ -1968,6 +1966,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
  */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
         const { id } = await params;
         const { searchParams } = new URL(request.url);
         const threadId = searchParams.get("threadId");
@@ -1976,7 +1979,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             return NextResponse.json([]);
         }
 
-        // Resolve the agent using AgentResolver
         const { agent } = await agentResolver.resolve({ slug: id });
         const memory = await agent?.getMemory();
 
@@ -1984,11 +1986,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             return NextResponse.json([]);
         }
 
-        const rawUserId2 = searchParams.get("userId") || `anon-${Date.now()}`;
-        let historyOrgId: string | null = null;
-        if (rawUserId2 && !rawUserId2.startsWith("anon-")) {
-            historyOrgId = await getUserOrganizationId(rawUserId2);
-        }
+        const rawUserId2 = authContext.userId;
+        const historyOrgId = authContext.organizationId || null;
         const historyResourceId = orgScopedResourceId(historyOrgId || "", rawUserId2);
 
         const result = await memory.recall({

@@ -9,7 +9,8 @@ import {
     detectArrayChange,
     type FieldChange
 } from "@/lib/changelog";
-import { requireAgentAccess, requireAuth, requireOrgRole } from "@/lib/authz";
+import { requireAgentAccess, requireAuth } from "@/lib/authz";
+import { requireEntityAccess } from "@/lib/authz/require-entity-access";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { RATE_LIMIT_POLICIES } from "@/lib/security/rate-limit-policy";
 
@@ -127,13 +128,12 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
         }
 
-        const roleResult = await requireOrgRole(
+        const updateAccess = await requireEntityAccess(
             authResult.context.userId,
-            authResult.context.organizationId
+            authResult.context.organizationId,
+            "update"
         );
-        if (roleResult.response) {
-            return roleResult.response;
-        }
+        if (!updateAccess.allowed) return updateAccess.response;
         const accessResult = await requireAgentAccess(authResult.context.organizationId, id);
         if (accessResult.response) {
             return accessResult.response;
@@ -695,13 +695,12 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         if (authResult.response) {
             return authResult.response;
         }
-        const roleResult = await requireOrgRole(
+        const updateAccess = await requireEntityAccess(
             authResult.context.userId,
-            authResult.context.organizationId
+            authResult.context.organizationId,
+            "update"
         );
-        if (roleResult.response) {
-            return roleResult.response;
-        }
+        if (!updateAccess.allowed) return updateAccess.response;
         const accessResult = await requireAgentAccess(authResult.context.organizationId, id);
         if (accessResult.response) {
             return accessResult.response;
@@ -788,13 +787,12 @@ export async function DELETE(
         if (authResult.response) {
             return authResult.response;
         }
-        const roleResult = await requireOrgRole(
+        const deleteAccess = await requireEntityAccess(
             authResult.context.userId,
-            authResult.context.organizationId
+            authResult.context.organizationId,
+            "delete"
         );
-        if (roleResult.response) {
-            return roleResult.response;
-        }
+        if (!deleteAccess.allowed) return deleteAccess.response;
         const accessResult = await requireAgentAccess(authResult.context.organizationId, id);
         if (accessResult.response) {
             return accessResult.response;

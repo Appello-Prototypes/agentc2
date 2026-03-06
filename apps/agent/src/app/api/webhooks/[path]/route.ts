@@ -103,7 +103,10 @@ export async function POST(
         const webhookSecretPlain = trigger.webhookSecret
             ? decryptString(trigger.webhookSecret)
             : null;
-        const requireSignatures = process.env.REQUIRE_WEBHOOK_SIGNATURES === "true";
+        const requireSignatures =
+            process.env.REQUIRE_WEBHOOK_SIGNATURES === "true" ||
+            (process.env.NODE_ENV === "production" &&
+                process.env.REQUIRE_WEBHOOK_SIGNATURES !== "false");
         let signatureVerified = false;
 
         if (webhookSecretPlain) {

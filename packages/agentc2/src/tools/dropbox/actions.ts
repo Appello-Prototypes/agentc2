@@ -13,7 +13,7 @@ const CONTENT_BASE = "https://content.dropboxapi.com/2";
 
 // ── Shared helper: resolve connection + call Dropbox ───────────────
 
-async function getAccessToken(connectionId: string): Promise<string> {
+async function getAccessToken(connectionId: string, organizationId?: string): Promise<string> {
     const { prisma } = await import("@repo/database");
     const { createDecipheriv } = await import("crypto");
 
@@ -23,6 +23,10 @@ async function getAccessToken(connectionId: string): Promise<string> {
 
     if (!connection || !connection.isActive) {
         throw new Error("Dropbox connection not found or inactive");
+    }
+
+    if (organizationId && connection.organizationId !== organizationId) {
+        throw new Error("Dropbox connection does not belong to your organization");
     }
 
     let creds: Record<string, unknown> = {};

@@ -317,8 +317,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             slug: id,
             id: agentId,
             requestContext: {
-                resource: contextVars,
-                metadata: contextVars
+                resource: {
+                    ...contextVars,
+                    userId: context.userId,
+                    tenantId: context.organizationId
+                },
+                metadata: contextVars,
+                userId: context.userId,
+                tenantId: context.organizationId
             },
             modelOverride: routedModelOverride
         });

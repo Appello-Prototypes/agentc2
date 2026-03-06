@@ -378,6 +378,7 @@ model IntegrationConnection {
     errorMessage   String?             @db.Text
     webhookPath    String?
     webhookSecret  String?
+    accessPolicy   String              @default("org-wide") // "org-wide", "owner-only", "role-restricted"
     agentTriggerId String?
     agentTrigger   AgentTrigger?       @relation(fields: [agentTriggerId], references: [id], onDelete: SetNull)
     createdAt      DateTime            @default(now())
@@ -1710,14 +1711,15 @@ model AgentAlert {
 
 // Audit Log - All write operations
 model AuditLog {
-    id         String   @id @default(cuid())
-    tenantId   String?
-    actorId    String? // User ID who performed the action
-    action     String // AGENT_CREATE, AGENT_UPDATE, CONFIG_CHANGE, etc.
-    entityType String // Agent, AgentVersion, etc.
-    entityId   String
-    metadata   Json? // Additional context
-    createdAt  DateTime @default(now())
+    id            String   @id @default(cuid())
+    tenantId      String?
+    actorId       String?
+    action        String
+    entityType    String
+    entityId      String
+    metadata      Json?
+    integrityHash String?  @db.VarChar(64)
+    createdAt     DateTime @default(now())
 
     @@index([tenantId, createdAt])
     @@index([entityId])

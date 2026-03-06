@@ -109,7 +109,8 @@ export const workflowExecuteTool = createTool({
             .string()
             .optional()
             .describe("Trigger type (manual, api, scheduled, webhook, tool, test, retry)"),
-        requestContext: z.record(z.any()).optional().describe("Optional request context")
+        requestContext: z.record(z.any()).optional().describe("Optional request context"),
+        organizationId: z.string().optional().describe("Auto-injected organization ID")
     }),
     outputSchema: z.object({
         success: z.boolean(),
@@ -119,9 +120,18 @@ export const workflowExecuteTool = createTool({
         error: z.any().optional(),
         run: z.any().optional()
     }),
-    execute: async ({ workflowSlug, input, source, environment, triggerType, requestContext }) => {
+    execute: async ({
+        workflowSlug,
+        input,
+        source,
+        environment,
+        triggerType,
+        requestContext,
+        organizationId
+    }) => {
+        const orgFilter = organizationId ? { workspace: { organizationId } } : {};
         const workflow = await prisma.workflow.findFirst({
-            where: { OR: [{ slug: workflowSlug }, { id: workflowSlug }] },
+            where: { OR: [{ slug: workflowSlug }, { id: workflowSlug }], ...orgFilter },
             include: { workspace: { select: { environment: true } } }
         });
 
@@ -257,7 +267,8 @@ export const workflowListRunsTool = createTool({
         triggerType: z.string().optional().describe("Trigger type filter"),
         from: z.string().optional().describe("Start ISO timestamp"),
         to: z.string().optional().describe("End ISO timestamp"),
-        search: z.string().optional().describe("Search run ID")
+        search: z.string().optional().describe("Search run ID"),
+        organizationId: z.string().optional().describe("Auto-injected organization ID")
     }),
     outputSchema: z.object({
         success: z.boolean(),
@@ -271,10 +282,12 @@ export const workflowListRunsTool = createTool({
         triggerType,
         from,
         to,
-        search
+        search,
+        organizationId
     }) => {
+        const orgFilter = organizationId ? { workspace: { organizationId } } : {};
         const workflow = await prisma.workflow.findFirst({
-            where: { OR: [{ slug: workflowSlug }, { id: workflowSlug }] }
+            where: { OR: [{ slug: workflowSlug }, { id: workflowSlug }], ...orgFilter }
         });
 
         if (!workflow) {
@@ -356,15 +369,17 @@ export const workflowGetRunTool = createTool({
     description: "Fetch workflow run details including steps.",
     inputSchema: z.object({
         workflowSlug: z.string().describe("Workflow slug or ID"),
-        runId: z.string().describe("Run ID")
+        runId: z.string().describe("Run ID"),
+        organizationId: z.string().optional().describe("Auto-injected organization ID")
     }),
     outputSchema: z.object({
         success: z.boolean(),
         run: z.any()
     }),
-    execute: async ({ workflowSlug, runId }) => {
+    execute: async ({ workflowSlug, runId, organizationId }) => {
+        const orgFilter = organizationId ? { workspace: { organizationId } } : {};
         const workflow = await prisma.workflow.findFirst({
-            where: { OR: [{ slug: workflowSlug }, { id: workflowSlug }] }
+            where: { OR: [{ slug: workflowSlug }, { id: workflowSlug }], ...orgFilter }
         });
 
         if (!workflow) {

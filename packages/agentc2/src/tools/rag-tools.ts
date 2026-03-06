@@ -8,7 +8,7 @@ const baseOutputSchema = z.object({ success: z.boolean().optional() }).passthrou
 const getInternalBaseUrl = () =>
     process.env.MASTRA_API_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
 
-const buildHeaders = () => {
+const buildHeaders = (organizationId?: string) => {
     const headers: Record<string, string> = {
         "Content-Type": "application/json"
     };
@@ -16,9 +16,14 @@ const buildHeaders = () => {
     if (apiKey) {
         headers["X-API-Key"] = apiKey;
     }
-    const orgSlug = process.env.MASTRA_ORGANIZATION_SLUG || process.env.MCP_API_ORGANIZATION_SLUG;
-    if (orgSlug) {
-        headers["X-Organization-Slug"] = orgSlug;
+    if (organizationId) {
+        headers["X-Organization-Id"] = organizationId;
+    } else {
+        const orgSlug =
+            process.env.MASTRA_ORGANIZATION_SLUG || process.env.MCP_API_ORGANIZATION_SLUG;
+        if (orgSlug) {
+            headers["X-Organization-Slug"] = orgSlug;
+        }
     }
     return headers;
 };
@@ -29,6 +34,7 @@ const callInternalApi = async (
         method?: string;
         query?: Record<string, unknown>;
         body?: Record<string, unknown>;
+        organizationId?: string;
     }
 ) => {
     const url = new URL(path, getInternalBaseUrl());
@@ -42,7 +48,7 @@ const callInternalApi = async (
 
     const response = await fetch(url.toString(), {
         method: options?.method ?? "GET",
-        headers: buildHeaders(),
+        headers: buildHeaders(options?.organizationId),
         body: options?.body ? JSON.stringify(options.body) : undefined
     });
     const data = await response.json();
@@ -151,10 +157,12 @@ export const ragIngestTool = createTool({
 export const ragDocumentsListTool = createTool({
     id: "rag-documents-list",
     description: "List ingested RAG documents.",
-    inputSchema: z.object({}),
+    inputSchema: z.object({
+        organizationId: z.string().optional().describe("Auto-injected organization ID")
+    }),
     outputSchema: baseOutputSchema,
-    execute: async () => {
-        return callInternalApi("/api/rag/documents");
+    execute: async ({ organizationId }) => {
+        return callInternalApi("/api/rag/documents", { organizationId });
     }
 });
 
@@ -162,13 +170,15 @@ export const ragDocumentDeleteTool = createTool({
     id: "rag-document-delete",
     description: "Delete an ingested RAG document.",
     inputSchema: z.object({
-        documentId: z.string()
+        documentId: z.string(),
+        organizationId: z.string().optional().describe("Auto-injected organization ID")
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ documentId }) => {
+    execute: async ({ documentId, organizationId }) => {
         return callInternalApi("/api/rag/documents", {
             method: "DELETE",
-            body: { documentId }
+            body: { documentId },
+            organizationId
         });
     }
 });

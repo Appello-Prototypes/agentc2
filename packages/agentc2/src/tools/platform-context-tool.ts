@@ -33,7 +33,8 @@ export const platformContextTool = createTool({
             .optional()
             .describe(
                 "Include per-category tool ID lists (default: false — only counts are returned)"
-            )
+            ),
+        organizationId: z.string().optional().describe("Auto-injected organization ID")
     }),
     outputSchema: z
         .object({
@@ -53,10 +54,15 @@ export const platformContextTool = createTool({
             })
         })
         .passthrough(),
-    execute: async ({ includeTools }) => {
+    execute: async ({ includeTools, organizationId }) => {
+        const orgWhere = organizationId ? { workspace: { organizationId } } : {};
+        const skillOrgWhere = organizationId
+            ? { OR: [{ workspace: { organizationId } }, { type: "SYSTEM" }] }
+            : {};
+
         const [agents, networks, workflows, skills, mcpToolDefs] = await Promise.all([
             prisma.agent.findMany({
-                where: { isArchived: false },
+                where: { isArchived: false, ...orgWhere },
                 select: {
                     slug: true,
                     name: true,
@@ -70,7 +76,7 @@ export const platformContextTool = createTool({
                 orderBy: { name: "asc" }
             }),
             prisma.network.findMany({
-                where: { isArchived: false },
+                where: { isArchived: false, ...orgWhere },
                 select: {
                     slug: true,
                     name: true,
@@ -82,7 +88,7 @@ export const platformContextTool = createTool({
                 orderBy: { name: "asc" }
             }),
             prisma.workflow.findMany({
-                where: { isArchived: false },
+                where: { isArchived: false, ...orgWhere },
                 select: {
                     slug: true,
                     name: true,
@@ -93,6 +99,7 @@ export const platformContextTool = createTool({
                 orderBy: { name: "asc" }
             }),
             prisma.skill.findMany({
+                where: skillOrgWhere,
                 select: {
                     slug: true,
                     name: true,

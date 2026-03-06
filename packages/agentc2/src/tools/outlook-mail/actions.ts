@@ -17,6 +17,7 @@ async function callGraph(params: {
     path: string;
     method?: string;
     body?: unknown;
+    organizationId?: string;
 }) {
     // Tools in @repo/agentc2 can't import from apps/agent directly.
     // They call Graph via raw fetch, loading tokens from the database.
@@ -29,6 +30,10 @@ async function callGraph(params: {
 
     if (!connection || !connection.isActive) {
         throw new Error("Microsoft connection not found or inactive");
+    }
+
+    if (params.organizationId && connection.organizationId !== params.organizationId) {
+        throw new Error("Microsoft connection does not belong to your organization");
     }
 
     // Decrypt credentials

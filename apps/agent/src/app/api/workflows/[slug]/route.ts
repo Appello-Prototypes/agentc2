@@ -8,6 +8,7 @@ import {
     type FieldChange
 } from "@/lib/changelog";
 import { authenticateRequest } from "@/lib/api-auth";
+import { requireEntityAccess } from "@/lib/authz/require-entity-access";
 
 async function findWorkflow(slug: string, organizationId: string) {
     return prisma.workflow.findFirst({
@@ -62,6 +63,12 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         if (!authContext) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
         }
+        const access = await requireEntityAccess(
+            authContext.userId,
+            authContext.organizationId,
+            "update"
+        );
+        if (!access.allowed) return access.response;
 
         const { slug } = await params;
         const body = await request.json();
@@ -211,6 +218,12 @@ export async function PATCH(
         if (!authContext) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
         }
+        const access = await requireEntityAccess(
+            authContext.userId,
+            authContext.organizationId,
+            "update"
+        );
+        if (!access.allowed) return access.response;
 
         const { slug } = await params;
         const body = await request.json();
@@ -273,6 +286,12 @@ export async function DELETE(
         if (!authContext) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
         }
+        const access = await requireEntityAccess(
+            authContext.userId,
+            authContext.organizationId,
+            "delete"
+        );
+        if (!access.allowed) return access.response;
 
         const { slug } = await params;
         const existing = await findWorkflow(slug, authContext.organizationId);

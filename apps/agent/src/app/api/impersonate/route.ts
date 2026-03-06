@@ -1,18 +1,19 @@
+import { randomBytes } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
 import { authenticateRequest } from "@/lib/api-auth";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
 
+const impersonationCodes = new Map<string, { sessionToken: string; expiresAt: number }>();
+
 /**
- * GET /api/impersonate?token=<session_token>
+ * POST /api/impersonate
  *
- * Sets the Better Auth session cookie for an admin-created impersonation
- * session, then navigates to the workspace. Returns an HTML page (not a
- * redirect) so the browser fully processes Set-Cookie headers before
- * navigating — avoids edge cases where redirect + Set-Cookie race.
+ * Admin creates a short-lived one-time code for impersonation.
+ * The code is used via GET to exchange for a session cookie.
  */
-export async function GET(request: NextRequest) {
+export async function POST(request: NextRequest) {
     const authContext = await authenticateRequest(request);
     if (!authContext) {
         return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
@@ -29,10 +30,50 @@ export async function GET(request: NextRequest) {
         );
     }
 
-    const token = request.nextUrl.searchParams.get("token");
-    if (!token) {
+    const body = await request.json();
+    const sessionToken = body.token;
+    if (!sessionToken) {
         return NextResponse.json({ error: "Missing token" }, { status: 400 });
     }
+
+    const code = randomBytes(32).toString("hex");
+    impersonationCodes.set(code, {
+        sessionToken,
+        expiresAt: Date.now() + 60_000
+    });
+
+    // Evict expired codes
+    for (const [k, v] of impersonationCodes) {
+        if (v.expiresAt < Date.now()) impersonationCodes.delete(k);
+    }
+
+    const impersonateUrl = new URL(`/api/impersonate?code=${code}`, APP_URL).toString();
+    return NextResponse.json({ success: true, url: impersonateUrl });
+}
+
+/**
+ * GET /api/impersonate?code=<one-time-code>
+ *
+ * Exchanges a one-time code for a session cookie. The code expires in 60s
+ * and can only be used once, preventing token exposure in URLs/logs.
+ */
+export async function GET(request: NextRequest) {
+    const code = request.nextUrl.searchParams.get("code");
+    if (!code) {
+        return NextResponse.json({ error: "Missing code" }, { status: 400 });
+    }
+
+    const entry = impersonationCodes.get(code);
+    impersonationCodes.delete(code);
+
+    if (!entry || entry.expiresAt < Date.now()) {
+        return NextResponse.json(
+            { error: "Invalid or expired impersonation code" },
+            { status: 403 }
+        );
+    }
+
+    const token = entry.sessionToken;
 
     const session = await prisma.session.findFirst({
         where: {
@@ -44,7 +85,7 @@ export async function GET(request: NextRequest) {
 
     if (!session) {
         return NextResponse.json(
-            { error: "Invalid or expired impersonation token" },
+            { error: "Invalid or expired impersonation session" },
             { status: 403 }
         );
     }

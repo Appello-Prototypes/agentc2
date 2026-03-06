@@ -39,17 +39,18 @@ export function wrapToolsWithPermissionGuard(
             behavior?.behavior === "mutation" ? "write" : "read";
 
         tool.execute = async (context: any) => {
-            // 1. Permission check
+            // 1. Permission check (fail-closed: deny on error)
             let permResult: ToolPermissionResult;
             try {
                 permResult = await checkToolPermission(agentId, toolId, requiredCategory);
             } catch (err) {
-                console.warn(`[ToolGuard] Permission check failed for "${toolId}":`, err);
+                console.error(`[ToolGuard] Permission check error for "${toolId}", denying:`, err);
                 permResult = {
-                    allowed: true,
-                    permission: "full",
+                    allowed: false,
+                    permission: "read_only",
                     maxCostUsd: null,
-                    source: "default"
+                    source: "default",
+                    reason: "Permission check failed — denying by default"
                 };
             }
 
@@ -63,12 +64,19 @@ export function wrapToolsWithPermissionGuard(
             if (organizationId) {
                 const targetUrl = extractUrlFromArgs(context);
                 if (targetUrl) {
+                    // Egress check (fail-closed: deny on error)
                     let egressResult: EgressCheckResult;
                     try {
                         egressResult = await checkEgressPermission(organizationId, targetUrl);
                     } catch (err) {
-                        console.warn(`[ToolGuard] Egress check failed for "${toolId}":`, err);
-                        egressResult = { allowed: true };
+                        console.error(
+                            `[ToolGuard] Egress check error for "${toolId}", denying:`,
+                            err
+                        );
+                        egressResult = {
+                            allowed: false,
+                            reason: "Egress check failed — denying by default"
+                        };
                     }
 
                     if (!egressResult.allowed) {

@@ -36,6 +36,9 @@ import { sessionOpsToolDefinitions, sessionOpsToolRoutes } from "./session-ops";
 import { pulseToolDefinitions, pulseToolRoutes } from "./pulse";
 import { conversationToolDefinitions, conversationToolRoutes } from "./conversations";
 import { playbookToolDefinitions, playbookToolRoutes } from "./playbook";
+import { agentPermissionToolDefinitions, agentPermissionToolRoutes } from "./agent-permissions";
+import { egressPolicyToolDefinitions, egressPolicyToolRoutes } from "./egress-policy";
+import { auditIntegrityToolDefinitions, auditIntegrityToolRoutes } from "./audit-integrity";
 import type { McpToolDefinition, McpToolRoute } from "./types";
 
 export type { McpToolDefinition, McpToolRoute } from "./types";
@@ -79,7 +82,10 @@ export const mcpToolDefinitions: McpToolDefinition[] = [
     ...sessionOpsToolDefinitions,
     ...pulseToolDefinitions,
     ...conversationToolDefinitions,
-    ...playbookToolDefinitions
+    ...playbookToolDefinitions,
+    ...agentPermissionToolDefinitions,
+    ...egressPolicyToolDefinitions,
+    ...auditIntegrityToolDefinitions
 ];
 
 export const mcpToolRoutes: McpToolRoute[] = [
@@ -120,5 +126,8 @@ export const mcpToolRoutes: McpToolRoute[] = [
     ...sessionOpsToolRoutes,
     ...pulseToolRoutes,
     ...conversationToolRoutes,
-    ...playbookToolRoutes
+    ...playbookToolRoutes,
+    ...agentPermissionToolRoutes,
+    ...egressPolicyToolRoutes,
+    ...auditIntegrityToolRoutes
 ];

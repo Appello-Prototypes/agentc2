@@ -9,6 +9,7 @@ import {
     type FieldChange
 } from "@/lib/changelog";
 import { authenticateRequest } from "@/lib/api-auth";
+import { requireEntityAccess } from "@/lib/authz/require-entity-access";
 
 async function findNetwork(slug: string, organizationId: string) {
     return prisma.network.findFirst({
@@ -293,6 +294,12 @@ export async function PATCH(
         if (!authContext) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
         }
+        const access = await requireEntityAccess(
+            authContext.userId,
+            authContext.organizationId,
+            "update"
+        );
+        if (!access.allowed) return access.response;
 
         const { slug } = await params;
         const body = await request.json();
@@ -360,6 +367,12 @@ export async function DELETE(
         if (!authContext) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
         }
+        const access = await requireEntityAccess(
+            authContext.userId,
+            authContext.organizationId,
+            "delete"
+        );
+        if (!access.allowed) return access.response;
 
         const { slug } = await params;
         const existing = await prisma.network.findFirst({

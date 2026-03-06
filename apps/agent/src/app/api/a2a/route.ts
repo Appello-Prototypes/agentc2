@@ -1,3 +1,4 @@
+import { createHash, timingSafeEqual } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
 import { processInvocation } from "@repo/agentc2/federation";
@@ -57,8 +58,7 @@ interface ApiKeyContext {
 }
 
 async function resolveApiKey(token: string): Promise<ApiKeyContext | null> {
-    // Look up the token in ToolCredential (reuses existing API key pattern)
-    const credential = await prisma.toolCredential.findFirst({
+    const candidates = await prisma.toolCredential.findMany({
         where: {
             toolId: "a2a-api-key",
             isActive: true
@@ -71,17 +71,37 @@ async function resolveApiKey(token: string): Promise<ApiKeyContext | null> {
         }
     });
 
-    if (!credential) return null;
+    const inputHash = createHash("sha256").update(token).digest("hex");
 
-    // The credentials JSON should have a "token" field with the hashed key
-    const creds = credential.credentials as Record<string, unknown>;
-    if (!creds || creds.token !== token) return null;
+    for (const credential of candidates) {
+        const creds = credential.credentials as Record<string, unknown>;
+        if (!creds) continue;
 
-    return {
-        organizationId: credential.organizationId,
-        userId: credential.createdBy || "api-key",
-        keyId: credential.id
-    };
+        const storedHash =
+            typeof creds.tokenHash === "string"
+                ? creds.tokenHash
+                : typeof creds.token === "string"
+                  ? creds.token
+                  : null;
+        if (!storedHash) continue;
+
+        const compareValue =
+            storedHash.length === 64
+                ? storedHash
+                : createHash("sha256").update(storedHash).digest("hex");
+
+        const a = Buffer.from(inputHash, "hex");
+        const b = Buffer.from(compareValue, "hex");
+        if (a.length === b.length && timingSafeEqual(a, b)) {
+            return {
+                organizationId: credential.organizationId,
+                userId: credential.createdBy || "api-key",
+                keyId: credential.id
+            };
+        }
+    }
+
+    return null;
 }
 
 async function handleTaskSend(

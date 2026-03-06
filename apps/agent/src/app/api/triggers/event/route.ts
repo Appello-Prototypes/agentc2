@@ -41,6 +41,17 @@ export async function POST(request: NextRequest) {
         }
 
         const organizationSlug = request.headers.get("x-organization-slug")?.trim();
+
+        if (!organizationSlug && !workspaceId) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    error: "Organization context required: provide X-Organization-Slug header or workspaceId"
+                },
+                { status: 400 }
+            );
+        }
+
         const where: Prisma.AgentTriggerWhereInput = {
             triggerType: "event",
             isActive: true,

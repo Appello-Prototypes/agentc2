@@ -3,7 +3,8 @@ import { prisma } from "@repo/database";
 import { getMcpToolsForServer } from "@repo/agentc2/mcp";
 import {
     rediscoverToolsForConnection,
-    syncIntegrationToolRecords
+    syncIntegrationToolRecords,
+    syncStaticToolsForConnection
 } from "@repo/agentc2/integrations";
 import { resolveConnectionServerId } from "@/lib/integrations";
 import { authenticateRequest } from "@/lib/api-auth";
@@ -56,36 +57,48 @@ export async function GET(
                   })
                 : [];
 
-        // If no IntegrationTool records exist, fall back to live MCP discovery and auto-populate
+        // If no IntegrationTool records exist, auto-populate from MCP or static tools
         if (integrationTools.length === 0 && connections.length > 0) {
             const defaultConn = connections.find((c) => c.isDefault) || connections[0];
-            const serverId = resolveConnectionServerId(provider.key, defaultConn);
-            const liveTools = await getMcpToolsForServer({
-                serverId,
-                organizationId,
-                userId: authContext.userId,
-                allowEnvFallback: false
-            }).catch(() => ({}));
 
-            const toolEntries = Object.entries(liveTools);
-            if (toolEntries.length > 0) {
-                const defs = toolEntries.map(([name, tool]) => {
-                    const t = tool as {
-                        description?: string;
-                        inputSchema?: { shape?: Record<string, unknown> };
-                    };
-                    return {
-                        toolId: name,
-                        name: t.description || name,
-                        description: t.description || "",
-                        inputSchema: t.inputSchema?.shape || null
-                    };
-                });
-                await syncIntegrationToolRecords(defaultConn.id, provider.key, defs);
+            // Try static tools first (native OAuth/credential providers)
+            const staticResult = await syncStaticToolsForConnection(defaultConn.id, provider.key);
+
+            if (staticResult > 0) {
                 integrationTools = await prisma.integrationTool.findMany({
                     where: { connectionId: defaultConn.id },
                     orderBy: [{ isEnabled: "desc" }, { name: "asc" }]
                 });
+            } else {
+                // Fall back to live MCP discovery
+                const serverId = resolveConnectionServerId(provider.key, defaultConn);
+                const liveTools = await getMcpToolsForServer({
+                    serverId,
+                    organizationId,
+                    userId: authContext.userId,
+                    allowEnvFallback: false
+                }).catch(() => ({}));
+
+                const toolEntries = Object.entries(liveTools);
+                if (toolEntries.length > 0) {
+                    const defs = toolEntries.map(([name, tool]) => {
+                        const t = tool as {
+                            description?: string;
+                            inputSchema?: { shape?: Record<string, unknown> };
+                        };
+                        return {
+                            toolId: name,
+                            name: t.description || name,
+                            description: t.description || "",
+                            inputSchema: t.inputSchema?.shape || null
+                        };
+                    });
+                    await syncIntegrationToolRecords(defaultConn.id, provider.key, defs);
+                    integrationTools = await prisma.integrationTool.findMany({
+                        where: { connectionId: defaultConn.id },
+                        orderBy: [{ isEnabled: "desc" }, { name: "asc" }]
+                    });
+                }
             }
         }
 

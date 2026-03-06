@@ -73,9 +73,12 @@ export async function createSkill(input: CreateSkillInput) {
 /**
  * Resolve a skill ID or slug to the internal CUID.
  */
-async function resolveSkillId(idOrSlug: string): Promise<string> {
+async function resolveSkillId(idOrSlug: string, organizationId?: string): Promise<string> {
+    const orgFilter = organizationId
+        ? { OR: [{ workspace: { organizationId } }, { type: "SYSTEM" as const }] }
+        : {};
     const skill = await prisma.skill.findFirst({
-        where: { OR: [{ id: idOrSlug }, { slug: idOrSlug }] },
+        where: { OR: [{ id: idOrSlug }, { slug: idOrSlug }], ...orgFilter },
         select: { id: true }
     });
     if (!skill) throw new Error(`Skill not found: ${idOrSlug}`);

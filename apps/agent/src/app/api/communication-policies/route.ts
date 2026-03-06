@@ -85,6 +85,46 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        if (scope === "organization" && scopeId !== authContext.organizationId) {
+            return NextResponse.json(
+                { success: false, error: "Cannot create policy for another organization" },
+                { status: 403 }
+            );
+        }
+        if (scope === "workspace") {
+            const ws = await prisma.workspace.findFirst({
+                where: { id: scopeId, organizationId: authContext.organizationId }
+            });
+            if (!ws) {
+                return NextResponse.json(
+                    { success: false, error: "Workspace not found in your organization" },
+                    { status: 403 }
+                );
+            }
+        }
+        if (scope === "agent") {
+            const ag = await prisma.agent.findFirst({
+                where: { id: scopeId, workspace: { organizationId: authContext.organizationId } }
+            });
+            if (!ag) {
+                return NextResponse.json(
+                    { success: false, error: "Agent not found in your organization" },
+                    { status: 403 }
+                );
+            }
+        }
+        if (scope === "network") {
+            const net = await prisma.network.findFirst({
+                where: { id: scopeId, workspace: { organizationId: authContext.organizationId } }
+            });
+            if (!net) {
+                return NextResponse.json(
+                    { success: false, error: "Network not found in your organization" },
+                    { status: 403 }
+                );
+            }
+        }
+
         const policy = await prisma.communicationPolicy.create({
             data: {
                 scope,

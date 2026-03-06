@@ -103,13 +103,27 @@ export async function PATCH(
         }
 
         const body = await request.json();
-        const { name, isDefault, isActive, credentials, metadata } = body as {
+        const { name, isDefault, isActive, credentials, metadata, accessPolicy } = body as {
             name?: string;
             isDefault?: boolean;
             isActive?: boolean;
             credentials?: Record<string, unknown> | null;
             metadata?: Record<string, unknown> | null;
+            accessPolicy?: string;
         };
+
+        if (
+            accessPolicy !== undefined &&
+            !["org-wide", "owner-only", "role-restricted"].includes(accessPolicy)
+        ) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    error: "Invalid accessPolicy. Must be 'org-wide', 'owner-only', or 'role-restricted'"
+                },
+                { status: 400 }
+            );
+        }
 
         if (isDefault) {
             await prisma.integrationConnection.updateMany({
@@ -141,7 +155,8 @@ export async function PATCH(
                     : {}),
                 ...(metadata !== undefined
                     ? { metadata: metadata ? JSON.parse(JSON.stringify(metadata)) : null }
-                    : {})
+                    : {}),
+                ...(accessPolicy !== undefined ? { accessPolicy } : {})
             }
         });
 

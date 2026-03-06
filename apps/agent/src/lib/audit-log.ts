@@ -17,6 +17,7 @@
  * ```
  */
 
+import { createHash } from "crypto";
 import { prisma, Prisma } from "@repo/database";
 
 /**
@@ -122,21 +123,58 @@ export interface AuditLogOptions {
 /**
  * Create an audit log entry
  */
+/**
+ * Compute integrity hash for a new audit log entry.
+ * Each entry's hash chains to the previous entry's hash (SHA-256).
+ */
+export async function computeIntegrityHash(
+    data: {
+        action: string;
+        entityType: string;
+        entityId: string;
+        actorId?: string | null;
+        tenantId?: string | null;
+    },
+    previousHash: string | null
+): Promise<string> {
+    const payload = JSON.stringify({
+        prev: previousHash || "genesis",
+        action: data.action,
+        entityType: data.entityType,
+        entityId: data.entityId,
+        actorId: data.actorId || null,
+        tenantId: data.tenantId || null
+    });
+    return createHash("sha256").update(payload).digest("hex");
+}
+
 export async function createAuditLog(options: AuditLogOptions): Promise<void> {
     try {
+        const previous = await prisma.auditLog.findFirst({
+            where: options.tenantId ? { tenantId: options.tenantId } : {},
+            orderBy: { createdAt: "desc" },
+            select: { integrityHash: true }
+        });
+
+        const data = {
+            action: options.action,
+            entityType: options.entityType,
+            entityId: options.entityId,
+            actorId: options.actorId || options.userId,
+            tenantId: options.tenantId
+        };
+
+        const integrityHash = await computeIntegrityHash(data, previous?.integrityHash || null);
+
         await prisma.auditLog.create({
             data: {
-                action: options.action,
-                entityType: options.entityType,
-                entityId: options.entityId,
-                actorId: options.actorId || options.userId,
-                tenantId: options.tenantId,
-                metadata: options.metadata as Prisma.InputJsonValue
+                ...data,
+                metadata: options.metadata as Prisma.InputJsonValue,
+                integrityHash
             }
         });
     } catch (error) {
         console.error("[AuditLog] Failed to create audit log:", error);
-        // Retry once after a short delay
         setTimeout(async () => {
             try {
                 await prisma.auditLog.create({

@@ -45,7 +45,8 @@ const networkCreateSchema = z
         type: z.enum(["USER", "SYSTEM"]).optional(),
         primitives: z.array(networkPrimitiveSchema).optional(),
         versionDescription: z.string().optional(),
-        createdBy: z.string().optional().nullable()
+        createdBy: z.string().optional().nullable(),
+        organizationId: z.string().optional().describe("Auto-injected organization ID")
     })
     .passthrough();
 
@@ -57,7 +58,8 @@ const networkReadSchema = z.object({
             versions: z.boolean().optional(),
             runs: z.boolean().optional()
         })
-        .optional()
+        .optional(),
+    organizationId: z.string().optional().describe("Auto-injected organization ID")
 });
 
 const networkUpdateSchema = z
@@ -67,13 +69,15 @@ const networkUpdateSchema = z
         restoreVersion: z.number().optional(),
         versionDescription: z.string().optional(),
         createdBy: z.string().optional().nullable(),
-        data: networkCreateSchema.partial().optional()
+        data: networkCreateSchema.partial().optional(),
+        organizationId: z.string().optional().describe("Auto-injected organization ID")
     })
     .passthrough();
 
 const networkDeleteSchema = z.object({
     networkId: z.string(),
-    mode: z.enum(["delete", "archive"]).optional()
+    mode: z.enum(["delete", "archive"]).optional(),
+    organizationId: z.string().optional().describe("Auto-injected organization ID")
 });
 
 export const networkCreateTool = createTool({
@@ -86,7 +90,12 @@ export const networkCreateTool = createTool({
     }),
     execute: async (input) => {
         const slug = input.slug || generateSlug(input.name);
-        const existing = await prisma.network.findUnique({ where: { slug } });
+        const orgFilter = input.organizationId
+            ? { workspace: { organizationId: input.organizationId } }
+            : {};
+        const existing = await prisma.network.findFirst({
+            where: { slug, ...orgFilter }
+        });
         if (existing) {
             throw new Error(`Network slug '${slug}' already exists`);
         }
@@ -161,14 +170,15 @@ export const networkReadTool = createTool({
         versions: z.array(z.any()).optional(),
         runs: z.array(z.any()).optional()
     }),
-    execute: async ({ networkId, include }) => {
+    execute: async ({ networkId, include, organizationId }) => {
         const includeConfig: Record<string, boolean> = {};
         if (include?.primitives) includeConfig.primitives = true;
         if (include?.versions) includeConfig.versions = true;
         if (include?.runs) includeConfig.runs = true;
 
+        const orgFilter = organizationId ? { workspace: { organizationId } } : {};
         const network = await prisma.network.findFirst({
-            where: { OR: [{ slug: networkId }, { id: networkId }] },
+            where: { OR: [{ slug: networkId }, { id: networkId }], ...orgFilter },
             include: includeConfig
         });
 
@@ -199,14 +209,16 @@ export const networkUpdateTool = createTool({
         restoreVersion,
         versionDescription,
         createdBy,
-        data
+        data,
+        organizationId
     }) => {
         if (!data && !restoreVersionId && restoreVersion === undefined) {
             throw new Error("Update requires data or a restoreVersion value");
         }
 
+        const orgFilter = organizationId ? { workspace: { organizationId } } : {};
         const existing = await prisma.network.findFirst({
-            where: { OR: [{ slug: networkId }, { id: networkId }] },
+            where: { OR: [{ slug: networkId }, { id: networkId }], ...orgFilter },
             include: { primitives: true }
         });
 
@@ -341,9 +353,10 @@ export const networkDeleteTool = createTool({
         success: z.boolean(),
         message: z.string().optional()
     }),
-    execute: async ({ networkId, mode }) => {
+    execute: async ({ networkId, mode, organizationId }) => {
+        const orgFilter = organizationId ? { workspace: { organizationId } } : {};
         const existing = await prisma.network.findFirst({
-            where: { OR: [{ slug: networkId }, { id: networkId }] }
+            where: { OR: [{ slug: networkId }, { id: networkId }], ...orgFilter }
         });
 
         if (!existing) {

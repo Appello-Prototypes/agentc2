@@ -72,6 +72,7 @@ function getNavItems(deploymentMode?: string): { id: string; label: string; icon
         { id: "costs", label: "Costs", icon: "dollar" },
         { id: "versions", label: "Versions", icon: "git-branch" },
         { id: "guardrails", label: "Guardrails", icon: "shield" },
+        { id: "permissions", label: "Permissions", icon: "lock" },
         { id: "simulations", label: "Simulations", icon: "play-list" },
         { id: "backlog", label: "Backlog", icon: "task-list" },
         { id: "output-actions", label: "Output Actions", icon: "arrow-right" }

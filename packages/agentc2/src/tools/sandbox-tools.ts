@@ -516,7 +516,9 @@ export const executeCodeTool = createTool({
         const useNetwork = networkAccess ?? false;
         const providerKeys = injectCredentials ?? [];
 
-        const credentials = providerKeys.length ? await resolveCredentials(providerKeys) : {};
+        const credentials = providerKeys.length
+            ? await resolveCredentials(providerKeys, organizationId)
+            : {};
 
         if (isDockerAvailable()) {
             const result = await executeInDocker({
@@ -843,6 +845,8 @@ const WORKSPACE_TOOL_IDS = new Set([
 const ORG_SCOPED_TOOL_IDS = new Set([
     "rag-query",
     "rag-ingest",
+    "rag-documents-list",
+    "rag-document-delete",
     "document-create",
     "document-read",
     "document-update",
@@ -853,16 +857,28 @@ const ORG_SCOPED_TOOL_IDS = new Set([
     "youtube-get-transcript",
     "youtube-analyze-video",
     "youtube-ingest-to-knowledge",
+    "network-create",
+    "network-read",
+    "network-update",
+    "network-delete",
     "network-execute",
     "network-list-runs",
     "network-get-run",
     "network-metrics",
     "network-versions",
     "network-stats",
+    "workflow-execute",
+    "workflow-list-runs",
+    "workflow-get-run",
+    "workflow-resume",
     "workflow-create",
     "workflow-read",
     "workflow-update",
     "workflow-delete",
+    "workflow-metrics",
+    "workflow-versions",
+    "workflow-stats",
+    "platform-context",
     "metrics-agent-analytics",
     "metrics-agent-runs",
     "metrics-live-summary",
@@ -882,15 +898,29 @@ const ORG_SCOPED_TOOL_IDS = new Set([
 ]);
 
 /**
- * Wraps a sandbox tool with pre-bound organizationId and agentId so the LLM
- * doesn't need to provide them. Called by the agent resolver at hydration time.
+ * Wraps a sandbox tool with pre-bound organizationId, agentId, and
+ * ToolExecutionContext fields so the LLM doesn't need to provide them.
+ * Called by the agent resolver at hydration time.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function bindWorkspaceContext(
     tool: any,
-    context: { organizationId: string; agentId: string }
+    context: {
+        organizationId: string;
+        agentId: string;
+        callingUserId?: string;
+        callingUserRole?: string;
+        executionMode?: string;
+        connectionScope?: string;
+    }
 ) {
     if (!tool?.id) return tool;
+
+    const execCtxFields: Record<string, unknown> = {};
+    if (context.callingUserId) execCtxFields.callingUserId = context.callingUserId;
+    if (context.callingUserRole) execCtxFields.callingUserRole = context.callingUserRole;
+    if (context.executionMode) execCtxFields.executionMode = context.executionMode;
+    if (context.connectionScope) execCtxFields.connectionScope = context.connectionScope;
 
     if (WORKSPACE_TOOL_IDS.has(tool.id)) {
         const originalExecute = tool.execute;
@@ -900,7 +930,8 @@ export function bindWorkspaceContext(
                 return originalExecute({
                     ...input,
                     organizationId: input.organizationId || context.organizationId,
-                    agentId: input.agentId || context.agentId
+                    agentId: input.agentId || context.agentId,
+                    ...execCtxFields
                 });
             }
         };
@@ -913,7 +944,8 @@ export function bindWorkspaceContext(
             execute: (input: Record<string, unknown>) => {
                 return originalExecute({
                     ...input,
-                    organizationId: input.organizationId || context.organizationId
+                    organizationId: input.organizationId || context.organizationId,
+                    ...execCtxFields
                 });
             }
         };

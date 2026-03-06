@@ -2,24 +2,29 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
 import { authenticateRequest } from "@/lib/api-auth";
 
-async function resolveEntityId(entityType: string, idOrSlug: string): Promise<string | null> {
+async function resolveEntityId(
+    entityType: string,
+    idOrSlug: string,
+    organizationId: string
+): Promise<string | null> {
+    const orgFilter = { workspace: { organizationId } };
     if (entityType === "agent") {
         const agent = await prisma.agent.findFirst({
-            where: { OR: [{ slug: idOrSlug }, { id: idOrSlug }] },
+            where: { OR: [{ slug: idOrSlug }, { id: idOrSlug }], ...orgFilter },
             select: { id: true }
         });
         return agent?.id || null;
     }
     if (entityType === "workflow") {
         const workflow = await prisma.workflow.findFirst({
-            where: { OR: [{ slug: idOrSlug }, { id: idOrSlug }] },
+            where: { OR: [{ slug: idOrSlug }, { id: idOrSlug }], ...orgFilter },
             select: { id: true }
         });
         return workflow?.id || null;
     }
     if (entityType === "network") {
         const network = await prisma.network.findFirst({
-            where: { OR: [{ slug: idOrSlug }, { id: idOrSlug }] },
+            where: { OR: [{ slug: idOrSlug }, { id: idOrSlug }], ...orgFilter },
             select: { id: true }
         });
         return network?.id || null;
@@ -52,7 +57,11 @@ export async function GET(request: NextRequest) {
             );
         }
 
-        const entityId = await resolveEntityId(entityType, entityIdOrSlug);
+        const entityId = await resolveEntityId(
+            entityType,
+            entityIdOrSlug,
+            authContext.organizationId
+        );
         if (!entityId) {
             return NextResponse.json(
                 { success: false, error: `${entityType} '${entityIdOrSlug}' not found` },

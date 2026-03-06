@@ -17,6 +17,7 @@ async function callGraph(params: {
     path: string;
     method?: string;
     body?: unknown;
+    organizationId?: string;
 }) {
     const { prisma } = await import("@repo/database");
     const { createDecipheriv } = await import("crypto");
@@ -27,6 +28,10 @@ async function callGraph(params: {
 
     if (!connection || !connection.isActive) {
         throw new Error("Microsoft connection not found or inactive");
+    }
+
+    if (params.organizationId && connection.organizationId !== params.organizationId) {
+        throw new Error("Microsoft connection does not belong to your organization");
     }
 
     let creds: Record<string, unknown> = {};

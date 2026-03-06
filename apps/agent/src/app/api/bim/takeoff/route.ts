@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
 import { computeTakeoff } from "@repo/agentc2/bim";
-import { getDemoSession } from "@/lib/standalone-auth";
+import { authenticateRequest } from "@/lib/api-auth";
 
 export async function POST(request: NextRequest) {
     try {
-        const session = await getDemoSession();
-        if (!session?.user) {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
         }
 
         const {
@@ -17,6 +17,8 @@ export async function POST(request: NextRequest) {
             filters,
             groupBy
         } = await request.json();
+
+        const orgWhere = { model: { workspace: { organizationId: authContext.organizationId } } };
 
         // Resolve versionId: use provided versionId, or find latest version for modelId
         let versionId = providedVersionId;
@@ -32,7 +34,7 @@ export async function POST(request: NextRequest) {
 
             // Find the latest version for this model
             const latestVersion = await prisma.bimModelVersion.findFirst({
-                where: { modelId },
+                where: { modelId, ...orgWhere },
                 orderBy: { createdAt: "desc" },
                 select: { id: true }
             });
@@ -47,11 +49,14 @@ export async function POST(request: NextRequest) {
             versionId = latestVersion.id;
         } else {
             // If versionId provided, look up the modelId
-            const version = await prisma.bimModelVersion.findUnique({
-                where: { id: versionId },
+            const version = await prisma.bimModelVersion.findFirst({
+                where: { id: versionId, ...orgWhere },
                 select: { modelId: true }
             });
-            resolvedModelId = version?.modelId;
+            if (!version) {
+                return NextResponse.json({ error: "Model version not found" }, { status: 404 });
+            }
+            resolvedModelId = version.modelId;
         }
 
         const result = await computeTakeoff({ versionId, filters, groupBy });

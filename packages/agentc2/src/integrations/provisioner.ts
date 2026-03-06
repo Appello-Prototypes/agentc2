@@ -96,6 +96,7 @@ export async function provisionIntegration(
         } else if (blueprint.skill.staticTools) {
             toolIds = blueprint.skill.staticTools;
             discoveryStatus = "complete";
+            discoveredDefs = buildStaticToolDefinitions(toolIds);
         }
 
         // 3b. Sync IntegrationTool records for this connection
@@ -664,10 +665,17 @@ export async function rediscoverToolsForConnection(
     if (!skill) return null;
 
     // Discover current tools with full definitions
-    const discoveredDefs = await discoverMcpToolsWithDefinitions(
-        connection.organizationId,
-        providerKey
-    );
+    let discoveredDefs: DiscoveredToolDef[];
+    if (blueprint.skill.toolDiscovery === "dynamic") {
+        discoveredDefs = await discoverMcpToolsWithDefinitions(
+            connection.organizationId,
+            providerKey
+        );
+    } else if (blueprint.skill.staticTools) {
+        discoveredDefs = buildStaticToolDefinitions(blueprint.skill.staticTools);
+    } else {
+        discoveredDefs = [];
+    }
     const currentTools = discoveredDefs.map((d) => d.toolId);
 
     const existingToolIds = new Set(skill.tools.map((t) => t.toolId));
@@ -730,6 +738,45 @@ export async function rediscoverToolsForConnection(
         removed,
         unchanged: currentTools.length - added.length
     };
+}
+
+// ── Static Tool Definitions ──────────────────────────────────────────────────
+
+/**
+ * Build DiscoveredToolDef entries for native/static tools (OAuth, credential-
+ * based integrations like Gmail, Google Drive, Cursor, etc.). This lets them
+ * get IntegrationTool records just like MCP-discovered tools.
+ */
+function buildStaticToolDefinitions(toolIds: string[]): DiscoveredToolDef[] {
+    const defs: DiscoveredToolDef[] = [];
+    for (const id of toolIds) {
+        const humanName = id.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+        defs.push({
+            toolId: id,
+            name: humanName,
+            description: "",
+            inputSchema: null
+        });
+    }
+    return defs;
+}
+
+/**
+ * Sync IntegrationTool records for a provider that uses static (native) tools.
+ * Returns the number of tools synced, or 0 if the provider has no static tools.
+ */
+export async function syncStaticToolsForConnection(
+    connectionId: string,
+    providerKey: string
+): Promise<number> {
+    const blueprint = getBlueprint(providerKey);
+    if (!blueprint?.skill.staticTools) return 0;
+
+    const defs = buildStaticToolDefinitions(blueprint.skill.staticTools);
+    if (defs.length === 0) return 0;
+
+    await syncIntegrationToolRecords(connectionId, providerKey, defs);
+    return defs.length;
 }
 
 // ── IntegrationTool Sync ─────────────────────────────────────────────────────

@@ -12,6 +12,11 @@ import {
     CardHeader,
     CardTitle,
     Input,
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
     Switch,
     Tabs,
     TabsContent,
@@ -47,6 +52,7 @@ type ConnectionSummary = {
     isActive: boolean;
     connected: boolean;
     missingFields: string[];
+    accessPolicy?: string;
 };
 
 type IntegrationProvider = {
@@ -402,6 +408,53 @@ function OverviewTab({
                                                 {result.message}
                                             </div>
                                         )}
+
+                                        <div className="flex items-center gap-3 pt-1">
+                                            <span className="text-muted-foreground text-xs">
+                                                Access Policy
+                                            </span>
+                                            <Select
+                                                value={conn.accessPolicy || "org-wide"}
+                                                onValueChange={async (value) => {
+                                                    try {
+                                                        const res = await fetch(
+                                                            `${getApiBase()}/api/integrations/connections/${conn.id}`,
+                                                            {
+                                                                method: "PATCH",
+                                                                headers: {
+                                                                    "Content-Type":
+                                                                        "application/json"
+                                                                },
+                                                                credentials: "include",
+                                                                body: JSON.stringify({
+                                                                    accessPolicy: value
+                                                                })
+                                                            }
+                                                        );
+                                                        if (res.ok) {
+                                                            onRefresh();
+                                                        }
+                                                    } catch {
+                                                        /* ignore */
+                                                    }
+                                                }}
+                                            >
+                                                <SelectTrigger className="h-7 w-52 text-xs">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="org-wide">
+                                                        All org agents
+                                                    </SelectItem>
+                                                    <SelectItem value="owner-only">
+                                                        Owner only
+                                                    </SelectItem>
+                                                    <SelectItem value="role-restricted">
+                                                        Admins only
+                                                    </SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
                                     </div>
                                 );
                             })}

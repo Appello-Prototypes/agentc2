@@ -395,6 +395,16 @@ export {
 } from "./crypto";
 export type { EncryptedPayload, OrgKeyPair } from "./crypto";
 
+// Security (tool execution context & access control)
+export { computeConnectionScope } from "./security/tool-execution-context";
+export type { ToolExecutionContext, UserRole } from "./security/tool-execution-context";
+export {
+    resolveCredential,
+    resolveAllCredentials,
+    AccessDeniedError
+} from "./security/credential-resolver";
+export type { ResolvedConnection } from "./security/credential-resolver";
+
 // Audit (platform-wide logging)
 export { writeAuditLog, writeAuditLogAsync, queryAuditLogs } from "./audit";
 export type { AuditEntry, AuditQueryOptions } from "./audit";

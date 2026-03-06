@@ -155,6 +155,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             const eventWhere: Prisma.TriggerEventWhereInput = {
                 sourceType: "slack",
                 agentId: parsed.sourceId,
+                workspace: { organizationId: workspaceContext.organizationId },
                 ...(Object.keys(runWhere).length > 0 ? { run: runWhere } : {})
             };
 
@@ -233,7 +234,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         }
 
         // ── Schedule / Trigger automations ───────────────────────────────
-        const baseWhere: Prisma.AgentRunWhereInput = { triggerId: parsed.sourceId };
+        const baseWhere: Prisma.AgentRunWhereInput = {
+            triggerId: parsed.sourceId,
+            agent: { workspace: { organizationId: workspaceContext.organizationId } }
+        };
         if (statusParam && statusParam !== "all") {
             baseWhere.status = statusParam.toUpperCase() as Prisma.EnumRunStatusFilter;
         }

@@ -10,6 +10,7 @@ import {
     validateWorkspaceOwnership
 } from "@/lib/organization";
 import { authenticateRequest } from "@/lib/api-auth";
+import { requireEntityAccess } from "@/lib/authz/require-entity-access";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { RATE_LIMIT_POLICIES } from "@/lib/security/rate-limit-policy";
 
@@ -269,6 +270,22 @@ export async function POST(request: NextRequest) {
         }
 
         const workspaceId = body.workspaceId || (await getDefaultWorkspaceIdForUser(userId));
+        let orgIdForRbac = organizationId ?? null;
+        if (!orgIdForRbac && workspaceId) {
+            const workspace = await prisma.workspace.findUnique({
+                where: { id: workspaceId },
+                select: { organizationId: true }
+            });
+            orgIdForRbac = workspace?.organizationId ?? null;
+        }
+        if (!orgIdForRbac) {
+            return NextResponse.json(
+                { success: false, error: "Organization context required for creating agents" },
+                { status: 403 }
+            );
+        }
+        const createAccess = await requireEntityAccess(userId, orgIdForRbac, "create");
+        if (!createAccess.allowed) return createAccess.response;
 
         if (body.workspaceId && organizationId) {
             const isValidWorkspace = await validateWorkspaceOwnership(

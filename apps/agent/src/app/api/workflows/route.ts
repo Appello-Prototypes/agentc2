@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
 import { authenticateRequest } from "@/lib/api-auth";
+import { requireEntityAccess } from "@/lib/authz/require-entity-access";
 
 function generateSlug(name: string): string {
     return name
@@ -54,6 +55,12 @@ export async function POST(request: NextRequest) {
         if (!authContext) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
         }
+        const access = await requireEntityAccess(
+            authContext.userId,
+            authContext.organizationId,
+            "create"
+        );
+        if (!access.allowed) return access.response;
 
         const body = await request.json();
         const { name, slug, description } = body;
@@ -66,8 +73,20 @@ export async function POST(request: NextRequest) {
         }
 
         const { getDefaultWorkspaceIdForUser } = await import("@/lib/organization");
-        const workspaceId =
-            body.workspaceId || (await getDefaultWorkspaceIdForUser(authContext.userId));
+        let workspaceId = body.workspaceId;
+        if (workspaceId) {
+            const ws = await prisma.workspace.findFirst({
+                where: { id: workspaceId, organizationId: authContext.organizationId }
+            });
+            if (!ws) {
+                return NextResponse.json(
+                    { success: false, error: "Workspace not found in your organization" },
+                    { status: 403 }
+                );
+            }
+        } else {
+            workspaceId = await getDefaultWorkspaceIdForUser(authContext.userId);
+        }
 
         const workflowSlug = slug || generateSlug(name);
         const existing = await prisma.workflow.findFirst({

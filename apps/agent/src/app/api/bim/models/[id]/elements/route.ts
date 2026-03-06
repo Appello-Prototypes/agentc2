@@ -24,16 +24,22 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         const searchParams = request.nextUrl.searchParams;
         const versionIdParam = searchParams.get("versionId");
 
+        const orgWhere = { model: { workspace: { organizationId: authContext.organizationId } } };
         let versionId = versionIdParam;
         if (!versionId) {
             const latestVersion = await prisma.bimModelVersion.findFirst({
-                where: {
-                    modelId: id,
-                    model: { workspace: { organizationId: authContext.organizationId } }
-                },
+                where: { modelId: id, ...orgWhere },
                 orderBy: { version: "desc" }
             });
             versionId = latestVersion?.id || null;
+        } else {
+            const version = await prisma.bimModelVersion.findFirst({
+                where: { id: versionId, modelId: id, ...orgWhere },
+                select: { id: true }
+            });
+            if (!version) {
+                return NextResponse.json({ error: "Model version not found" }, { status: 404 });
+            }
         }
 
         if (!versionId) {

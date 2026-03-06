@@ -14,16 +14,18 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         const versionIdParam = searchParams.get("versionId");
 
         let version = null;
+        const orgWhere = { model: { workspace: { organizationId: authContext.organizationId } } };
         if (versionIdParam) {
-            version = await prisma.bimModelVersion.findUnique({
-                where: { id: versionIdParam }
+            version = await prisma.bimModelVersion.findFirst({
+                where: {
+                    id: versionIdParam,
+                    modelId: id,
+                    ...orgWhere
+                }
             });
-            if (version && version.modelId !== id) {
-                version = null;
-            }
         } else {
             version = await prisma.bimModelVersion.findFirst({
-                where: { modelId: id },
+                where: { modelId: id, ...orgWhere },
                 orderBy: { version: "desc" }
             });
         }

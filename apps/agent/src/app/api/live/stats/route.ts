@@ -109,21 +109,25 @@ export async function GET(request: NextRequest) {
         // Filter to agents with production runs
         const activeAgents = agentStats.filter((a) => a.prodRuns > 0);
 
-        // Overall summary
+        // Overall summary (scoped to org)
+        const orgRunFilter = {
+            runType: "PROD" as const,
+            agent: { workspace: { organizationId: authContext.organizationId } }
+        };
         const [totalProdRuns, completedRuns, failedRuns, overallStats] = await Promise.all([
-            prisma.agentRun.count({ where: { runType: "PROD" } }),
-            prisma.agentRun.count({ where: { runType: "PROD", status: "COMPLETED" } }),
-            prisma.agentRun.count({ where: { runType: "PROD", status: "FAILED" } }),
+            prisma.agentRun.count({ where: orgRunFilter }),
+            prisma.agentRun.count({ where: { ...orgRunFilter, status: "COMPLETED" } }),
+            prisma.agentRun.count({ where: { ...orgRunFilter, status: "FAILED" } }),
             prisma.agentRun.aggregate({
-                where: { runType: "PROD" },
+                where: orgRunFilter,
                 _avg: { durationMs: true },
                 _sum: { totalTokens: true, costUsd: true }
             })
         ]);
 
-        // Get unique sources across all production runs
+        // Get unique sources across all production runs (scoped to org)
         const allSources = await prisma.agentRun.findMany({
-            where: { runType: "PROD", source: { not: null } },
+            where: { ...orgRunFilter, source: { not: null } },
             select: { source: true },
             distinct: ["source"]
         });
@@ -132,7 +136,7 @@ export async function GET(request: NextRequest) {
         for (const s of allSources) {
             if (s.source) {
                 const count = await prisma.agentRun.count({
-                    where: { runType: "PROD", source: s.source }
+                    where: { ...orgRunFilter, source: s.source }
                 });
                 runsBySource.push({ source: s.source, count });
             }

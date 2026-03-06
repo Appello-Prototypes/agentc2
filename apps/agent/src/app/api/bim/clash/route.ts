@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
 import { computeClashes } from "@repo/agentc2/bim";
-import { getDemoSession } from "@/lib/standalone-auth";
+import { authenticateRequest } from "@/lib/api-auth";
 
 export async function POST(request: NextRequest) {
     try {
-        const session = await getDemoSession();
-        if (!session?.user) {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
         }
 
         const { versionId, filters, maxPairs } = await request.json();
@@ -15,15 +15,22 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: "versionId is required" }, { status: 400 });
         }
 
-        const result = await computeClashes({ versionId, filters, maxPairs });
-        const version = await prisma.bimModelVersion.findUnique({
-            where: { id: versionId },
+        const version = await prisma.bimModelVersion.findFirst({
+            where: {
+                id: versionId,
+                model: { workspace: { organizationId: authContext.organizationId } }
+            },
             select: { modelId: true }
         });
+        if (!version) {
+            return NextResponse.json({ error: "Model version not found" }, { status: 404 });
+        }
+
+        const result = await computeClashes({ versionId, filters, maxPairs });
 
         const record = await prisma.bimClash.create({
             data: {
-                modelId: version?.modelId,
+                modelId: version.modelId,
                 versionId,
                 query: { filters, maxPairs },
                 result

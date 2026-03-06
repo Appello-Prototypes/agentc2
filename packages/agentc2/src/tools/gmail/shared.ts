@@ -203,13 +203,16 @@ export const callGmailApi = async (
  * If provided and non-empty, use as-is.
  * If empty/default, query the first active GmailIntegration from the database.
  */
-export const resolveGmailAddress = async (gmailAddress?: string): Promise<string> => {
+export const resolveGmailAddress = async (
+    gmailAddress?: string,
+    organizationId?: string
+): Promise<string> => {
     if (gmailAddress && gmailAddress.includes("@")) {
         return gmailAddress;
     }
-    // Fallback: find the first active Gmail integration
+    const orgFilter = organizationId ? { workspace: { organizationId } } : {};
     const integration = await prisma.gmailIntegration.findFirst({
-        where: { isActive: true },
+        where: { isActive: true, ...orgFilter },
         orderBy: { updatedAt: "desc" },
         select: { gmailAddress: true }
     });

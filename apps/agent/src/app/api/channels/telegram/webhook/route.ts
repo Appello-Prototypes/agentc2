@@ -53,7 +53,12 @@ function validateBotToken(request: NextRequest, creds: Record<string, string>): 
 
     const secretToken = request.headers.get("x-telegram-bot-api-secret-token");
     const expectedSecret = creds.TELEGRAM_WEBHOOK_SECRET || process.env.TELEGRAM_WEBHOOK_SECRET;
-    if (secretToken && expectedSecret && secretToken !== expectedSecret) {
+
+    if (process.env.NODE_ENV === "production" && expectedSecret) {
+        if (!secretToken || secretToken !== expectedSecret) {
+            return false;
+        }
+    } else if (secretToken && expectedSecret && secretToken !== expectedSecret) {
         return false;
     }
 

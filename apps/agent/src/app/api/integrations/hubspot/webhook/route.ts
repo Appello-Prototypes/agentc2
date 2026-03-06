@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma, TriggerEventStatus, type Prisma } from "@repo/database";
 import { inngest } from "@/lib/inngest";
@@ -60,7 +61,35 @@ const getRecordId = (event: HubSpotEvent) => {
  */
 export async function POST(request: NextRequest) {
     try {
-        const payload = await request.json().catch(() => null);
+        const rawBody = await request.text();
+
+        // HubSpot signature verification in production
+        const hubspotSecret = process.env.HUBSPOT_CLIENT_SECRET;
+        if (hubspotSecret && process.env.NODE_ENV === "production") {
+            const signature = request.headers.get("x-hubspot-signature");
+            if (!signature) {
+                return NextResponse.json(
+                    { success: false, error: "Missing HubSpot signature" },
+                    { status: 401 }
+                );
+            }
+            const expectedHash = createHash("sha256")
+                .update(hubspotSecret + rawBody)
+                .digest("hex");
+            if (signature !== expectedHash) {
+                return NextResponse.json(
+                    { success: false, error: "Invalid HubSpot signature" },
+                    { status: 401 }
+                );
+            }
+        }
+
+        let payload: unknown = null;
+        try {
+            payload = JSON.parse(rawBody);
+        } catch {
+            // invalid JSON
+        }
         const events = normalizeHubSpotEvents(payload);
         if (events.length === 0) {
             return NextResponse.json(

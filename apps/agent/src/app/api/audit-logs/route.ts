@@ -53,6 +53,7 @@ export async function GET(request: NextRequest) {
                 entityId: log.entityId,
                 actorId: log.actorId,
                 metadata: log.metadata,
+                integrityHash: log.integrityHash,
                 createdAt: log.createdAt
             })),
             hasMore: result.hasMore,

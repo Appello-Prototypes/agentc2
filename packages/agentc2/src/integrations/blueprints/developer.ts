@@ -264,7 +264,14 @@ Best practices:
 - Track costs per coding task for budget management`,
             category: "Developer Tools",
             tags: ["developer", "cursor", "coding", "automation", "ci-cd"],
-            toolDiscovery: "dynamic"
+            toolDiscovery: "static",
+            staticTools: [
+                "cursor-launch-agent",
+                "cursor-get-status",
+                "cursor-add-followup",
+                "cursor-get-conversation",
+                "cursor-poll-until-done"
+            ]
         },
         agent: {
             slug: "cursor-agent",

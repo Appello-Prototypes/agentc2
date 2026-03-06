@@ -103,6 +103,30 @@ const settingsNavItems: SettingsNavItem[] = [
         icon: "code",
         description: "Manage embed partners and deployments",
         requiresRole: ["owner", "admin"]
+    },
+    {
+        id: "guardrails",
+        label: "Guardrails",
+        href: "/settings/guardrails",
+        icon: "shield",
+        description: "Org-wide safety and content controls",
+        requiresRole: ["owner", "admin"]
+    },
+    {
+        id: "egress",
+        label: "Egress Policy",
+        href: "/settings/egress",
+        icon: "ai-network",
+        description: "Network egress domain controls",
+        requiresRole: ["owner", "admin"]
+    },
+    {
+        id: "audit",
+        label: "Audit Log",
+        href: "/settings/audit",
+        icon: "activity",
+        description: "Platform audit trail and integrity",
+        requiresRole: ["owner", "admin"]
     }
 ];
 

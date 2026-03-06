@@ -29,6 +29,10 @@ import {
 } from "../processors/guardrail-processors";
 
 import { getThreadSkillState } from "../skills/thread-state";
+import {
+    type ToolExecutionContext,
+    computeConnectionScope
+} from "../security/tool-execution-context";
 import { recordActivity } from "../activity/service";
 import { budgetEnforcement } from "../budget";
 import { resolveModelForOrg } from "./model-provider";
@@ -190,6 +194,8 @@ export interface HydratedAgent {
     toolHealth: ToolHealthSnapshot;
     /** All tool names loaded on the resolved agent (for finish-tool pattern detection) */
     resolvedToolNames: string[];
+    /** Security context for tool execution access control */
+    toolExecutionContext?: ToolExecutionContext;
 }
 
 /**
@@ -333,11 +339,13 @@ export class AgentResolver {
         });
 
         if (record) {
+            const recordOrgId = record.workspace?.organizationId;
+
             // Enforce hard budget limit before running the agent (full hierarchy)
             // Budget checks must always run live, never cached
             await this.checkBudgetLimit(record.id, {
                 userId: requestContext?.userId,
-                organizationId: record.workspace?.organizationId
+                organizationId: recordOrgId
             });
 
             // Check hydration cache (keyed by slug:version:threadId:loadAllSkills)
@@ -354,6 +362,27 @@ export class AgentResolver {
 
             const result = await this.hydrate(record, requestContext, threadId, loadAllSkills);
 
+            // Build ToolExecutionContext for access control
+            let toolExecCtx: ToolExecutionContext | undefined;
+            const callingUserId = requestContext?.userId || requestContext?.resource?.userId;
+            if (recordOrgId && callingUserId) {
+                const membership = await prisma.membership.findFirst({
+                    where: { userId: callingUserId, organizationId: recordOrgId },
+                    select: { role: true }
+                });
+                const role =
+                    (membership?.role as ToolExecutionContext["callingUserRole"]) || "viewer";
+                const executionMode: ToolExecutionContext["executionMode"] =
+                    record.type === "SYSTEM" ? "org" : "user";
+                toolExecCtx = {
+                    organizationId: recordOrgId,
+                    callingUserId,
+                    callingUserRole: role,
+                    executionMode,
+                    connectionScope: computeConnectionScope(executionMode, role)
+                };
+            }
+
             // Store in hydration cache
             this.hydrationCache.set(cacheKey, {
                 result,
@@ -368,7 +397,7 @@ export class AgentResolver {
                 }
             }
 
-            return { ...result, record, source: "database" };
+            return { ...result, record, source: "database", toolExecutionContext: toolExecCtx };
         }
 
         // Fallback to code-defined agents
@@ -874,10 +903,31 @@ export class AgentResolver {
         // Bind org context to workspace/sandbox tools so they use org-scoped paths
         if (organizationId) {
             const { bindWorkspaceContext } = await import("../tools/sandbox-tools");
+            const callingUserId = context?.userId || context?.resource?.userId || undefined;
+
+            let execCtxFields: Record<string, string> = {};
+            if (callingUserId) {
+                const membership = await prisma.membership.findFirst({
+                    where: { userId: callingUserId, organizationId },
+                    select: { role: true }
+                });
+                const role = (membership?.role ||
+                    "viewer") as ToolExecutionContext["callingUserRole"];
+                const executionMode: ToolExecutionContext["executionMode"] =
+                    record.type === "SYSTEM" ? "org" : "user";
+                execCtxFields = {
+                    callingUserId,
+                    callingUserRole: role,
+                    executionMode,
+                    connectionScope: computeConnectionScope(executionMode, role)
+                };
+            }
+
             for (const toolKey of Object.keys(tools)) {
                 tools[toolKey] = bindWorkspaceContext(tools[toolKey], {
                     organizationId,
-                    agentId: record.slug
+                    agentId: record.slug,
+                    ...execCtxFields
                 });
             }
         }

@@ -6,14 +6,23 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS || "")
     .filter(Boolean);
 
 export function getCorsHeaders(origin: string | null): Record<string, string> {
-    const allowedOrigin =
-        origin && (allowedOrigins.length === 0 || allowedOrigins.includes(origin))
-            ? origin
-            : allowedOrigins[0] || "";
+    const isProduction = process.env.NODE_ENV === "production";
+
+    let allowedOrigin: string;
+    if (isProduction && allowedOrigins.length === 0) {
+        // In production, refuse to echo back arbitrary origins
+        allowedOrigin = process.env.NEXT_PUBLIC_APP_URL || "";
+    } else {
+        allowedOrigin =
+            origin && (allowedOrigins.length === 0 || allowedOrigins.includes(origin))
+                ? origin
+                : allowedOrigins[0] || "";
+    }
+
     return {
         "Access-Control-Allow-Origin": allowedOrigin,
         "Access-Control-Allow-Headers":
-            "Content-Type, Authorization, X-API-Key, X-Organization-Slug",
+            "Content-Type, Authorization, X-API-Key, X-Organization-Slug, X-Organization-Id",
         "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS"
     };
 }

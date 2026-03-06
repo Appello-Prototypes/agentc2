@@ -33,10 +33,10 @@ export async function POST(request: NextRequest) {
             fromAgentSlug,
             toAgentSlug,
             sessionId,
-            organizationId,
+            organizationId: authContext.organizationId,
             workspaceId,
             networkId,
-            userId,
+            userId: authContext.userId,
             currentDepth,
             currentPeerCalls
         });
