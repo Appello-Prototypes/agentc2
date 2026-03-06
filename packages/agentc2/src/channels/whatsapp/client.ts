@@ -25,6 +25,7 @@ export class WhatsAppClient implements ChannelHandler {
     private messageHandler: MessageHandler | null = null;
     private socket: unknown = null;
     private qrCode: string | null = null;
+    private sentMessageIds: Set<string> = new Set();
 
     constructor(config: WhatsAppConfig) {
         this.config = config;
@@ -107,9 +108,18 @@ export class WhatsAppClient implements ChannelHandler {
                 if (!this.messageHandler) return;
 
                 for (const msg of m.messages) {
-                    // Skip status messages and own messages
+                    // Skip status messages
                     if (msg.key.remoteJid === "status@broadcast") continue;
-                    if (msg.key.fromMe) continue;
+
+                    // Handle fromMe messages: skip unless self-chat mode is enabled
+                    if (msg.key.fromMe) {
+                        if (!this.config.selfChatMode) continue;
+                        // In self-chat mode, skip bot-sent responses to prevent loops
+                        if (this.sentMessageIds.has(msg.key.id || "")) {
+                            this.sentMessageIds.delete(msg.key.id || "");
+                            continue;
+                        }
+                    }
 
                     // Check allowlist
                     if (this.config.allowlist && this.config.allowlist.length > 0) {
@@ -237,6 +247,16 @@ export class WhatsAppClient implements ChannelHandler {
                 : undefined;
 
             const result = await sock.sendMessage(jid, { text: message.text }, options);
+
+            // Track sent message IDs to prevent self-chat loops
+            if (this.config.selfChatMode && result.key.id) {
+                this.sentMessageIds.add(result.key.id);
+                // Cap the set to prevent memory leaks
+                if (this.sentMessageIds.size > 200) {
+                    const oldest = this.sentMessageIds.values().next().value;
+                    if (oldest) this.sentMessageIds.delete(oldest);
+                }
+            }
 
             return {
                 success: true,
