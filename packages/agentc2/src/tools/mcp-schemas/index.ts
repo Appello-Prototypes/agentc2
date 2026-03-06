@@ -39,6 +39,7 @@ import { playbookToolDefinitions, playbookToolRoutes } from "./playbook";
 import { agentPermissionToolDefinitions, agentPermissionToolRoutes } from "./agent-permissions";
 import { egressPolicyToolDefinitions, egressPolicyToolRoutes } from "./egress-policy";
 import { auditIntegrityToolDefinitions, auditIntegrityToolRoutes } from "./audit-integrity";
+import { aiModelToolDefinitions, aiModelToolRoutes } from "./ai-models";
 import type { McpToolDefinition, McpToolRoute } from "./types";
 
 export type { McpToolDefinition, McpToolRoute } from "./types";
@@ -85,7 +86,8 @@ export const mcpToolDefinitions: McpToolDefinition[] = [
     ...playbookToolDefinitions,
     ...agentPermissionToolDefinitions,
     ...egressPolicyToolDefinitions,
-    ...auditIntegrityToolDefinitions
+    ...auditIntegrityToolDefinitions,
+    ...aiModelToolDefinitions
 ];
 
 export const mcpToolRoutes: McpToolRoute[] = [
@@ -129,5 +131,6 @@ export const mcpToolRoutes: McpToolRoute[] = [
     ...playbookToolRoutes,
     ...agentPermissionToolRoutes,
     ...egressPolicyToolRoutes,
-    ...auditIntegrityToolRoutes
+    ...auditIntegrityToolRoutes,
+    ...aiModelToolRoutes
 ];

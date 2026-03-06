@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { prisma, type Prisma } from "@repo/database";
+import { validateModelSelection } from "@repo/agentc2/agents";
+import type { ModelProvider } from "@repo/agentc2/agents";
 import { buildNetworkTopologyFromPrimitives, isNetworkTopologyEmpty } from "@repo/agentc2/networks";
 import {
     createChangeLog,
@@ -113,6 +115,28 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         if (body.instructions !== undefined) updateData.instructions = body.instructions;
         if (body.modelProvider !== undefined) updateData.modelProvider = body.modelProvider;
         if (body.modelName !== undefined) updateData.modelName = body.modelName;
+
+        // Validate model when provider or model name is being changed
+        if (body.modelProvider !== undefined || body.modelName !== undefined) {
+            const effectiveProvider = (body.modelProvider ?? existing.modelProvider) as string;
+            const effectiveModel = (body.modelName ?? existing.modelName) as string;
+            const modelValidation = await validateModelSelection(
+                effectiveProvider as ModelProvider,
+                effectiveModel,
+                authContext.organizationId
+            );
+            if (!modelValidation.valid) {
+                return NextResponse.json(
+                    {
+                        success: false,
+                        error: modelValidation.message,
+                        suggestion: modelValidation.suggestion
+                    },
+                    { status: 400 }
+                );
+            }
+        }
+
         if (body.temperature !== undefined) updateData.temperature = body.temperature;
         if (body.memoryConfig !== undefined) updateData.memoryConfig = body.memoryConfig;
         if (body.maxSteps !== undefined) updateData.maxSteps = body.maxSteps;

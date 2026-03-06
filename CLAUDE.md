@@ -160,10 +160,11 @@ CADDY_ADMIN_API="http://localhost:2019"           # Caddy admin endpoint
 
 ### AI Providers
 
-```bash
-OPENAI_API_KEY="sk-..."           # OpenAI API key (GPT-4o, Whisper, TTS)
-ANTHROPIC_API_KEY="sk-ant-..."    # Anthropic API key (Claude models)
-```
+> **Important**: AI model provider API keys (OpenAI, Anthropic, etc.) are NO LONGER
+> read from environment variables. All AI provider keys must be configured via
+> **IntegrationConnection** records in the database (Settings > Integrations).
+> This ensures consistent multi-tenant behavior and avoids encryption key mismatches.
+> Voice provider keys (ElevenLabs, OpenAI TTS/Whisper) still use env vars.
 
 ### Voice Providers (ElevenLabs)
 

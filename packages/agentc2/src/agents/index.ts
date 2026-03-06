@@ -5,13 +5,8 @@ export { visionAgent, visionAnalysisSchema } from "./vision";
 export { researchAgent, researchTools } from "./research";
 
 export { mcpAgent, createMcpAgent } from "./mcp-agent";
-export {
-    openaiVoiceAgent,
-    elevenlabsVoiceAgent,
-    hybridVoiceAgent,
-    voiceProviders,
-    openaiSpeakers
-} from "./voice";
+export { voiceProviders, openaiSpeakers } from "./voice";
+export type { OpenAISpeaker } from "./voice";
 
 // Agent factory for stored agents
 export {
@@ -54,7 +49,8 @@ export {
     clearModelCache,
     resolveModelAlias,
     MODEL_ALIASES,
-    FALLBACK_AVAILABLE_MODELS
+    FALLBACK_AVAILABLE_MODELS,
+    validateModelSelection
 } from "./model-registry";
 export type {
     ModelDefinition,

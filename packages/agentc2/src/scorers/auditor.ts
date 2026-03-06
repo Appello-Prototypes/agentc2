@@ -5,12 +5,12 @@
  * against a custom scorecard with structured output.
  */
 
-import { openai } from "@ai-sdk/openai";
 import { generateObject } from "ai";
 import { z } from "zod";
 import { prisma } from "@repo/database";
 import type { EvalContext, ScorecardCriterion, Tier2Result, AarOutput, FailureMode } from "./types";
 import { DEFAULT_SCORECARD_CRITERIA, computeWeightedScore } from "./types";
+import { resolveModelForOrg } from "../agents/model-provider";
 
 /**
  * Truncate text to a maximum length, adding ellipsis if truncated.
@@ -308,12 +308,18 @@ export async function buildAuditorPrompt(context: EvalContext): Promise<string> 
 export async function runTier2Auditor(context: EvalContext): Promise<Tier2Result> {
     const criteria: ScorecardCriterion[] =
         context.agent.scorecard?.criteria ?? DEFAULT_SCORECARD_CRITERIA;
-    const auditorModel = context.agent.scorecard?.auditorModel ?? "gpt-4o-mini";
+    const auditorModelName = context.agent.scorecard?.auditorModel ?? "gpt-4o-mini";
+
+    const orgId = context.organizationId || context.tenantId || undefined;
+    const model = await resolveModelForOrg("openai", auditorModelName, orgId);
+    if (!model) {
+        throw new Error("OpenAI API key not configured. Add it via Settings > Integrations.");
+    }
 
     const userPrompt = await buildAuditorPrompt(context);
 
     const { object: auditorOutput } = await generateObject({
-        model: openai(auditorModel),
+        model,
         schema: AuditorOutputSchema,
         system: AUDITOR_SYSTEM_PROMPT,
         prompt: userPrompt,

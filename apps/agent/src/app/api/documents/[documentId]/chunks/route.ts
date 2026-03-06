@@ -1,16 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
+import { createOpenAI } from "@ai-sdk/openai";
 import { auth } from "@repo/auth";
 import { getDocumentRecord } from "@repo/agentc2/documents";
 import { ragIndexExists } from "@repo/agentc2/rag";
+import { getOrgApiKey } from "@repo/agentc2/agents";
 import { authenticateRequest } from "@/lib/api-auth";
 import { getUserOrganizationId } from "@/lib/organization";
 import { embed } from "ai";
-import { openai } from "@ai-sdk/openai";
 
 type RouteContext = { params: Promise<{ documentId: string }> };
-
-const embedder = openai.embedding("text-embedding-3-small");
 
 /**
  * GET /api/documents/[documentId]/chunks
@@ -43,7 +42,6 @@ export async function GET(request: NextRequest, context: RouteContext) {
             return NextResponse.json({ error: "Document not found" }, { status: 404 });
         }
 
-        // Check if the RAG vector index exists before querying
         if (!(await ragIndexExists())) {
             return NextResponse.json({
                 documentId: document.id,
@@ -54,13 +52,22 @@ export async function GET(request: NextRequest, context: RouteContext) {
             });
         }
 
-        // We need a query vector to search -- embed the document's name as a representative query
+        const openaiKey = await getOrgApiKey("openai", userOrgId);
+        if (!openaiKey) {
+            return NextResponse.json(
+                { error: "OpenAI API key not configured. Add it via Settings > Integrations." },
+                { status: 500 }
+            );
+        }
+
+        const openai = createOpenAI({ apiKey: openaiKey });
+        const embedder = openai.embedding("text-embedding-3-small");
+
         const { embedding } = await embed({
             model: embedder,
             value: document.name + " " + (document.description || "")
         });
 
-        // Import vector store directly to query with filter
         const { vector } = await import("@repo/agentc2");
 
         console.log(
@@ -81,7 +88,6 @@ export async function GET(request: NextRequest, context: RouteContext) {
 
         console.log(`[chunks] Vector query returned ${results.length} results`);
 
-        // Sort by chunk index for consistent ordering
         const chunks = results
             .map((r) => {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any

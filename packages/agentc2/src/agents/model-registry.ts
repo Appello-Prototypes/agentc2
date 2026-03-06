@@ -1485,6 +1485,417 @@ async function fetchAnthropicModels(apiKey: string): Promise<ModelDefinition[]> 
     return models;
 }
 
+// ── Provider Fetcher Helpers ─────────────────────────────────────────────────
+
+function buildMetadataMap(fallbackModels: ModelDefinition[]): Map<string, ModelDefinition> {
+    return new Map(fallbackModels.map((m) => [m.id, m]));
+}
+
+/**
+ * Generic fetcher for providers with OpenAI-compatible /v1/models endpoints.
+ * Used by Groq, xAI, DeepSeek, Fireworks, and Kimi.
+ */
+async function fetchOpenAICompatibleModels(
+    apiUrl: string,
+    apiKey: string,
+    provider: ModelProvider,
+    fallbackModels: ModelDefinition[],
+    chatFilterFn?: (id: string) => boolean
+): Promise<ModelDefinition[]> {
+    const response = await fetch(apiUrl, {
+        headers: { Authorization: `Bearer ${apiKey}` }
+    });
+    if (!response.ok) {
+        throw new Error(
+            `${provider} models API returned ${response.status}: ${response.statusText}`
+        );
+    }
+
+    const data = (await response.json()) as {
+        data: Array<{
+            id: string;
+            created?: number;
+            owned_by?: string;
+            context_window?: number;
+            active?: boolean;
+        }>;
+    };
+
+    const metadataMap = buildMetadataMap(fallbackModels);
+    const models: ModelDefinition[] = [];
+    const seenIds = new Set<string>();
+
+    for (const apiModel of data.data) {
+        const id = apiModel.id;
+        if (!id || seenIds.has(id)) continue;
+        if (apiModel.active === false) continue;
+        if (chatFilterFn && !chatFilterFn(id)) continue;
+
+        seenIds.add(id);
+        const known = metadataMap.get(id);
+
+        if (known) {
+            models.push(known);
+        } else {
+            const defaultCaps: ModelCapabilities = {
+                chat: true,
+                vision: false,
+                extendedThinking: false,
+                parallelToolCalls: true,
+                functionCalling: true,
+                streaming: true
+            };
+            models.push({
+                id,
+                provider,
+                displayName: formatModelId(id),
+                category: "flagship",
+                capabilities: defaultCaps,
+                contextWindow: apiModel.context_window ?? 128000,
+                deprecated: false,
+                aliases: [],
+                sortOrder: 100
+            });
+        }
+    }
+
+    models.sort((a, b) => a.sortOrder - b.sortOrder);
+    return models;
+}
+
+// ── Google (Gemini) Fetcher ──────────────────────────────────────────────────
+
+async function fetchGoogleModels(apiKey: string): Promise<ModelDefinition[]> {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}&pageSize=100`;
+    const response = await fetch(url);
+
+    if (!response.ok) {
+        throw new Error(`Google models API returned ${response.status}: ${response.statusText}`);
+    }
+
+    const data = (await response.json()) as {
+        models: Array<{
+            name: string;
+            displayName: string;
+            supportedGenerationMethods?: string[];
+            inputTokenLimit?: number;
+        }>;
+    };
+
+    const metadataMap = buildMetadataMap(GOOGLE_FALLBACK_MODELS);
+    const models: ModelDefinition[] = [];
+    const seenIds = new Set<string>();
+
+    for (const apiModel of data.models) {
+        if (!apiModel.supportedGenerationMethods?.includes("generateContent")) continue;
+
+        const id = apiModel.name.replace(/^models\//, "");
+        if (seenIds.has(id)) continue;
+        if (id.includes("embedding") || id.includes("aqa") || id.startsWith("text-")) continue;
+
+        seenIds.add(id);
+        const known = metadataMap.get(id);
+
+        if (known) {
+            models.push(known);
+        } else {
+            const defaultCaps: ModelCapabilities = {
+                chat: true,
+                vision: true,
+                extendedThinking: false,
+                parallelToolCalls: true,
+                functionCalling: true,
+                streaming: true
+            };
+            models.push({
+                id,
+                provider: "google",
+                displayName: apiModel.displayName || id,
+                category: id.includes("flash") ? "fast" : "flagship",
+                capabilities: defaultCaps,
+                contextWindow: apiModel.inputTokenLimit || 128000,
+                deprecated: false,
+                aliases: [],
+                sortOrder: 100
+            });
+        }
+    }
+
+    models.sort((a, b) => a.sortOrder - b.sortOrder);
+    return models;
+}
+
+// ── Groq Fetcher ─────────────────────────────────────────────────────────────
+
+async function fetchGroqModels(apiKey: string): Promise<ModelDefinition[]> {
+    return fetchOpenAICompatibleModels(
+        "https://api.groq.com/openai/v1/models",
+        apiKey,
+        "groq",
+        GROQ_FALLBACK_MODELS,
+        (id) =>
+            !id.includes("whisper") &&
+            !id.includes("distil-whisper") &&
+            !id.includes("tool-use") &&
+            !id.includes("guard")
+    );
+}
+
+// ── Mistral Fetcher ──────────────────────────────────────────────────────────
+
+async function fetchMistralModels(apiKey: string): Promise<ModelDefinition[]> {
+    const response = await fetch("https://api.mistral.ai/v1/models", {
+        headers: { Authorization: `Bearer ${apiKey}` }
+    });
+
+    if (!response.ok) {
+        throw new Error(`Mistral models API returned ${response.status}: ${response.statusText}`);
+    }
+
+    const data = (await response.json()) as {
+        data: Array<{
+            id: string;
+            name?: string;
+            capabilities?: {
+                completion_chat?: boolean;
+                vision?: boolean;
+                function_calling?: boolean;
+            };
+            max_context_length?: number;
+        }>;
+    };
+
+    const metadataMap = buildMetadataMap(MISTRAL_FALLBACK_MODELS);
+    const models: ModelDefinition[] = [];
+    const seenIds = new Set<string>();
+
+    for (const apiModel of data.data) {
+        const id = apiModel.id;
+        if (!id || seenIds.has(id)) continue;
+        if (apiModel.capabilities && apiModel.capabilities.completion_chat === false) continue;
+        if (id.includes("embed") || id.includes("moderation")) continue;
+
+        seenIds.add(id);
+        const known = metadataMap.get(id);
+
+        if (known) {
+            models.push(known);
+        } else {
+            models.push({
+                id,
+                provider: "mistral",
+                displayName: apiModel.name || formatModelId(id),
+                category: id.includes("small") || id.includes("mini") ? "fast" : "flagship",
+                capabilities: {
+                    chat: true,
+                    vision: apiModel.capabilities?.vision ?? false,
+                    extendedThinking: false,
+                    parallelToolCalls: apiModel.capabilities?.function_calling ?? true,
+                    functionCalling: apiModel.capabilities?.function_calling ?? true,
+                    streaming: true
+                },
+                contextWindow: apiModel.max_context_length || 128000,
+                deprecated: false,
+                aliases: [],
+                sortOrder: 100
+            });
+        }
+    }
+
+    models.sort((a, b) => a.sortOrder - b.sortOrder);
+    return models;
+}
+
+// ── xAI (Grok) Fetcher ──────────────────────────────────────────────────────
+
+async function fetchXaiModels(apiKey: string): Promise<ModelDefinition[]> {
+    return fetchOpenAICompatibleModels(
+        "https://api.x.ai/v1/models",
+        apiKey,
+        "xai",
+        XAI_FALLBACK_MODELS,
+        (id) => !id.includes("embedding")
+    );
+}
+
+// ── DeepSeek Fetcher ─────────────────────────────────────────────────────────
+
+async function fetchDeepSeekModels(apiKey: string): Promise<ModelDefinition[]> {
+    return fetchOpenAICompatibleModels(
+        "https://api.deepseek.com/models",
+        apiKey,
+        "deepseek",
+        DEEPSEEK_FALLBACK_MODELS
+    );
+}
+
+// ── TogetherAI Fetcher ───────────────────────────────────────────────────────
+
+async function fetchTogetherAIModels(apiKey: string): Promise<ModelDefinition[]> {
+    const response = await fetch("https://api.together.xyz/v1/models", {
+        headers: { Authorization: `Bearer ${apiKey}` }
+    });
+
+    if (!response.ok) {
+        throw new Error(
+            `TogetherAI models API returned ${response.status}: ${response.statusText}`
+        );
+    }
+
+    const rawData = await response.json();
+    const modelsList = Array.isArray(rawData) ? rawData : rawData.data;
+
+    if (!Array.isArray(modelsList)) {
+        throw new Error("Unexpected TogetherAI API response format");
+    }
+
+    const metadataMap = buildMetadataMap(TOGETHERAI_FALLBACK_MODELS);
+    const models: ModelDefinition[] = [];
+    const seenIds = new Set<string>();
+
+    for (const apiModel of modelsList) {
+        const id = apiModel.id as string;
+        if (!id || seenIds.has(id)) continue;
+
+        const type = (apiModel.type as string) || "";
+        if (type && type !== "chat" && type !== "language") continue;
+
+        seenIds.add(id);
+        const known = metadataMap.get(id);
+
+        if (known) {
+            models.push(known);
+        } else {
+            const contextLength = (apiModel.context_length as number) || 128000;
+            const displayName = (apiModel.display_name as string) || id.split("/").pop() || id;
+
+            models.push({
+                id,
+                provider: "togetherai",
+                displayName,
+                category: "open-source",
+                capabilities: {
+                    chat: true,
+                    vision: false,
+                    extendedThinking: false,
+                    parallelToolCalls: true,
+                    functionCalling: true,
+                    streaming: true
+                },
+                contextWindow: contextLength,
+                deprecated: false,
+                aliases: [],
+                sortOrder: 100
+            });
+        }
+    }
+
+    models.sort((a, b) => a.sortOrder - b.sortOrder);
+    return models;
+}
+
+// ── Fireworks Fetcher ────────────────────────────────────────────────────────
+
+async function fetchFireworksModels(apiKey: string): Promise<ModelDefinition[]> {
+    return fetchOpenAICompatibleModels(
+        "https://api.fireworks.ai/inference/v1/models",
+        apiKey,
+        "fireworks",
+        FIREWORKS_FALLBACK_MODELS,
+        (id) => !id.includes("embedding") && !id.includes("whisper")
+    );
+}
+
+// ── OpenRouter Fetcher ───────────────────────────────────────────────────────
+
+async function fetchOpenRouterModels(apiKey?: string): Promise<ModelDefinition[]> {
+    const headers: Record<string, string> = {};
+    if (apiKey) headers["Authorization"] = `Bearer ${apiKey}`;
+
+    const response = await fetch("https://openrouter.ai/api/v1/models", { headers });
+
+    if (!response.ok) {
+        throw new Error(
+            `OpenRouter models API returned ${response.status}: ${response.statusText}`
+        );
+    }
+
+    const data = (await response.json()) as {
+        data: Array<{
+            id: string;
+            name: string;
+            pricing?: { prompt?: string; completion?: string };
+            context_length?: number;
+            architecture?: { modality?: string };
+        }>;
+    };
+
+    const metadataMap = buildMetadataMap(OPENROUTER_FALLBACK_MODELS);
+    const models: ModelDefinition[] = [];
+    const seenIds = new Set<string>();
+
+    for (const apiModel of data.data) {
+        const id = apiModel.id;
+        if (!id || seenIds.has(id)) continue;
+
+        const modality = apiModel.architecture?.modality || "";
+        if (modality && !modality.includes("text")) continue;
+
+        seenIds.add(id);
+        const known = metadataMap.get(id);
+
+        if (known) {
+            models.push(known);
+        } else {
+            let pricing: ModelPricing | undefined;
+            if (apiModel.pricing?.prompt && apiModel.pricing?.completion) {
+                const inputPerToken = parseFloat(apiModel.pricing.prompt);
+                const outputPerToken = parseFloat(apiModel.pricing.completion);
+                if (!isNaN(inputPerToken) && !isNaN(outputPerToken)) {
+                    pricing = {
+                        inputPer1M: inputPerToken * 1e6,
+                        outputPer1M: outputPerToken * 1e6
+                    };
+                }
+            }
+
+            models.push({
+                id,
+                provider: "openrouter",
+                displayName: apiModel.name || id,
+                category: id.includes(":free") ? "open-source" : "flagship",
+                capabilities: {
+                    chat: true,
+                    vision: modality.includes("image"),
+                    extendedThinking: false,
+                    parallelToolCalls: true,
+                    functionCalling: true,
+                    streaming: true
+                },
+                contextWindow: apiModel.context_length || 128000,
+                pricing,
+                deprecated: false,
+                aliases: [],
+                sortOrder: 100
+            });
+        }
+    }
+
+    models.sort((a, b) => a.sortOrder - b.sortOrder);
+    return models;
+}
+
+// ── Kimi (Moonshot) Fetcher ──────────────────────────────────────────────────
+
+async function fetchKimiModels(apiKey: string): Promise<ModelDefinition[]> {
+    return fetchOpenAICompatibleModels(
+        "https://api.moonshot.cn/v1/models",
+        apiKey,
+        "kimi",
+        KIMI_FALLBACK_MODELS
+    );
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 /**
@@ -1661,8 +2072,7 @@ export async function getModelsByProvider(
 
     try {
         const apiKey = await getOrgApiKey(provider, organizationId);
-        if (!apiKey) {
-            // No API key configured — skip this provider entirely
+        if (!apiKey && provider !== "openrouter") {
             setCachedModels(cacheKey, []);
             return [];
         }
@@ -1670,22 +2080,37 @@ export async function getModelsByProvider(
         let models: ModelDefinition[];
         switch (provider) {
             case "openai":
-                models = await fetchOpenAIModels(apiKey);
+                models = await fetchOpenAIModels(apiKey!);
                 break;
             case "anthropic":
-                models = await fetchAnthropicModels(apiKey);
+                models = await fetchAnthropicModels(apiKey!);
                 break;
             case "google":
+                models = await fetchGoogleModels(apiKey!);
+                break;
             case "groq":
+                models = await fetchGroqModels(apiKey!);
+                break;
             case "mistral":
+                models = await fetchMistralModels(apiKey!);
+                break;
             case "xai":
+                models = await fetchXaiModels(apiKey!);
+                break;
             case "deepseek":
+                models = await fetchDeepSeekModels(apiKey!);
+                break;
             case "togetherai":
+                models = await fetchTogetherAIModels(apiKey!);
+                break;
             case "fireworks":
+                models = await fetchFireworksModels(apiKey!);
+                break;
             case "openrouter":
+                models = await fetchOpenRouterModels(apiKey || undefined);
+                break;
             case "kimi":
-                // These providers use static fallback lists (API-based discovery not yet implemented)
-                models = getFallbackModels(provider);
+                models = await fetchKimiModels(apiKey!);
                 break;
             default:
                 models = [];
@@ -1829,6 +2254,81 @@ function getFallbackModels(provider: ModelProvider): ModelDefinition[] {
         default:
             return [];
     }
+}
+
+// ── Validation ───────────────────────────────────────────────────────────────
+
+/**
+ * Validate that a model selection is available from the provider.
+ * Returns { valid: true } if the model exists, or { valid: false, suggestion, message }
+ * with a closest-match suggestion if not.
+ */
+export async function validateModelSelection(
+    provider: ModelProvider,
+    modelName: string,
+    organizationId?: string | null
+): Promise<{ valid: boolean; suggestion?: string; message?: string }> {
+    const resolved = resolveModelAlias(provider, modelName);
+    const models = await getModelsByProvider(provider, organizationId);
+
+    if (models.length === 0) {
+        return { valid: true, message: "No models available for validation; allowing save." };
+    }
+
+    if (models.some((m) => m.id === resolved || m.id === modelName)) {
+        return { valid: true };
+    }
+
+    if (models.some((m) => m.aliases.includes(modelName) || m.aliases.includes(resolved))) {
+        return { valid: true };
+    }
+
+    const suggestion = findClosestModel(resolved, models);
+    return {
+        valid: false,
+        suggestion: suggestion?.id,
+        message: `Model '${modelName}' is not available for provider '${provider}'.${
+            suggestion ? ` Did you mean '${suggestion.id}'?` : ""
+        }`
+    };
+}
+
+function findClosestModel(target: string, models: ModelDefinition[]): ModelDefinition | undefined {
+    const prefixMatch = models.find((m) => target.startsWith(m.id) || m.id.startsWith(target));
+    if (prefixMatch) return prefixMatch;
+
+    let best: ModelDefinition | undefined;
+    let bestDistance = Infinity;
+
+    for (const model of models) {
+        const distance = levenshteinDistance(target.toLowerCase(), model.id.toLowerCase());
+        if (distance < bestDistance) {
+            bestDistance = distance;
+            best = model;
+        }
+    }
+
+    const maxLen = Math.max(target.length, best?.id.length || 0);
+    return bestDistance <= maxLen * 0.5 ? best : models[0];
+}
+
+function levenshteinDistance(a: string, b: string): number {
+    const matrix: number[][] = [];
+    for (let i = 0; i <= a.length; i++) matrix[i] = [i];
+    for (let j = 0; j <= b.length; j++) matrix[0]![j] = j;
+
+    for (let i = 1; i <= a.length; i++) {
+        for (let j = 1; j <= b.length; j++) {
+            const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+            matrix[i]![j] = Math.min(
+                matrix[i - 1]![j]! + 1,
+                matrix[i]![j - 1]! + 1,
+                matrix[i - 1]![j - 1]! + cost
+            );
+        }
+    }
+
+    return matrix[a.length]![b.length]!;
 }
 
 // ── Sync Backward Compatibility ──────────────────────────────────────────────

@@ -31,7 +31,8 @@ export {
     // Model routing
     classifyComplexity,
     resolveRoutingDecision,
-    resolveModelOverride
+    resolveModelOverride,
+    validateModelSelection
 } from "./agents";
 export type {
     StoredAgentConfig,

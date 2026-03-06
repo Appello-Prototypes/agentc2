@@ -1,12 +1,20 @@
 import { MDocument } from "@mastra/rag";
+import { createOpenAI } from "@ai-sdk/openai";
 import { embedMany, embed, generateText, type LanguageModel } from "ai";
-import { openai } from "@ai-sdk/openai";
 import { prisma } from "@repo/database";
 import { vector } from "../vector";
+import { getOrgApiKey } from "../agents/model-provider";
 
 const RAG_INDEX_NAME = "rag_documents";
 
-const embedder = openai.embedding("text-embedding-3-small");
+async function getEmbedder(organizationId?: string) {
+    const apiKey = await getOrgApiKey("openai", organizationId);
+    if (!apiKey) {
+        throw new Error("OpenAI API key not configured. Add it via Settings > Integrations.");
+    }
+    const openai = createOpenAI({ apiKey });
+    return openai.embedding("text-embedding-3-small");
+}
 
 export type DocumentType = "text" | "markdown" | "html" | "json";
 
@@ -109,8 +117,9 @@ export async function ingestDocument(
         throw new Error("No chunks generated from document");
     }
 
+    const embeddingModel = await getEmbedder(organizationId);
     const { embeddings } = await embedMany({
-        model: embedder,
+        model: embeddingModel,
         values: chunks.map((c) => c.text)
     });
 
@@ -246,8 +255,9 @@ export async function queryRag(
     }> = [];
 
     if (await ragIndexExists()) {
+        const embeddingModel = await getEmbedder(organizationId);
         const { embedding } = await embed({
-            model: embedder,
+            model: embeddingModel,
             value: query
         });
 

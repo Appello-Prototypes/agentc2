@@ -1,9 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { OpenAIVoice } from "@mastra/voice-openai";
 import { Readable } from "stream";
+import { getOrgApiKey } from "@repo/agentc2/agents";
+import { authenticateRequest } from "@/lib/api-auth";
 
 export async function POST(request: NextRequest) {
     try {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
+
         const formData = await request.formData();
         const audioFile = formData.get("audio") as File | null;
 
@@ -11,11 +18,14 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: "Audio file is required" }, { status: 400 });
         }
 
-        if (!process.env.OPENAI_API_KEY) {
-            return NextResponse.json({ error: "OPENAI_API_KEY not configured" }, { status: 500 });
+        const openaiKey = await getOrgApiKey("openai", authContext.organizationId);
+        if (!openaiKey) {
+            return NextResponse.json(
+                { error: "OpenAI API key not configured. Add it via Settings > Integrations." },
+                { status: 500 }
+            );
         }
 
-        // Validate file type
         const filename = audioFile.name.toLowerCase();
         const allowedExtensions = ["mp3", "wav", "webm", "m4a", "ogg", "flac"];
         const extension = filename.split(".").pop() || "";
@@ -27,18 +37,16 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Convert File to buffer then to stream
         const arrayBuffer = await audioFile.arrayBuffer();
         const audioBuffer = Buffer.from(arrayBuffer);
 
         const voice = new OpenAIVoice({
             listeningModel: {
                 name: "whisper-1",
-                apiKey: process.env.OPENAI_API_KEY
+                apiKey: openaiKey
             }
         });
 
-        // Create readable stream from buffer
         const audioStream = Readable.from(audioBuffer);
 
         const transcript = await voice.listen(audioStream, {

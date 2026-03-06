@@ -265,7 +265,7 @@ export default function ConfigurePage() {
 
     // AI provider API key status
     const [aiProviderStatus, setAiProviderStatus] = useState<
-        Record<string, { hasOrgKey: boolean; hasEnvKey: boolean; connected: boolean }>
+        Record<string, { hasOrgKey: boolean; connected: boolean }>
     >({});
     const [aiProviderStatusLoading, setAiProviderStatusLoading] = useState(true);
 

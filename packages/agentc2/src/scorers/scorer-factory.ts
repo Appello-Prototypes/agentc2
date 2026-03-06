@@ -13,9 +13,9 @@
 import { createScorer } from "@mastra/core/evals";
 import type { MastraScorer } from "@mastra/core/evals";
 import { z } from "zod";
-import { openai } from "@ai-sdk/openai";
 import { generateObject } from "ai";
 import { prisma } from "@repo/database";
+import { resolveModelForOrg } from "../agents/model-provider";
 import type {
     EvalContext,
     ScorecardCriterion,
@@ -677,8 +677,15 @@ export async function generateAAR(
     }
 
     try {
+        const orgId = context.organizationId || context.tenantId || undefined;
+        const model = await resolveModelForOrg("openai", auditorModel, orgId);
+        if (!model) {
+            console.warn("[AAR] No OpenAI API key configured, skipping AAR generation");
+            return null;
+        }
+
         const { object: aar } = await generateObject({
-            model: openai(auditorModel),
+            model,
             schema: AarSchema,
             system: AAR_SYSTEM_PROMPT,
             prompt: parts.join("\n\n"),

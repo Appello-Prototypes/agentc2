@@ -502,6 +502,40 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                     }
                 });
 
+                // Detect managed generate failures: if abortReason is set and
+                // no text was produced, the LLM call itself failed (e.g. bad API key,
+                // retired model, network error). Surface the error properly.
+                if (
+                    managedResult.abortReason &&
+                    !managedResult.text &&
+                    managedResult.totalPromptTokens === 0
+                ) {
+                    const errorMsg = `Agent generate failed: ${managedResult.abortReason}`;
+                    console.error(
+                        `[Agent Invoke] MANAGED-GENERATE FAILURE for ${record.slug}:`,
+                        JSON.stringify({
+                            abortReason: managedResult.abortReason,
+                            model: `${record.modelProvider}/${record.modelName}`,
+                            totalSteps: managedResult.totalSteps,
+                            finishReason: managedResult.finishReason
+                        })
+                    );
+                    await runHandle.fail(new Error(errorMsg));
+                    clearTimeout(timeoutId);
+                    const durationMs = Date.now() - startTime;
+                    return NextResponse.json(
+                        {
+                            success: false,
+                            run_id: runHandle.runId,
+                            status: "failed",
+                            error: errorMsg,
+                            model: `${record.modelProvider}/${record.modelName}`,
+                            duration_ms: durationMs
+                        },
+                        { status: 500 }
+                    );
+                }
+
                 responseText = managedResult.text;
                 usage = {
                     promptTokens: managedResult.totalPromptTokens,

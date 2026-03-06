@@ -8,7 +8,7 @@ import { authenticateRequest } from "@/lib/api-auth";
  * Returns the status of AI model provider API key connections
  * for the current user's organization.
  *
- * Response: { providers: { openai: { hasOrgKey, hasEnvKey, connected }, ... } }
+ * Response: { providers: { openai: { hasOrgKey, connected }, ... } }
  */
 export async function GET(request: NextRequest) {
     try {

@@ -13,10 +13,7 @@ import {
     structuredAgent,
     visionAgent,
     researchAgent,
-    mcpAgent,
-    openaiVoiceAgent,
-    elevenlabsVoiceAgent,
-    hybridVoiceAgent
+    mcpAgent
 } from "./agents";
 import {
     analysisWorkflow,
@@ -74,34 +71,23 @@ function getObservability(): Observability {
 }
 
 /**
- * Build agents object, only including voice agents if their API keys are available.
+ * Build agents object for static/code-defined agents.
+ *
+ * Voice agents are not registered here — they are resolved dynamically
+ * with org-scoped API keys from the database at request time.
  *
  * Note: The Trip Planner network is now database-driven and resolved via NetworkResolver.
  * It is not registered here; instead, it's constructed dynamically when needed.
  */
 function buildAgents(): Record<string, Agent> {
-    const agents: Record<string, Agent> = {
+    return {
         assistant: assistantAgent,
         sidekick: sidekickAgent,
         structured: structuredAgent,
         vision: visionAgent,
         research: researchAgent,
-
         "mcp-agent": mcpAgent
     };
-
-    // Only add voice agents if they were successfully created (API keys present)
-    if (openaiVoiceAgent) {
-        agents["openai-voice-agent"] = openaiVoiceAgent;
-    }
-    if (elevenlabsVoiceAgent) {
-        agents["elevenlabs-voice-agent"] = elevenlabsVoiceAgent;
-    }
-    if (hybridVoiceAgent) {
-        agents["hybrid-voice-agent"] = hybridVoiceAgent;
-    }
-
-    return agents;
 }
 
 /**

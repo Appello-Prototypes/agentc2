@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
+import { validateModelSelection } from "@repo/agentc2/agents";
+import type { ModelProvider } from "@repo/agentc2/agents";
 import { buildNetworkTopologyFromPrimitives, isNetworkTopologyEmpty } from "@repo/agentc2/networks";
 import { authenticateRequest } from "@/lib/api-auth";
 import { requireEntityAccess } from "@/lib/authz/require-entity-access";
@@ -72,6 +74,23 @@ export async function POST(request: NextRequest) {
                 {
                     success: false,
                     error: "Missing required fields: name, instructions, modelProvider, modelName"
+                },
+                { status: 400 }
+            );
+        }
+
+        // Validate model exists for the provider
+        const modelValidation = await validateModelSelection(
+            body.modelProvider as ModelProvider,
+            body.modelName,
+            authContext.organizationId
+        );
+        if (!modelValidation.valid) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    error: modelValidation.message,
+                    suggestion: modelValidation.suggestion
                 },
                 { status: 400 }
             );

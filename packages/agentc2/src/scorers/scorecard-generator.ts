@@ -5,10 +5,10 @@
  * based on an agent's configuration (instructions, tools, skills).
  */
 
-import { openai } from "@ai-sdk/openai";
 import { generateObject } from "ai";
 import { z } from "zod";
 import type { ScorecardCriterion } from "./types";
+import { resolveModelForOrg } from "../agents/model-provider";
 
 /**
  * Truncate text to a maximum length.
@@ -42,13 +42,16 @@ const GeneratedScorecardSchema = z.object({
  *
  * Returns criteria and reasoning, but does NOT save -- the user reviews first.
  */
-export async function generateScorecard(agent: {
-    name: string;
-    description: string | null;
-    instructions: string;
-    tools: { toolId: string }[];
-    skills: { skill: { name: string; instructions: string } }[];
-}): Promise<{
+export async function generateScorecard(
+    agent: {
+        name: string;
+        description: string | null;
+        instructions: string;
+        tools: { toolId: string }[];
+        skills: { skill: { name: string; instructions: string } }[];
+    },
+    organizationId?: string
+): Promise<{
     criteria: ScorecardCriterion[];
     reasoning: string;
 }> {
@@ -82,8 +85,13 @@ REQUIREMENTS:
 6. Use snake_case IDs that are descriptive (e.g., "field_accuracy", "routing_correctness").
 7. Most criteria should be "higher_better" except safety which should be "lower_better".`;
 
+    const model = await resolveModelForOrg("openai", "gpt-4o-mini", organizationId);
+    if (!model) {
+        throw new Error("OpenAI API key not configured. Add it via Settings > Integrations.");
+    }
+
     const { object: result } = await generateObject({
-        model: openai("gpt-4o-mini"),
+        model,
         schema: GeneratedScorecardSchema,
         prompt,
         temperature: 0.3

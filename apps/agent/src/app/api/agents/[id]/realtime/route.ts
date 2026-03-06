@@ -1,4 +1,5 @@
 import { agentResolver } from "@repo/agentc2/agents";
+import { getOrgApiKey } from "@repo/agentc2/agents";
 import { prisma } from "@repo/database";
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, requireAgentAccess } from "@/lib/authz";
@@ -54,8 +55,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         const accessResult = await requireAgentAccess(authResult.context.organizationId, id);
         if (accessResult.response) return accessResult.response;
 
-        if (!process.env.OPENAI_API_KEY) {
-            return NextResponse.json({ error: "OPENAI_API_KEY not configured" }, { status: 500 });
+        const openaiKey = await getOrgApiKey("openai", authResult.context.organizationId);
+        if (!openaiKey) {
+            return NextResponse.json(
+                { error: "OpenAI API key not configured. Add it via Settings > Integrations." },
+                { status: 500 }
+            );
         }
 
         // Read raw SDP offer from request body
@@ -114,7 +119,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         const openaiResponse = await fetch("https://api.openai.com/v1/realtime/calls", {
             method: "POST",
             headers: {
-                Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
+                Authorization: `Bearer ${openaiKey}`
             },
             body: fd
         });

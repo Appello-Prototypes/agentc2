@@ -3,13 +3,14 @@
  *
  * Resolves AI SDK language model instances with org-scoped API keys.
  *
- * Resolution order:
+ * Resolution:
  * 1. Look up the org's IntegrationConnection for the provider (e.g., "openai")
  * 2. Decrypt the stored API key from the connection credentials
  * 3. Create an AI SDK provider instance with that key
- * 4. Fall back to process.env API keys if no org connection exists
  *
- * This ensures each organization pays for their own model usage.
+ * No environment variable fallback — all API keys must be configured
+ * via IntegrationConnection in the database. This ensures consistent
+ * multi-tenant behavior and avoids encryption key mismatches.
  */
 
 import type { LanguageModel } from "ai";
@@ -30,74 +31,64 @@ import { decryptCredentials } from "../crypto";
 /**
  * Map from model provider string (as stored in Agent.modelProvider)
  * to the IntegrationProvider key and the credential field name.
+ *
+ * All API keys are resolved exclusively from IntegrationConnection
+ * records in the database — no environment variable fallback.
  */
-const PROVIDER_KEY_MAP: Record<
-    string,
-    { integrationKey: string; credentialField: string; envVar: string }
-> = {
+const PROVIDER_KEY_MAP: Record<string, { integrationKey: string; credentialField: string }> = {
     openai: {
         integrationKey: "openai",
-        credentialField: "OPENAI_API_KEY",
-        envVar: "OPENAI_API_KEY"
+        credentialField: "OPENAI_API_KEY"
     },
     anthropic: {
         integrationKey: "anthropic",
-        credentialField: "ANTHROPIC_API_KEY",
-        envVar: "ANTHROPIC_API_KEY"
+        credentialField: "ANTHROPIC_API_KEY"
     },
     google: {
         integrationKey: "google",
-        credentialField: "GOOGLE_GENERATIVE_AI_API_KEY",
-        envVar: "GOOGLE_GENERATIVE_AI_API_KEY"
+        credentialField: "GOOGLE_GENERATIVE_AI_API_KEY"
     },
     groq: {
         integrationKey: "groq",
-        credentialField: "GROQ_API_KEY",
-        envVar: "GROQ_API_KEY"
+        credentialField: "GROQ_API_KEY"
     },
     mistral: {
         integrationKey: "mistral",
-        credentialField: "MISTRAL_API_KEY",
-        envVar: "MISTRAL_API_KEY"
+        credentialField: "MISTRAL_API_KEY"
     },
     xai: {
         integrationKey: "xai",
-        credentialField: "XAI_API_KEY",
-        envVar: "XAI_API_KEY"
+        credentialField: "XAI_API_KEY"
     },
     deepseek: {
         integrationKey: "deepseek",
-        credentialField: "DEEPSEEK_API_KEY",
-        envVar: "DEEPSEEK_API_KEY"
+        credentialField: "DEEPSEEK_API_KEY"
     },
     togetherai: {
         integrationKey: "togetherai",
-        credentialField: "TOGETHER_AI_API_KEY",
-        envVar: "TOGETHER_AI_API_KEY"
+        credentialField: "TOGETHER_AI_API_KEY"
     },
     fireworks: {
         integrationKey: "fireworks",
-        credentialField: "FIREWORKS_API_KEY",
-        envVar: "FIREWORKS_API_KEY"
+        credentialField: "FIREWORKS_API_KEY"
     },
     openrouter: {
         integrationKey: "openrouter",
-        credentialField: "OPENROUTER_API_KEY",
-        envVar: "OPENROUTER_API_KEY"
+        credentialField: "OPENROUTER_API_KEY"
     },
     kimi: {
         integrationKey: "kimi",
-        credentialField: "MOONSHOT_API_KEY",
-        envVar: "MOONSHOT_API_KEY"
+        credentialField: "MOONSHOT_API_KEY"
     }
 };
 
 /**
  * Look up an organization's API key for a given model provider.
  *
- * Checks IntegrationConnection for the provider, decrypts credentials,
- * and returns the API key string. Falls back to process.env if no
- * org connection exists.
+ * Requires an IntegrationConnection in the database for the provider.
+ * No environment variable fallback — all API keys must be configured
+ * via IntegrationConnection to ensure consistent multi-tenant behavior
+ * and avoid encryption key mismatches across environments.
  */
 export async function getOrgApiKey(
     provider: string,
@@ -106,49 +97,82 @@ export async function getOrgApiKey(
     const mapping = PROVIDER_KEY_MAP[provider];
     if (!mapping) return undefined;
 
-    // Try org-scoped connection first
-    if (organizationId) {
-        try {
-            const connection = await prisma.integrationConnection.findFirst({
-                where: {
-                    organizationId,
-                    isActive: true,
-                    provider: {
-                        key: mapping.integrationKey,
-                        providerType: "ai-model"
-                    }
-                },
-                include: { provider: true },
-                orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }]
-            });
-
-            if (connection?.credentials) {
-                const credentials = decryptCredentials(connection.credentials);
-                const apiKey = credentials[mapping.credentialField];
-                if (typeof apiKey === "string" && apiKey.trim()) {
-                    return apiKey.trim();
-                }
-            }
-        } catch (error) {
-            console.warn(`[ModelProvider] Failed to look up org API key for ${provider}:`, error);
-        }
+    if (!organizationId) {
+        console.warn(
+            `[ModelProvider] No organizationId provided for provider "${provider}". ` +
+                `Cannot look up API key without an org context.`
+        );
+        return undefined;
     }
 
-    // Fall back to environment variable
-    return process.env[mapping.envVar] || undefined;
+    try {
+        const connection = await prisma.integrationConnection.findFirst({
+            where: {
+                organizationId,
+                isActive: true,
+                provider: {
+                    key: mapping.integrationKey,
+                    providerType: "ai-model"
+                }
+            },
+            include: { provider: true },
+            orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }]
+        });
+
+        if (!connection) {
+            console.error(
+                `[ModelProvider] No IntegrationConnection for provider "${provider}" ` +
+                    `(org=${organizationId}). Create one via Settings > Integrations.`
+            );
+            return undefined;
+        }
+
+        if (!connection.credentials) {
+            console.error(
+                `[ModelProvider] IntegrationConnection for "${provider}" exists ` +
+                    `(org=${organizationId}, id=${connection.id}) but has no credentials stored.`
+            );
+            return undefined;
+        }
+
+        const credentials = decryptCredentials(connection.credentials);
+        if (Object.keys(credentials).length === 0) {
+            console.error(
+                `[ModelProvider] Credential decryption returned empty for provider "${provider}" ` +
+                    `(org=${organizationId}, connectionId=${connection.id}). ` +
+                    `Likely CREDENTIAL_ENCRYPTION_KEY mismatch between environments. ` +
+                    `Re-create the connection to re-encrypt with the current key.`
+            );
+            return undefined;
+        }
+
+        const apiKey = credentials[mapping.credentialField];
+        if (typeof apiKey === "string" && apiKey.trim()) {
+            return apiKey.trim();
+        }
+
+        console.warn(
+            `[ModelProvider] Connection exists for "${provider}" (org=${organizationId}) ` +
+                `but credential field "${mapping.credentialField}" not found in decrypted keys: ` +
+                `[${Object.keys(credentials).join(", ")}]`
+        );
+        return undefined;
+    } catch (error) {
+        console.error(
+            `[ModelProvider] Failed to look up org API key for "${provider}" ` +
+                `(org=${organizationId}):`,
+            error
+        );
+        return undefined;
+    }
 }
 
 /**
  * Resolve a LanguageModel instance for a given provider and model name,
- * using the organization's API key if available.
+ * using the organization's IntegrationConnection API key.
  *
- * If the provider has an org-scoped key, creates a provider instance
- * with that key. Otherwise, falls back to the default behavior
- * (reading from process.env).
- *
- * @returns A LanguageModel instance, or null if the provider is unsupported.
- *          When null, the caller should use the string-based model format
- *          as a fallback (for providers not yet in this system).
+ * @returns A LanguageModel instance, or null if no API key is configured
+ *          or the provider is unsupported.
  */
 export async function resolveModelForOrg(
     provider: string,
@@ -225,17 +249,14 @@ export async function hasOrgApiKey(provider: string, organizationId: string): Pr
 /**
  * Get the status of all AI model provider connections for an organization.
  *
- * Returns which providers have org-level keys, env-level keys, or no keys.
+ * Returns which providers have org-level keys configured via IntegrationConnection.
  */
 export async function getAiProviderStatus(
     organizationId: string
-): Promise<Record<string, { hasOrgKey: boolean; hasEnvKey: boolean; connected: boolean }>> {
-    const result: Record<string, { hasOrgKey: boolean; hasEnvKey: boolean; connected: boolean }> =
-        {};
+): Promise<Record<string, { hasOrgKey: boolean; connected: boolean }>> {
+    const result: Record<string, { hasOrgKey: boolean; connected: boolean }> = {};
 
     for (const [provider, mapping] of Object.entries(PROVIDER_KEY_MAP)) {
-        const hasEnvKey = Boolean(process.env[mapping.envVar]);
-
         let hasOrgKey = false;
         try {
             const connection = await prisma.integrationConnection.findFirst({
@@ -262,8 +283,7 @@ export async function getAiProviderStatus(
 
         result[provider] = {
             hasOrgKey,
-            hasEnvKey,
-            connected: hasOrgKey || hasEnvKey
+            connected: hasOrgKey
         };
     }
 
@@ -272,20 +292,20 @@ export async function getAiProviderStatus(
 
 /**
  * Resolve a fast, cheap model suitable for semantic compression of tool results.
- * Tries Anthropic Haiku first ($0.25/M tokens), falls back to OpenAI gpt-4o-mini.
+ * Prefers gpt-4o-mini (reliable, widely available), then Anthropic Haiku as fallback.
  */
 export async function getFastCompressionModel(
     organizationId?: string | null
 ): Promise<LanguageModel | null> {
+    const miniModel = await resolveModelForOrg("openai", "gpt-4o-mini", organizationId);
+    if (miniModel) return miniModel;
+
     const haikuModel = await resolveModelForOrg(
         "anthropic",
         "claude-3-5-haiku-20241022",
         organizationId
     );
     if (haikuModel) return haikuModel;
-
-    const miniModel = await resolveModelForOrg("openai", "gpt-4o-mini", organizationId);
-    if (miniModel) return miniModel;
 
     return null;
 }

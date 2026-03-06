@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { OpenAIVoice } from "@mastra/voice-openai";
 import { ElevenLabsVoice } from "@mastra/voice-elevenlabs";
 import { Readable } from "stream";
+import { getOrgApiKey } from "@repo/agentc2/agents";
+import { authenticateRequest } from "@/lib/api-auth";
 import { resolveCredentialValue } from "@/lib/channel-credentials";
 
-// Helper to convert Node.js Readable stream to buffer using async iteration
-// This handles already-ended streams (like PassThrough) more reliably than events
 async function streamToBuffer(stream: NodeJS.ReadableStream): Promise<Buffer> {
     const chunks: Buffer[] = [];
     for await (const chunk of stream as AsyncIterable<Buffer>) {
@@ -16,6 +16,11 @@ async function streamToBuffer(stream: NodeJS.ReadableStream): Promise<Buffer> {
 
 export async function POST(request: NextRequest) {
     try {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
+
         const { text, provider = "openai", speaker = "alloy" } = await request.json();
 
         if (!text || typeof text !== "string") {
@@ -34,7 +39,9 @@ export async function POST(request: NextRequest) {
             );
             if (!elApiKey) {
                 return NextResponse.json(
-                    { error: "ELEVENLABS_API_KEY not configured" },
+                    {
+                        error: "ElevenLabs API key not configured. Add it via Settings > Integrations."
+                    },
                     { status: 500 }
                 );
             }
@@ -45,16 +52,17 @@ export async function POST(request: NextRequest) {
                 }
             });
         } else {
-            if (!process.env.OPENAI_API_KEY) {
+            const openaiKey = await getOrgApiKey("openai", authContext.organizationId);
+            if (!openaiKey) {
                 return NextResponse.json(
-                    { error: "OPENAI_API_KEY not configured" },
+                    { error: "OpenAI API key not configured. Add it via Settings > Integrations." },
                     { status: 500 }
                 );
             }
             voice = new OpenAIVoice({
                 speechModel: {
                     name: "tts-1",
-                    apiKey: process.env.OPENAI_API_KEY
+                    apiKey: openaiKey
                 },
                 speaker
             });
@@ -68,17 +76,14 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: "Failed to generate audio" }, { status: 500 });
         }
 
-        // Handle both Node.js streams and Web ReadableStreams
         let audioBuffer: Buffer;
 
         if (
             audioStream instanceof Readable ||
             typeof (audioStream as NodeJS.ReadableStream).on === "function"
         ) {
-            // Node.js stream
             audioBuffer = await streamToBuffer(audioStream as NodeJS.ReadableStream);
         } else if (typeof (audioStream as unknown as ReadableStream).getReader === "function") {
-            // Web ReadableStream
             const chunks: Uint8Array[] = [];
             const reader = (audioStream as unknown as ReadableStream).getReader();
             while (true) {

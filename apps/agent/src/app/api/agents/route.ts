@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { prisma, Prisma } from "@repo/database";
-import { agentResolver } from "@repo/agentc2/agents";
+import { agentResolver, validateModelSelection } from "@repo/agentc2/agents";
+import type { ModelProvider } from "@repo/agentc2/agents";
 import { recordActivity } from "@repo/agentc2/activity/service";
 import { auth } from "@repo/auth";
 import {
@@ -315,6 +316,23 @@ export async function POST(request: NextRequest) {
                 {
                     success: false,
                     error: "Missing required fields: name, instructions, modelProvider, modelName"
+                },
+                { status: 400 }
+            );
+        }
+
+        // Validate model exists for the provider
+        const modelValidation = await validateModelSelection(
+            modelProvider as ModelProvider,
+            modelName,
+            organizationId
+        );
+        if (!modelValidation.valid) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    error: modelValidation.message,
+                    suggestion: modelValidation.suggestion
                 },
                 { status: 400 }
             );

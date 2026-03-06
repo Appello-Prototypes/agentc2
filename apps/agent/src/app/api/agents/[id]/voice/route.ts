@@ -1,4 +1,5 @@
 import { agentResolver } from "@repo/agentc2/agents";
+import { getOrgApiKey } from "@repo/agentc2/agents";
 import { prisma } from "@repo/database";
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, requireAgentAccess } from "@/lib/authz";
@@ -133,11 +134,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                         }
                     }
 
-                    if (!audioBuffer && process.env.OPENAI_API_KEY) {
+                    const openaiKey = await getOrgApiKey(
+                        "openai",
+                        authResult.context.organizationId
+                    );
+                    if (!audioBuffer && openaiKey) {
                         const voice = new OpenAIVoice({
                             speechModel: {
                                 name: "tts-1",
-                                apiKey: process.env.OPENAI_API_KEY
+                                apiKey: openaiKey
                             },
                             speaker: "alloy"
                         });

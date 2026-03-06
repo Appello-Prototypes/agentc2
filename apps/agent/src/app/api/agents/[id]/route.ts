@@ -1,6 +1,8 @@
 import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
+import { validateModelSelection } from "@repo/agentc2/agents";
+import type { ModelProvider } from "@repo/agentc2/agents";
 import { recordActivity } from "@repo/agentc2/activity/service";
 import {
     createChangeLog,
@@ -198,6 +200,27 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
                 updateData.instructionsTemplate = body.instructionsTemplate;
             if (body.modelProvider !== undefined) updateData.modelProvider = body.modelProvider;
             if (body.modelName !== undefined) updateData.modelName = body.modelName;
+
+            // Validate model when provider or model name is being changed
+            const effectiveProvider = (body.modelProvider ?? existing.modelProvider) as string;
+            const effectiveModel = (body.modelName ?? existing.modelName) as string;
+            if (body.modelProvider !== undefined || body.modelName !== undefined) {
+                const modelValidation = await validateModelSelection(
+                    effectiveProvider as ModelProvider,
+                    effectiveModel,
+                    authResult.context.organizationId
+                );
+                if (!modelValidation.valid) {
+                    return NextResponse.json(
+                        {
+                            success: false,
+                            error: modelValidation.message,
+                            suggestion: modelValidation.suggestion
+                        },
+                        { status: 400 }
+                    );
+                }
+            }
             if (body.temperature !== undefined) updateData.temperature = body.temperature;
             if (body.maxTokens !== undefined) updateData.maxTokens = body.maxTokens;
             if (body.subAgents !== undefined) updateData.subAgents = body.subAgents;

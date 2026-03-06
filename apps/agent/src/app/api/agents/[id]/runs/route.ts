@@ -429,7 +429,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             if (USE_MANAGED_GENERATE) {
                 const contextCfg = (record as { contextConfig?: Record<string, unknown> })
                     .contextConfig;
-                const compressionModel = await getFastCompressionModel();
+                const compressionModel = await getFastCompressionModel(context.organizationId);
                 const managedResult = await managedGenerate(agent, input, {
                     maxSteps: effectiveMaxSteps,
                     maxContextTokens: (contextCfg?.maxContextTokens as number) ?? 50_000,

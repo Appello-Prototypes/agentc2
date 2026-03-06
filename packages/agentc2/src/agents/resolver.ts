@@ -483,11 +483,6 @@ export class AgentResolver {
             (record as Record<string, unknown>).maxSteps = instanceCtx.maxStepsOverride;
         }
 
-        // Build memory if enabled
-        const memory = record.memoryEnabled
-            ? this.buildMemory(record.memoryConfig as MemoryConfig | null)
-            : undefined;
-
         // Get tools from registry AND MCP (async)
         const toolNames = record.tools.map((t: { toolId: string }) => t.toolId);
         const organizationId =
@@ -495,6 +490,14 @@ export class AgentResolver {
             context?.tenantId ||
             record.workspace?.organizationId ||
             record.tenantId;
+
+        // Build memory if enabled (needs orgId for working memory consolidation model)
+        const memory = record.memoryEnabled
+            ? this.buildMemory(
+                  record.memoryConfig as MemoryConfig | null,
+                  organizationId ?? undefined
+              )
+            : undefined;
 
         const metadata = record.metadata as Record<string, unknown> | null;
 
@@ -943,6 +946,14 @@ export class AgentResolver {
                 overrideName,
                 organizationId
             );
+            if (!resolvedOverride) {
+                console.error(
+                    `[AgentResolver] NO API KEY for provider "${modelOverride.provider}" ` +
+                        `(org=${organizationId}). Falling back to string model ` +
+                        `"${modelOverride.provider}/${overrideName}" which will likely fail. ` +
+                        `Check IntegrationConnection or env var.`
+                );
+            }
             model = resolvedOverride ?? `${modelOverride.provider}/${overrideName}`;
         } else {
             const modelName = resolveModelName(record.modelProvider, record.modelName);
@@ -951,6 +962,14 @@ export class AgentResolver {
                 modelName,
                 organizationId
             );
+            if (!resolvedModel) {
+                console.error(
+                    `[AgentResolver] NO API KEY for provider "${record.modelProvider}" ` +
+                        `(org=${organizationId}, agent="${record.slug}"). Falling back to string ` +
+                        `model "${record.modelProvider}/${modelName}" which will likely fail. ` +
+                        `Check IntegrationConnection or env var ${record.modelProvider.toUpperCase()}_API_KEY.`
+                );
+            }
             model = resolvedModel ?? `${record.modelProvider}/${modelName}`;
         }
 
@@ -1631,7 +1650,7 @@ export class AgentResolver {
      * When maxWorkingMemoryChars is set, proxies updateWorkingMemory to
      * auto-consolidate oversized memory via a fast model.
      */
-    private buildMemory(config: MemoryConfig | null): Memory {
+    private buildMemory(config: MemoryConfig | null, organizationId?: string): Memory {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const memoryOptions: any = {};
         // Check if semantic recall is enabled (it's an object when enabled, false when disabled)
@@ -1699,7 +1718,8 @@ export class AgentResolver {
                     try {
                         workingMemory = await AgentResolver.consolidateWorkingMemory(
                             workingMemory,
-                            targetChars
+                            targetChars,
+                            organizationId
                         );
                     } catch (err) {
                         console.error(
@@ -1741,13 +1761,22 @@ export class AgentResolver {
      */
     private static async consolidateWorkingMemory(
         memory: string,
-        targetChars: number
+        targetChars: number,
+        organizationId?: string
     ): Promise<string> {
         const { generateText } = await import("ai");
-        const { openai } = await import("@ai-sdk/openai");
+        const { resolveModelForOrg } = await import("./model-provider");
+
+        const model = await resolveModelForOrg("openai", "gpt-4o-mini", organizationId);
+        if (!model) {
+            console.warn(
+                "[AgentResolver] No OpenAI key for working memory consolidation, truncating instead"
+            );
+            return memory.substring(0, targetChars);
+        }
 
         const result = await generateText({
-            model: openai("gpt-4o-mini"),
+            model,
             system: [
                 "You are a working-memory compactor. Given an agent's working memory that has grown too large, ",
                 "produce a consolidated version that fits within the target character limit.",

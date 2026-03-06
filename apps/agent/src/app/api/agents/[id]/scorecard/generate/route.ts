@@ -39,18 +39,21 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             }
         });
 
-        const result = await generateScorecard({
-            name: agent!.name,
-            description: agent!.description,
-            instructions: agent!.instructions,
-            tools: agent!.tools,
-            skills: agent!.skills.map((as) => ({
-                skill: {
-                    name: as.skill.name,
-                    instructions: as.skill.instructions
-                }
-            }))
-        });
+        const result = await generateScorecard(
+            {
+                name: agent!.name,
+                description: agent!.description,
+                instructions: agent!.instructions,
+                tools: agent!.tools,
+                skills: agent!.skills.map((as) => ({
+                    skill: {
+                        name: as.skill.name,
+                        instructions: as.skill.instructions
+                    }
+                }))
+            },
+            context.organizationId
+        );
 
         return NextResponse.json({
             success: true,
