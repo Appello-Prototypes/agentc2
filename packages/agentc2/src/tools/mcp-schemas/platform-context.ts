@@ -23,5 +23,5 @@ export const platformContextToolDefinitions: McpToolDefinition[] = [
 ];
 
 export const platformContextToolRoutes: McpToolRoute[] = [
-    { kind: "registry", name: "platform-context" }
+    { kind: "registry", name: "platform-context", enforceOrg: true }
 ];

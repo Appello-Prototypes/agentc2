@@ -262,9 +262,9 @@ export const codingPipelineToolRoutes: McpToolRoute[] = [
     { kind: "registry", name: "cursor-add-followup" },
     { kind: "registry", name: "cursor-get-conversation" },
     { kind: "registry", name: "cursor-poll-until-done" },
-    { kind: "registry", name: "verify-branch" },
-    { kind: "registry", name: "wait-for-checks" },
-    { kind: "registry", name: "dispatch-coding-pipeline" },
-    { kind: "registry", name: "lookup-pipeline-config" },
-    { kind: "registry", name: "ingest-ticket" }
+    { kind: "registry", name: "verify-branch", enforceOrg: true },
+    { kind: "registry", name: "wait-for-checks", enforceOrg: true },
+    { kind: "registry", name: "dispatch-coding-pipeline", enforceOrg: true },
+    { kind: "registry", name: "lookup-pipeline-config", enforceOrg: true },
+    { kind: "registry", name: "ingest-ticket", enforceOrg: true }
 ];

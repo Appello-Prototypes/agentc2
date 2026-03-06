@@ -121,10 +121,10 @@ export const documentToolDefinitions: McpToolDefinition[] = [
 ];
 
 export const documentToolRoutes: McpToolRoute[] = [
-    { kind: "registry", name: "document-create", applyDefaults: true },
-    { kind: "registry", name: "document-read" },
-    { kind: "registry", name: "document-update" },
-    { kind: "registry", name: "document-delete" },
-    { kind: "registry", name: "document-list" },
+    { kind: "registry", name: "document-create", applyDefaults: true, enforceOrg: true },
+    { kind: "registry", name: "document-read", enforceOrg: true },
+    { kind: "registry", name: "document-update", enforceOrg: true },
+    { kind: "registry", name: "document-delete", enforceOrg: true },
+    { kind: "registry", name: "document-list", enforceOrg: true },
     { kind: "registry", name: "document-search" }
 ];

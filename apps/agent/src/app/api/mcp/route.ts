@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { prisma } from "@repo/database";
-import { getToolByName, mcpToolDefinitions, mcpToolRoutes } from "@repo/agentc2/tools";
+import {
+    getToolByName,
+    mcpToolDefinitions,
+    mcpToolRoutes,
+    toolCredentialChecks
+} from "@repo/agentc2/tools";
 import { auth } from "@repo/auth";
 import { getDefaultWorkspaceIdForUser, getUserOrganizationId } from "@/lib/organization";
 import { checkRateLimit } from "@/lib/rate-limit";
@@ -445,10 +450,15 @@ export async function GET(request: NextRequest) {
             outputSchema: networkDefaultOutputSchema,
             invoke_url: `/api/networks/${network.slug}/execute`
         }));
-        const staticTools = mcpToolDefinitions.map((tool) => ({
-            ...tool,
-            invoke_url: tool.invoke_url || "/api/mcp"
-        }));
+        const staticTools = mcpToolDefinitions
+            .filter((tool) => {
+                const check = toolCredentialChecks[tool.name];
+                return !check || check();
+            })
+            .map((tool) => ({
+                ...tool,
+                invoke_url: tool.invoke_url || "/api/mcp"
+            }));
 
         // Generate per-instance tools for multi-instance agents
         const instances = await prisma.agentInstance.findMany({
@@ -816,6 +826,12 @@ export async function POST(request: NextRequest) {
                             scopedParams.userId = userId;
                         }
                     } else {
+                        if (route.enforceOrg && scopedParams.organizationId === undefined) {
+                            scopedParams.organizationId = organizationId;
+                        }
+                        if (route.enforceUser && userId && scopedParams.userId === undefined) {
+                            scopedParams.userId = userId;
+                        }
                         try {
                             await prisma.auditLog.create({
                                 data: {

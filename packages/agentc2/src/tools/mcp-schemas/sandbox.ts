@@ -106,8 +106,8 @@ export const sandboxToolDefinitions: McpToolDefinition[] = [
 ];
 
 export const sandboxToolRoutes: McpToolRoute[] = [
-    { kind: "registry", name: "execute-code" },
-    { kind: "registry", name: "write-workspace-file" },
-    { kind: "registry", name: "read-workspace-file" },
-    { kind: "registry", name: "list-workspace-files" }
+    { kind: "registry", name: "execute-code", enforceOrg: true },
+    { kind: "registry", name: "write-workspace-file", enforceOrg: true },
+    { kind: "registry", name: "read-workspace-file", enforceOrg: true },
+    { kind: "registry", name: "list-workspace-files", enforceOrg: true }
 ];

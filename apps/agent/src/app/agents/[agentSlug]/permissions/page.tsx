@@ -253,7 +253,7 @@ export default function PermissionsPage() {
                                             <Select
                                                 value={perm.permission}
                                                 onValueChange={(v) => {
-                                                    if (v) handlePermissionChange(perm, v)
+                                                    if (v) handlePermissionChange(perm, v);
                                                 }}
                                                 disabled={savingId === perm.id}
                                             >

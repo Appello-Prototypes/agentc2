@@ -185,16 +185,16 @@ export const crudToolDefinitions: McpToolDefinition[] = [
 ];
 
 export const crudToolRoutes: McpToolRoute[] = [
-    { kind: "registry", name: "agent-create", applyDefaults: true },
-    { kind: "registry", name: "agent-read" },
-    { kind: "registry", name: "agent-update" },
-    { kind: "registry", name: "agent-delete" },
-    { kind: "registry", name: "workflow-create", applyDefaults: true },
-    { kind: "registry", name: "workflow-read" },
-    { kind: "registry", name: "workflow-update" },
-    { kind: "registry", name: "workflow-delete" },
-    { kind: "registry", name: "network-create", applyDefaults: true },
-    { kind: "registry", name: "network-read" },
-    { kind: "registry", name: "network-update" },
-    { kind: "registry", name: "network-delete" }
+    { kind: "registry", name: "agent-create", applyDefaults: true, enforceOrg: true },
+    { kind: "registry", name: "agent-read", enforceOrg: true },
+    { kind: "registry", name: "agent-update", enforceOrg: true },
+    { kind: "registry", name: "agent-delete", enforceOrg: true },
+    { kind: "registry", name: "workflow-create", applyDefaults: true, enforceOrg: true },
+    { kind: "registry", name: "workflow-read", enforceOrg: true },
+    { kind: "registry", name: "workflow-update", enforceOrg: true },
+    { kind: "registry", name: "workflow-delete", enforceOrg: true },
+    { kind: "registry", name: "network-create", applyDefaults: true, enforceOrg: true },
+    { kind: "registry", name: "network-read", enforceOrg: true },
+    { kind: "registry", name: "network-update", enforceOrg: true },
+    { kind: "registry", name: "network-delete", enforceOrg: true }
 ];

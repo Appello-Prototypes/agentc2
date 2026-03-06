@@ -237,9 +237,9 @@ export const instanceToolDefinitions: McpToolDefinition[] = [
 ];
 
 export const instanceToolRoutes: McpToolRoute[] = [
-    { kind: "registry", name: "instance-list" },
-    { kind: "registry", name: "instance-get" },
-    { kind: "registry", name: "instance-create" },
+    { kind: "registry", name: "instance-list", enforceOrg: true },
+    { kind: "registry", name: "instance-get", enforceOrg: true },
+    { kind: "registry", name: "instance-create", enforceOrg: true },
     { kind: "registry", name: "instance-update" },
     { kind: "registry", name: "instance-delete" },
     { kind: "registry", name: "instance-bind-channel" },
