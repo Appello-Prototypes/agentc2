@@ -240,6 +240,47 @@ function mergeGuardrailConfigs(org: GuardrailConfig, agent: GuardrailConfig): Gu
 }
 
 /**
+ * Normalize a raw config JSON that may contain a `rules` array into the
+ * canonical GuardrailConfig shape. Rules with `type: "output"` and
+ * `action: "block"` are converted to `output.blockedPatterns`; rules with
+ * `type: "input"` go to `input.blockedPatterns`.
+ */
+function normalizeGuardrailConfig(raw: Record<string, unknown>): GuardrailConfig {
+    const config = raw as unknown as GuardrailConfig & {
+        rules?: Array<{
+            type?: string;
+            action?: string;
+            pattern?: string;
+        }>;
+    };
+
+    if (!Array.isArray(config.rules) || config.rules.length === 0) {
+        return config;
+    }
+
+    const inputPatterns = new Set<string>(config.input?.blockedPatterns ?? []);
+    const outputPatterns = new Set<string>(config.output?.blockedPatterns ?? []);
+
+    for (const rule of config.rules) {
+        if (!rule.pattern) continue;
+        if (rule.type === "input") {
+            inputPatterns.add(rule.pattern);
+        } else if (rule.type === "output") {
+            outputPatterns.add(rule.pattern);
+        }
+    }
+
+    if (inputPatterns.size > 0) {
+        config.input = { ...config.input, blockedPatterns: [...inputPatterns] };
+    }
+    if (outputPatterns.size > 0) {
+        config.output = { ...config.output, blockedPatterns: [...outputPatterns] };
+    }
+
+    return config;
+}
+
+/**
  * Load guardrail config for an agent from the database, merging with any
  * org-level guardrail policy so that org policies act as a baseline floor.
  */
@@ -257,10 +298,10 @@ async function loadGuardrailConfig(opts: {
     ]);
 
     const agentConfig = agentPolicy?.configJson
-        ? (agentPolicy.configJson as unknown as GuardrailConfig)
+        ? normalizeGuardrailConfig(agentPolicy.configJson as Record<string, unknown>)
         : null;
     const orgConfig = orgPolicy?.configJson
-        ? (orgPolicy.configJson as unknown as GuardrailConfig)
+        ? normalizeGuardrailConfig(orgPolicy.configJson as Record<string, unknown>)
         : null;
 
     if (!orgConfig && !agentConfig) return DEFAULT_GUARDRAIL_CONFIG;
