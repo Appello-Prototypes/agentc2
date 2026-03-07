@@ -56,6 +56,7 @@ import { dateTimeTool, calculatorTool, generateIdTool } from "./example-tools";
 import { webFetchTool } from "./web-fetch";
 import { webSearchTool, webScrapeTool } from "./web-search";
 import { teeonLoginTool } from "./teeon-login";
+import { teeonSearchTool } from "./teeon-search";
 import {
     exaSearchTool,
     exaFindSimilarTool,
@@ -429,6 +430,7 @@ export const toolCategoryMap: Record<string, string> = {
     "web-search": "Utilities",
     "web-scrape": "Utilities",
     "teeon-login": "Integrations",
+    "teeon-search": "Integrations",
     "memory-recall": "Utilities",
 
     // Search
@@ -1291,6 +1293,7 @@ export const toolRegistry: Record<string, any> = {
     "web-search": webSearchTool,
     "web-scrape": webScrapeTool,
     "teeon-login": teeonLoginTool,
+    "teeon-search": teeonSearchTool,
     "memory-recall": memoryRecallTool,
 
     // Search tools
