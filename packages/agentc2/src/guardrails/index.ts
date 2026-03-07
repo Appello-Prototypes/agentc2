@@ -181,6 +181,47 @@ function matchesBlockedPatterns(text: string, patterns: string[]): string | null
 }
 
 /**
+ * Strip tool execution artifacts from agent output before guardrail checking.
+ *
+ * Some LLMs (notably Claude Haiku) interleave tool call narration in their text
+ * output, producing patterns like:
+ *   Tool: playwright_browser_evaluate
+ *   Result: {"content":[{"type":"text","text":"### Ran Playwright code\n```js\n
+ *     await page.evaluate('() => { ... f.Password.value = ...; }');\n```"}]}
+ *
+ * These are execution artifacts, not user-facing content. Credential values
+ * appearing ONLY inside these artifacts should not trigger guardrail blocks.
+ * Credentials in the agent's natural-language response still trigger correctly.
+ */
+function stripToolArtifacts(text: string): string {
+    let cleaned = text;
+
+    // Remove "Tool: <name>\nResult: <json>" blocks.
+    // These are echoed tool call/result narration from the model's text stream.
+    cleaned = cleaned.replace(
+        /Tool:\s*[\w_.-]+\s*\nResult:\s*\{[\s\S]*?\}(?=\s*(?:Tool:\s|[A-Z]|$))/g,
+        " "
+    );
+
+    // Remove markdown code blocks (```...```) which contain Playwright JS code
+    cleaned = cleaned.replace(/```[\s\S]*?```/g, " ");
+
+    // Remove "### Ran Playwright code" sections and "### Result" lines
+    cleaned = cleaned.replace(/###\s*(?:Ran Playwright code|Result)\b[^\n]*/g, " ");
+
+    // Remove inline JSON tool result objects
+    cleaned = cleaned.replace(
+        /\{"content":\[\{"type":"text"[\s\S]*?\}\]\}/g,
+        " "
+    );
+
+    // Collapse whitespace
+    cleaned = cleaned.replace(/\s{2,}/g, " ");
+
+    return cleaned.trim();
+}
+
+/**
  * Merge two guardrail configs.  Org config is the "floor" -- agents can add
  * restrictions but never weaken org-level policy.
  *
@@ -428,6 +469,13 @@ export async function enforceInputGuardrails(
 
 /**
  * Enforce output guardrails after agent execution.
+ *
+ * The output text may contain interleaved tool execution artifacts from the
+ * model's text stream (e.g. "Tool: X\nResult: {...}"). These are stripped
+ * before pattern-based checks so that credential values appearing ONLY in
+ * tool result echoes do not cause false-positive blocks.
+ *
+ * Length and structural checks still use the raw output.
  */
 export async function enforceOutputGuardrails(
     agentId: string,
@@ -442,7 +490,11 @@ export async function enforceOutputGuardrails(
     const violations: GuardrailResult["violations"] = [];
     const outputConfig = config.output;
 
-    // Check max length
+    // Strip tool execution artifacts for pattern-based checks only.
+    // Length/structural checks still use raw output.
+    const cleanedOutput = stripToolArtifacts(output);
+
+    // Check max length (raw output)
     if (outputConfig.maxLength && output.length > outputConfig.maxLength) {
         violations.push({
             guardrailKey: "output.maxLength",
@@ -451,8 +503,8 @@ export async function enforceOutputGuardrails(
         });
     }
 
-    // Check for PII leakage
-    if (outputConfig.blockPII && containsPII(output)) {
+    // Check for PII leakage (cleaned output — tool results often contain form data)
+    if (outputConfig.blockPII && containsPII(cleanedOutput)) {
         violations.push({
             guardrailKey: "output.blockPII",
             message: "Output contains potential PII leakage",
@@ -461,7 +513,7 @@ export async function enforceOutputGuardrails(
     }
 
     // Check for leaked secrets/credentials (always enabled, not configurable)
-    const matchedSecret = containsSecrets(output);
+    const matchedSecret = containsSecrets(cleanedOutput);
     if (matchedSecret) {
         violations.push({
             guardrailKey: "output.secretLeakage",
@@ -470,9 +522,9 @@ export async function enforceOutputGuardrails(
         });
     }
 
-    // Check blocked patterns
+    // Check blocked patterns (cleaned output)
     if (outputConfig.blockedPatterns && outputConfig.blockedPatterns.length > 0) {
-        const matchedPattern = matchesBlockedPatterns(output, outputConfig.blockedPatterns);
+        const matchedPattern = matchesBlockedPatterns(cleanedOutput, outputConfig.blockedPatterns);
         if (matchedPattern) {
             violations.push({
                 guardrailKey: "output.blockedPatterns",
