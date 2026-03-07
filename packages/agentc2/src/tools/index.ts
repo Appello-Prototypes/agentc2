@@ -132,6 +132,7 @@ export {
     bimHandoverTool
 } from "./bim-tools";
 export { webhookListAgentsTool, webhookCreateTool } from "./webhook-tools";
+export { teeonLoginTool } from "./teeon-login";
 export {
     integrationImportMcpJsonTool,
     integrationMcpConfigTool,

@@ -210,10 +210,7 @@ function stripToolArtifacts(text: string): string {
     cleaned = cleaned.replace(/###\s*(?:Ran Playwright code|Result)\b[^\n]*/g, " ");
 
     // Remove inline JSON tool result objects
-    cleaned = cleaned.replace(
-        /\{"content":\[\{"type":"text"[\s\S]*?\}\]\}/g,
-        " "
-    );
+    cleaned = cleaned.replace(/\{"content":\[\{"type":"text"[\s\S]*?\}\]\}/g, " ");
 
     // Collapse whitespace
     cleaned = cleaned.replace(/\s{2,}/g, " ");
