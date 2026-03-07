@@ -55,7 +55,8 @@ export class WhatsAppClient implements ChannelHandler {
             const {
                 default: makeWASocket,
                 useMultiFileAuthState,
-                DisconnectReason
+                DisconnectReason,
+                fetchLatestBaileysVersion
             } = await import("@whiskeysockets/baileys");
 
             const sessionPath = this.config.sessionPath || "./.whatsapp-session";
@@ -63,10 +64,23 @@ export class WhatsAppClient implements ChannelHandler {
             // Load or create auth state
             const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
 
+            // Fetch latest WhatsApp Web version to avoid 405 Connection Failure.
+            // Since Feb 2026, WhatsApp rejects outdated client versions during pairing.
+            let version: [number, number, number] | undefined;
+            try {
+                const versionInfo = await fetchLatestBaileysVersion();
+                version = versionInfo.version;
+                console.log(
+                    `[WhatsApp] Using WA version ${version.join(".")}, isLatest: ${versionInfo.isLatest}`
+                );
+            } catch {
+                console.warn("[WhatsApp] Failed to fetch latest version, using Baileys default");
+            }
+
             // Create socket
             this.socket = makeWASocket({
                 auth: state,
-                printQRInTerminal: true
+                ...(version ? { version } : {})
             });
 
             const sock = this.socket as ReturnType<typeof makeWASocket>;

@@ -22,10 +22,19 @@ const CACHE_TTL_MS = 60_000;
 const _processedUpdates = new Set<number>();
 const MAX_DEDUP_SIZE = 5000;
 
+async function resolveOrganizationId(): Promise<string | undefined> {
+    const connection = await prisma.integrationConnection.findFirst({
+        where: { provider: { key: "telegram-bot" }, isActive: true },
+        select: { organizationId: true }
+    });
+    return connection?.organizationId ?? undefined;
+}
+
 async function getTelegramCredentials(): Promise<Record<string, string>> {
     const now = Date.now();
     if (!_cachedCreds || now - _cachedAt > CACHE_TTL_MS) {
-        const { credentials } = await resolveChannelCredentials("telegram-bot");
+        const orgId = await resolveOrganizationId();
+        const { credentials } = await resolveChannelCredentials("telegram-bot", orgId);
         _cachedCreds = credentials;
         _cachedAt = now;
     }

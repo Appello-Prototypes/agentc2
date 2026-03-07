@@ -88,47 +88,46 @@ export async function resolveChannelCredentials(
     providerKey: string,
     organizationId?: string
 ): Promise<ResolvedCredentials> {
-    // 1. Try database first (if we have an org context)
-    if (organizationId) {
-        try {
-            const connection = await prisma.integrationConnection.findFirst({
-                where: {
-                    organizationId,
-                    isActive: true,
-                    provider: { key: providerKey }
-                },
-                include: { provider: true },
-                orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }]
-            });
+    // 1. Try database first
+    try {
+        const where: Record<string, unknown> = {
+            isActive: true,
+            provider: { key: providerKey }
+        };
+        if (organizationId) where.organizationId = organizationId;
 
-            if (connection) {
-                const decrypted = decryptCredentials(connection.credentials);
-                if (decrypted && typeof decrypted === "object" && !Array.isArray(decrypted)) {
-                    const credentials: Record<string, string> = {};
-                    for (const [key, value] of Object.entries(
-                        decrypted as Record<string, unknown>
-                    )) {
-                        if (typeof value === "string" && value.trim()) {
-                            credentials[key] = value.trim();
-                        }
-                    }
+        const connection = await prisma.integrationConnection.findFirst({
+            where,
+            include: { provider: true },
+            orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }]
+        });
 
-                    // Only return DB credentials if we found at least one field
-                    if (Object.keys(credentials).length > 0) {
-                        return {
-                            credentials,
-                            source: "database",
-                            connectionId: connection.id
-                        };
+        if (connection) {
+            const decrypted = decryptCredentials(connection.credentials);
+            if (decrypted && typeof decrypted === "object" && !Array.isArray(decrypted)) {
+                const credentials: Record<string, string> = {};
+                for (const [key, value] of Object.entries(
+                    decrypted as Record<string, unknown>
+                )) {
+                    if (typeof value === "string" && value.trim()) {
+                        credentials[key] = value.trim();
                     }
                 }
+
+                if (Object.keys(credentials).length > 0) {
+                    return {
+                        credentials,
+                        source: "database",
+                        connectionId: connection.id
+                    };
+                }
             }
-        } catch (error) {
-            console.warn(
-                `[ChannelCredentials] Failed to resolve DB credentials for ${providerKey}:`,
-                error instanceof Error ? error.message : error
-            );
         }
+    } catch (error) {
+        console.warn(
+            `[ChannelCredentials] Failed to resolve DB credentials for ${providerKey}:`,
+            error instanceof Error ? error.message : error
+        );
     }
 
     // 2. Fall back to env vars

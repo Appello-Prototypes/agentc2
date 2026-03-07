@@ -78,6 +78,8 @@ export function WhatsAppSetup() {
     const [saveSuccess, setSaveSuccess] = useState(false);
 
     const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const [connectingStep, setConnectingStep] = useState(0);
+    const stepTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     /* ----- Check initial status ----- */
     const checkStatus = useCallback(async () => {
@@ -141,13 +143,17 @@ export function WhatsAppSetup() {
             } else {
                 await fetchQR();
             }
-        }, 3000);
+        }, 1500);
     }, [base, fetchQR]);
 
     const stopPolling = () => {
         if (pollRef.current) {
             clearInterval(pollRef.current);
             pollRef.current = null;
+        }
+        if (stepTimerRef.current) {
+            clearInterval(stepTimerRef.current);
+            stepTimerRef.current = null;
         }
     };
 
@@ -196,6 +202,12 @@ export function WhatsAppSetup() {
     const handleConnect = async () => {
         setPhase("connecting");
         setErrorMessage(null);
+        setConnectingStep(0);
+
+        if (stepTimerRef.current) clearInterval(stepTimerRef.current);
+        stepTimerRef.current = setInterval(() => {
+            setConnectingStep((s) => Math.min(s + 1, 3));
+        }, 2500);
 
         try {
             // Ensure IntegrationConnection exists
@@ -430,11 +442,19 @@ export function WhatsAppSetup() {
                                     />
                                 </div>
                             ) : (
-                                <div className="flex h-[332px] w-[332px] flex-col items-center justify-center gap-3 rounded-xl border">
+                                <div className="flex h-[332px] w-[332px] flex-col items-center justify-center gap-4 rounded-xl border">
                                     <Loader2Icon className="text-muted-foreground h-8 w-8 animate-spin" />
-                                    <p className="text-muted-foreground text-sm">
-                                        Generating QR code...
-                                    </p>
+                                    <div className="space-y-2 text-center">
+                                        <p className="text-muted-foreground text-sm font-medium">
+                                            {connectingStep === 0 && "Connecting to WhatsApp..."}
+                                            {connectingStep === 1 && "Checking version..."}
+                                            {connectingStep === 2 && "Establishing session..."}
+                                            {connectingStep >= 3 && "Generating QR code..."}
+                                        </p>
+                                        <p className="text-muted-foreground/60 text-xs">
+                                            This may take up to 15 seconds
+                                        </p>
+                                    </div>
                                 </div>
                             )}
                             <div className="text-muted-foreground flex items-center gap-2 text-sm">

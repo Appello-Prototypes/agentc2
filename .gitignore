@@ -82,5 +82,8 @@ scripts/dumps/
 # Playwright MCP logs
 .playwright-mcp/
 
+# WhatsApp session credentials
+.whatsapp-session/
+
 # Secrets / keys
 keys.txt

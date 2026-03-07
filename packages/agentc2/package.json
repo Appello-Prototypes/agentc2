@@ -71,7 +71,7 @@
     "@openrouter/ai-sdk-provider": "^2.2.3",
     "@repo/database": "workspace:*",
     "@types/pg": "^8.16.0",
-    "@whiskeysockets/baileys": "^6.7.16",
+    "@whiskeysockets/baileys": "^7.0.0-rc.9",
     "ai": "^6.0.64",
     "cron-parser": "^5.5.0",
     "grammy": "^1.35.0",

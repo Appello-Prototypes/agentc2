@@ -67,8 +67,12 @@ const nextConfig: NextConfig = {
     // Externalize heavy server-only packages so webpack skips them (loaded via require() at runtime).
     // This dramatically reduces build time by preventing webpack from parsing large dependency trees.
     serverExternalPackages: [
-        // WhatsApp + image processing
+        // WhatsApp + image processing (ws/bufferutil/utf-8-validate are native
+        // addons used by Baileys that break when bundled by webpack)
         "@whiskeysockets/baileys",
+        "ws",
+        "bufferutil",
+        "utf-8-validate",
         "jimp",
         "sharp",
         "pdf-parse",
