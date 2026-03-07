@@ -67,11 +67,10 @@ export const teeonSearchTool = createTool({
     id: "teeon-search",
     description:
         "Look up a TeeOn golf course and get navigation instructions for booking. " +
-        "Call this AFTER teeon-login to get the correct URLs for Playwright navigation. " +
-        "Returns the course navigation menu with the 'View Tee Sheet' URL that you should " +
-        "navigate to in Playwright to see available tee times. " +
-        "WORKFLOW: teeon-login -> teeon-search -> set cookie in browser -> " +
-        "playwright_browser_navigate to the viewTeeSheetUrl -> playwright_browser_snapshot to read times.",
+        "Call this AFTER teeon-login to get the comboLandingUrl and playwrightInstructions. " +
+        "WORKFLOW: teeon-login -> teeon-search -> playwright_browser_navigate to comboLandingUrl -> " +
+        "set cookies -> reload -> CLICK 'View Tee Sheet' link -> snapshot to read times. " +
+        "NEVER navigate to viewTeeSheetUrl directly — it only works when clicked from within ComboLanding.",
     inputSchema: z.object({
         allCookies: z
             .string()
@@ -96,7 +95,7 @@ export const teeonSearchTool = createTool({
             .string()
             .optional()
             .describe(
-                "Full URL for Playwright to navigate to for viewing the tee sheet"
+                "DO NOT navigate to this URL directly. Instead navigate to comboLandingUrl first, then click the 'View Tee Sheet' link in the snapshot."
             ),
         bookTeeTimeUrl: z
             .string()
@@ -182,12 +181,15 @@ export const teeonSearchTool = createTool({
                 : undefined
 
             const steps = [
-                `1. Set cookies in browser: playwright_browser_evaluate -> document.cookie = 'JSESSIONID=<value>; path=/PubGolf'; (use the session cookie from teeon-login)`,
-                `2. Navigate to: ${viewTeeSheetUrl || comboUrl}`,
-                `3. Take a snapshot: playwright_browser_snapshot`,
-                `4. If you see a date dropdown, select the desired date`,
-                `5. Take another snapshot to read the tee times with prices`,
-                `6. Present the available times to the user`,
+                `1. Close the browser: playwright_browser_close`,
+                `2. Navigate to ComboLanding: playwright_browser_navigate to ${comboUrl}`,
+                `3. Set session cookies: playwright_browser_evaluate -> allCookies.split('; ').forEach(c => { document.cookie = c + '; path=/PubGolf'; })`,
+                `4. Reload the page: playwright_browser_evaluate -> location.reload()`,
+                `5. Wait 2 seconds, then take a snapshot: playwright_browser_snapshot`,
+                `6. In the snapshot, find and CLICK the "View Tee Sheet" link (ref=eN). Do NOT navigate to the URL directly.`,
+                `7. Take a snapshot — you should see the tee sheet with available times and prices`,
+                `8. If you need a different date, select it from the date dropdown and snapshot again`,
+                `IMPORTANT: You MUST click the "View Tee Sheet" link from within the ComboLanding page. The MemberTeeSheetGolferSection URL does NOT work when navigated to directly.`,
             ]
 
             return {
