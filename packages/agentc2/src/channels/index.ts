@@ -26,6 +26,6 @@ export {
 } from "./routing";
 
 // Channel implementations
-export { WhatsAppClient } from "./whatsapp/client";
+export { WhatsAppClient, type ConnectionCallback } from "./whatsapp/client";
 export { TelegramClient } from "./telegram/client";
 export { TwilioVoiceClient } from "./voice/twilio";

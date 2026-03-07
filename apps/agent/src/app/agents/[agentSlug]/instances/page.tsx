@@ -442,14 +442,22 @@ export default function InstancesPage() {
                                                         </div>
                                                         <div className="space-y-1">
                                                             <Label className="text-xs">
-                                                                Channel ID
+                                                                {bindingChannelType === "whatsapp"
+                                                                    ? "Phone Number"
+                                                                    : "Channel ID"}
                                                             </Label>
                                                             <Input
                                                                 className="h-8 text-xs"
                                                                 placeholder={
                                                                     bindingChannelType === "slack"
                                                                         ? "C0123456789"
-                                                                        : "identifier"
+                                                                        : bindingChannelType ===
+                                                                            "whatsapp"
+                                                                          ? "+15551234567"
+                                                                          : bindingChannelType ===
+                                                                              "email"
+                                                                            ? "user@example.com"
+                                                                            : "identifier"
                                                                 }
                                                                 value={bindingChannelId}
                                                                 onChange={(e) =>
@@ -458,6 +466,12 @@ export default function InstancesPage() {
                                                                     )
                                                                 }
                                                             />
+                                                            {bindingChannelType === "whatsapp" && (
+                                                                <p className="text-muted-foreground text-[10px]">
+                                                                    Phone number of the user who
+                                                                    will message this agent
+                                                                </p>
+                                                            )}
                                                         </div>
                                                     </div>
                                                     <div className="space-y-1">
@@ -469,7 +483,10 @@ export default function InstancesPage() {
                                                             placeholder={
                                                                 bindingChannelType === "slack"
                                                                     ? "#channel-name"
-                                                                    : "name"
+                                                                    : bindingChannelType ===
+                                                                        "whatsapp"
+                                                                      ? "John's WhatsApp"
+                                                                      : "name"
                                                             }
                                                             value={bindingChannelName}
                                                             onChange={(e) =>

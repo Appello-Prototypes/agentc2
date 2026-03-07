@@ -1,57 +1,54 @@
-import { createTool } from "@mastra/core/tools"
-import { z } from "zod"
+import { createTool } from "@mastra/core/tools";
+import { z } from "zod";
 
-const BASE_URL = "https://www.tee-on.com/PubGolf/servlet/"
-const COMBO_LANDING =
-    "com.teeon.teesheet.servlets.golfersection.ComboLanding"
+const BASE_URL = "https://www.tee-on.com/PubGolf/servlet/";
+const COMBO_LANDING = "com.teeon.teesheet.servlets.golfersection.ComboLanding";
 
-const FETCH_TIMEOUT_MS = 15_000
+const FETCH_TIMEOUT_MS = 15_000;
 const UA =
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
 const KNOWN_COURSES: Record<string, string> = {
     BYQT: "Bay of Quinte Golf Club",
     PKGC: "Pine Knot Golf Club",
     TRNT: "Trenton Golf Club",
     BRGH: "Brockville Highland Golf Club",
-    GRCR: "Garrison Creek Golf Club",
-}
+    GRCR: "Garrison Creek Golf Club"
+};
 
 interface NavLink {
-    label: string
-    url: string
-    servlet: string
+    label: string;
+    url: string;
+    servlet: string;
 }
 
 function extractNavLinks(html: string): NavLink[] {
-    const links: NavLink[] = []
-    const regex = /<a[^>]*href="([^"]*servlet[^"]*)"[^>]*>([^<]+)<\/a>/gi
-    let match: RegExpExecArray | null
+    const links: NavLink[] = [];
+    const regex = /<a[^>]*href="([^"]*servlet[^"]*)"[^>]*>([^<]+)<\/a>/gi;
+    let match: RegExpExecArray | null;
     while ((match = regex.exec(html)) !== null) {
-        const url = match[1].trim()
-        const label = match[2].trim()
-        const servletMatch = url.match(
-            /servlets\.[a-z]+\.(\w+)/i
-        )
+        const url = match[1].trim();
+        const label = match[2].trim();
+        const servletMatch = url.match(/servlets\.[a-z]+\.(\w+)/i);
         if (servletMatch) {
             links.push({
                 label,
                 url,
-                servlet: servletMatch[1],
-            })
+                servlet: servletMatch[1]
+            });
         }
     }
-    return links
+    return links;
 }
 
 function extractLockerString(html: string): string {
-    const match = html.match(/LockerString=([^&"]+)/)
-    return match ? decodeURIComponent(match[1]) : ""
+    const match = html.match(/LockerString=([^&"]+)/);
+    return match ? decodeURIComponent(match[1]) : "";
 }
 
 function extractMemberId(html: string): string {
-    const match = html.match(/MemberID=([^&"]+)/)
-    return match ? match[1] : ""
+    const match = html.match(/MemberID=([^&"]+)/);
+    return match ? match[1] : "";
 }
 
 const teeTimeSlotSchema = z.object({
@@ -60,8 +57,8 @@ const teeTimeSlotSchema = z.object({
     price: z.string().optional(),
     holes: z.string().optional(),
     players: z.string().optional(),
-    notes: z.string().optional(),
-})
+    notes: z.string().optional()
+});
 
 export const teeonSearchTool = createTool({
     id: "teeon-search",
@@ -74,21 +71,12 @@ export const teeonSearchTool = createTool({
     inputSchema: z.object({
         allCookies: z
             .string()
-            .describe(
-                "Full cookie string from teeon-login result (allCookies field)"
-            ),
-        courseCode: z
-            .string()
-            .describe(
-                "TeeOn course code (e.g., BYQT, PKGC, TRNT, BRGH, GRCR)"
-            ),
+            .describe("Full cookie string from teeon-login result (allCookies field)"),
+        courseCode: z.string().describe("TeeOn course code (e.g., BYQT, PKGC, TRNT, BRGH, GRCR)")
     }),
     outputSchema: z.object({
         success: z.boolean(),
-        courseName: z
-            .string()
-            .optional()
-            .describe("Name of the golf course"),
+        courseName: z.string().optional().describe("Name of the golf course"),
         courseCode: z.string().optional(),
         memberId: z.string().optional().describe("Logged-in member ID"),
         viewTeeSheetUrl: z
@@ -100,9 +88,7 @@ export const teeonSearchTool = createTool({
         bookTeeTimeUrl: z
             .string()
             .optional()
-            .describe(
-                "Full URL for the booking search form (fallback)"
-            ),
+            .describe("Full URL for the booking search form (fallback)"),
         comboLandingUrl: z
             .string()
             .optional()
@@ -112,7 +98,7 @@ export const teeonSearchTool = createTool({
                 z.object({
                     label: z.string(),
                     url: z.string(),
-                    servlet: z.string(),
+                    servlet: z.string()
                 })
             )
             .optional()
@@ -120,18 +106,13 @@ export const teeonSearchTool = createTool({
         playwrightInstructions: z
             .string()
             .optional()
-            .describe(
-                "Step-by-step Playwright instructions for viewing tee times"
-            ),
-        error: z
-            .string()
-            .optional()
-            .describe("Error message on failure"),
+            .describe("Step-by-step Playwright instructions for viewing tee times"),
+        error: z.string().optional().describe("Error message on failure")
     }),
     execute: async ({ allCookies, courseCode }) => {
-        const code = courseCode.toUpperCase()
+        const code = courseCode.toUpperCase();
         try {
-            const comboUrl = `${BASE_URL}${COMBO_LANDING}?CourseCode=${code}&FromCourseWebsite=true`
+            const comboUrl = `${BASE_URL}${COMBO_LANDING}?CourseCode=${code}&FromCourseWebsite=true`;
 
             const response = await fetch(comboUrl, {
                 method: "GET",
@@ -140,45 +121,42 @@ export const teeonSearchTool = createTool({
                 headers: {
                     "User-Agent": UA,
                     Accept: "text/html",
-                    Cookie: allCookies,
-                },
-            })
+                    Cookie: allCookies
+                }
+            });
 
             if (response.status >= 400) {
                 return {
                     success: false,
-                    error: `Failed to load course page: HTTP ${response.status}. Course code '${code}' may be invalid.`,
-                }
+                    error: `Failed to load course page: HTTP ${response.status}. Course code '${code}' may be invalid.`
+                };
             }
 
-            const html = await response.text()
+            const html = await response.text();
 
             if (html.length < 5000) {
                 return {
                     success: false,
-                    error: `Course page returned minimal content. You may need to re-login with teeon-login first.`,
-                }
+                    error: `Course page returned minimal content. You may need to re-login with teeon-login first.`
+                };
             }
 
-            const navLinks = extractNavLinks(html)
-            const lockerString = extractLockerString(html)
-            const memberId = extractMemberId(html)
-            const courseName =
-                KNOWN_COURSES[code] || `TeeOn Course (${code})`
+            const navLinks = extractNavLinks(html);
+            const lockerString = extractLockerString(html);
+            const memberId = extractMemberId(html);
+            const courseName = KNOWN_COURSES[code] || `TeeOn Course (${code})`;
 
             const viewTeeSheetLink = navLinks.find(
                 (l) => l.servlet === "MemberTeeSheetGolferSection"
-            )
-            const bookTeeTimeLink = navLinks.find(
-                (l) => l.servlet === "WebBookingSearchSteps"
-            )
+            );
+            const bookTeeTimeLink = navLinks.find((l) => l.servlet === "WebBookingSearchSteps");
 
             const viewTeeSheetUrl = viewTeeSheetLink
                 ? `${BASE_URL}${viewTeeSheetLink.url}`
-                : undefined
+                : undefined;
             const bookTeeTimeUrl = bookTeeTimeLink
                 ? `${BASE_URL}${bookTeeTimeLink.url}`
-                : undefined
+                : undefined;
 
             const steps = [
                 `1. Close the browser: playwright_browser_close`,
@@ -189,8 +167,8 @@ export const teeonSearchTool = createTool({
                 `6. In the snapshot, find and CLICK the "View Tee Sheet" link (ref=eN). Do NOT navigate to the URL directly.`,
                 `7. Take a snapshot — you should see the tee sheet with available times and prices`,
                 `8. If you need a different date, select it from the date dropdown and snapshot again`,
-                `IMPORTANT: You MUST click the "View Tee Sheet" link from within the ComboLanding page. The MemberTeeSheetGolferSection URL does NOT work when navigated to directly.`,
-            ]
+                `IMPORTANT: You MUST click the "View Tee Sheet" link from within the ComboLanding page. The MemberTeeSheetGolferSection URL does NOT work when navigated to directly.`
+            ];
 
             return {
                 success: true,
@@ -203,26 +181,22 @@ export const teeonSearchTool = createTool({
                 navLinks: navLinks.map((l) => ({
                     label: l.label,
                     url: `${BASE_URL}${l.url}`,
-                    servlet: l.servlet,
+                    servlet: l.servlet
                 })),
-                playwrightInstructions: steps.join("\n"),
-            }
+                playwrightInstructions: steps.join("\n")
+            };
         } catch (error) {
-            const msg =
-                error instanceof Error ? error.message : String(error)
-            if (
-                msg.includes("TimeoutError") ||
-                msg.includes("aborted")
-            ) {
+            const msg = error instanceof Error ? error.message : String(error);
+            if (msg.includes("TimeoutError") || msg.includes("aborted")) {
                 return {
                     success: false,
-                    error: "TeeOn server did not respond within 15 seconds.",
-                }
+                    error: "TeeOn server did not respond within 15 seconds."
+                };
             }
             return {
                 success: false,
-                error: `Course lookup failed: ${msg}`,
-            }
+                error: `Course lookup failed: ${msg}`
+            };
         }
-    },
-})
+    }
+});

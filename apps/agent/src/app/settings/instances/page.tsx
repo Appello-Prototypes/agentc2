@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
 import {
     Card,
     CardContent,
@@ -816,7 +817,11 @@ export default function InstancesPage() {
                             </div>
                         ) : (
                             <div className="space-y-2">
-                                <Label>Channel Identifier</Label>
+                                <Label>
+                                    {bindingChannelType === "whatsapp"
+                                        ? "Phone Number"
+                                        : "Channel Identifier"}
+                                </Label>
                                 <Input
                                     value={bindingChannelId}
                                     onChange={(e) => setBindingChannelId(e.target.value)}
@@ -824,12 +829,26 @@ export default function InstancesPage() {
                                         bindingChannelType === "email"
                                             ? "deals+owens@agentc2.ai"
                                             : bindingChannelType === "whatsapp"
-                                              ? "+1-555-0100"
+                                              ? "+15551234567"
                                               : bindingChannelType === "web"
                                                 ? "embed-token"
                                                 : "identifier"
                                     }
                                 />
+                                {bindingChannelType === "whatsapp" && (
+                                    <p className="text-muted-foreground text-xs">
+                                        Enter the phone number (with country code) of the user whose
+                                        messages should route to this agent instance. WhatsApp must
+                                        be{" "}
+                                        <Link
+                                            href="/mcp/providers/whatsapp-web"
+                                            className="underline"
+                                        >
+                                            connected
+                                        </Link>{" "}
+                                        first.
+                                    </p>
+                                )}
                             </div>
                         )}
 

@@ -18,11 +18,14 @@ import type {
 /**
  * WhatsApp client using Baileys
  */
+export type ConnectionCallback = (status: "connected" | "disconnected") => void | Promise<void>;
+
 export class WhatsAppClient implements ChannelHandler {
     readonly type = "whatsapp" as const;
     private _status: ChannelStatus = "disconnected";
     private config: WhatsAppConfig;
     private messageHandler: MessageHandler | null = null;
+    private connectionCallback: ConnectionCallback | null = null;
     private socket: unknown = null;
     private qrCode: string | null = null;
     private sentMessageIds: Set<string> = new Set();
@@ -88,6 +91,11 @@ export class WhatsAppClient implements ChannelHandler {
                     );
 
                     this._status = "disconnected";
+                    if (this.connectionCallback) {
+                        Promise.resolve(this.connectionCallback("disconnected")).catch((err) =>
+                            console.error("[WhatsApp] Connection callback error:", err)
+                        );
+                    }
 
                     if (shouldReconnect) {
                         // Reconnect after a delay
@@ -97,6 +105,11 @@ export class WhatsAppClient implements ChannelHandler {
                     this._status = "connected";
                     this.qrCode = null;
                     console.log("[WhatsApp] Connected successfully");
+                    if (this.connectionCallback) {
+                        Promise.resolve(this.connectionCallback("connected")).catch((err) =>
+                            console.error("[WhatsApp] Connection callback error:", err)
+                        );
+                    }
                 }
             });
 
@@ -291,5 +304,12 @@ export class WhatsAppClient implements ChannelHandler {
      */
     onMessage(handler: MessageHandler): void {
         this.messageHandler = handler;
+    }
+
+    /**
+     * Set connection state change callback
+     */
+    onConnectionChange(callback: ConnectionCallback): void {
+        this.connectionCallback = callback;
     }
 }

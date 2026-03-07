@@ -5,7 +5,12 @@ import { useParams } from "next/navigation";
 import { getApiBase } from "@/lib/utils";
 import { SetupWizard } from "@/components/integrations/SetupWizard";
 import { IntegrationManagePage } from "@/components/integrations/IntegrationManagePage";
+import { WhatsAppSetup } from "@/components/channels/WhatsAppSetup";
 import { Loader2Icon } from "lucide-react";
+
+const CUSTOM_PROVIDER_PAGES: Record<string, React.FC> = {
+    "whatsapp-web": WhatsAppSetup
+};
 
 export default function ProviderDetailPage() {
     const params = useParams();
@@ -13,7 +18,11 @@ export default function ProviderDetailPage() {
     const [isConnected, setIsConnected] = useState<boolean | null>(null);
     const fetched = useRef(false);
 
+    const CustomPage = CUSTOM_PROVIDER_PAGES[providerKey] ?? null;
+    const hasCustomPage = CustomPage !== null;
+
     useEffect(() => {
+        if (hasCustomPage) return;
         if (fetched.current) return;
         fetched.current = true;
 
@@ -40,7 +49,11 @@ export default function ProviderDetailPage() {
         return () => {
             cancelled = true;
         };
-    }, [providerKey]);
+    }, [providerKey, hasCustomPage]);
+
+    if (CustomPage) {
+        return <CustomPage />;
+    }
 
     if (isConnected === null) {
         return (

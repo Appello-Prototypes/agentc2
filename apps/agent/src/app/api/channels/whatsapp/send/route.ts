@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getWhatsAppService } from "../_service";
+import { getWhatsAppService, isWhatsAppEnabled } from "../_service";
 import { authenticateRequest } from "@/lib/api-auth";
 
 /**
@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-        const enabled = process.env.WHATSAPP_ENABLED === "true";
+        const enabled = await isWhatsAppEnabled(authContext.organizationId);
 
         if (!enabled) {
             return NextResponse.json({ error: "WhatsApp channel is disabled" }, { status: 400 });

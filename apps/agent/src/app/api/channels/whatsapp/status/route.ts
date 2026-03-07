@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
-import { getWhatsAppService, isWhatsAppInitialized } from "../_service";
+import { getWhatsAppService, isWhatsAppInitialized, isWhatsAppEnabled } from "../_service";
 import { authenticateRequest } from "@/lib/api-auth";
 
 /**
@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
     }
 
     try {
-        const enabled = process.env.WHATSAPP_ENABLED === "true";
+        const enabled = await isWhatsAppEnabled(authContext.organizationId);
 
         if (!enabled) {
             return NextResponse.json({
@@ -37,7 +37,6 @@ export async function GET(request: NextRequest) {
         const status = service.getStatus();
         const hasQR = !!service.getQRCode();
 
-        // Get session count
         const sessionCount = await prisma.channelSession.count({
             where: { channel: "whatsapp" }
         });
@@ -49,10 +48,6 @@ export async function GET(request: NextRequest) {
             hasQR,
             sessions: {
                 total: sessionCount
-            },
-            config: {
-                defaultAgentSlug: process.env.WHATSAPP_DEFAULT_AGENT_SLUG || "mcp-agent",
-                allowlistConfigured: !!process.env.WHATSAPP_ALLOWLIST
             }
         });
     } catch (error) {
@@ -83,7 +78,7 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-        const enabled = process.env.WHATSAPP_ENABLED === "true";
+        const enabled = await isWhatsAppEnabled(authContext.organizationId);
 
         if (!enabled) {
             return NextResponse.json({ error: "WhatsApp channel is disabled" }, { status: 400 });

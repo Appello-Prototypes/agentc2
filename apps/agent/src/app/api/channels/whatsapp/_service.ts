@@ -21,6 +21,7 @@ import { prisma } from "@repo/database";
 import { startRun, extractTokenUsage, extractToolCalls } from "@/lib/run-recorder";
 import { calculateCost } from "@/lib/cost-calculator";
 import { resolveChannelCredentials } from "@/lib/channel-credentials";
+import { encryptCredentials } from "@/lib/credential-crypto";
 import { createTriggerEventRecord } from "@/lib/trigger-events";
 import { lookupChannelBinding, isUserAllowed, type InstanceContext } from "@/lib/agent-instances";
 
@@ -28,6 +29,29 @@ const FALLBACK_AGENT_SLUG = "bigjim2-appello";
 
 let whatsappService: WhatsAppClient | null = null;
 let initialized = false;
+
+/**
+ * Check if WhatsApp is enabled via DB IntegrationConnection or env var.
+ */
+export async function isWhatsAppEnabled(organizationId?: string): Promise<boolean> {
+    if (process.env.WHATSAPP_ENABLED === "true") return true;
+
+    try {
+        const where: Record<string, unknown> = {
+            provider: { key: "whatsapp-web" },
+            isActive: true
+        };
+        if (organizationId) where.organizationId = organizationId;
+
+        const connection = await prisma.integrationConnection.findFirst({
+            where,
+            select: { id: true }
+        });
+        return !!connection;
+    } catch {
+        return false;
+    }
+}
 
 /**
  * Get configuration, resolving credentials from DB then env fallback.
@@ -40,14 +64,18 @@ async function getConfig(organizationId?: string): Promise<WhatsAppConfig> {
         .map((s) => s.trim())
         .filter(Boolean);
 
+    const enabled = await isWhatsAppEnabled(organizationId);
+
     return {
-        enabled: process.env.WHATSAPP_ENABLED === "true",
+        enabled,
         defaultAgentSlug:
             credentials.WHATSAPP_DEFAULT_AGENT_SLUG ||
             process.env.WHATSAPP_DEFAULT_AGENT_SLUG ||
             FALLBACK_AGENT_SLUG,
         allowlist: allowlist.length > 0 ? allowlist : undefined,
-        selfChatMode: process.env.WHATSAPP_SELF_CHAT_MODE === "true",
+        selfChatMode:
+            credentials.WHATSAPP_SELF_CHAT_MODE === "true" ||
+            process.env.WHATSAPP_SELF_CHAT_MODE === "true",
         sessionPath:
             credentials.WHATSAPP_SESSION_PATH ||
             process.env.WHATSAPP_SESSION_PATH ||
@@ -383,6 +411,65 @@ export function isWhatsAppInitialized(): boolean {
 }
 
 /**
+ * Upsert an IntegrationConnection when WhatsApp connects/disconnects.
+ */
+async function handleConnectionChange(status: "connected" | "disconnected"): Promise<void> {
+    try {
+        const provider = await prisma.integrationProvider.findUnique({
+            where: { key: "whatsapp-web" },
+            select: { id: true }
+        });
+        if (!provider) return;
+
+        const existing = await prisma.integrationConnection.findFirst({
+            where: { providerId: provider.id, isActive: true },
+            select: { id: true, organizationId: true, credentials: true }
+        });
+
+        if (status === "connected") {
+            if (existing) {
+                await prisma.integrationConnection.update({
+                    where: { id: existing.id },
+                    data: {
+                        metadata: { status: "connected", connectedAt: new Date().toISOString() }
+                    }
+                });
+            } else {
+                const org = await prisma.organization.findFirst({
+                    select: { id: true }
+                });
+                if (!org) return;
+
+                const encrypted = encryptCredentials({ WHATSAPP_ENABLED: "true" });
+                await prisma.integrationConnection.create({
+                    data: {
+                        providerId: provider.id,
+                        organizationId: org.id,
+                        scope: "org",
+                        name: "WhatsApp Web",
+                        isActive: true,
+                        isDefault: true,
+                        ...(encrypted ? { credentials: encrypted } : {}),
+                        metadata: { status: "connected", connectedAt: new Date().toISOString() }
+                    }
+                });
+            }
+            console.log("[WhatsApp] IntegrationConnection upserted (connected)");
+        } else if (existing) {
+            await prisma.integrationConnection.update({
+                where: { id: existing.id },
+                data: {
+                    metadata: { status: "disconnected", disconnectedAt: new Date().toISOString() }
+                }
+            });
+            console.log("[WhatsApp] IntegrationConnection updated (disconnected)");
+        }
+    } catch (error) {
+        console.error("[WhatsApp] Failed to upsert IntegrationConnection:", error);
+    }
+}
+
+/**
  * Get or create WhatsApp service
  */
 export async function getWhatsAppService(): Promise<WhatsAppClient> {
@@ -390,6 +477,7 @@ export async function getWhatsAppService(): Promise<WhatsAppClient> {
         const config = await getConfig();
         whatsappService = new WhatsAppClient(config);
         whatsappService.onMessage(messageHandler);
+        whatsappService.onConnectionChange(handleConnectionChange);
 
         if (config.enabled && !initialized) {
             initialized = true;

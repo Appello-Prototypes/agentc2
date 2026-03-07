@@ -203,31 +203,19 @@ function stripToolArtifacts(text: string): string {
         " "
     );
     // Catch the final Tool/Result block at end of text
-    cleaned = cleaned.replace(
-        /Tool:\s*[\w_.-]+\s*\nResult:\s*[\s\S]*$/g,
-        " "
-    );
+    cleaned = cleaned.replace(/Tool:\s*[\w_.-]+\s*\nResult:\s*[\s\S]*$/g, " ");
 
     // Remove markdown code blocks (```...```) which contain Playwright JS code
     cleaned = cleaned.replace(/```[\s\S]*?```/g, " ");
 
     // Remove "### Ran Playwright code" sections and "### Result" lines
-    cleaned = cleaned.replace(
-        /###\s*(?:Ran Playwright code|Result|Snapshot|Page)\b[^\n]*/g,
-        " "
-    );
+    cleaned = cleaned.replace(/###\s*(?:Ran Playwright code|Result|Snapshot|Page)\b[^\n]*/g, " ");
 
     // Remove inline JSON tool result objects (nested braces handled by greedy match)
-    cleaned = cleaned.replace(
-        /\{"content":\[\{"type":"text"[\s\S]*?\}\s*\]\s*\}/g,
-        " "
-    );
+    cleaned = cleaned.replace(/\{"content":\[\{"type":"text"[\s\S]*?\}\s*\]\s*\}/g, " ");
 
     // Remove URL-encoded or query-string references containing sensitive data
-    cleaned = cleaned.replace(
-        /(?:LockerString|MemberID|Username|Password)=[^\s&"']*/gi,
-        " "
-    );
+    cleaned = cleaned.replace(/(?:LockerString|MemberID|Username|Password)=[^\s&"']*/gi, " ");
 
     // Remove JSESSIONID values
     cleaned = cleaned.replace(/JSESSIONID=[^\s;"]*/gi, " ");

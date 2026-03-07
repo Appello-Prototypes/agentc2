@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getWhatsAppService } from "../_service";
+import QRCode from "qrcode";
+import { getWhatsAppService, isWhatsAppEnabled } from "../_service";
 import { authenticateRequest } from "@/lib/api-auth";
 
 /**
  * GET /api/channels/whatsapp/qr
  *
  * Get QR code for WhatsApp pairing.
- * Returns base64 encoded QR image or connection status.
+ * Returns base64 PNG data URL or connection status.
  */
 export async function GET(request: NextRequest) {
     const authContext = await authenticateRequest(request);
@@ -15,7 +16,7 @@ export async function GET(request: NextRequest) {
     }
 
     try {
-        const enabled = process.env.WHATSAPP_ENABLED === "true";
+        const enabled = await isWhatsAppEnabled(authContext.organizationId);
 
         if (!enabled) {
             return NextResponse.json({
@@ -46,13 +47,17 @@ export async function GET(request: NextRequest) {
             });
         }
 
-        // Generate QR code as data URL using qrcode-terminal format
-        // Note: For a proper QR image, you'd use the 'qrcode' package
+        const qrDataUrl = await QRCode.toDataURL(qrCode, {
+            width: 300,
+            margin: 2,
+            color: { dark: "#000000", light: "#ffffff" }
+        });
+
         return NextResponse.json({
             success: true,
             connected: false,
-            qr: qrCode,
-            qrType: "text", // Terminal-style QR
+            qr: qrDataUrl,
+            qrType: "image",
             message: "Scan this QR code with WhatsApp (Settings > Linked Devices > Link a Device)"
         });
     } catch (error) {
