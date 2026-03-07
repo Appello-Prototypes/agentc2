@@ -196,10 +196,15 @@ function matchesBlockedPatterns(text: string, patterns: string[]): string | null
 function stripToolArtifacts(text: string): string {
     let cleaned = text;
 
-    // Remove "Tool: <name>\nResult: <json>" blocks.
-    // These are echoed tool call/result narration from the model's text stream.
+    // Remove "Tool: <name>\nResult: ..." blocks up to the next "Tool:" or natural text.
+    // Greedy: consumes everything between consecutive tool dumps.
     cleaned = cleaned.replace(
-        /Tool:\s*[\w_.-]+\s*\nResult:\s*\{[\s\S]*?\}(?=\s*(?:Tool:\s|[A-Z]|$))/g,
+        /Tool:\s*[\w_.-]+\s*\nResult:\s*[\s\S]*?(?=\nTool:\s*[\w_.-]+\s*\n|(?:\n[A-Z][a-z]))/g,
+        " "
+    );
+    // Catch the final Tool/Result block at end of text
+    cleaned = cleaned.replace(
+        /Tool:\s*[\w_.-]+\s*\nResult:\s*[\s\S]*$/g,
         " "
     );
 
@@ -207,10 +212,25 @@ function stripToolArtifacts(text: string): string {
     cleaned = cleaned.replace(/```[\s\S]*?```/g, " ");
 
     // Remove "### Ran Playwright code" sections and "### Result" lines
-    cleaned = cleaned.replace(/###\s*(?:Ran Playwright code|Result)\b[^\n]*/g, " ");
+    cleaned = cleaned.replace(
+        /###\s*(?:Ran Playwright code|Result|Snapshot|Page)\b[^\n]*/g,
+        " "
+    );
 
-    // Remove inline JSON tool result objects
-    cleaned = cleaned.replace(/\{"content":\[\{"type":"text"[\s\S]*?\}\]\}/g, " ");
+    // Remove inline JSON tool result objects (nested braces handled by greedy match)
+    cleaned = cleaned.replace(
+        /\{"content":\[\{"type":"text"[\s\S]*?\}\s*\]\s*\}/g,
+        " "
+    );
+
+    // Remove URL-encoded or query-string references containing sensitive data
+    cleaned = cleaned.replace(
+        /(?:LockerString|MemberID|Username|Password)=[^\s&"']*/gi,
+        " "
+    );
+
+    // Remove JSESSIONID values
+    cleaned = cleaned.replace(/JSESSIONID=[^\s;"]*/gi, " ");
 
     // Collapse whitespace
     cleaned = cleaned.replace(/\s{2,}/g, " ");
