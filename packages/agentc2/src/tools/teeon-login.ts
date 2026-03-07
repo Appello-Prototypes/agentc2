@@ -1,18 +1,18 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 
-const LOGIN_URL =
-    "https://www.tee-on.com/PubGolf/servlet/com.teeon.teesheet.servlets.golfersection.SignInGolferSection";
+const BASE_URL = "https://www.tee-on.com/PubGolf/servlet/";
+const LOGIN_PAGE = "com.teeon.teesheet.servlets.golfersection.SignInGolferSection";
+const CHECK_SIGNIN_AJAX = "com.teeon.teesheet.servlets.ajax.CheckSignInCloudAjax";
+const GOLFER_HOME = "com.teeon.teesheet.servlets.golfersection.GolferSectionHome";
 
 const FETCH_TIMEOUT_MS = 15_000;
+const UA =
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
-/**
- * Extract hidden form fields from TeeOn login page HTML.
- * Parses <input type="hidden" name="..." value="..." /> tags.
- */
-function parseHiddenFields(html: string): Record<string, string> {
+function parseInputFields(html: string): Record<string, string> {
     const fields: Record<string, string> = {};
-    const regex = /<input[^>]*type\s*=\s*["']hidden["'][^>]*>/gi;
+    const regex = /<input[^>]*>/gi;
     let match: RegExpExecArray | null;
     while ((match = regex.exec(html)) !== null) {
         const tag = match[0];
@@ -25,10 +25,51 @@ function parseHiddenFields(html: string): Record<string, string> {
     return fields;
 }
 
+function collectCookies(response: Response, jar: string[]): void {
+    const setCookies = response.headers.getSetCookie?.() || [];
+    for (const c of setCookies) {
+        const nameValue = c.split(";")[0];
+        if (!nameValue) continue;
+        const cookieName = nameValue.split("=")[0];
+        const idx = jar.findIndex((e) => e.split("=")[0] === cookieName);
+        if (idx >= 0) jar[idx] = nameValue;
+        else jar.push(nameValue);
+    }
+}
+
+async function followRedirects(
+    response: Response,
+    jar: string[],
+    maxHops = 5
+): Promise<{ finalResponse: Response; finalUrl: string }> {
+    let current = response;
+    let currentUrl = response.url;
+    for (let i = 0; i < maxHops; i++) {
+        if (![301, 302, 303, 307, 308].includes(current.status)) break;
+        collectCookies(current, jar);
+        const location = current.headers.get("Location");
+        if (!location) break;
+        const nextUrl = new URL(location, currentUrl).toString();
+        current = await fetch(nextUrl, {
+            method: "GET",
+            redirect: "manual",
+            signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+            headers: {
+                "User-Agent": UA,
+                Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                Cookie: jar.join("; ")
+            }
+        });
+        currentUrl = nextUrl;
+    }
+    collectCookies(current, jar);
+    return { finalResponse: current, finalUrl: currentUrl };
+}
+
 export const teeonLoginTool = createTool({
     id: "teeon-login",
     description:
-        "Log in to TeeOn (tee-on.com) using HTTP POST. Returns the session cookie (JSESSIONID) " +
+        "Log in to TeeOn (tee-on.com) using HTTP requests. Returns the session cookie (JSESSIONID) " +
         "on success. Use this BEFORE any Playwright browser navigation to TeeOn. " +
         "After getting the session cookie, set it in the browser using playwright_browser_evaluate: " +
         "() => { document.cookie = 'JSESSIONID=<value>; path=/PubGolf'; return 'cookie set'; } " +
@@ -51,167 +92,136 @@ export const teeonLoginTool = createTool({
         loginUrl: z.string().optional().describe("URL after login (for Playwright navigation)")
     }),
     execute: async ({ username, password, loginType = 5 }) => {
-        const collectCookies = (
-            response: Response,
-            jar: string[]
-        ): void => {
-            const setCookies = response.headers.getSetCookie?.() || []
-            for (const c of setCookies) {
-                const nameValue = c.split(";")[0]
-                if (!nameValue) continue
-                const cookieName = nameValue.split("=")[0]
-                const idx = jar.findIndex((e) => e.split("=")[0] === cookieName)
-                if (idx >= 0) jar[idx] = nameValue
-                else jar.push(nameValue)
-            }
-        }
-
-        const followRedirects = async (
-            response: Response,
-            jar: string[],
-            maxHops = 5
-        ): Promise<{ finalResponse: Response; finalUrl: string }> => {
-            let current = response
-            let currentUrl = response.url
-            for (let i = 0; i < maxHops; i++) {
-                if (![301, 302, 303, 307, 308].includes(current.status)) break
-                collectCookies(current, jar)
-                const location = current.headers.get("Location")
-                if (!location) break
-                const nextUrl = new URL(location, currentUrl).toString()
-                current = await fetch(nextUrl, {
-                    method: "GET",
-                    redirect: "manual",
-                    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-                    headers: {
-                        "User-Agent":
-                            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                        Cookie: jar.join("; ")
-                    }
-                })
-                currentUrl = nextUrl
-            }
-            collectCookies(current, jar)
-            return { finalResponse: current, finalUrl: currentUrl }
-        }
-
         try {
-            const cookieJar: string[] = []
+            const cookieJar: string[] = [];
 
             // Step 1: GET the login page to obtain session cookie and hidden fields
-            const pageUrl = `${LOGIN_URL}?FromTeeOn=true&GrabFocus=true&LoginType=${loginType}`
+            const pageUrl = `${BASE_URL}${LOGIN_PAGE}?FromTeeOn=true&GrabFocus=true&LoginType=${loginType}`;
             const pageResponse = await fetch(pageUrl, {
                 method: "GET",
                 redirect: "manual",
                 signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-                headers: {
-                    "User-Agent":
-                        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                    Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
-                }
-            })
+                headers: { "User-Agent": UA, Accept: "text/html" }
+            });
 
-            const { finalResponse: getResult } = await followRedirects(pageResponse, cookieJar)
+            const { finalResponse: getResult } = await followRedirects(pageResponse, cookieJar);
 
-            if (!getResult.ok && getResult.status !== 200) {
+            if (getResult.status >= 400) {
                 return {
                     success: false,
                     error: `Failed to load login page: HTTP ${getResult.status}`
-                }
+                };
             }
 
-            const pageHtml = await getResult.text()
-            const hiddenFields = parseHiddenFields(pageHtml)
+            const pageHtml = await getResult.text();
+            const formFields = parseInputFields(pageHtml);
 
-            // Step 2: POST the login form (include query params in both URL and form body)
-            const postUrl = `${LOGIN_URL}?FromTeeOn=true&GrabFocus=true&LoginType=${loginType}`
-            const formData = new URLSearchParams()
-            formData.append("Username", username)
-            formData.append("Password", password)
-            formData.append("FromTeeOn", "true")
-            formData.append("LoginType", String(loginType))
-            for (const [key, value] of Object.entries(hiddenFields)) {
-                formData.append(key, value)
-            }
+            // Step 2: AJAX credential check (mirrors doLogin() JavaScript)
+            const ajaxUrl = `${BASE_URL}${CHECK_SIGNIN_AJAX}`;
+            const ajaxData = new URLSearchParams();
+            ajaxData.append("Username", encodeURIComponent(username));
+            ajaxData.append("Password", encodeURIComponent(password));
+            ajaxData.append("SaveSignIn", "false");
+            ajaxData.append("CourseCode", "");
 
-            const loginResponse = await fetch(postUrl, {
+            const ajaxResponse = await fetch(ajaxUrl, {
                 method: "POST",
                 redirect: "manual",
                 signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
                 headers: {
                     "Content-Type": "application/x-www-form-urlencoded",
-                    "User-Agent":
-                        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                    Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                    "User-Agent": UA,
+                    Accept: "application/json, text/javascript, */*; q=0.01",
+                    "X-Requested-With": "XMLHttpRequest",
                     Referer: pageUrl,
                     Cookie: cookieJar.join("; ")
+                },
+                body: ajaxData.toString()
+            });
+
+            collectCookies(ajaxResponse, cookieJar);
+
+            let ajaxResult: { success?: number; message?: string } = {};
+            const ajaxText = await ajaxResponse.text();
+            try {
+                ajaxResult = JSON.parse(ajaxText);
+            } catch {
+                return {
+                    success: false,
+                    error: `Unexpected AJAX response (not JSON): ${ajaxText.substring(0, 200)}`
+                };
+            }
+
+            if (ajaxResult.success === 2) {
+                return {
+                    success: false,
+                    error: "TeeOn requires multi-factor authentication (MFA). Please log in manually at tee-on.com first."
+                };
+            }
+
+            if (ajaxResult.success !== 1) {
+                const msg = ajaxResult.message || "Sign In Failed";
+                return {
+                    success: false,
+                    error: `Invalid username or password: ${msg}`
+                };
+            }
+
+            // Step 3: AJAX succeeded (success=1) — submit form to GolferSectionHome
+            const formUrl = `${BASE_URL}${GOLFER_HOME}`;
+            const formData = new URLSearchParams();
+            formData.append("Username", username);
+            formData.append("Password", password);
+            for (const [key, value] of Object.entries(formFields)) {
+                if (key !== "Username" && key !== "Password") {
+                    formData.append(key, value);
                 }
-            })
+            }
 
-            // Follow redirects manually to preserve cookies at each hop
-            const { finalResponse, finalUrl } = await followRedirects(loginResponse, cookieJar)
+            const formResponse = await fetch(formUrl, {
+                method: "POST",
+                redirect: "manual",
+                signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "User-Agent": UA,
+                    Accept: "text/html",
+                    Referer: pageUrl,
+                    Cookie: cookieJar.join("; ")
+                },
+                body: formData.toString()
+            });
 
-            const responseHtml = await finalResponse.text()
+            const { finalResponse, finalUrl } = await followRedirects(formResponse, cookieJar);
 
-            // Step 3: Check for login success
-            const isOnGolferSection =
-                finalUrl.includes("GolferSection") && !finalUrl.includes("SignIn")
-            const hasWelcome = /Welcome\s+\w+/i.test(responseHtml)
-            const hasSignInFailed = /Sign In Failed|Invalid username or password/i.test(
-                responseHtml
-            )
-
-            // Extract JSESSIONID
+            const responseHtml = await finalResponse.text();
             const jsessionId = cookieJar
                 .find((c) => c.startsWith("JSESSIONID="))
                 ?.split("=")
                 .slice(1)
-                .join("=")
+                .join("=");
 
-            if (hasSignInFailed && !hasWelcome) {
-                return {
-                    success: false,
-                    error: `Invalid username or password. Please verify your TeeOn credentials. (finalUrl: ${finalUrl}, hiddenFields: ${Object.keys(hiddenFields).join(",")}, cookies: ${cookieJar.length})`
-                }
-            }
-
-            if (isOnGolferSection || hasWelcome) {
-                const welcomeMatch = responseHtml.match(/Welcome\s+(\w+)/i)
-                return {
-                    success: true,
-                    sessionCookie: jsessionId || "",
-                    allCookies: cookieJar.join("; "),
-                    welcomeMessage: welcomeMatch ? welcomeMatch[0] : "Login successful",
-                    loginUrl: finalUrl
-                }
-            }
-
-            // Ambiguous result: no clear success or failure indicator
-            if (jsessionId) {
-                return {
-                    success: true,
-                    sessionCookie: jsessionId,
-                    allCookies: cookieJar.join("; "),
-                    welcomeMessage:
-                        "Session obtained (verify by navigating to a protected page)",
-                    loginUrl: finalUrl
-                }
-            }
+            const hasWelcome = /Welcome\s+\w+/i.test(responseHtml);
+            const welcomeMatch = responseHtml.match(/Welcome\s+(\w+)/i);
 
             return {
-                success: false,
-                error: `Login response did not indicate success. finalUrl: ${finalUrl}, status: ${finalResponse.status}, hiddenFields: ${Object.keys(hiddenFields).join(",")}, cookies: ${cookieJar.length}`
-            }
+                success: true,
+                sessionCookie: jsessionId || "",
+                allCookies: cookieJar.join("; "),
+                welcomeMessage: hasWelcome
+                    ? welcomeMatch![0]
+                    : "Login successful (credential check passed)",
+                loginUrl: finalUrl
+            };
         } catch (error) {
-            const msg = error instanceof Error ? error.message : String(error)
+            const msg = error instanceof Error ? error.message : String(error);
             if (msg.includes("TimeoutError") || msg.includes("aborted")) {
                 return {
                     success: false,
                     error: "TeeOn server did not respond within 15 seconds. Please try again later."
-                }
+                };
             }
-            return { success: false, error: `Login failed: ${msg}` }
+            return { success: false, error: `Login failed: ${msg}` };
         }
     }
 });
