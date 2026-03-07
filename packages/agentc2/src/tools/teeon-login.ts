@@ -117,39 +117,59 @@ export const teeonLoginTool = createTool({
             const formFields = parseInputFields(pageHtml);
 
             // Step 2: AJAX credential check (mirrors doLogin() JavaScript)
+            // TeeOn's doLogin() does: encodeURIComponent(value) into a hidden input,
+            // then jQuery .serialize() encodes again. We replicate this double-encoding
+            // by manually building the body string.
             const ajaxUrl = `${BASE_URL}${CHECK_SIGNIN_AJAX}`;
-            const ajaxData = new URLSearchParams();
-            ajaxData.append("Username", encodeURIComponent(username));
-            ajaxData.append("Password", encodeURIComponent(password));
-            ajaxData.append("SaveSignIn", "false");
-            ajaxData.append("CourseCode", "");
 
-            const ajaxResponse = await fetch(ajaxUrl, {
-                method: "POST",
-                redirect: "manual",
-                signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-                headers: {
-                    "Content-Type": "application/x-www-form-urlencoded",
-                    "User-Agent": UA,
-                    Accept: "application/json, text/javascript, */*; q=0.01",
-                    "X-Requested-With": "XMLHttpRequest",
-                    Referer: pageUrl,
-                    Cookie: cookieJar.join("; ")
+            // Try two encoding strategies: TeeOn's double-encode first, then single-encode fallback
+            const encodingStrategies = [
+                {
+                    name: "double-encode",
+                    body: `Username=${encodeURIComponent(encodeURIComponent(username))}&Password=${encodeURIComponent(encodeURIComponent(password))}&SaveSignIn=false&CourseCode=`
                 },
-                body: ajaxData.toString()
-            });
-
-            collectCookies(ajaxResponse, cookieJar);
+                {
+                    name: "single-encode",
+                    body: `Username=${encodeURIComponent(username)}&Password=${encodeURIComponent(password)}&SaveSignIn=false&CourseCode=`
+                }
+            ];
 
             let ajaxResult: { success?: number; message?: string } = {};
-            const ajaxText = await ajaxResponse.text();
-            try {
-                ajaxResult = JSON.parse(ajaxText);
-            } catch {
-                return {
-                    success: false,
-                    error: `Unexpected AJAX response (not JSON): ${ajaxText.substring(0, 200)}`
-                };
+            let lastError = "";
+
+            for (const strategy of encodingStrategies) {
+                const ajaxResponse = await fetch(ajaxUrl, {
+                    method: "POST",
+                    redirect: "manual",
+                    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+                    headers: {
+                        "Content-Type":
+                            "application/x-www-form-urlencoded; charset=UTF-8",
+                        "User-Agent": UA,
+                        Accept: "application/json, text/javascript, */*; q=0.01",
+                        "X-Requested-With": "XMLHttpRequest",
+                        Referer: pageUrl,
+                        Origin: "https://www.tee-on.com",
+                        Cookie: cookieJar.join("; ")
+                    },
+                    body: strategy.body
+                });
+
+                collectCookies(ajaxResponse, cookieJar);
+
+                const ajaxText = await ajaxResponse.text();
+                try {
+                    ajaxResult = JSON.parse(ajaxText);
+                } catch {
+                    lastError = `Unexpected AJAX response (not JSON, strategy=${strategy.name}): ${ajaxText.substring(0, 300)}`;
+                    continue;
+                }
+
+                if (ajaxResult.success === 1 || ajaxResult.success === 2) {
+                    break;
+                }
+
+                lastError = `strategy=${strategy.name}: ${JSON.stringify(ajaxResult)}`;
             }
 
             if (ajaxResult.success === 2) {
@@ -160,10 +180,9 @@ export const teeonLoginTool = createTool({
             }
 
             if (ajaxResult.success !== 1) {
-                const msg = ajaxResult.message || "Sign In Failed";
                 return {
                     success: false,
-                    error: `Invalid username or password: ${msg}`
+                    error: `Login failed. Tried both encoding strategies. Last: ${lastError}. Cookies: ${cookieJar.length}`
                 };
             }
 
