@@ -117,59 +117,42 @@ export const teeonLoginTool = createTool({
             const formFields = parseInputFields(pageHtml);
 
             // Step 2: AJAX credential check (mirrors doLogin() JavaScript)
-            // TeeOn's doLogin() does: encodeURIComponent(value) into a hidden input,
-            // then jQuery .serialize() encodes again. We replicate this double-encoding
-            // by manually building the body string.
+            // Single-encode: URLSearchParams-style encoding matches what TeeOn expects.
             const ajaxUrl = `${BASE_URL}${CHECK_SIGNIN_AJAX}`;
+            const ajaxBody = `Username=${encodeURIComponent(username)}&Password=${encodeURIComponent(password)}&SaveSignIn=false&CourseCode=`;
 
-            // Try two encoding strategies: TeeOn's double-encode first, then single-encode fallback
-            const encodingStrategies = [
-                {
-                    name: "double-encode",
-                    body: `Username=${encodeURIComponent(encodeURIComponent(username))}&Password=${encodeURIComponent(encodeURIComponent(password))}&SaveSignIn=false&CourseCode=`
+            const ajaxResponse = await fetch(ajaxUrl, {
+                method: "POST",
+                redirect: "manual",
+                signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+                    "User-Agent": UA,
+                    Accept: "application/json, text/javascript, */*; q=0.01",
+                    "X-Requested-With": "XMLHttpRequest",
+                    Referer: pageUrl,
+                    Origin: "https://www.tee-on.com",
+                    Cookie: cookieJar.join("; ")
                 },
-                {
-                    name: "single-encode",
-                    body: `Username=${encodeURIComponent(username)}&Password=${encodeURIComponent(password)}&SaveSignIn=false&CourseCode=`
-                }
-            ];
+                body: ajaxBody
+            });
 
-            let ajaxResult: { success?: number; message?: string } = {};
-            let lastError = "";
+            collectCookies(ajaxResponse, cookieJar);
 
-            for (const strategy of encodingStrategies) {
-                const ajaxResponse = await fetch(ajaxUrl, {
-                    method: "POST",
-                    redirect: "manual",
-                    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-                    headers: {
-                        "Content-Type":
-                            "application/x-www-form-urlencoded; charset=UTF-8",
-                        "User-Agent": UA,
-                        Accept: "application/json, text/javascript, */*; q=0.01",
-                        "X-Requested-With": "XMLHttpRequest",
-                        Referer: pageUrl,
-                        Origin: "https://www.tee-on.com",
-                        Cookie: cookieJar.join("; ")
-                    },
-                    body: strategy.body
-                });
-
-                collectCookies(ajaxResponse, cookieJar);
-
-                const ajaxText = await ajaxResponse.text();
-                try {
-                    ajaxResult = JSON.parse(ajaxText);
-                } catch {
-                    lastError = `Unexpected AJAX response (not JSON, strategy=${strategy.name}): ${ajaxText.substring(0, 300)}`;
-                    continue;
-                }
-
-                if (ajaxResult.success === 1 || ajaxResult.success === 2) {
-                    break;
-                }
-
-                lastError = `strategy=${strategy.name}: ${JSON.stringify(ajaxResult)}`;
+            type AjaxResult = {
+                success?: number;
+                failType?: number;
+                failMessage?: string;
+            };
+            let ajaxResult: AjaxResult = {};
+            const ajaxText = await ajaxResponse.text();
+            try {
+                ajaxResult = JSON.parse(ajaxText);
+            } catch {
+                return {
+                    success: false,
+                    error: `Unexpected TeeOn response (not JSON): ${ajaxText.substring(0, 200)}`
+                };
             }
 
             if (ajaxResult.success === 2) {
@@ -179,10 +162,20 @@ export const teeonLoginTool = createTool({
                 };
             }
 
-            if (ajaxResult.success !== 1) {
+            if (ajaxResult.failType === 4) {
                 return {
                     success: false,
-                    error: `Login failed. Tried both encoding strategies. Last: ${lastError}. Cookies: ${cookieJar.length}`
+                    error: "Your TeeOn account is temporarily locked due to too many failed attempts. Please wait 15 minutes and try again."
+                };
+            }
+
+            if (ajaxResult.success !== 1) {
+                const msg = ajaxResult.failMessage
+                    ? ajaxResult.failMessage.replace(/<[^>]*>/g, "").substring(0, 100)
+                    : "Unknown error";
+                return {
+                    success: false,
+                    error: `TeeOn login failed: ${msg}`
                 };
             }
 
