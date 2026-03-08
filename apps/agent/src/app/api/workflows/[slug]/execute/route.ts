@@ -17,7 +17,7 @@ function mapStepStatus(status: "completed" | "failed" | "suspended") {
 }
 
 function executeWorkflowInBackground(
-    workflow: { id: string; slug: string; workspaceId: string; definitionJson: unknown },
+    workflow: { id: string; slug: string; workspaceId: string | null; definitionJson: unknown },
     run: { id: string },
     input: Record<string, unknown>,
     body: Record<string, unknown>
