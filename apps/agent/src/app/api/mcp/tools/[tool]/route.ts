@@ -568,16 +568,18 @@ export async function POST(
         if (tool.startsWith("workflow-")) {
             const workflowSlug = tool.slice("workflow-".length);
             const invokeUrl = new URL(`/api/workflows/${workflowSlug}/execute`, request.url);
+            const authHeaders: Record<string, string> = {
+                "Content-Type": "application/json"
+            };
+            for (const hdr of ["authorization", "x-api-key", "x-organization-slug"]) {
+                const val = request.headers.get(hdr);
+                if (val) authHeaders[hdr] = val;
+            }
             const invokeResponse = await fetch(invokeUrl, {
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    ...(request.headers.get("authorization")
-                        ? { Authorization: request.headers.get("authorization")! }
-                        : {})
-                },
+                headers: authHeaders,
                 body: JSON.stringify({
-                    input: body.input,
+                    input: body.input ?? body,
                     source: body.source,
                     environment: body.environment,
                     triggerType: body.triggerType,
@@ -585,21 +587,35 @@ export async function POST(
                 })
             });
 
-            const result = await invokeResponse.json();
-            return NextResponse.json(result, { status: invokeResponse.status });
+            const responseText = await invokeResponse.text();
+            try {
+                const result = JSON.parse(responseText);
+                return NextResponse.json(result, { status: invokeResponse.status });
+            } catch {
+                return NextResponse.json(
+                    {
+                        success: false,
+                        error: `Workflow endpoint returned non-JSON (status ${invokeResponse.status})`,
+                        statusCode: invokeResponse.status
+                    },
+                    { status: 502 }
+                );
+            }
         }
 
         if (tool.startsWith("network-")) {
             const networkSlug = tool.slice("network-".length);
             const invokeUrl = new URL(`/api/networks/${networkSlug}/execute`, request.url);
+            const netAuthHeaders: Record<string, string> = {
+                "Content-Type": "application/json"
+            };
+            for (const hdr of ["authorization", "x-api-key", "x-organization-slug"]) {
+                const val = request.headers.get(hdr);
+                if (val) netAuthHeaders[hdr] = val;
+            }
             const invokeResponse = await fetch(invokeUrl, {
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    ...(request.headers.get("authorization")
-                        ? { Authorization: request.headers.get("authorization")! }
-                        : {})
-                },
+                headers: netAuthHeaders,
                 body: JSON.stringify({
                     message: body.message ?? body.input,
                     source: body.source,
@@ -610,7 +626,20 @@ export async function POST(
                 })
             });
 
-            const result = await invokeResponse.json();
+            const netResponseText = await invokeResponse.text();
+            let result: unknown;
+            try {
+                result = JSON.parse(netResponseText);
+            } catch {
+                return NextResponse.json(
+                    {
+                        success: false,
+                        error: `Network endpoint returned non-JSON (status ${invokeResponse.status})`,
+                        statusCode: invokeResponse.status
+                    },
+                    { status: 502 }
+                );
+            }
             return NextResponse.json(result, { status: invokeResponse.status });
         }
 

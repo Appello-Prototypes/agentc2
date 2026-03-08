@@ -133,10 +133,13 @@ export function extractTriggerInputMapping(inputMapping: unknown): TriggerInputM
 export function extractTriggerConfig(
     inputMapping: TriggerInputMapping | null
 ): TriggerMappingConfig | null {
-    if (!inputMapping?.config || typeof inputMapping.config !== "object") {
+    const cfg =
+        (inputMapping as Record<string, unknown>)?.config ??
+        (inputMapping as Record<string, unknown>)?._config;
+    if (!cfg || typeof cfg !== "object") {
         return null;
     }
-    return inputMapping.config;
+    return cfg as TriggerMappingConfig;
 }
 
 export function mergeTriggerInputMapping(

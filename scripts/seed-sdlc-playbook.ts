@@ -1706,7 +1706,7 @@ async function main() {
                     githubActions: ["labeled"]
                 },
                 inputMapping: {
-                    _config: {
+                    config: {
                         fieldMapping: {
                             title: "issue.title",
                             description: "issue.body",

@@ -1387,33 +1387,29 @@ export async function startConversationRun(
         async addTurn(input: string): Promise<TurnHandle> {
             const turnStartTime = Date.now();
 
-            const { newTurn, newTurnCount } = await prisma.$transaction(async (tx) => {
-                // Get current turn count
-                const currentRun = await tx.agentRun.findUniqueOrThrow({
-                    where: { id: run.id },
-                    select: { turnCount: true }
-                });
+            const { newTurn, newTurnCount } = await prisma.$transaction(
+                async (tx) => {
+                    // Atomically increment turnCount and use the OLD value as newIndex
+                    const updatedRun = await tx.agentRun.update({
+                        where: { id: run.id },
+                        data: { turnCount: { increment: 1 } },
+                        select: { turnCount: true }
+                    });
+                    const newIndex = updatedRun.turnCount - 1;
 
-                const newIndex = currentRun.turnCount;
+                    const createdTurn = await tx.agentRunTurn.create({
+                        data: {
+                            runId: run.id,
+                            turnIndex: newIndex,
+                            inputText: input,
+                            startedAt: new Date()
+                        }
+                    });
 
-                // Create new turn
-                const createdTurn = await tx.agentRunTurn.create({
-                    data: {
-                        runId: run.id,
-                        turnIndex: newIndex,
-                        inputText: input,
-                        startedAt: new Date()
-                    }
-                });
-
-                // Increment turn count
-                await tx.agentRun.update({
-                    where: { id: run.id },
-                    data: { turnCount: newIndex + 1 }
-                });
-
-                return { newTurn: createdTurn, newTurnCount: newIndex + 1 };
-            });
+                    return { newTurn: createdTurn, newTurnCount: updatedRun.turnCount };
+                },
+                { isolationLevel: "Serializable" }
+            );
 
             console.log(
                 `[RunRecorder] Added turn ${newTurn.turnIndex} (${newTurn.id}) to run ${run.id} (total: ${newTurnCount})`
@@ -1454,59 +1450,61 @@ export async function startConversationRun(
 export async function continueTurn(options: ContinueTurnOptions): Promise<TurnHandle> {
     const turnStartTime = Date.now();
 
-    const { newTurn, traceId } = await prisma.$transaction(async (tx) => {
-        // Get current run state
-        const currentRun = await tx.agentRun.findUniqueOrThrow({
-            where: { id: options.runId },
-            select: { turnCount: true, status: true }
-        });
-
-        if (currentRun.status === "FAILED") {
-            throw new Error(`Cannot add turn to FAILED run ${options.runId}`);
-        }
-
-        const newIndex = currentRun.turnCount;
-
-        // Create new turn
-        const createdTurn = await tx.agentRunTurn.create({
-            data: {
-                runId: options.runId,
-                turnIndex: newIndex,
-                inputText: options.input,
-                startedAt: new Date()
-            }
-        });
-
-        // Increment turn count and re-open the run if it was COMPLETED
-        await tx.agentRun.update({
-            where: { id: options.runId },
-            data: {
-                turnCount: newIndex + 1,
-                status: "RUNNING",
-                completedAt: null
-            }
-        });
-
-        // Also re-open the trace
-        const traceRecord = await tx.agentTrace.findFirst({
-            where: { runId: options.runId },
-            select: { id: true }
-        });
-        if (traceRecord) {
-            await tx.agentTrace.update({
-                where: { id: traceRecord.id },
-                data: { status: "RUNNING" }
+    const { newTurn, traceId } = await prisma.$transaction(
+        async (tx) => {
+            // Check status before modifying
+            const statusCheck = await tx.agentRun.findUniqueOrThrow({
+                where: { id: options.runId },
+                select: { status: true }
             });
-        }
 
-        // Get the trace ID
-        const trace = await tx.agentTrace.findFirst({
-            where: { runId: options.runId },
-            select: { id: true }
-        });
+            if (statusCheck.status === "FAILED") {
+                throw new Error(`Cannot add turn to FAILED run ${options.runId}`);
+            }
 
-        return { newTurn: createdTurn, traceId: trace?.id || "" };
-    });
+            // Atomically increment turnCount and use the OLD value as newIndex
+            const updatedRun = await tx.agentRun.update({
+                where: { id: options.runId },
+                data: {
+                    turnCount: { increment: 1 },
+                    status: "RUNNING",
+                    completedAt: null
+                },
+                select: { turnCount: true }
+            });
+            const newIndex = updatedRun.turnCount - 1;
+
+            const createdTurn = await tx.agentRunTurn.create({
+                data: {
+                    runId: options.runId,
+                    turnIndex: newIndex,
+                    inputText: options.input,
+                    startedAt: new Date()
+                }
+            });
+
+            // Also re-open the trace
+            const traceRecord = await tx.agentTrace.findFirst({
+                where: { runId: options.runId },
+                select: { id: true }
+            });
+            if (traceRecord) {
+                await tx.agentTrace.update({
+                    where: { id: traceRecord.id },
+                    data: { status: "RUNNING" }
+                });
+            }
+
+            // Get the trace ID
+            const trace = await tx.agentTrace.findFirst({
+                where: { runId: options.runId },
+                select: { id: true }
+            });
+
+            return { newTurn: createdTurn, traceId: trace?.id || "" };
+        },
+        { isolationLevel: "Serializable" }
+    );
 
     console.log(
         `[RunRecorder] Continued run ${options.runId} with turn ${newTurn.turnIndex} (${newTurn.id})`

@@ -116,7 +116,7 @@ export async function POST(request: NextRequest, { params }: Params) {
                                 githubActions: ["labeled"]
                             },
                             inputMapping: {
-                                _config: {
+                                config: {
                                     workflowRouting: {
                                         bug: sdlcBugfix?.slug ?? "sdlc-bugfix",
                                         feature: sdlcFeature?.slug ?? "sdlc-feature",

@@ -181,10 +181,13 @@ export const runScenariosTool = createTool({
 export const calculateTrustScoreTool = createTool({
     id: "calculate-trust-score",
     description:
-        "Calculate a trust score for a pipeline run based on scenario results, " +
-        "holdout results, and CI pass rate. Score is 0.0 to 1.0.",
+        "Calculate a trust score based on scenario results, holdout results, and CI pass rate. " +
+        "Score is 0.0 to 1.0. When pipelineRunId is provided, persists the score to the DB.",
     inputSchema: z.object({
-        pipelineRunId: z.string().describe("Pipeline run ID"),
+        pipelineRunId: z
+            .string()
+            .optional()
+            .describe("Pipeline run ID (optional — omit for standalone reviews)"),
         scenarioPassRate: z.number().describe("Pass rate from non-holdout scenarios (0-1)"),
         holdoutPassRate: z.number().optional().describe("Pass rate from holdout scenarios (0-1)"),
         ciPassed: z.boolean().describe("Whether CI checks passed"),
@@ -192,6 +195,7 @@ export const calculateTrustScoreTool = createTool({
     }),
     outputSchema: z.object({
         trustScore: z.number(),
+        persisted: z.boolean(),
         breakdown: z.object({
             scenarioWeight: z.number(),
             holdoutWeight: z.number(),
@@ -225,14 +229,19 @@ export const calculateTrustScoreTool = createTool({
 
         const roundedScore = Math.round(trustScore * 1000) / 1000;
 
-        const { prisma } = await import("@repo/database");
-        await prisma.codingPipelineRun.update({
-            where: { id: pipelineRunId },
-            data: { trustScore: roundedScore }
-        });
+        let persisted = false;
+        if (pipelineRunId) {
+            const { prisma } = await import("@repo/database");
+            await prisma.codingPipelineRun.update({
+                where: { id: pipelineRunId },
+                data: { trustScore: roundedScore }
+            });
+            persisted = true;
+        }
 
         return {
             trustScore: roundedScore,
+            persisted,
             breakdown: {
                 scenarioWeight: scenarioPassRate * weights.scenario,
                 holdoutWeight: holdoutScore * weights.holdout,
