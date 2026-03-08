@@ -1640,8 +1640,8 @@ export class AgentResolver {
         }
     }
 
-    private static readonly DEFAULT_MAX_WORKING_MEMORY_CHARS = 4_000;
-    private static readonly CONSOLIDATION_TARGET_CHARS = 2_000;
+    private static readonly DEFAULT_MAX_WORKING_MEMORY_CHARS = 2_000;
+    private static readonly CONSOLIDATION_TARGET_CHARS = 1_000;
 
     /**
      * Build a Memory instance from configuration
@@ -1781,10 +1781,12 @@ export class AgentResolver {
                 "You are a working-memory compactor. Given an agent's working memory that has grown too large, ",
                 "produce a consolidated version that fits within the target character limit.",
                 "\n\nRules:",
-                "\n- Preserve ALL factual information about the user (name, role, preferences)",
+                "\n- Working memory is a USER PROFILE — it stores identity, preferences, and key facts ONLY",
+                "\n- Preserve ALL factual information about the user (name, role, credentials, preferences)",
                 "\n- Preserve active projects and their current status (keep only the 3-5 most recent)",
-                "\n- Remove redundant greeting logs and duplicate event entries",
-                "\n- Remove stale or completed items",
+                "\n- REMOVE search results, API responses, listings, catalogs, and data dumps — these do NOT belong in working memory",
+                "\n- REMOVE redundant greeting logs and duplicate event entries",
+                "\n- REMOVE stale or completed items",
                 "\n- Keep the same structured format (XML tags or sections) as the original",
                 "\n- Output ONLY the consolidated memory, no commentary"
             ].join(""),

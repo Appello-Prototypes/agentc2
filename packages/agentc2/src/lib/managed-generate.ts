@@ -45,6 +45,12 @@ export interface ManagedGenerateOptions {
     compressionModel?: LanguageModel;
     compressionThreshold?: number;
     isReasoningModel?: boolean;
+    /** Max times any single tool can be invoked (any args). Default: 8 */
+    maxCallsPerTool?: number;
+    /** Max total tool invocations across all tools. Default: maxSteps * 2 */
+    maxTotalToolCalls?: number;
+    /** Number of empty/false results before injecting a stop nudge. Default: 3 */
+    emptyResultThreshold?: number;
 }
 
 export interface StepSummary {
@@ -245,12 +251,18 @@ export async function managedGenerate(
         modelName,
         compressionModel,
         compressionThreshold = 3000,
-        isReasoningModel = false
+        isReasoningModel = false,
+        maxCallsPerTool = 8,
+        maxTotalToolCalls = maxSteps * 2,
+        emptyResultThreshold = 3
     } = options;
 
     const allSteps: StepSummary[] = [];
     const toolCallHistory: ToolCallRecord[] = [];
     const duplicateCallTracker = new Map<string, { count: number; cachedResult: unknown }>();
+    const perToolCallCount = new Map<string, number>();
+    const perToolEmptyCount = new Map<string, number>();
+    let totalToolCalls = 0;
     let totalPromptTokens = 0;
     let totalCompletionTokens = 0;
     let currentStep = 0;
@@ -427,29 +439,89 @@ export async function managedGenerate(
             });
         }
 
-        // Duplicate tool call detection: track tool+args combos
+        // ── Tool guardrails ─────────────────────────────────────────────────
+
         if (hasToolCall) {
-            let duplicateDetected = false;
+            // Track total tool calls
+            totalToolCalls += stepToolCalls.length;
+
+            // --- Global tool budget ---
+            if (totalToolCalls > maxTotalToolCalls) {
+                abortReason = `Global tool budget exceeded: ${totalToolCalls} calls (limit: ${maxTotalToolCalls})`;
+                console.warn(`[ManagedGenerate] ${abortReason}`);
+                break;
+            }
+
+            // --- Per-tool call budget + empty-result tracking + duplicate detection ---
+            let guardBreak = false;
+            const emptyNudgeTools: string[] = [];
+
             for (let i = 0; i < stepToolCalls.length; i++) {
                 const toolName = resolveToolName(stepToolCalls[i]) || "unknown";
                 const args = resolveToolArgs(stepToolCalls[i]);
+                const result = resolveToolResult(stepToolResults[i]);
+
+                // Per-tool call count
+                const toolCount = (perToolCallCount.get(toolName) ?? 0) + 1;
+                perToolCallCount.set(toolName, toolCount);
+
+                if (toolCount > maxCallsPerTool) {
+                    abortReason = `Per-tool budget exceeded: ${toolName} called ${toolCount} times (limit: ${maxCallsPerTool})`;
+                    console.warn(`[ManagedGenerate] ${abortReason}`);
+                    guardBreak = true;
+                    break;
+                }
+
+                // Empty/false result tracking
+                const resultText =
+                    typeof result === "string" ? result : JSON.stringify(result ?? "");
+                const isEmpty =
+                    !result ||
+                    resultText === "" ||
+                    resultText === "false" ||
+                    resultText === "null" ||
+                    resultText === "[]" ||
+                    resultText === "{}" ||
+                    resultText === '""';
+
+                if (isEmpty) {
+                    const emptyCount = (perToolEmptyCount.get(toolName) ?? 0) + 1;
+                    perToolEmptyCount.set(toolName, emptyCount);
+                    if (emptyCount >= emptyResultThreshold) {
+                        emptyNudgeTools.push(toolName);
+                    }
+                }
+
+                // Duplicate detection (tool+args combo)
                 const key = `${toolName}::${JSON.stringify(args)}`;
                 const entry = duplicateCallTracker.get(key);
-                const result = resolveToolResult(stepToolResults[i]);
                 if (entry) {
                     entry.count++;
                     entry.cachedResult = result;
                     if (entry.count >= 3) {
                         abortReason = `Duplicate tool call loop: ${toolName} called ${entry.count} times with identical args`;
                         console.warn(`[ManagedGenerate] ${abortReason}`);
-                        duplicateDetected = true;
+                        guardBreak = true;
                         break;
                     }
                 } else {
                     duplicateCallTracker.set(key, { count: 1, cachedResult: result });
                 }
             }
-            if (duplicateDetected) break;
+
+            if (guardBreak) break;
+
+            // Inject empty-result nudge
+            if (emptyNudgeTools.length > 0) {
+                const toolList = emptyNudgeTools.join(", ");
+                messages.push({
+                    role: "user",
+                    content:
+                        `[System] ${toolList} has returned empty/no results ${emptyResultThreshold}+ times. ` +
+                        `Stop calling it and use what's already in your context. ` +
+                        `If you don't have what you need, inform the user rather than retrying.`
+                });
+            }
         }
 
         // Add the assistant response and tool results to our managed messages

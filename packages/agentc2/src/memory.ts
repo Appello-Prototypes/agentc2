@@ -24,8 +24,7 @@ function getMemory(): Memory {
             embedder: new ModelRouterEmbeddingModel("openai/text-embedding-3-small"),
             options: {
                 generateTitle: true,
-                lastMessages: 40,
-                // Enable working memory for user context persistence
+                lastMessages: 10,
                 workingMemory: {
                     enabled: true,
                     template: `# User Information
@@ -39,13 +38,9 @@ function getMemory(): Memory {
 - **Facts**:
 - **Projects**:`
                 },
-                // Semantic recall configuration
                 semanticRecall: {
-                    // Number of semantically similar messages to retrieve
-                    topK: 3,
-                    // Include N messages before and after each match for context
-                    messageRange: 2,
-                    // Search across all threads for this user (vs "thread" for current thread only)
+                    topK: 2,
+                    messageRange: 1,
                     scope: "resource"
                 }
             }

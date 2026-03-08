@@ -34,6 +34,7 @@ import { instanceToolDefinitions, instanceToolRoutes } from "./instances";
 import { searchToolDefinitions, searchToolRoutes } from "./search";
 import { sessionOpsToolDefinitions, sessionOpsToolRoutes } from "./session-ops";
 import { pulseToolDefinitions, pulseToolRoutes } from "./pulse";
+import { communityToolDefinitions, communityToolRoutes } from "./community";
 import { conversationToolDefinitions, conversationToolRoutes } from "./conversations";
 import { playbookToolDefinitions, playbookToolRoutes } from "./playbook";
 import { agentPermissionToolDefinitions, agentPermissionToolRoutes } from "./agent-permissions";
@@ -82,6 +83,7 @@ export const mcpToolDefinitions: McpToolDefinition[] = [
     ...searchToolDefinitions,
     ...sessionOpsToolDefinitions,
     ...pulseToolDefinitions,
+    ...communityToolDefinitions,
     ...conversationToolDefinitions,
     ...playbookToolDefinitions,
     ...agentPermissionToolDefinitions,
@@ -127,6 +129,7 @@ export const mcpToolRoutes: McpToolRoute[] = [
     ...searchToolRoutes,
     ...sessionOpsToolRoutes,
     ...pulseToolRoutes,
+    ...communityToolRoutes,
     ...conversationToolRoutes,
     ...playbookToolRoutes,
     ...agentPermissionToolRoutes,

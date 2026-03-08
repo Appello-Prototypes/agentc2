@@ -7,6 +7,7 @@
  */
 
 import { agentResolver, resolveModelOverride } from "@repo/agentc2/agents";
+import { managedGenerate, getFastCompressionModel } from "@repo/agentc2";
 import { recordActivity, inputPreview } from "@repo/agentc2/activity/service";
 import { prisma } from "@repo/database";
 import { startRun, extractTokenUsage, extractToolCalls } from "@/lib/run-recorder";
@@ -350,7 +351,7 @@ export async function handleTelegramMessage(
     await sendChatAction(chatId, ctx.botToken);
 
     // Model routing (pre-resolve)
-    const { modelOverride: routedModelOverride } = await resolveModelOverride(
+    const { modelOverride: routedModelOverride, isReasoningModel } = await resolveModelOverride(
         agentSlug,
         messageText,
         {
@@ -434,41 +435,87 @@ export async function handleTelegramMessage(
 
     try {
         const effectiveMaxSteps = instanceBinding?.maxStepsOverride ?? record?.maxSteps ?? 5;
-        const generateOptions = {
-            maxSteps: effectiveMaxSteps,
-            ...(record?.memoryEnabled
-                ? {
-                      memory: {
-                          thread: memoryThread,
-                          resource: memoryResource
-                      }
-                  }
-                : {})
-        } as unknown as Parameters<typeof agent.generate>[1];
+        const memoryOpts = record?.memoryEnabled
+            ? { thread: memoryThread, resource: memoryResource }
+            : undefined;
 
-        const response = await agent.generate(messageText, generateOptions);
-        const responseText = response.text || "I'm sorry, I couldn't process that.";
+        const contextCfg = (record as { contextConfig?: Record<string, unknown> } | null)
+            ?.contextConfig;
 
-        const tokens = extractTokenUsage(response);
-        const toolCalls = extractToolCalls(response);
+        const useManagedGenerate = effectiveMaxSteps > 5;
 
-        for (const tc of toolCalls) {
-            await run.addToolCall(tc);
+        let responseText: string | undefined;
+        let promptTokens = 0;
+        let completionTokens = 0;
+
+        if (useManagedGenerate) {
+            const compressionModel = await getFastCompressionModel(ctx.organizationId);
+            const managedResult = await managedGenerate(agent, messageText, {
+                maxSteps: effectiveMaxSteps,
+                maxContextTokens: (contextCfg?.maxContextTokens as number) ?? 50_000,
+                windowSize: (contextCfg?.windowSize as number) ?? 5,
+                anchorInstructions: (contextCfg?.anchorInstructions as boolean) ?? true,
+                anchorInterval: (contextCfg?.anchorInterval as number) ?? 10,
+                maxTokens: record?.maxTokens ?? undefined,
+                memory: memoryOpts,
+                modelProvider: record?.modelProvider,
+                modelName: record?.modelName,
+                compressionModel: compressionModel ?? undefined,
+                isReasoningModel: isReasoningModel ?? false,
+                onStep: async (_stepNum, summary) => {
+                    if (summary.hasToolCall && summary.toolName) {
+                        await run.addToolCall({
+                            toolName: summary.toolName,
+                            input: summary.inputPreview,
+                            output: summary.outputPreview
+                        });
+                    }
+                }
+            });
+
+            responseText = managedResult.text;
+            promptTokens = managedResult.totalPromptTokens;
+            completionTokens = managedResult.totalCompletionTokens;
+
+            if (managedResult.abortReason) {
+                console.warn(
+                    `[Telegram] managedGenerate aborted: ${managedResult.abortReason}`
+                );
+            }
+        } else {
+            const generateOptions = {
+                maxSteps: effectiveMaxSteps,
+                ...(memoryOpts ? { memory: memoryOpts } : {})
+            } as unknown as Parameters<typeof agent.generate>[1];
+
+            const response = await agent.generate(messageText, generateOptions);
+            responseText = response.text;
+
+            const tokens = extractTokenUsage(response);
+            const toolCalls = extractToolCalls(response);
+            promptTokens = tokens?.promptTokens || 0;
+            completionTokens = tokens?.completionTokens || 0;
+
+            for (const tc of toolCalls) {
+                await run.addToolCall(tc);
+            }
         }
+
+        responseText = responseText || "I'm sorry, I couldn't process that.";
 
         const costUsd = calculateCost(
             record?.modelName || "unknown",
             record?.modelProvider || "unknown",
-            tokens?.promptTokens || 0,
-            tokens?.completionTokens || 0
+            promptTokens,
+            completionTokens
         );
 
         await run.complete({
             output: responseText,
             modelProvider: record?.modelProvider || "unknown",
             modelName: record?.modelName || "unknown",
-            promptTokens: tokens?.promptTokens,
-            completionTokens: tokens?.completionTokens,
+            promptTokens,
+            completionTokens,
             costUsd
         });
 
