@@ -283,6 +283,7 @@ export const cursorPollUntilDoneTool = createTool({
         summary: z.string().nullable(),
         branchName: z.string().nullable(),
         prNumber: z.number().nullable(),
+        prUrl: z.string().nullable(),
         repository: z.string().nullable(),
         durationMs: z.number(),
         timedOut: z.boolean()
@@ -349,6 +350,7 @@ export const cursorPollUntilDoneTool = createTool({
                     summary,
                     branchName,
                     prNumber,
+                    prUrl,
                     repository: repository || null,
                     durationMs: Date.now() - startTime,
                     timedOut: false
@@ -365,6 +367,7 @@ export const cursorPollUntilDoneTool = createTool({
             summary: null,
             branchName: null,
             prNumber: null,
+            prUrl: null,
             repository: repository || null,
             durationMs: Date.now() - startTime,
             timedOut: true

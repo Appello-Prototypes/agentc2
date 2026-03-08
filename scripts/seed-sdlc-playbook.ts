@@ -1147,7 +1147,7 @@ async function main() {
                 config: {
                     toolId: "cursor-launch-agent",
                     parameters: {
-                        prompt: "Implement the following approved bugfix. Create a branch, make the changes, and push.\n\n## Bug\nTitle: {{input.title}}\nGitHub Issue: {{steps.intake.issueUrl}}\n\n## Approved Fix Plan\n{{steps['analyze-wait'].summary}}\n\n## Instructions\n1. Create a feature branch from main\n2. Implement the fix according to the approved plan\n3. Add or update tests as needed\n4. Run linting and type-checking to verify\n5. Commit with a conventional commit message: fix: <description>\n6. Push the branch — do NOT create a PR or merge",
+                        prompt: "Implement the following approved bugfix. Create a branch, make the changes, push, and open a pull request.\n\n## Bug\nTitle: {{input.title}}\nGitHub Issue: {{steps.intake.issueUrl}}\n\n## Approved Fix Plan\n{{steps['analyze-wait'].summary}}\n\n## Instructions\n1. Create a feature branch from main\n2. Implement the fix according to the approved plan\n3. Add or update tests as needed\n4. Run linting and type-checking to verify\n5. Commit with a conventional commit message: fix: <description>\n6. Push the branch\n7. Create a pull request with title 'fix: {{input.title}}' and body referencing the issue. Do NOT merge.",
                         repository: "https://github.com/{{input.repository}}"
                     }
                 }
@@ -1160,21 +1160,7 @@ async function main() {
                     toolId: "cursor-poll-until-done",
                     parameters: {
                         agentId: "{{steps['implement-launch'].agentId}}",
-                        maxWaitMinutes: 30
-                    }
-                }
-            },
-            {
-                id: "create-pr",
-                type: "tool",
-                name: "Create Pull Request",
-                config: {
-                    toolId: "github-create-pull-request",
-                    parameters: {
-                        base: "main",
-                        head: "{{steps['implement-wait'].branchName}}",
-                        title: "fix: {{input.title}}",
-                        body: "## Summary\n\nFixes #{{steps.intake.issueNumber}}\n\n## Root Cause\n\n{{steps['analyze-wait'].summary}}\n\n## Implementation\n\n{{steps['implement-wait'].summary}}\n\n---\n_Automated via AgentC2 SDLC Bugfix Pipeline_",
+                        maxWaitMinutes: 30,
                         repository: "{{input.repository}}"
                     }
                 }
@@ -1184,7 +1170,7 @@ async function main() {
                 type: "human",
                 name: "Review PR on GitHub",
                 config: {
-                    prompt: "A pull request has been created:\n\n{{steps['create-pr'].htmlUrl}}\n\nReview the code changes on GitHub. Approve to merge, or reject."
+                    prompt: "A pull request has been created:\n\n{{steps['implement-wait'].prUrl}}\n\nReview the code changes on GitHub. Approve to merge, or reject."
                 }
             },
             {
@@ -1194,7 +1180,7 @@ async function main() {
                 config: {
                     toolId: "merge-pull-request",
                     parameters: {
-                        prNumber: "{{steps['create-pr'].prNumber}}",
+                        prNumber: "{{steps['implement-wait'].prNumber}}",
                         repository: "{{input.repository}}",
                         mergeMethod: "squash"
                     }
@@ -1217,8 +1203,8 @@ async function main() {
                     implementationBranch: "{{steps['implement-wait'].branchName}}",
                     implementationAgentId: "{{steps['implement-launch'].agentId}}",
                     implementationDurationMs: "{{steps['implement-wait'].durationMs}}",
-                    prUrl: "{{steps['create-pr'].htmlUrl}}",
-                    prNumber: "{{steps['create-pr'].prNumber}}",
+                    prUrl: "{{steps['implement-wait'].prUrl}}",
+                    prNumber: "{{steps['implement-wait'].prNumber}}",
                     mergeCommitSha: "{{steps.merge.sha}}",
                     repository: "{{input.repository}}"
                 }
@@ -1391,7 +1377,7 @@ async function main() {
                 config: {
                     toolId: "cursor-launch-agent",
                     parameters: {
-                        prompt: "Implement the following approved feature plan. Create a branch, make the changes, and push.\n\n## Feature\nTitle: {{input.title}}\nGitHub Issue: {{steps.intake.issueUrl}}\n\n## Approved Implementation Plan\n{{steps['feature-plan'].text}}\n\n## Instructions\n1. Create a feature branch from main\n2. Implement the feature according to the approved phased plan\n3. Add comprehensive tests\n4. Run linting and type-checking to verify\n5. Commit with conventional commit messages: feat: <description>\n6. Push the branch — do NOT create a PR or merge",
+                        prompt: "Implement the following approved feature plan. Create a branch, make the changes, push, and open a pull request.\n\n## Feature\nTitle: {{input.title}}\nGitHub Issue: {{steps.intake.issueUrl}}\n\n## Approved Implementation Plan\n{{steps['feature-plan'].text}}\n\n## Instructions\n1. Create a feature branch from main\n2. Implement the feature according to the approved phased plan\n3. Add comprehensive tests\n4. Run linting and type-checking to verify\n5. Commit with conventional commit messages: feat: <description>\n6. Push the branch\n7. Create a pull request with title 'feat: {{input.title}}' and body referencing the issue. Do NOT merge.",
                         repository: "https://github.com/{{input.repository}}"
                     }
                 }
@@ -1404,21 +1390,7 @@ async function main() {
                     toolId: "cursor-poll-until-done",
                     parameters: {
                         agentId: "{{steps['implement-launch'].agentId}}",
-                        maxWaitMinutes: 30
-                    }
-                }
-            },
-            {
-                id: "create-pr",
-                type: "tool",
-                name: "Create Pull Request",
-                config: {
-                    toolId: "github-create-pull-request",
-                    parameters: {
-                        base: "main",
-                        head: "{{steps['implement-wait'].branchName}}",
-                        title: "feat: {{input.title}}",
-                        body: "## Summary\n\nResolves #{{steps.intake.issueNumber}}\n\nScope: {{steps.classify.complexity}} | Priority: {{steps.classify.priority}}\n\n## Technical Design\n\n{{steps['design-wait'].summary}}\n\n## Implementation Plan\n\n{{steps['feature-plan'].text}}\n\n## Implementation\n\n{{steps['implement-wait'].summary}}\n\n---\n_Automated via AgentC2 SDLC Feature Pipeline_",
+                        maxWaitMinutes: 30,
                         repository: "{{input.repository}}"
                     }
                 }
@@ -1428,7 +1400,7 @@ async function main() {
                 type: "human",
                 name: "Review PR on GitHub",
                 config: {
-                    prompt: "A pull request has been created:\n\n{{steps['create-pr'].htmlUrl}}\n\nReview the code changes on GitHub. Approve to merge, or reject."
+                    prompt: "A pull request has been created:\n\n{{steps['implement-wait'].prUrl}}\n\nReview the code changes on GitHub. Approve to merge, or reject."
                 }
             },
             {
@@ -1438,7 +1410,7 @@ async function main() {
                 config: {
                     toolId: "merge-pull-request",
                     parameters: {
-                        prNumber: "{{steps['create-pr'].prNumber}}",
+                        prNumber: "{{steps['implement-wait'].prNumber}}",
                         repository: "{{input.repository}}",
                         mergeMethod: "squash"
                     }
