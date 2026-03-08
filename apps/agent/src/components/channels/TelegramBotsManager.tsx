@@ -477,22 +477,30 @@ function AddBotDialog({
         setValidating(true);
         setTokenError(null);
         try {
-            const res = await fetch(`https://api.telegram.org/bot${botToken.trim()}/getMe`);
+            const res = await fetch(
+                `${apiBase}/api/channels/telegram/bots/validate`,
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ botToken: botToken.trim() })
+                }
+            );
             const data = await res.json();
-            if (data.ok) {
+            if (data.success) {
                 setValidatedBot({
-                    username: data.result.username,
-                    firstName: data.result.first_name,
-                    id: data.result.id
+                    username: data.bot.username,
+                    firstName: data.bot.firstName,
+                    id: data.bot.id
                 });
                 setStep("binding");
             } else {
                 setTokenError(
-                    "Invalid bot token. Make sure you copied it correctly from @BotFather."
+                    data.error ||
+                        "Invalid bot token. Make sure you copied it correctly from @BotFather."
                 );
             }
         } catch {
-            setTokenError("Could not reach Telegram. Check your network connection.");
+            setTokenError("Could not validate token. Check your network connection.");
         } finally {
             setValidating(false);
         }
