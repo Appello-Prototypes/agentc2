@@ -465,9 +465,10 @@ export async function handleTelegramMessage(
                 onStep: async (_stepNum, summary) => {
                     if (summary.hasToolCall && summary.toolName) {
                         await run.addToolCall({
-                            toolName: summary.toolName,
-                            input: summary.inputPreview,
-                            output: summary.outputPreview
+                            toolKey: summary.toolName,
+                            input: {},
+                            output: summary.outputPreview,
+                            success: true
                         });
                     }
                 }
