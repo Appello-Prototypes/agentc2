@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/authz";
 import { prisma } from "@repo/database";
+import { validateManifest } from "@repo/agentc2";
 
 type Params = { params: Promise<{ slug: string; versionNumber: string }> };
 
@@ -29,6 +30,19 @@ export async function POST(request: NextRequest, { params }: Params) {
         });
         if (!sourceVersion) {
             return NextResponse.json({ error: "Version not found" }, { status: 404 });
+        }
+
+        try {
+            validateManifest(sourceVersion.manifest);
+        } catch (validationError) {
+            return NextResponse.json(
+                {
+                    error:
+                        `Cannot revert to version ${targetVersion}: manifest is invalid or incompatible with current schema. ` +
+                        `Error: ${validationError instanceof Error ? validationError.message : "Unknown"}`
+                },
+                { status: 400 }
+            );
         }
 
         const latestVersion = await prisma.playbookVersion.findFirst({

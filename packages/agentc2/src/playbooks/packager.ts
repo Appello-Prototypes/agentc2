@@ -647,6 +647,16 @@ export async function repackagePlaybook(opts: RepackagePlaybookOptions) {
     let processedSkillIds = new Set<string>();
 
     if (mode === "boot-only" && previousManifest) {
+        try {
+            validateManifest(previousManifest);
+        } catch (validationError) {
+            throw new Error(
+                `Cannot perform boot-only repackage: previous manifest is invalid. ` +
+                    `Use mode="full" to rebuild the manifest. ` +
+                    `Error: ${validationError instanceof Error ? validationError.message : "Unknown"}`
+            );
+        }
+
         // Keep components from previous version, only update bootConfig + setupConfig
         const playbook = await prisma.playbook.findUnique({
             where: { id: opts.playbookId },
@@ -675,17 +685,31 @@ export async function repackagePlaybook(opts: RepackagePlaybookOptions) {
         };
         requiredIntegrations = previousManifest.requiredIntegrations;
     } else if (mode === "components-only" && previousManifest) {
-        // Re-snapshot components but preserve bootConfig + setupConfig
-        const result = await buildManifest({ ...opts, playbookId: opts.playbookId });
-        manifest = {
-            ...result.manifest,
-            bootConfig: previousManifest.bootConfig,
-            setupConfig: previousManifest.setupConfig
-        };
-        warnings = result.warnings;
-        requiredIntegrations = result.requiredIntegrations;
-        processedAgentIds = result.processedAgentIds;
-        processedSkillIds = result.processedSkillIds;
+        try {
+            validateManifest(previousManifest);
+            // Re-snapshot components but preserve bootConfig + setupConfig
+            const result = await buildManifest({ ...opts, playbookId: opts.playbookId });
+            manifest = {
+                ...result.manifest,
+                bootConfig: previousManifest.bootConfig,
+                setupConfig: previousManifest.setupConfig
+            };
+            warnings = result.warnings;
+            requiredIntegrations = result.requiredIntegrations;
+            processedAgentIds = result.processedAgentIds;
+            processedSkillIds = result.processedSkillIds;
+        } catch (validationError) {
+            console.warn(
+                `[repackagePlaybook] Previous manifest invalid, falling back to full rebuild:`,
+                validationError
+            );
+            const result = await buildManifest({ ...opts, playbookId: opts.playbookId });
+            manifest = result.manifest;
+            warnings = result.warnings;
+            requiredIntegrations = result.requiredIntegrations;
+            processedAgentIds = result.processedAgentIds;
+            processedSkillIds = result.processedSkillIds;
+        }
     } else {
         // Full re-snapshot (default)
         const result = await buildManifest({ ...opts, playbookId: opts.playbookId });

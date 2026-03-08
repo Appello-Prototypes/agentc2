@@ -9,9 +9,9 @@ vi.mock("@repo/database", () => ({
     Prisma: { JsonNull: "DbNull", InputJsonValue: {} }
 }));
 
-import { validateManifest, isValidManifest } from "@repo/agentc2/playbooks/manifest";
-import { sanitizeManifest, detectHardcodedUrls } from "@repo/agentc2/playbooks/sanitizer";
-import type { PlaybookManifest } from "@repo/agentc2/playbooks/types";
+import { validateManifest, isValidManifest } from "../../../packages/agentc2/src/playbooks/manifest";
+import { sanitizeManifest, detectHardcodedUrls } from "../../../packages/agentc2/src/playbooks/sanitizer";
+import type { PlaybookManifest } from "../../../packages/agentc2/src/playbooks/types";
 
 const validManifest: PlaybookManifest = {
     version: "1.0",
@@ -374,6 +374,67 @@ describe("Packaging Engine", () => {
             expect(result.entryPoint.slug).toBe("support-network");
             const networkSlugs = result.networks.map((n) => n.slug);
             expect(networkSlugs).toContain(result.entryPoint.slug);
+        });
+    });
+
+    describe("Repackage with Invalid Previous Manifest", () => {
+        it("should validate that manifests with missing entryPoint are invalid", () => {
+            const invalidManifest = {
+                version: "1.0",
+                agents: [
+                    {
+                        slug: "test-agent",
+                        name: "Test Agent",
+                        description: "Test",
+                        instructions: "Test",
+                        instructionsTemplate: null,
+                        modelProvider: "openai",
+                        modelName: "gpt-4o",
+                        temperature: 0.7,
+                        maxTokens: null,
+                        modelConfig: null,
+                        routingConfig: null,
+                        contextConfig: null,
+                        subAgents: [],
+                        workflows: [],
+                        memoryEnabled: false,
+                        memoryConfig: null,
+                        maxSteps: 3,
+                        visibility: "PRIVATE",
+                        requiresApproval: false,
+                        maxSpendUsd: null,
+                        autoVectorize: false,
+                        deploymentMode: null,
+                        metadata: null,
+                        version: 1,
+                        tools: [],
+                        skills: [],
+                        guardrail: null,
+                        testCases: [],
+                        scorecard: null
+                    }
+                ],
+                skills: [],
+                documents: [],
+                workflows: [],
+                networks: [],
+                campaignTemplates: [],
+                guardrails: [],
+                testCases: [],
+                scorecards: [],
+                requiredIntegrations: []
+            };
+
+            expect(() => validateManifest(invalidManifest)).toThrow();
+            expect(isValidManifest(invalidManifest)).toBe(false);
+        });
+
+        it("should validate that manifests with valid entryPoint pass validation", () => {
+            expect(() => validateManifest(validManifest)).not.toThrow();
+            expect(isValidManifest(validManifest)).toBe(true);
+            expect(validManifest.entryPoint).toBeDefined();
+            expect(validManifest.entryPoint.type).toBe("network");
+            expect(validManifest.entryPoint.slug).toBe("support-network");
         });
     });
 });

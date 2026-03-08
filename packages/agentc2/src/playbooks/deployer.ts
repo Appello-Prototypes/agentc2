@@ -72,6 +72,13 @@ export async function deployPlaybook(opts: DeployPlaybookOptions) {
 
     const manifest = validateManifest(version.manifest);
 
+    if (!manifest.entryPoint) {
+        throw new Error(
+            `Playbook version ${opts.versionNumber} has no entry point defined. ` +
+                `The manifest may be corrupted. Please repackage the playbook using mode="full".`
+        );
+    }
+
     const installation = await prisma.playbookInstallation.create({
         data: {
             playbookId: opts.playbookId,
@@ -550,7 +557,7 @@ export async function deployPlaybook(opts: DeployPlaybookOptions) {
         });
 
         const entryAgentSlug =
-            manifest.entryPoint.type === "agent"
+            manifest.entryPoint?.type === "agent"
                 ? (agentSlugMap.get(manifest.entryPoint.slug) ?? manifest.entryPoint.slug)
                 : undefined;
 
