@@ -72,7 +72,14 @@ export const teeonSearchTool = createTool({
         allCookies: z
             .string()
             .describe("Full cookie string from teeon-login result (allCookies field)"),
-        courseCode: z.string().describe("TeeOn course code (e.g., BYQT, PKGC, TRNT, BRGH, GRCR)")
+        courseCode: z.string().describe("TeeOn course code (e.g., BYQT, PKGC, TRNT, BRGH, GRCR)"),
+        portalUrl: z
+            .string()
+            .optional()
+            .describe(
+                "Full GolfNorth TeeOn portal URL as alternative to courseCode " +
+                    "(e.g., https://admin.teeon.com/portal/golfnorth/teetimes/westminster)"
+            )
     }),
     outputSchema: z.object({
         success: z.boolean(),
@@ -107,12 +114,31 @@ export const teeonSearchTool = createTool({
             .string()
             .optional()
             .describe("Step-by-step Playwright instructions for viewing tee times"),
+        isOpen: z
+            .boolean()
+            .optional()
+            .describe("Whether the course appears to be open for booking"),
+        webBookingEnabled: z
+            .boolean()
+            .optional()
+            .describe("Whether web booking (View Tee Sheet) is available"),
+        statusMessage: z
+            .string()
+            .optional()
+            .describe("Human-readable status of the course booking page"),
+        isPortalUrl: z
+            .boolean()
+            .optional()
+            .describe("Whether this is a GolfNorth portal URL (different entry point)"),
         error: z.string().optional().describe("Error message on failure")
     }),
-    execute: async ({ allCookies, courseCode }) => {
+    execute: async ({ allCookies, courseCode, portalUrl }) => {
         const code = courseCode.toUpperCase();
+        const isPortal = !!portalUrl;
         try {
-            const comboUrl = `${BASE_URL}${COMBO_LANDING}?CourseCode=${code}&FromCourseWebsite=true`;
+            const comboUrl = isPortal
+                ? portalUrl!
+                : `${BASE_URL}${COMBO_LANDING}?CourseCode=${code}&FromCourseWebsite=true`;
 
             const response = await fetch(comboUrl, {
                 method: "GET",
@@ -128,7 +154,7 @@ export const teeonSearchTool = createTool({
             if (response.status >= 400) {
                 return {
                     success: false,
-                    error: `Failed to load course page: HTTP ${response.status}. Course code '${code}' may be invalid.`
+                    error: `Failed to load course page: HTTP ${response.status}. ${isPortal ? "Portal URL may be invalid." : `Course code '${code}' may be invalid.`}`
                 };
             }
 
@@ -158,17 +184,67 @@ export const teeonSearchTool = createTool({
                 ? `${BASE_URL}${bookTeeTimeLink.url}`
                 : undefined;
 
-            const steps = [
-                `1. Close the browser: playwright_browser_close`,
-                `2. Navigate to ComboLanding: playwright_browser_navigate to ${comboUrl}`,
-                `3. Set session cookies: playwright_browser_evaluate -> allCookies.split('; ').forEach(c => { document.cookie = c + '; path=/PubGolf'; })`,
-                `4. Reload the page: playwright_browser_evaluate -> location.reload()`,
-                `5. Wait 2 seconds, then take a snapshot: playwright_browser_snapshot`,
-                `6. In the snapshot, find and CLICK the "View Tee Sheet" link (ref=eN). Do NOT navigate to the URL directly.`,
-                `7. Take a snapshot — you should see the tee sheet with available times and prices`,
-                `8. If you need a different date, select it from the date dropdown and snapshot again`,
-                `IMPORTANT: You MUST click the "View Tee Sheet" link from within the ComboLanding page. The MemberTeeSheetGolferSection URL does NOT work when navigated to directly.`
+            // Pre-check: detect if course is open and has web booking
+            const htmlLower = html.toLowerCase();
+            const closedPatterns = [
+                "course is closed",
+                "currently closed",
+                "not available",
+                "season has ended",
+                "closed for the season",
+                "opening soon"
             ];
+            const isClosed = closedPatterns.some((p) => htmlLower.includes(p));
+            const isOpen = !isClosed;
+            const webBookingEnabled = !!viewTeeSheetLink;
+
+            let statusMessage = "Course is available for online booking.";
+            if (isClosed) {
+                statusMessage =
+                    "Course appears to be closed or not currently accepting online bookings.";
+            } else if (!webBookingEnabled) {
+                statusMessage =
+                    "Course page loaded but 'View Tee Sheet' link was not found. " +
+                    "Web booking may not be enabled for this course.";
+            }
+
+            if (isClosed || !webBookingEnabled) {
+                return {
+                    success: false,
+                    courseName,
+                    courseCode: code,
+                    comboLandingUrl: comboUrl,
+                    isOpen,
+                    webBookingEnabled,
+                    statusMessage,
+                    isPortalUrl: isPortal,
+                    error: statusMessage
+                };
+            }
+
+            const steps = isPortal
+                ? [
+                      `1. Close the browser: playwright_browser_close`,
+                      `2. Navigate to the GolfNorth portal: playwright_browser_navigate to ${comboUrl}`,
+                      `3. Set session cookies: playwright_browser_evaluate -> allCookies.split('; ').forEach(c => { document.cookie = c; })`,
+                      `4. Reload the page: playwright_browser_evaluate -> location.reload()`,
+                      `5. Wait 2 seconds, then take a snapshot: playwright_browser_snapshot`,
+                      `6. Look for tee time slots or a "View Tee Sheet" link and CLICK it`,
+                      `7. Take a snapshot — you should see the tee sheet with available times and prices`,
+                      `8. If you need a different date, select it from the date dropdown and snapshot again`,
+                      `NOTE: This is a GolfNorth portal URL — the page layout may differ from standard TeeOn.`
+                  ]
+                : [
+                      `1. Close the browser: playwright_browser_close`,
+                      `2. Navigate to ComboLanding: playwright_browser_navigate to ${comboUrl}`,
+                      `3. Set session cookies: playwright_browser_evaluate -> allCookies.split('; ').forEach(c => { document.cookie = c + '; path=/PubGolf'; })`,
+                      `4. Reload the page: playwright_browser_evaluate -> location.reload()`,
+                      `5. Wait 2 seconds, then take a snapshot: playwright_browser_snapshot`,
+                      `6. In the snapshot, find and CLICK the "View Tee Sheet" link (ref=eN). Do NOT navigate to the URL directly.`,
+                      `7. Take a snapshot — you should see the tee sheet with available times and prices`,
+                      `8. If you need a different date, select it from the date dropdown and snapshot again`,
+                      `IMPORTANT: You MUST click the "View Tee Sheet" link from within the ComboLanding page. The MemberTeeSheetGolferSection URL does NOT work when navigated to directly.`
+                  ];
 
             return {
                 success: true,
@@ -183,7 +259,11 @@ export const teeonSearchTool = createTool({
                     url: `${BASE_URL}${l.url}`,
                     servlet: l.servlet
                 })),
-                playwrightInstructions: steps.join("\n")
+                playwrightInstructions: steps.join("\n"),
+                isOpen,
+                webBookingEnabled,
+                statusMessage,
+                isPortalUrl: isPortal
             };
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);

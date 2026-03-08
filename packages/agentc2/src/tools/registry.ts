@@ -57,6 +57,12 @@ import { webFetchTool } from "./web-fetch";
 import { webSearchTool, webScrapeTool } from "./web-search";
 import { teeonLoginTool } from "./teeon-login";
 import { teeonSearchTool } from "./teeon-search";
+import { chronogolfSearchTool } from "./chronogolf-search";
+import { chronogolfBookTool } from "./chronogolf-book";
+import { golfnowSearchTool } from "./golfnow-search";
+import { golfnowBookTool } from "./golfnow-book";
+import { golfnorthSearchTool } from "./golfnorth-search";
+import { golfCourseDiscoverTool } from "./golf-course-discover";
 import {
     exaSearchTool,
     exaFindSimilarTool,
@@ -431,6 +437,12 @@ export const toolCategoryMap: Record<string, string> = {
     "web-scrape": "Utilities",
     "teeon-login": "Integrations",
     "teeon-search": "Integrations",
+    "chronogolf-search": "Integrations",
+    "chronogolf-book": "Integrations",
+    "golfnow-search": "Integrations",
+    "golfnow-book": "Integrations",
+    "golfnorth-search": "Integrations",
+    "golf-course-discover": "Integrations",
     "memory-recall": "Utilities",
 
     // Search
@@ -1093,6 +1105,10 @@ export const toolBehaviorMap: Record<string, ToolBehaviorMeta> = {
     "playbook-set-auto-boot": { behavior: "mutation" },
     "playbook-set-setup-config": { behavior: "mutation" },
 
+    // Golf Booking
+    "chronogolf-book": { behavior: "mutation" },
+    "golfnow-book": { behavior: "mutation" },
+
     // YouTube
     "youtube-ingest-to-knowledge": { behavior: "mutation" },
 
@@ -1208,6 +1224,10 @@ export const toolCredentialChecks: Record<string, () => boolean> = {
     "youtube-search-videos": () => !!process.env.YOUTUBE_API_KEY,
     "youtube-analyze-video": () => !!process.env.YOUTUBE_API_KEY,
     "youtube-ingest-to-knowledge": () => !!process.env.YOUTUBE_API_KEY,
+    "chronogolf-search": () => true,
+    "chronogolf-book": () => true,
+    "golfnow-search": () => true,
+    "golfnow-book": () => true,
     "moltbook-get-profile": () => !!process.env.MOLTBOOK_API_KEY,
     "moltbook-update-profile": () => !!process.env.MOLTBOOK_API_KEY,
     "moltbook-view-agent": () => !!process.env.MOLTBOOK_API_KEY,
@@ -1294,6 +1314,12 @@ export const toolRegistry: Record<string, any> = {
     "web-scrape": webScrapeTool,
     "teeon-login": teeonLoginTool,
     "teeon-search": teeonSearchTool,
+    "chronogolf-search": chronogolfSearchTool,
+    "chronogolf-book": chronogolfBookTool,
+    "golfnow-search": golfnowSearchTool,
+    "golfnow-book": golfnowBookTool,
+    "golfnorth-search": golfnorthSearchTool,
+    "golf-course-discover": golfCourseDiscoverTool,
     "memory-recall": memoryRecallTool,
 
     // Search tools

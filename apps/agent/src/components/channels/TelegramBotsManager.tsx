@@ -477,14 +477,11 @@ function AddBotDialog({
         setValidating(true);
         setTokenError(null);
         try {
-            const res = await fetch(
-                `${apiBase}/api/channels/telegram/bots/validate`,
-                {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ botToken: botToken.trim() })
-                }
-            );
+            const res = await fetch(`${apiBase}/api/channels/telegram/bots/validate`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ botToken: botToken.trim() })
+            });
             const data = await res.json();
             if (data.success) {
                 setValidatedBot({

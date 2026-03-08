@@ -134,6 +134,13 @@ export {
 export { webhookListAgentsTool, webhookCreateTool } from "./webhook-tools";
 export { teeonLoginTool } from "./teeon-login";
 export { teeonSearchTool } from "./teeon-search";
+export { chronogolfSearchTool } from "./chronogolf-search";
+export { chronogolfBookTool } from "./chronogolf-book";
+export { golfnowSearchTool } from "./golfnow-search";
+export { golfnowBookTool } from "./golfnow-book";
+export { golfnorthSearchTool } from "./golfnorth-search";
+export { golfCourseDiscoverTool } from "./golf-course-discover";
+export { resolveChronoGolfCredentials, resolveGolfNowCredentials } from "./golf-credentials";
 export {
     integrationImportMcpJsonTool,
     integrationMcpConfigTool,

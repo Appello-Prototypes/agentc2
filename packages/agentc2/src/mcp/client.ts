@@ -2159,6 +2159,64 @@ const INTEGRATION_PROVIDER_SEEDS: IntegrationProviderSeed[] = [
             }
         }
     },
+    // ── Golf Booking Platform Integrations ──────────────────────────────
+    {
+        key: "chronogolf",
+        name: "ChronoGolf (Lightspeed Golf)",
+        description:
+            "Golf course tee time booking via ChronoGolf Partner API — search courses, check availability, and book tee times across 45% of Ontario courses",
+        category: "productivity",
+        authType: "apiKey",
+        providerType: "custom",
+        configJson: {
+            requiredFields: ["CHRONOGOLF_API_KEY"],
+            fieldDefinitions: {
+                CHRONOGOLF_API_KEY: {
+                    label: "Partner API Key",
+                    description:
+                        "Apply for partner access at chronogolf.com/partners or contact Lightspeed Golf",
+                    placeholder: "cg_...",
+                    type: "password"
+                }
+            }
+        }
+    },
+    {
+        key: "golfnow",
+        name: "GolfNow",
+        description:
+            "Golf course tee time booking via GolfNow Affiliate API — search courses, check availability, and book tee times across 15% of Ontario courses",
+        category: "productivity",
+        authType: "apiKey",
+        providerType: "custom",
+        configJson: {
+            requiredFields: ["GOLFNOW_USERNAME", "GOLFNOW_PASSWORD"],
+            fieldDefinitions: {
+                GOLFNOW_USERNAME: {
+                    label: "API Username",
+                    description: "Affiliate API username from affiliate.gnsvc.com",
+                    placeholder: "your-api-username"
+                },
+                GOLFNOW_PASSWORD: {
+                    label: "API Password",
+                    description: "Affiliate API password from affiliate.gnsvc.com",
+                    placeholder: "your-api-password",
+                    type: "password"
+                },
+                GOLFNOW_CHANNEL_ID: {
+                    label: "Channel ID (optional)",
+                    description: "Distribution channel ID — defaults to 331 if not specified",
+                    placeholder: "331"
+                },
+                GOLFNOW_SANDBOX: {
+                    label: "Use Sandbox (optional)",
+                    description: "Set to 'true' to use sandbox.api.gnsvc.com instead of production",
+                    placeholder: "false"
+                }
+            }
+        }
+    },
+
     // ── Cloud Provider MCP Servers ──────────────────────────────────────
     {
         key: "aws",
