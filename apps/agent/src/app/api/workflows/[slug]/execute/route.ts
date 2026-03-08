@@ -16,6 +16,71 @@ function mapStepStatus(status: "completed" | "failed" | "suspended") {
     return "COMPLETED";
 }
 
+function executeWorkflowInBackground(
+    workflow: { id: string; slug: string; workspaceId: string; definitionJson: unknown },
+    run: { id: string },
+    input: Record<string, unknown>,
+    body: Record<string, unknown>
+) {
+    setImmediate(async () => {
+        try {
+            const result = await executeWorkflowDefinition({
+                definition: workflow.definitionJson as unknown as WorkflowDefinition,
+                input,
+                requestContext: body.requestContext as Record<string, unknown> | undefined,
+                workflowMeta: { runId: run.id, workflowSlug: workflow.slug }
+            });
+
+            const durationMs = result.steps.reduce(
+                (sum, step) => sum + (step.durationMs || 0),
+                0
+            );
+
+            if (result.steps.length > 0) {
+                await prisma.workflowRunStep.createMany({
+                    data: result.steps.map((step) => ({
+                        runId: run.id,
+                        stepId: step.stepId,
+                        stepType: step.stepType,
+                        stepName: step.stepName,
+                        status: mapStepStatus(step.status),
+                        inputJson: step.input as Prisma.InputJsonValue,
+                        outputJson: step.output as Prisma.InputJsonValue,
+                        errorJson: step.error as Prisma.InputJsonValue,
+                        iterationIndex: step.iterationIndex,
+                        startedAt: step.startedAt,
+                        completedAt: step.completedAt,
+                        durationMs: step.durationMs
+                    }))
+                });
+            }
+
+            const finalStatus = result.status === "failed" ? "FAILED" : "COMPLETED";
+            await prisma.workflowRun.update({
+                where: { id: run.id },
+                data: {
+                    status: finalStatus,
+                    outputJson: result.output as Prisma.InputJsonValue,
+                    completedAt: new Date(),
+                    durationMs
+                }
+            });
+            await refreshWorkflowMetrics(workflow.id, new Date());
+        } catch (error) {
+            console.error("[Workflow Execute Async] Background error:", error);
+            await prisma.workflowRun.update({
+                where: { id: run.id },
+                data: {
+                    status: "FAILED",
+                    outputJson:
+                        error instanceof Error ? error.message : "Background execution failed",
+                    completedAt: new Date()
+                }
+            });
+        }
+    });
+}
+
 export async function POST(
     request: NextRequest,
     { params }: { params: Promise<{ slug: string }> }
@@ -47,6 +112,7 @@ export async function POST(
         }
 
         const input = body.input ?? body.inputData ?? {};
+        const asyncMode = body.async === true;
         const run = await prisma.workflowRun.create({
             data: {
                 workflowId: workflow.id,
@@ -79,6 +145,16 @@ export async function POST(
             });
         } catch (e) {
             console.warn("[Workflow Execute] Failed to record trigger event:", e);
+        }
+
+        if (asyncMode) {
+            executeWorkflowInBackground(workflow, run, input, body);
+            return NextResponse.json({
+                success: true,
+                status: "running",
+                runId: run.id,
+                message: "Workflow started asynchronously. Poll workflow_get_run for status."
+            });
         }
 
         const result = await executeWorkflowDefinition({
