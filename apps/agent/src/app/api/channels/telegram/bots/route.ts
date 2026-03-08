@@ -291,7 +291,7 @@ export async function POST(request: NextRequest) {
         // 6. Build webhook URL and register with Telegram
         const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.DEPLOY_DOMAIN;
         const webhookUrl = baseUrl
-            ? `${baseUrl.replace(/\/$/, "")}/agent/api/channels/telegram/webhook/${connection.id}`
+            ? `${baseUrl.replace(/\/$/, "")}/api/channels/telegram/webhook/${connection.id}`
             : null;
 
         let webhookRegistered = false;
