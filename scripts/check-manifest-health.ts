@@ -41,6 +41,20 @@ async function main() {
     for (const v of versions) {
         const manifest = v.manifest as Record<string, unknown>;
 
+        // Guard against null manifests
+        if (!manifest || typeof manifest !== "object") {
+            issues.push({
+                versionId: v.id,
+                playbookId: v.playbookId,
+                playbookSlug: v.playbook.slug,
+                playbookName: v.playbook.name,
+                version: v.version,
+                issue: "Manifest is null or not an object",
+                severity: "critical"
+            });
+            continue;
+        }
+
         // Check 1: Missing entryPoint key
         if (!("entryPoint" in manifest)) {
             issues.push({

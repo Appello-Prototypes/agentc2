@@ -50,7 +50,7 @@ This analysis has produced the following documents:
 - Deployment checklist
 - Success metrics
 
-### 🔍 5. [scripts/check-manifest-health.ts](./scripts/check-manifest-health.ts)
+### 🔍 5. [../../scripts/check-manifest-health.ts](../../scripts/check-manifest-health.ts)
 **Purpose**: Database health check utility  
 **Audience**: DevOps, database administrators  
 **Type**: Executable script  
