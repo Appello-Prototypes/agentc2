@@ -292,13 +292,19 @@ export async function getAiProviderStatus(
 
 /**
  * Resolve a fast, cheap model suitable for semantic compression of tool results.
- * Prefers gpt-4o-mini (reliable, widely available), then Anthropic Haiku as fallback.
+ * Uses the Chat Completions API (not Responses API) to avoid structured output
+ * schema issues — compression is plain text-in/text-out.
+ *
+ * Prefers gpt-4o-mini, then Anthropic Haiku as fallback.
  */
 export async function getFastCompressionModel(
     organizationId?: string | null
 ): Promise<LanguageModel | null> {
-    const miniModel = await resolveModelForOrg("openai", "gpt-4o-mini", organizationId);
-    if (miniModel) return miniModel;
+    const openaiKey = await getOrgApiKey("openai", organizationId);
+    if (openaiKey) {
+        const openai = createOpenAI({ apiKey: openaiKey });
+        return openai.chat("gpt-4o-mini");
+    }
 
     const haikuModel = await resolveModelForOrg(
         "anthropic",
