@@ -291,8 +291,8 @@ Return organizationId or null
 # Check production logs for 500 errors
 pm2 logs | grep -A 20 "Stripe Checkout.*Error"
 
-# Check if STRIPE_SECRET_KEY is set
-echo $STRIPE_SECRET_KEY | head -c 10
+# Check if STRIPE_SECRET_KEY is set (without exposing value)
+test -n "$STRIPE_SECRET_KEY" && echo "STRIPE_SECRET_KEY is set" || echo "STRIPE_SECRET_KEY is NOT set"
 
 # Test authentication flow
 curl -X POST https://agentc2.ai/api/stripe/checkout \
@@ -445,7 +445,10 @@ try {
     console.error("[Stripe Checkout] Error details:", {
         error: error instanceof Error ? error.message : "Unknown error",
         stack: error instanceof Error ? error.stack : undefined,
-        requestHeaders: Object.fromEntries(request.headers.entries()),
+        // Safe headers logging (no sensitive data)
+        contentType: request.headers.get("content-type"),
+        userAgent: request.headers.get("user-agent"),
+        hasAuthCookie: request.cookies.has("better-auth.session_token"),
         hasCookie: request.cookies.has("agentc2-active-org"),
         hasStripeKey: !!process.env.STRIPE_SECRET_KEY
     });
