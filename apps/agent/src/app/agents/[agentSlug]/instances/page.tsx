@@ -50,7 +50,7 @@ interface Instance {
     updatedAt: string;
 }
 
-const CHANNEL_TYPES = ["slack", "email", "whatsapp", "web", "voice"] as const;
+const CHANNEL_TYPES = ["slack", "email", "whatsapp", "web", "voice", "telegram"] as const;
 
 export default function InstancesPage() {
     const params = useParams();

@@ -107,6 +107,7 @@ interface IntegrationCardProps {
     testResult: TestResponse | null;
     testLoading: boolean;
     testError: string | null;
+    extraActions?: React.ReactNode;
 }
 
 function CredentialSourceBadge({ source }: { source?: string }) {
@@ -133,7 +134,8 @@ function IntegrationCard({
     onRunTest,
     testResult,
     testLoading,
-    testError
+    testError,
+    extraActions
 }: IntegrationCardProps) {
     const [testParams, setTestParams] = useState<Record<string, string>>({});
 
@@ -159,6 +161,7 @@ function IntegrationCard({
                                 <StatusBadge status={result.status} />
                             </>
                         ) : null}
+                        {extraActions}
                         <Link href={`/mcp/providers/${providerKey}`}>
                             <Button variant="ghost" size="icon" className="h-7 w-7">
                                 <SettingsIcon className="h-3.5 w-3.5" />
@@ -556,6 +559,13 @@ export function ChannelsTab() {
                     testResult={testResults.telegram ?? null}
                     testLoading={testLoading.telegram ?? false}
                     testError={testErrors.telegram ?? null}
+                    extraActions={
+                        <Link href="/mcp/providers/telegram-bot">
+                            <Button variant="outline" size="sm">
+                                Manage Bots
+                            </Button>
+                        </Link>
+                    }
                 />
 
                 {/* WhatsApp */}

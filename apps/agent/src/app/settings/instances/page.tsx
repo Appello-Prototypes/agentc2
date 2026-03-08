@@ -307,7 +307,8 @@ export default function InstancesPage() {
             email: "Email",
             whatsapp: "WhatsApp",
             web: "Web",
-            voice: "Voice"
+            voice: "Voice",
+            telegram: "Telegram"
         };
         return labels[type] || type;
     };
@@ -780,6 +781,7 @@ export default function InstancesPage() {
                                     <SelectItem value="whatsapp">WhatsApp</SelectItem>
                                     <SelectItem value="web">Web Embed</SelectItem>
                                     <SelectItem value="voice">Voice</SelectItem>
+                                    <SelectItem value="telegram">Telegram</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>

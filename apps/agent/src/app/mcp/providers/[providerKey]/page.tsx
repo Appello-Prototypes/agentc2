@@ -6,10 +6,12 @@ import { getApiBase } from "@/lib/utils";
 import { SetupWizard } from "@/components/integrations/SetupWizard";
 import { IntegrationManagePage } from "@/components/integrations/IntegrationManagePage";
 import { WhatsAppSetup } from "@/components/channels/WhatsAppSetup";
+import { TelegramBotsManager } from "@/components/channels/TelegramBotsManager";
 import { Loader2Icon } from "lucide-react";
 
 const CUSTOM_PROVIDER_PAGES: Record<string, React.FC> = {
-    "whatsapp-web": WhatsAppSetup
+    "whatsapp-web": WhatsAppSetup,
+    "telegram-bot": TelegramBotsManager
 };
 
 export default function ProviderDetailPage() {

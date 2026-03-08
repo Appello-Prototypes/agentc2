@@ -106,9 +106,7 @@ export async function resolveChannelCredentials(
             const decrypted = decryptCredentials(connection.credentials);
             if (decrypted && typeof decrypted === "object" && !Array.isArray(decrypted)) {
                 const credentials: Record<string, string> = {};
-                for (const [key, value] of Object.entries(
-                    decrypted as Record<string, unknown>
-                )) {
+                for (const [key, value] of Object.entries(decrypted as Record<string, unknown>)) {
                     if (typeof value === "string" && value.trim()) {
                         credentials[key] = value.trim();
                     }

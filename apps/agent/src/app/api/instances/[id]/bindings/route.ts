@@ -91,7 +91,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         );
     }
 
-    const validTypes = ["slack", "email", "whatsapp", "web", "voice"];
+    const validTypes = ["slack", "email", "whatsapp", "web", "voice", "telegram"];
     if (!validTypes.includes(body.channelType)) {
         return NextResponse.json(
             { error: `channelType must be one of: ${validTypes.join(", ")}` },
