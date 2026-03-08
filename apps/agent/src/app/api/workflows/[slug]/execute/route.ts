@@ -157,12 +157,88 @@ export async function POST(
             });
         }
 
-        const result = await executeWorkflowDefinition({
+        const SYNC_TIMEOUT_MS = 55_000;
+        const executionPromise = executeWorkflowDefinition({
             definition: workflow.definitionJson as unknown as WorkflowDefinition,
             input,
             requestContext: body.requestContext,
             workflowMeta: { runId: run.id, workflowSlug: workflow.slug }
         });
+
+        const timeoutSymbol = Symbol("timeout");
+        const raceResult = await Promise.race([
+            executionPromise.then((r) => ({ kind: "done" as const, value: r })),
+            new Promise<{ kind: "timeout"; value: typeof timeoutSymbol }>((resolve) =>
+                setTimeout(
+                    () => resolve({ kind: "timeout", value: timeoutSymbol }),
+                    SYNC_TIMEOUT_MS
+                )
+            )
+        ]);
+
+        if (raceResult.kind === "timeout") {
+            executionPromise
+                .then(async (bgResult) => {
+                    const bgDuration = bgResult.steps.reduce(
+                        (sum, step) => sum + (step.durationMs || 0),
+                        0
+                    );
+                    if (bgResult.steps.length > 0) {
+                        await prisma.workflowRunStep.createMany({
+                            data: bgResult.steps.map((step) => ({
+                                runId: run.id,
+                                stepId: step.stepId,
+                                stepType: step.stepType,
+                                stepName: step.stepName,
+                                status: mapStepStatus(step.status),
+                                inputJson: step.input as Prisma.InputJsonValue,
+                                outputJson: step.output as Prisma.InputJsonValue,
+                                errorJson: step.error as Prisma.InputJsonValue,
+                                iterationIndex: step.iterationIndex,
+                                startedAt: step.startedAt,
+                                completedAt: step.completedAt,
+                                durationMs: step.durationMs
+                            }))
+                        });
+                    }
+                    const finalStatus =
+                        bgResult.status === "failed" ? "FAILED" : "COMPLETED";
+                    await prisma.workflowRun.update({
+                        where: { id: run.id },
+                        data: {
+                            status: finalStatus,
+                            outputJson: bgResult.output as Prisma.InputJsonValue,
+                            completedAt: new Date(),
+                            durationMs: bgDuration
+                        }
+                    });
+                    await refreshWorkflowMetrics(workflow.id, new Date());
+                })
+                .catch(async (error) => {
+                    console.error("[Workflow Execute] Background completion error:", error);
+                    await prisma.workflowRun.update({
+                        where: { id: run.id },
+                        data: {
+                            status: "FAILED",
+                            outputJson:
+                                error instanceof Error
+                                    ? error.message
+                                    : "Background execution failed",
+                            completedAt: new Date()
+                        }
+                    });
+                });
+
+            return NextResponse.json({
+                success: true,
+                status: "running",
+                runId: run.id,
+                message:
+                    "Workflow still running after 55s. Poll workflow_get_run for status."
+            });
+        }
+
+        const result = raceResult.value;
 
         const durationMs = result.steps.reduce((sum, step) => sum + (step.durationMs || 0), 0);
 

@@ -230,14 +230,93 @@ export const workflowExecuteTool = createTool({
             };
         }
 
+        const SYNC_TIMEOUT_MS = 55_000;
+        const { executeWorkflowDefinition } = await import("../workflows/builder");
+
+        const executionPromise = executeWorkflowDefinition({
+            definition: workflow.definitionJson as unknown as WorkflowDefinition,
+            input,
+            requestContext
+        });
+
+        const timeoutSymbol = Symbol("timeout");
+        const raceResult = await Promise.race([
+            executionPromise.then((r) => ({ kind: "done" as const, value: r })),
+            new Promise<{ kind: "timeout"; value: typeof timeoutSymbol }>((resolve) =>
+                setTimeout(() => resolve({ kind: "timeout", value: timeoutSymbol }), SYNC_TIMEOUT_MS)
+            )
+        ]);
+
+        if (raceResult.kind === "timeout") {
+            executionPromise
+                .then(async (result) => {
+                    const durationMs = result.steps.reduce(
+                        (sum, step) => sum + (step.durationMs || 0),
+                        0
+                    );
+                    if (result.steps.length > 0) {
+                        await prisma.workflowRunStep.createMany({
+                            data: result.steps.map((step) => ({
+                                runId: run.id,
+                                stepId: step.stepId,
+                                stepType: step.stepType,
+                                stepName: step.stepName,
+                                status: mapStepStatus(step.status),
+                                inputJson: step.input
+                                    ? (step.input as Prisma.InputJsonValue)
+                                    : Prisma.DbNull,
+                                outputJson: step.output
+                                    ? (step.output as Prisma.InputJsonValue)
+                                    : Prisma.DbNull,
+                                errorJson: step.error
+                                    ? (step.error as Prisma.InputJsonValue)
+                                    : Prisma.DbNull,
+                                iterationIndex: step.iterationIndex,
+                                startedAt: step.startedAt,
+                                completedAt: step.completedAt,
+                                durationMs: step.durationMs
+                            }))
+                        });
+                    }
+                    const finalStatus =
+                        result.status === "failed" ? RunStatus.FAILED : RunStatus.COMPLETED;
+                    await prisma.workflowRun.update({
+                        where: { id: run.id },
+                        data: {
+                            status: finalStatus,
+                            outputJson: result.output as Prisma.InputJsonValue,
+                            completedAt: new Date(),
+                            durationMs
+                        }
+                    });
+                })
+                .catch(async (error) => {
+                    console.error("[workflow-execute] Background completion error:", error);
+                    await prisma.workflowRun.update({
+                        where: { id: run.id },
+                        data: {
+                            status: RunStatus.FAILED,
+                            outputJson:
+                                error instanceof Error
+                                    ? error.message
+                                    : "Background execution failed",
+                            completedAt: new Date()
+                        }
+                    });
+                });
+
+            return {
+                success: true,
+                runId: run.id,
+                status: "running",
+                message:
+                    "Workflow still running after 55s. Use workflow_get_run to poll for results."
+            };
+        }
+
         let result;
         try {
-            const { executeWorkflowDefinition } = await import("../workflows/builder");
-            result = await executeWorkflowDefinition({
-                definition: workflow.definitionJson as unknown as WorkflowDefinition,
-                input,
-                requestContext
-            });
+            result = raceResult.value;
         } catch (execError) {
             await prisma.workflowRun.update({
                 where: { id: run.id },
