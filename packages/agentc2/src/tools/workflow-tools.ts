@@ -226,7 +226,8 @@ export const workflowExecuteTool = createTool({
                 success: true,
                 runId: run.id,
                 status: "running",
-                message: "Workflow started asynchronously. Use workflow_get_run to poll for results."
+                message:
+                    "Workflow started asynchronously. Use workflow_get_run to poll for results."
             };
         }
 

@@ -97,3 +97,73 @@ export function createOutputGuardrailProcessor(
         }
     };
 }
+
+/**
+ * Thinking block filter processor.
+ *
+ * Strips thinking content parts from assistant messages before they're saved to memory.
+ * This prevents thinking tokens from leaking into conversation history and bloating
+ * subsequent prompts (RC-2 fix for BigJim2 token bloat issue).
+ *
+ * Preserves text and tool_use parts while removing thinking parts.
+ */
+export function createThinkingFilterProcessor(): Processor<"thinking-filter"> {
+    return {
+        id: "thinking-filter" as const,
+        name: "Thinking Block Filter",
+
+        async processOutputResult({ messages }) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            return messages.map((msg: any) => {
+                if (msg.role !== "assistant") return msg;
+
+                const content = msg.content;
+
+                if (
+                    typeof content === "object" &&
+                    content !== null &&
+                    "parts" in content &&
+                    Array.isArray(content.parts)
+                ) {
+                    const originalPartsCount = content.parts.length;
+                    const filteredParts = content.parts.filter(
+                        (part: any) => part.type !== "thinking"
+                    );
+
+                    if (filteredParts.length !== originalPartsCount) {
+                        const removedCount = originalPartsCount - filteredParts.length;
+                        console.log(
+                            `[ThinkingFilter] Removed ${removedCount} thinking block(s) from assistant message before memory save`
+                        );
+
+                        return {
+                            ...msg,
+                            content: {
+                                ...content,
+                                parts: filteredParts
+                            }
+                        };
+                    }
+                }
+
+                if (Array.isArray(content)) {
+                    const filteredContent = content.filter((part: any) => part.type !== "thinking");
+
+                    if (filteredContent.length !== content.length) {
+                        const removedCount = content.length - filteredContent.length;
+                        console.log(
+                            `[ThinkingFilter] Removed ${removedCount} thinking block(s) from assistant message before memory save`
+                        );
+
+                        return {
+                            ...msg,
+                            content: filteredContent.length > 0 ? filteredContent : content
+                        };
+                    }
+                }
+
+                return msg;
+            });
+        }
+    };
+}

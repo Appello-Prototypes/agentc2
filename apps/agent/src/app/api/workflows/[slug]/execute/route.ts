@@ -31,10 +31,7 @@ function executeWorkflowInBackground(
                 workflowMeta: { runId: run.id, workflowSlug: workflow.slug }
             });
 
-            const durationMs = result.steps.reduce(
-                (sum, step) => sum + (step.durationMs || 0),
-                0
-            );
+            const durationMs = result.steps.reduce((sum, step) => sum + (step.durationMs || 0), 0);
 
             if (result.steps.length > 0) {
                 await prisma.workflowRunStep.createMany({

@@ -328,12 +328,15 @@ export async function managedGenerate(
         }
 
         // Build generate options with instructions separated from messages
+        // FIX: Only pass memory on step 1 to avoid double-context (RC-1)
+        // After step 1, managed-generate's own message window provides context,
+        // preventing Mastra memory from loading duplicate/thinking-heavy messages
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const generateOptions: any = {
             maxSteps: 1,
             ...(stepInstructions ? { instructions: stepInstructions } : {}),
             ...(maxTokens ? { modelSettings: { maxTokens } } : {}),
-            ...(memory ? { memory } : {})
+            ...(memory && currentStep === 1 ? { memory } : {})
         };
 
         // Anthropic prompt caching: mark system prompt for caching

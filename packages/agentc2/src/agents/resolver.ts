@@ -25,7 +25,8 @@ import { TokenLimiter, ToolCallFilter } from "@mastra/core/processors";
 import { wrapToolsWithPermissionGuard } from "../security/tool-execution-guard";
 import {
     createInputGuardrailProcessor,
-    createOutputGuardrailProcessor
+    createOutputGuardrailProcessor,
+    createThinkingFilterProcessor
 } from "../processors/guardrail-processors";
 
 import { getThreadSkillState } from "../skills/thread-state";
@@ -1087,6 +1088,7 @@ export class AgentResolver {
             new TokenLimiter(tokenLimit)
         ];
         const outputProcessors = [
+            createThinkingFilterProcessor(),
             createOutputGuardrailProcessor(record.id, tenantId),
             new ToolCallFilter(),
             new TokenLimiter(tokenLimit)
