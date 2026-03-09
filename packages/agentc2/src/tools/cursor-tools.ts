@@ -84,13 +84,28 @@ export const cursorLaunchAgentTool = createTool({
     description:
         "Launch a Cursor Cloud Agent to implement code changes on a GitHub repository. " +
         "Provide a detailed prompt describing what to build or fix. The agent clones the repo, " +
-        "writes code, and pushes a branch. Returns the agent ID and branch name for tracking.",
+        "writes code, and pushes a branch. Set autoCreatePr to have Cursor automatically " +
+        "open a pull request when the agent finishes.",
     inputSchema: z.object({
         repository: z
             .string()
             .describe("GitHub repository URL (e.g., 'https://github.com/org/repo')"),
         prompt: z.string().describe("Detailed implementation instructions for the coding agent"),
         ref: z.string().optional().describe("Base branch or ref to work from (default: 'main')"),
+        autoCreatePr: z
+            .boolean()
+            .optional()
+            .describe(
+                "Automatically create a PR when the agent finishes. " +
+                    "The PR URL will be available on the agent response at target.prUrl."
+            ),
+        openAsCursorGithubApp: z
+            .boolean()
+            .optional()
+            .describe(
+                "Open the PR as the Cursor GitHub App instead of as the user. " +
+                    "Only applies when autoCreatePr is true."
+            ),
         organizationId: z.string().optional().describe("Organization ID for credential resolution")
     }),
     outputSchema: z.object({
@@ -100,8 +115,19 @@ export const cursorLaunchAgentTool = createTool({
         branchName: z.string().nullable(),
         agentUrl: z.string().nullable()
     }),
-    execute: async ({ repository, prompt, ref, organizationId }) => {
+    execute: async ({
+        repository,
+        prompt,
+        ref,
+        autoCreatePr,
+        openAsCursorGithubApp,
+        organizationId
+    }) => {
         const apiKey = await resolveCursorApiKey(organizationId);
+
+        const target: Record<string, unknown> = {};
+        if (autoCreatePr) target.autoCreatePr = true;
+        if (openAsCursorGithubApp) target.openAsCursorGithubApp = true;
 
         const response = await cursorFetch("/agents", apiKey, {
             method: "POST",
@@ -110,7 +136,8 @@ export const cursorLaunchAgentTool = createTool({
                 source: {
                     repository,
                     ref: ref || "main"
-                }
+                },
+                ...(Object.keys(target).length > 0 ? { target } : {})
             })
         });
 

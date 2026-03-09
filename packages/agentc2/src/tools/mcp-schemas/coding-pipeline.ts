@@ -5,7 +5,8 @@ export const codingPipelineToolDefinitions: McpToolDefinition[] = [
         name: "cursor-launch-agent",
         description:
             "Launch a Cursor Cloud Agent to implement code changes on a GitHub repository. " +
-            "Provide a detailed prompt describing what to build or fix.",
+            "Provide a detailed prompt describing what to build or fix. " +
+            "Set autoCreatePr to have Cursor automatically open a PR when the agent finishes.",
         inputSchema: {
             type: "object",
             properties: {
@@ -20,6 +21,18 @@ export const codingPipelineToolDefinitions: McpToolDefinition[] = [
                 ref: {
                     type: "string",
                     description: "Base branch or ref to work from (default: 'main')"
+                },
+                autoCreatePr: {
+                    type: "boolean",
+                    description:
+                        "Automatically create a PR when the agent finishes. " +
+                        "The PR URL will be available at target.prUrl on the agent response."
+                },
+                openAsCursorGithubApp: {
+                    type: "boolean",
+                    description:
+                        "Open the PR as the Cursor GitHub App instead of as the user. " +
+                        "Only applies when autoCreatePr is true."
                 }
             },
             required: ["repository", "prompt"]
