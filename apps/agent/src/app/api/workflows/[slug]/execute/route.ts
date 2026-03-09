@@ -55,16 +55,34 @@ function executeWorkflowInBackground(
                 });
             }
 
-            const finalStatus = result.status === "failed" ? "FAILED" : "COMPLETED";
-            await prisma.workflowRun.update({
-                where: { id: run.id },
-                data: {
-                    status: finalStatus,
-                    outputJson: result.output as Prisma.InputJsonValue,
-                    completedAt: new Date(),
-                    durationMs
-                }
-            });
+            if (result.status === "suspended") {
+                const suspendedStep = result.steps.find(
+                    (s) => s.status === "suspended"
+                );
+                await prisma.workflowRun.update({
+                    where: { id: run.id },
+                    data: {
+                        status: "SUSPENDED",
+                        outputJson: result.output as Prisma.InputJsonValue,
+                        suspendedAt: new Date(),
+                        suspendedStep: suspendedStep?.stepId || null,
+                        suspendDataJson: suspendedStep?.output as Prisma.InputJsonValue,
+                        durationMs
+                    }
+                });
+            } else {
+                const finalStatus =
+                    result.status === "failed" ? "FAILED" : "COMPLETED";
+                await prisma.workflowRun.update({
+                    where: { id: run.id },
+                    data: {
+                        status: finalStatus,
+                        outputJson: result.output as Prisma.InputJsonValue,
+                        completedAt: new Date(),
+                        durationMs
+                    }
+                });
+            }
             await refreshWorkflowMetrics(workflow.id, new Date());
         } catch (error) {
             console.error("[Workflow Execute Async] Background error:", error);
@@ -201,17 +219,35 @@ export async function POST(
                             }))
                         });
                     }
-                    const finalStatus =
-                        bgResult.status === "failed" ? "FAILED" : "COMPLETED";
-                    await prisma.workflowRun.update({
-                        where: { id: run.id },
-                        data: {
-                            status: finalStatus,
-                            outputJson: bgResult.output as Prisma.InputJsonValue,
-                            completedAt: new Date(),
-                            durationMs: bgDuration
-                        }
-                    });
+                    if (bgResult.status === "suspended") {
+                        const suspendedStep = bgResult.steps.find(
+                            (s) => s.status === "suspended"
+                        );
+                        await prisma.workflowRun.update({
+                            where: { id: run.id },
+                            data: {
+                                status: "SUSPENDED",
+                                outputJson: bgResult.output as Prisma.InputJsonValue,
+                                suspendedAt: new Date(),
+                                suspendedStep: suspendedStep?.stepId || null,
+                                suspendDataJson:
+                                    suspendedStep?.output as Prisma.InputJsonValue,
+                                durationMs: bgDuration
+                            }
+                        });
+                    } else {
+                        const finalStatus =
+                            bgResult.status === "failed" ? "FAILED" : "COMPLETED";
+                        await prisma.workflowRun.update({
+                            where: { id: run.id },
+                            data: {
+                                status: finalStatus,
+                                outputJson: bgResult.output as Prisma.InputJsonValue,
+                                completedAt: new Date(),
+                                durationMs: bgDuration
+                            }
+                        });
+                    }
                     await refreshWorkflowMetrics(workflow.id, new Date());
                 })
                 .catch(async (error) => {

@@ -195,17 +195,38 @@ export const workflowExecuteTool = createTool({
                             }))
                         });
                     }
-                    const finalStatus =
-                        result.status === "failed" ? RunStatus.FAILED : RunStatus.COMPLETED;
-                    await prisma.workflowRun.update({
-                        where: { id: run.id },
-                        data: {
-                            status: finalStatus,
-                            outputJson: result.output as Prisma.InputJsonValue,
-                            completedAt: new Date(),
-                            durationMs
-                        }
-                    });
+                    if (result.status === "suspended") {
+                        const suspendedStep = result.steps.find(
+                            (s) => s.status === "suspended"
+                        );
+                        await prisma.workflowRun.update({
+                            where: { id: run.id },
+                            data: {
+                                status: "SUSPENDED",
+                                outputJson: result.output as Prisma.InputJsonValue,
+                                suspendedAt: new Date(),
+                                suspendedStep: suspendedStep?.stepId || null,
+                                suspendDataJson: suspendedStep?.output
+                                    ? (suspendedStep.output as Prisma.InputJsonValue)
+                                    : Prisma.DbNull,
+                                durationMs
+                            }
+                        });
+                    } else {
+                        const finalStatus =
+                            result.status === "failed"
+                                ? RunStatus.FAILED
+                                : RunStatus.COMPLETED;
+                        await prisma.workflowRun.update({
+                            where: { id: run.id },
+                            data: {
+                                status: finalStatus,
+                                outputJson: result.output as Prisma.InputJsonValue,
+                                completedAt: new Date(),
+                                durationMs
+                            }
+                        });
+                    }
                 } catch (error) {
                     console.error("[workflow-execute async] Background error:", error);
                     await prisma.workflowRun.update({
@@ -278,17 +299,38 @@ export const workflowExecuteTool = createTool({
                             }))
                         });
                     }
-                    const finalStatus =
-                        result.status === "failed" ? RunStatus.FAILED : RunStatus.COMPLETED;
-                    await prisma.workflowRun.update({
-                        where: { id: run.id },
-                        data: {
-                            status: finalStatus,
-                            outputJson: result.output as Prisma.InputJsonValue,
-                            completedAt: new Date(),
-                            durationMs
-                        }
-                    });
+                    if (result.status === "suspended") {
+                        const suspendedStep = result.steps.find(
+                            (s) => s.status === "suspended"
+                        );
+                        await prisma.workflowRun.update({
+                            where: { id: run.id },
+                            data: {
+                                status: "SUSPENDED",
+                                outputJson: result.output as Prisma.InputJsonValue,
+                                suspendedAt: new Date(),
+                                suspendedStep: suspendedStep?.stepId || null,
+                                suspendDataJson: suspendedStep?.output
+                                    ? (suspendedStep.output as Prisma.InputJsonValue)
+                                    : Prisma.DbNull,
+                                durationMs
+                            }
+                        });
+                    } else {
+                        const finalStatus =
+                            result.status === "failed"
+                                ? RunStatus.FAILED
+                                : RunStatus.COMPLETED;
+                        await prisma.workflowRun.update({
+                            where: { id: run.id },
+                            data: {
+                                status: finalStatus,
+                                outputJson: result.output as Prisma.InputJsonValue,
+                                completedAt: new Date(),
+                                durationMs
+                            }
+                        });
+                    }
                 })
                 .catch(async (error) => {
                     console.error("[workflow-execute] Background completion error:", error);
