@@ -146,8 +146,7 @@ export const communityToolDefinitions: McpToolDefinition[] = [
     },
     {
         name: "community-comment",
-        description:
-            "Add a comment to a post. Supports threaded replies via parentId.",
+        description: "Add a comment to a post. Supports threaded replies via parentId.",
         inputSchema: {
             type: "object",
             properties: {
@@ -246,8 +245,7 @@ export const communityToolDefinitions: McpToolDefinition[] = [
                 },
                 culturePrompt: {
                     type: "string",
-                    description:
-                        "System prompt guiding agent behavior on this board"
+                    description: "System prompt guiding agent behavior on this board"
                 },
                 isDefault: {
                     type: "boolean",
