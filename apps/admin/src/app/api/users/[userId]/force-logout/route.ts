@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
-import { requireAdminAction, AdminAuthError } from "@repo/admin-auth";
+import { requireAdminAction, AdminAuthError, validateRouteParam } from "@repo/admin-auth";
 import { adminAudit, getRequestContext } from "@/lib/admin-audit";
 
 export async function POST(
@@ -11,9 +11,14 @@ export async function POST(
         const admin = await requireAdminAction(request, "user:force_logout");
         const { userId } = await params;
 
+        const validation = validateRouteParam("userId", userId);
+        if (!validation.valid) {
+            return validation.response;
+        }
+
         // Delete all sessions for this user
         const deleted = await prisma.session.deleteMany({
-            where: { userId }
+            where: { userId: validation.value }
         });
 
         const { ipAddress, userAgent } = getRequestContext(request);
@@ -21,7 +26,7 @@ export async function POST(
             adminUserId: admin.adminUserId,
             action: "USER_FORCE_LOGOUT",
             entityType: "User",
-            entityId: userId,
+            entityId: validation.value,
             ipAddress,
             userAgent,
             metadata: { sessionsRevoked: deleted.count }

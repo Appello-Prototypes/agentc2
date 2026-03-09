@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
-import { requireAdminAction, AdminAuthError } from "@repo/admin-auth";
+import { requireAdminAction, AdminAuthError, validateRouteParam } from "@repo/admin-auth";
 import { adminAudit, getRequestContext } from "@/lib/admin-audit";
 
 export async function POST(
@@ -11,8 +11,13 @@ export async function POST(
         const admin = await requireAdminAction(request, "user:verify_email");
         const { userId } = await params;
 
+        const validation = validateRouteParam("userId", userId);
+        if (!validation.valid) {
+            return validation.response;
+        }
+
         const user = await prisma.user.findUnique({
-            where: { id: userId },
+            where: { id: validation.value },
             select: { emailVerified: true }
         });
         if (!user) {
@@ -22,7 +27,7 @@ export async function POST(
         const newValue = !user.emailVerified;
 
         await prisma.user.update({
-            where: { id: userId },
+            where: { id: validation.value },
             data: { emailVerified: newValue }
         });
 
@@ -31,7 +36,7 @@ export async function POST(
             adminUserId: admin.adminUserId,
             action: newValue ? "USER_VERIFY_EMAIL" : "USER_UNVERIFY_EMAIL",
             entityType: "User",
-            entityId: userId,
+            entityId: validation.value,
             beforeJson: { emailVerified: user.emailVerified },
             afterJson: { emailVerified: newValue },
             ipAddress,

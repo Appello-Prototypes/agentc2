@@ -14,7 +14,8 @@
   "dependencies": {
     "@repo/database": "workspace:*",
     "bcryptjs": "^2.4.3",
-    "google-auth-library": "^10.5.0"
+    "google-auth-library": "^10.5.0",
+    "next": "16.1.0"
   },
   "devDependencies": {
     "@repo/typescript-config": "workspace:*",

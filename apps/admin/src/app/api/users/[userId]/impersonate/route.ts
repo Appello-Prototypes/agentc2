@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import { prisma } from "@repo/database";
-import { requireAdminAction, AdminAuthError } from "@repo/admin-auth";
+import { requireAdminAction, AdminAuthError, validateRouteParam } from "@repo/admin-auth";
 import { adminAudit, getRequestContext } from "@/lib/admin-audit";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
@@ -21,12 +21,18 @@ export async function POST(
     try {
         const admin = await requireAdminAction(request, "user:impersonate");
         const { userId } = await params;
+
+        const validation = validateRouteParam("userId", userId);
+        if (!validation.valid) {
+            return validation.response;
+        }
+
         const body = await request.json();
 
         const reason = body.reason || "Admin impersonation via user management";
 
         // Resolve the target user and their org
-        const user = await prisma.user.findUnique({ where: { id: userId } });
+        const user = await prisma.user.findUnique({ where: { id: validation.value } });
         if (!user) {
             return NextResponse.json({ error: "User not found" }, { status: 404 });
         }
@@ -34,7 +40,7 @@ export async function POST(
         let orgId = body.orgId;
         if (!orgId) {
             const membership = await prisma.membership.findFirst({
-                where: { userId },
+                where: { userId: validation.value },
                 select: { organizationId: true }
             });
             if (!membership) {
@@ -52,7 +58,7 @@ export async function POST(
         const impersonationSession = await prisma.impersonationSession.create({
             data: {
                 adminUserId: admin.adminUserId,
-                targetUserId: userId,
+                targetUserId: validation.value,
                 targetOrgId: orgId,
                 reason,
                 ipAddress: ipAddress,
@@ -67,7 +73,7 @@ export async function POST(
         await prisma.session.create({
             data: {
                 token: sessionToken,
-                userId,
+                userId: validation.value,
                 expiresAt,
                 ipAddress: `impersonate:${ipAddress}`,
                 userAgent: `admin-impersonate:${admin.adminUserId}`
@@ -78,7 +84,7 @@ export async function POST(
             adminUserId: admin.adminUserId,
             action: "USER_IMPERSONATE_START",
             entityType: "User",
-            entityId: userId,
+            entityId: validation.value,
             ipAddress,
             userAgent,
             metadata: {
@@ -118,6 +124,12 @@ export async function DELETE(
     try {
         const admin = await requireAdminAction(request, "user:impersonate");
         const { userId } = await params;
+
+        const validation = validateRouteParam("userId", userId);
+        if (!validation.valid) {
+            return validation.response;
+        }
+
         const url = new URL(request.url);
         const sessionId = url.searchParams.get("sessionId");
 
@@ -135,7 +147,7 @@ export async function DELETE(
             adminUserId: admin.adminUserId,
             action: "USER_IMPERSONATE_END",
             entityType: "User",
-            entityId: userId,
+            entityId: validation.value,
             ipAddress,
             userAgent,
             metadata: { sessionId }

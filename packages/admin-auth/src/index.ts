@@ -33,3 +33,6 @@ export type { RateLimitResult } from "./rate-limit";
 // Permissions / RBAC
 export { can, getAllowedActions, getRoleLabel, ALL_ROLES } from "./permissions";
 export type { AdminRole, AdminAction } from "./permissions";
+
+// Route parameter validation
+export { validateRouteParam, validateRouteParams } from "./validate-params";

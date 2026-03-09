@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
-import { requireAdminAction, AdminAuthError } from "@repo/admin-auth";
+import { requireAdminAction, AdminAuthError, validateRouteParam } from "@repo/admin-auth";
 import { adminAudit, getRequestContext } from "@/lib/admin-audit";
 
 export async function POST(
@@ -10,11 +10,17 @@ export async function POST(
     try {
         const admin = await requireAdminAction(request, "user:delete");
         const { userId } = await params;
+
+        const validation = validateRouteParam("userId", userId);
+        if (!validation.valid) {
+            return validation.response;
+        }
+
         const body = await request.json().catch(() => ({}));
         const reason = body.reason || "Deleted by admin";
 
         const user = await prisma.user.findUnique({
-            where: { id: userId },
+            where: { id: validation.value },
             select: { status: true }
         });
         if (!user) {
@@ -27,18 +33,18 @@ export async function POST(
         const previousStatus = user.status;
 
         await prisma.user.update({
-            where: { id: userId },
+            where: { id: validation.value },
             data: { status: "deleted" }
         });
 
-        await prisma.session.deleteMany({ where: { userId } });
+        await prisma.session.deleteMany({ where: { userId: validation.value } });
 
         const { ipAddress, userAgent } = getRequestContext(request);
         await adminAudit.log({
             adminUserId: admin.adminUserId,
             action: "USER_DELETE",
             entityType: "User",
-            entityId: userId,
+            entityId: validation.value,
             beforeJson: { status: previousStatus },
             afterJson: { status: "deleted" },
             ipAddress,
