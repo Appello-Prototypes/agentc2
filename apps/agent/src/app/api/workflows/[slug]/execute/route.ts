@@ -56,17 +56,17 @@ function executeWorkflowInBackground(
             }
 
             if (result.status === "suspended") {
-                const suspendedStep = result.steps.find(
+                const suspStep = result.steps.find(
                     (s) => s.status === "suspended"
                 );
                 await prisma.workflowRun.update({
                     where: { id: run.id },
                     data: {
-                        status: "SUSPENDED",
+                        status: "RUNNING",
                         outputJson: result.output as Prisma.InputJsonValue,
                         suspendedAt: new Date(),
-                        suspendedStep: suspendedStep?.stepId || null,
-                        suspendDataJson: suspendedStep?.output as Prisma.InputJsonValue,
+                        suspendedStep: suspStep?.stepId || null,
+                        suspendDataJson: suspStep?.output as Prisma.InputJsonValue,
                         durationMs
                     }
                 });
@@ -220,18 +220,18 @@ export async function POST(
                         });
                     }
                     if (bgResult.status === "suspended") {
-                        const suspendedStep = bgResult.steps.find(
+                        const suspStep = bgResult.steps.find(
                             (s) => s.status === "suspended"
                         );
                         await prisma.workflowRun.update({
                             where: { id: run.id },
                             data: {
-                                status: "SUSPENDED",
+                                status: "RUNNING",
                                 outputJson: bgResult.output as Prisma.InputJsonValue,
                                 suspendedAt: new Date(),
-                                suspendedStep: suspendedStep?.stepId || null,
+                                suspendedStep: suspStep?.stepId || null,
                                 suspendDataJson:
-                                    suspendedStep?.output as Prisma.InputJsonValue,
+                                    suspStep?.output as Prisma.InputJsonValue,
                                 durationMs: bgDuration
                             }
                         });
