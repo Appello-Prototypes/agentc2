@@ -21,7 +21,7 @@ describe("AgentResolver Logic", () => {
             const flatContext = {
                 userId: "user-123",
                 userName: "John Doe",
-                tenantId: "tenant-456",
+                organizationId: "tenant-456",
                 sessionId: "session-789"
             };
 
@@ -30,7 +30,7 @@ describe("AgentResolver Logic", () => {
                 resource: {
                     userId: "user-123",
                     userName: "John Doe",
-                    tenantId: "tenant-456"
+                    organizationId: "tenant-456"
                 },
                 thread: {
                     id: undefined,
@@ -40,7 +40,7 @@ describe("AgentResolver Logic", () => {
             };
 
             expect(flatContext.userId).toBe(expected.resource.userId);
-            expect(flatContext.tenantId).toBe(expected.resource.tenantId);
+            expect(flatContext.organizationId).toBe(expected.resource.organizationId);
         });
 
         it("should preserve already-nested context", () => {
@@ -48,7 +48,7 @@ describe("AgentResolver Logic", () => {
                 resource: {
                     userId: "user-123",
                     userName: "John",
-                    tenantId: "tenant-456"
+                    organizationId: "tenant-456"
                 },
                 thread: {
                     id: "thread-abc",
@@ -127,9 +127,9 @@ describe("AgentResolver Logic", () => {
             expect(result).toBe("You are helping user user-123");
         });
 
-        it("should replace {{tenantId}} placeholder", () => {
-            const template = "Tenant: {{tenantId}}";
-            const context = { tenantId: "tenant-456" };
+        it("should replace {{organizationId}} placeholder", () => {
+            const template = "Tenant: {{organizationId}}";
+            const context = { organizationId: "tenant-456" };
 
             const result = template.replace(/\{\{(\w+)\}\}/g, (match, key) => {
                 return context[key as keyof typeof context] || match;
@@ -179,7 +179,7 @@ describe("AgentResolver Logic", () => {
             await prismaMock.agent.findMany({
                 where: {
                     isActive: true,
-                    OR: [{ type: "SYSTEM" }, { ownerId: "user-123" }, { visibility: "PUBLIC" }]
+                    OR: [{ type: "USER" }, { ownerId: "user-123" }, { visibility: "PUBLIC" }]
                 },
                 include: { tools: true },
                 orderBy: [{ type: "asc" }, { name: "asc" }]
@@ -188,7 +188,7 @@ describe("AgentResolver Logic", () => {
             expect(prismaMock.agent.findMany).toHaveBeenCalledWith({
                 where: {
                     isActive: true,
-                    OR: [{ type: "SYSTEM" }, { ownerId: "user-123" }, { visibility: "PUBLIC" }]
+                    OR: [{ type: "USER" }, { ownerId: "user-123" }, { visibility: "PUBLIC" }]
                 },
                 include: { tools: true },
                 orderBy: [{ type: "asc" }, { name: "asc" }]
@@ -202,7 +202,7 @@ describe("AgentResolver Logic", () => {
             await prismaMock.agent.findMany({
                 where: {
                     isActive: true,
-                    OR: [{ type: "SYSTEM" }, { visibility: "PUBLIC" }]
+                    OR: [{ type: "USER" }, { visibility: "PUBLIC" }]
                 },
                 include: { tools: true },
                 orderBy: [{ type: "asc" }, { name: "asc" }]
@@ -211,30 +211,11 @@ describe("AgentResolver Logic", () => {
             expect(prismaMock.agent.findMany).toHaveBeenCalledWith({
                 where: {
                     isActive: true,
-                    OR: [{ type: "SYSTEM" }, { visibility: "PUBLIC" }]
+                    OR: [{ type: "USER" }, { visibility: "PUBLIC" }]
                 },
                 include: { tools: true },
                 orderBy: [{ type: "asc" }, { name: "asc" }]
             });
-        });
-    });
-
-    describe("listSystem() database queries", () => {
-        it("should query only SYSTEM agents", async () => {
-            const agents = [mockSystemAgent];
-            prismaMock.agent.findMany.mockResolvedValue(agents as never);
-
-            const result = await prismaMock.agent.findMany({
-                where: {
-                    type: "SYSTEM",
-                    isActive: true
-                },
-                include: { tools: true },
-                orderBy: { name: "asc" }
-            });
-
-            expect(result).toHaveLength(1);
-            expect(result[0].type).toBe("SYSTEM");
         });
     });
 

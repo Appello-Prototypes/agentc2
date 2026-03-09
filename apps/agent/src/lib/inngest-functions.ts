@@ -219,11 +219,6 @@ async function computeAndUpsertHealthScore(agentId: string): Promise<void> {
 
     const confidence = Math.min(1.0, runCount / 20);
 
-    const agent = await prisma.agent.findUnique({
-        where: { id: agentId },
-        select: { tenantId: true }
-    });
-
     await prisma.agentHealthScore.upsert({
         where: { agentId_date: { agentId, date: today } },
         update: {
@@ -241,7 +236,6 @@ async function computeAndUpsertHealthScore(agentId: string): Promise<void> {
         },
         create: {
             agentId,
-            tenantId: agent?.tenantId,
             date: today,
             evalScore,
             feedbackScore,
@@ -406,7 +400,7 @@ export const runCompletedFunction = inngest.createFunction(
     },
     { event: "run/completed" },
     async ({ event, step }) => {
-        const { runId, agentId, costUsd } = event.data;
+        const { runId, agentId, costUsd, organizationId, workspaceId } = event.data;
 
         console.log(`[Inngest] Processing run completion: ${runId}`);
 
@@ -454,7 +448,7 @@ export const runCompletedFunction = inngest.createFunction(
         // Step 2: Trigger evaluation (sampling: 100% for now, configurable later)
         await step.sendEvent("trigger-evaluation", {
             name: "run/evaluate",
-            data: { runId, agentId }
+            data: { runId, agentId, organizationId, workspaceId }
         });
 
         // Step 3: Check budget thresholds
@@ -904,16 +898,10 @@ export const calibrationCheckFunction = inngest.createFunction(
                       ? "auditor_higher"
                       : "auditor_lower";
 
-            const agent = await prisma.agent.findUnique({
-                where: { id: agentId },
-                select: { tenantId: true }
-            });
-
             return prisma.calibrationCheck.create({
                 data: {
                     evaluationId: evalData.id,
                     agentId,
-                    tenantId: agent?.tenantId ?? null,
                     auditorGrade,
                     humanRating,
                     disagreement: Math.round(disagreement * 1000) / 1000,
@@ -951,13 +939,15 @@ export const calibrationCheckFunction = inngest.createFunction(
                     recentChecks.length;
 
                 if (alignmentRate < 0.7) {
+                    const driftCtx = await getOrgIdFromAgent(agentId);
                     await inngest.send({
                         name: "calibration/drift.detected",
                         data: {
                             agentId,
                             alignmentRate,
                             avgDisagreement,
-                            bias: avgBias
+                            bias: avgBias,
+                            organizationId: driftCtx
                         }
                     });
 
@@ -1106,8 +1096,7 @@ export const feedbackReEvaluationFunction = inngest.createFunction(
                           }
                       }
                     : null,
-                skillsJson: run.skillsJson as { skillSlug: string; skillVersion?: number }[] | null,
-                tenantId: run.agent.tenantId ?? null
+                skillsJson: run.skillsJson as { skillSlug: string; skillVersion?: number }[] | null
             };
         });
 
@@ -1408,7 +1397,8 @@ export const runEvaluationFunction = inngest.createFunction(
                                         select: { name: true, slug: true, instructions: true }
                                     }
                                 }
-                            }
+                            },
+                            workspace: { select: { organizationId: true } }
                         }
                     },
                     trace: true,
@@ -1487,7 +1477,8 @@ export const runEvaluationFunction = inngest.createFunction(
                       }
                     : null,
                 skillsJson: run.skillsJson as { skillSlug: string; skillVersion?: number }[] | null,
-                tenantId: run.agent.tenantId ?? null
+                organizationId: run.agent.workspace?.organizationId ?? undefined,
+                workspaceId: run.agent.workspaceId ?? undefined
             };
         });
 
@@ -1647,7 +1638,6 @@ export const runEvaluationFunction = inngest.createFunction(
                             data: {
                                 agentId,
                                 evaluationId: evaluation.id,
-                                tenantId: context.tenantId,
                                 type: rec.type,
                                 category: rec.category,
                                 title: rec.pattern,
@@ -1674,7 +1664,9 @@ export const runEvaluationFunction = inngest.createFunction(
                             pattern: rec.pattern,
                             evidence: rec.evidence,
                             category: rec.category,
-                            severity: rec.type === "improve" ? "medium" : "low"
+                            severity: rec.type === "improve" ? "medium" : "low",
+                            organizationId: context?.organizationId,
+                            workspaceId: context?.workspaceId
                         }
                     });
                 }
@@ -1742,7 +1734,6 @@ export const runEvaluationFunction = inngest.createFunction(
                             await prisma.evaluationTheme.create({
                                 data: {
                                     agentId,
-                                    tenantId: context.tenantId,
                                     theme,
                                     sentiment,
                                     count: 1
@@ -1761,7 +1752,9 @@ export const runEvaluationFunction = inngest.createFunction(
                 evaluationId: evaluation.id,
                 agentId,
                 runId,
-                scores
+                scores,
+                organizationId: context?.organizationId,
+                workspaceId: context?.workspaceId
             }
         });
 
@@ -1776,7 +1769,9 @@ export const runEvaluationFunction = inngest.createFunction(
                         runId,
                         signalType: "LOW_SCORE",
                         severity: overallGrade < 0.3 ? "high" : "medium",
-                        scores
+                        scores,
+                        organizationId: context?.organizationId,
+                        workspaceId: context?.workspaceId
                     }
                 });
             }
@@ -1804,7 +1799,7 @@ export const learningSignalDetectorFunction = inngest.createFunction(
     },
     { event: "learning/signal.detected" },
     async ({ event, step }) => {
-        const { agentId, signalType } = event.data;
+        const { agentId, signalType, organizationId, workspaceId } = event.data;
 
         console.log(`[Inngest] Signal detected for agent ${agentId}: ${signalType}`);
 
@@ -1912,7 +1907,9 @@ export const learningSignalDetectorFunction = inngest.createFunction(
                 data: {
                     agentId,
                     triggerReason: `${signalCount} signals detected in the last ${config.signalWindowMinutes} minutes (threshold: ${config.signalThreshold})`,
-                    triggerType: "threshold"
+                    triggerType: "threshold",
+                    organizationId,
+                    workspaceId
                 }
             });
 
@@ -1948,7 +1945,8 @@ export const scheduledLearningTriggerFunction = inngest.createFunction(
                 select: {
                     id: true,
                     slug: true,
-                    tenantId: true,
+                    workspaceId: true,
+                    workspace: { select: { organizationId: true } },
                     learningPolicy: true
                 }
             });
@@ -2060,7 +2058,9 @@ export const scheduledLearningTriggerFunction = inngest.createFunction(
                     data: {
                         agentId: agent.id,
                         triggerReason: "Scheduled backstop trigger",
-                        triggerType: "scheduled"
+                        triggerType: "scheduled",
+                        organizationId: agent.workspace?.organizationId,
+                        workspaceId: agent.workspaceId
                     }
                 });
 
@@ -2107,8 +2107,7 @@ export const learningSessionStartFunction = inngest.createFunction(
                 select: {
                     id: true,
                     slug: true,
-                    version: true,
-                    tenantId: true
+                    version: true
                 }
             });
         });
@@ -2134,7 +2133,6 @@ export const learningSessionStartFunction = inngest.createFunction(
             return prisma.learningSession.create({
                 data: {
                     agentId,
-                    tenantId: agent.tenantId,
                     status: "COLLECTING",
                     baselineVersion: agent.version,
                     scorerConfig: {},
@@ -2185,7 +2183,6 @@ export const learningSessionStartFunction = inngest.createFunction(
             const dataset = await prisma.learningDataset.create({
                 data: {
                     sessionId: session.id,
-                    tenantId: agent.tenantId,
                     runIds,
                     selectionCriteria: {
                         from: sevenDaysAgo.toISOString(),
@@ -2227,7 +2224,6 @@ export const learningSessionStartFunction = inngest.createFunction(
         await step.run("audit-log", async () => {
             await prisma.auditLog.create({
                 data: {
-                    tenantId: agent.tenantId,
                     actorId: "system",
                     action: "LEARNING_SESSION_CREATED",
                     entityType: "LearningSession",
@@ -2671,7 +2667,6 @@ export const learningSignalExtractionFunction = inngest.createFunction(
                 await prisma.learningSignal.create({
                     data: {
                         sessionId,
-                        tenantId: dataset.tenantId,
                         type: signal.type as
                             | "LOW_SCORE"
                             | "TOOL_FAILURE"
@@ -3029,7 +3024,6 @@ export const learningProposalGenerationFunction = inngest.createFunction(
                 const p = await prisma.learningProposal.create({
                     data: {
                         sessionId,
-                        tenantId: sessionData.tenantId,
                         proposalType: proposal.proposalType,
                         title: proposal.title,
                         description: proposal.description,
@@ -3094,7 +3088,6 @@ export const learningProposalGenerationFunction = inngest.createFunction(
             const agentVersion = await prisma.agentVersion.create({
                 data: {
                     agentId,
-                    tenantId: sessionData.tenantId,
                     version: newVersion,
                     description: selectedProposal.title,
                     instructions: enhancedInstructions,
@@ -3141,7 +3134,6 @@ export const learningProposalGenerationFunction = inngest.createFunction(
                     data: {
                         sessionId,
                         proposalId: createdProposals[0].id,
-                        tenantId: sessionData.tenantId,
                         status: "PENDING",
                         baselineVersionId: sessionData.agent.version.toString(),
                         candidateVersionId: candidateVersion.id,
@@ -3426,7 +3418,6 @@ export const learningExperimentRunFunction = inngest.createFunction(
                     await prisma.learningApproval.create({
                         data: {
                             sessionId,
-                            tenantId: experiment.tenantId,
                             decision: "auto_approved",
                             autoApproved: true,
                             rationale: `Auto-approved: ${autoPromotionCheck.reasons.length === 0 ? "All criteria met" : autoPromotionCheck.reasons.join("; ")}`,
@@ -3448,7 +3439,6 @@ export const learningExperimentRunFunction = inngest.createFunction(
                     // Audit log for auto-promotion
                     await prisma.auditLog.create({
                         data: {
-                            tenantId: experiment.tenantId,
                             actorId: "system",
                             action: "LEARNING_AUTO_PROMOTED",
                             entityType: "Agent",
@@ -3500,7 +3490,6 @@ export const learningExperimentRunFunction = inngest.createFunction(
                     await prisma.learningApproval.create({
                         data: {
                             sessionId,
-                            tenantId: experiment.tenantId,
                             decision: "pending",
                             autoApproved: false
                         }
@@ -3672,7 +3661,12 @@ export const learningApprovalHandlerFunction = inngest.createFunction(
                         take: 1
                     },
                     agent: {
-                        select: { id: true, slug: true, name: true }
+                        select: {
+                            id: true,
+                            slug: true,
+                            name: true,
+                            workspace: { select: { organizationId: true } }
+                        }
                     }
                 }
             });
@@ -3688,7 +3682,6 @@ export const learningApprovalHandlerFunction = inngest.createFunction(
         await step.run("audit-pending", async () => {
             await prisma.auditLog.create({
                 data: {
-                    tenantId: data.tenantId,
                     actorId: "system",
                     action: "LEARNING_APPROVAL_PENDING",
                     entityType: "LearningSession",
@@ -3707,9 +3700,10 @@ export const learningApprovalHandlerFunction = inngest.createFunction(
         await step.run("notify-channels", async () => {
             try {
                 const { decryptJson } = await import("@repo/agentc2/crypto");
-                const org = data.tenantId
+                const agentOrgId = data.agent.workspace?.organizationId;
+                const org = agentOrgId
                     ? await prisma.organization.findUnique({
-                          where: { id: data.tenantId },
+                          where: { id: agentOrgId },
                           select: { id: true }
                       })
                     : null;
@@ -3894,7 +3888,6 @@ export const learningVersionPromotionFunction = inngest.createFunction(
         await step.run("audit-promotion", async () => {
             await prisma.auditLog.create({
                 data: {
-                    tenantId: session.tenantId,
                     actorId: approvedBy,
                     action: "LEARNING_VERSION_PROMOTED",
                     entityType: "Agent",
@@ -3986,7 +3979,7 @@ export const dailyMetricsRollupFunction = inngest.createFunction(
         // Step 1: Get all agents
         const agents = await step.run("get-agents", async () => {
             return prisma.agent.findMany({
-                select: { id: true, slug: true, tenantId: true }
+                select: { id: true, slug: true, workspace: { select: { organizationId: true } } }
             });
         });
 
@@ -4128,7 +4121,6 @@ export const dailyMetricsRollupFunction = inngest.createFunction(
                     },
                     create: {
                         agentId: agent.id,
-                        tenantId: agent.tenantId,
                         date: targetDate,
                         sessionsStarted,
                         sessionsCompleted,
@@ -4264,7 +4256,7 @@ export const generateInsightsFunction = inngest.createFunction(
     },
     { event: "evaluation/completed" },
     async ({ event, step }) => {
-        const { agentId } = event.data;
+        const { agentId, organizationId, workspaceId } = event.data;
 
         console.log(`[Inngest] Generating AI insights for agent: ${agentId}`);
 
@@ -4604,7 +4596,9 @@ Return ONLY a valid JSON array of insights, no other text.`;
                                 name: "learning/session.start",
                                 data: {
                                     agentId,
-                                    triggerReason: `Insight: ${insight.title}`
+                                    triggerReason: `Insight: ${insight.title}`,
+                                    organizationId,
+                                    workspaceId
                                 }
                             });
                             await prisma.insight.update({
@@ -5621,7 +5615,7 @@ export const asyncInvokeFunction = inngest.createFunction(
                     const { enforceInputGuardrails } = await import("@repo/agentc2/guardrails");
                     const inputCheck = await enforceInputGuardrails(record.id, input, {
                         runId,
-                        tenantId: record.tenantId || undefined
+                        organizationId: record.workspace?.organizationId || undefined
                     });
                     if (inputCheck.blocked) {
                         return {
@@ -5657,7 +5651,7 @@ export const asyncInvokeFunction = inngest.createFunction(
                         const outputCheck = await enforceOutputGuardrails(
                             record.id,
                             response.text,
-                            { runId, tenantId: record.tenantId || undefined }
+                            { runId, organizationId: record.workspace?.organizationId || undefined }
                         );
                         if (outputCheck.blocked) {
                             return {
@@ -5923,6 +5917,20 @@ export const asyncInvokeFunction = inngest.createFunction(
 
         // Step 4: Trigger run/completed pipeline for cost tracking, evaluations, etc.
         if (result.success) {
+            const tenantCtx = await step.run("resolve-tenant-ctx", async () => {
+                const agent = await prisma.agent.findUnique({
+                    where: { id: agentId },
+                    select: {
+                        workspaceId: true,
+                        workspace: { select: { organizationId: true } }
+                    }
+                });
+                return {
+                    organizationId: agent?.workspace?.organizationId,
+                    workspaceId: agent?.workspaceId
+                };
+            });
+
             await step.sendEvent("trigger-run-completed", {
                 name: "run/completed",
                 data: {
@@ -5931,7 +5939,9 @@ export const asyncInvokeFunction = inngest.createFunction(
                     status: "COMPLETED",
                     durationMs: result.durationMs,
                     totalTokens: result.totalTokens || 0,
-                    costUsd: result.costUsd || 0
+                    costUsd: result.costUsd || 0,
+                    organizationId: tenantCtx.organizationId,
+                    workspaceId: tenantCtx.workspaceId
                 }
             });
         }
@@ -6057,7 +6067,9 @@ export const scheduleTriggerFunction = inngest.createFunction(
                             requireApproval: true,
                             maxCostUsd: true,
                             timeoutMinutes: true,
-                            isActive: true
+                            isActive: true,
+                            organizationId: true,
+                            workspaceId: true
                         }
                     }
                 },
@@ -6128,6 +6140,8 @@ export const scheduleTriggerFunction = inngest.createFunction(
                         templateId: cs.template.id,
                         runNumber,
                         parameterValues: cs.inputJson as Prisma.InputJsonValue | undefined,
+                        organizationId: cs.organizationId || cs.template.organizationId,
+                        workspaceId: cs.template.workspaceId,
                         status: CampaignStatus.PLANNING
                     }
                 });
@@ -6201,7 +6215,7 @@ export const agentScheduleTriggerFunction = inngest.createFunction(
             typeof inputJson?.environment === "string" ? inputJson.environment : undefined;
 
         // Derive organizationId from the schedule's workspace (or the agent's workspace as fallback)
-        let scheduleOrgId = schedule.workspace?.organizationId;
+        let scheduleOrgId: string | undefined = schedule.workspace?.organizationId;
         if (!scheduleOrgId && schedule.agent.workspaceId) {
             const agentWorkspace = await step.run("lookup-agent-workspace", async () => {
                 return prisma.workspace.findUnique({
@@ -6211,7 +6225,7 @@ export const agentScheduleTriggerFunction = inngest.createFunction(
             });
             scheduleOrgId = agentWorkspace?.organizationId;
         }
-        const orgContext = scheduleOrgId ? { resource: { tenantId: scheduleOrgId } } : {};
+        const orgContext = scheduleOrgId ? { resource: { organizationId: scheduleOrgId } } : {};
 
         // Ensure threadId and resourceId are set for memory-enabled agents on scheduled runs.
         // Uses a deterministic ID based on schedule+agent so memory persists across runs.
@@ -6247,6 +6261,8 @@ export const agentScheduleTriggerFunction = inngest.createFunction(
                     source: "api",
                     triggerType: RunTriggerType.SCHEDULED,
                     triggerId: schedule.id,
+                    organizationId: scheduleOrgId,
+                    workspaceId: schedule.agent.workspaceId || undefined,
                     metadata: {
                         scheduleId: schedule.id,
                         scheduleName: schedule.name
@@ -6332,6 +6348,8 @@ export const agentScheduleTriggerFunction = inngest.createFunction(
                 source: "api",
                 triggerType: RunTriggerType.SCHEDULED,
                 triggerId: schedule.id,
+                organizationId: scheduleOrgId,
+                workspaceId: schedule.agent.workspaceId || undefined,
                 metadata: {
                     scheduleId: schedule.id,
                     scheduleName: schedule.name
@@ -7178,7 +7196,11 @@ export const workflowTriggerFireFunction = inngest.createFunction(
             if (routedSlug && routedSlug !== targetWorkflowSlug) {
                 const routedWorkflow = await step.run("load-routed-workflow", async () => {
                     return prisma.workflow.findFirst({
-                        where: { slug: routedSlug, isActive: true },
+                        where: {
+                            slug: routedSlug,
+                            isActive: true,
+                            workspaceId: trigger.workspaceId
+                        },
                         select: { id: true, slug: true, isActive: true }
                     });
                 });
@@ -8134,6 +8156,13 @@ export const learningDocumentCreateFunction = inngest.createFunction(
         const document = await step.run("create-document", async () => {
             const slug = `aar-${docType}-${category}-${Date.now()}`;
 
+            const defaultWs = orgId
+                ? await prisma.workspace.findFirst({
+                      where: { organizationId: orgId, isDefault: true },
+                      select: { id: true }
+                  })
+                : null;
+
             const doc = await prisma.document.create({
                 data: {
                     slug,
@@ -8142,7 +8171,9 @@ export const learningDocumentCreateFunction = inngest.createFunction(
                     contentType: "markdown",
                     category: `aar-${docType}`,
                     description: `Auto-generated from AAR recommendation: ${description.substring(0, 200)}`,
-                    tags: ["aar", docType, category]
+                    tags: ["aar", docType, category],
+                    organizationId: orgId || "",
+                    workspaceId: defaultWs?.id || ""
                 }
             });
 
@@ -8624,7 +8655,7 @@ export const asyncWorkflowExecuteFunction = inngest.createFunction(
                     try {
                         const resolved = await agentResolver.resolve({
                             slug: agentSlug,
-                            requestContext: organizationId ? { tenantId: organizationId } : {}
+                            requestContext: organizationId ? { organizationId: organizationId } : {}
                         });
                         const agentId = resolved.record?.id;
                         if (!agentId) return undefined;
@@ -8634,7 +8665,7 @@ export const asyncWorkflowExecuteFunction = inngest.createFunction(
                             agentSlug,
                             input: prompt.slice(0, 2000),
                             source: "workflow",
-                            tenantId: organizationId,
+                            organizationId: organizationId,
                             metadata: {
                                 workflowRunId,
                                 workflowSlug: workflowSlug || workflow.slug
@@ -8751,7 +8782,7 @@ export const asyncWorkflowExecuteFunction = inngest.createFunction(
                 input,
                 existingSteps,
                 onStepEvent,
-                requestContext: organizationId ? { tenantId: organizationId } : {},
+                requestContext: organizationId ? { organizationId: organizationId } : {},
                 workflowMeta: {
                     runId: workflowRunId,
                     workflowSlug:
@@ -8912,9 +8943,12 @@ export const asyncWorkflowExecuteFunction = inngest.createFunction(
                             select: { stepId: true, stepType: true, outputJson: true },
                             orderBy: { startedAt: "asc" }
                         });
+                        const wsId = (input as Record<string, unknown>)?.workspaceId as
+                            | string
+                            | undefined;
                         await createEngagement({
                             organizationId: orgId,
-                            workspaceId: null,
+                            workspaceId: wsId || null,
                             workflowRunId,
                             workflowSlug: slug || "",
                             suspendedStep: result.suspended.stepId,

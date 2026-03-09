@@ -11,7 +11,7 @@
  *   entityType: "Agent",
  *   entityId: agent.id,
  *   actorId: userId,
- *   tenantId: tenantId,
+ *   organizationId: organizationId,
  *   metadata: { name: agent.name, slug: agent.slug }
  * });
  * ```
@@ -116,7 +116,7 @@ export interface AuditLogOptions {
     entityId: string;
     actorId?: string;
     userId?: string; // Alias for actorId for convenience
-    tenantId?: string;
+    organizationId?: string;
     metadata?: Record<string, unknown>;
 }
 
@@ -133,7 +133,7 @@ export async function computeIntegrityHash(
         entityType: string;
         entityId: string;
         actorId?: string | null;
-        tenantId?: string | null;
+        organizationId?: string | null;
     },
     previousHash: string | null
 ): Promise<string> {
@@ -143,7 +143,7 @@ export async function computeIntegrityHash(
         entityType: data.entityType,
         entityId: data.entityId,
         actorId: data.actorId || null,
-        tenantId: data.tenantId || null
+        organizationId: data.organizationId || null
     });
     return createHash("sha256").update(payload).digest("hex");
 }
@@ -151,7 +151,6 @@ export async function computeIntegrityHash(
 export async function createAuditLog(options: AuditLogOptions): Promise<void> {
     try {
         const previous = await prisma.auditLog.findFirst({
-            where: options.tenantId ? { tenantId: options.tenantId } : {},
             orderBy: { createdAt: "desc" },
             select: { integrityHash: true }
         });
@@ -160,16 +159,23 @@ export async function createAuditLog(options: AuditLogOptions): Promise<void> {
             action: options.action,
             entityType: options.entityType,
             entityId: options.entityId,
-            actorId: options.actorId || options.userId,
-            tenantId: options.tenantId
+            actorId: options.actorId || options.userId
         };
 
-        const integrityHash = await computeIntegrityHash(data, previous?.integrityHash || null);
+        const integrityHash = await computeIntegrityHash(
+            { ...data, organizationId: options.organizationId },
+            previous?.integrityHash || null
+        );
+
+        const mergedMetadata = {
+            ...(options.metadata || {}),
+            ...(options.organizationId ? { organizationId: options.organizationId } : {})
+        };
 
         await prisma.auditLog.create({
             data: {
                 ...data,
-                metadata: options.metadata as Prisma.InputJsonValue,
+                metadata: mergedMetadata as Prisma.InputJsonValue,
                 integrityHash
             }
         });
@@ -177,14 +183,17 @@ export async function createAuditLog(options: AuditLogOptions): Promise<void> {
         console.error("[AuditLog] Failed to create audit log:", error);
         setTimeout(async () => {
             try {
+                const mergedMetadata = {
+                    ...(options.metadata || {}),
+                    ...(options.organizationId ? { organizationId: options.organizationId } : {})
+                };
                 await prisma.auditLog.create({
                     data: {
                         action: options.action,
                         entityType: options.entityType,
                         entityId: options.entityId,
                         actorId: options.actorId || options.userId,
-                        tenantId: options.tenantId,
-                        metadata: options.metadata as Prisma.InputJsonValue
+                        metadata: mergedMetadata as Prisma.InputJsonValue
                     }
                 });
             } catch (retryError) {
@@ -204,7 +213,7 @@ export const auditLog = {
     async agentCreate(
         agentId: string,
         actorId?: string,
-        tenantId?: string,
+        organizationId?: string,
         metadata?: Record<string, unknown>
     ) {
         await createAuditLog({
@@ -212,7 +221,7 @@ export const auditLog = {
             entityType: "Agent",
             entityId: agentId,
             actorId,
-            tenantId,
+            organizationId,
             metadata
         });
     },
@@ -220,7 +229,7 @@ export const auditLog = {
     async agentUpdate(
         agentId: string,
         actorId?: string,
-        tenantId?: string,
+        organizationId?: string,
         changes?: Record<string, unknown>
     ) {
         await createAuditLog({
@@ -228,18 +237,18 @@ export const auditLog = {
             entityType: "Agent",
             entityId: agentId,
             actorId,
-            tenantId,
+            organizationId,
             metadata: { changes }
         });
     },
 
-    async agentDelete(agentId: string, actorId?: string, tenantId?: string) {
+    async agentDelete(agentId: string, actorId?: string, organizationId?: string) {
         await createAuditLog({
             action: "AGENT_DELETE",
             entityType: "Agent",
             entityId: agentId,
             actorId,
-            tenantId
+            organizationId
         });
     },
 
@@ -249,14 +258,14 @@ export const auditLog = {
         agentId: string,
         version: number,
         actorId?: string,
-        tenantId?: string
+        organizationId?: string
     ) {
         await createAuditLog({
             action: "VERSION_CREATE",
             entityType: "AgentVersion",
             entityId: versionId,
             actorId,
-            tenantId,
+            organizationId,
             metadata: { agentId, version }
         });
     },
@@ -266,37 +275,37 @@ export const auditLog = {
         fromVersion: number,
         toVersion: number,
         actorId?: string,
-        tenantId?: string
+        organizationId?: string
     ) {
         await createAuditLog({
             action: "VERSION_ROLLBACK",
             entityType: "Agent",
             entityId: agentId,
             actorId,
-            tenantId,
+            organizationId,
             metadata: { fromVersion, toVersion }
         });
     },
 
     // Tool Management
-    async toolAttach(agentId: string, toolId: string, actorId?: string, tenantId?: string) {
+    async toolAttach(agentId: string, toolId: string, actorId?: string, organizationId?: string) {
         await createAuditLog({
             action: "TOOL_ATTACH",
             entityType: "AgentTool",
             entityId: `${agentId}:${toolId}`,
             actorId,
-            tenantId,
+            organizationId,
             metadata: { agentId, toolId }
         });
     },
 
-    async toolDetach(agentId: string, toolId: string, actorId?: string, tenantId?: string) {
+    async toolDetach(agentId: string, toolId: string, actorId?: string, organizationId?: string) {
         await createAuditLog({
             action: "TOOL_DETACH",
             entityType: "AgentTool",
             entityId: `${agentId}:${toolId}`,
             actorId,
-            tenantId,
+            organizationId,
             metadata: { agentId, toolId }
         });
     },
@@ -306,14 +315,14 @@ export const auditLog = {
         credentialId: string,
         toolId: string,
         actorId?: string,
-        tenantId?: string
+        organizationId?: string
     ) {
         await createAuditLog({
             action: "CREDENTIAL_ACCESS",
             entityType: "ToolCredential",
             entityId: credentialId,
             actorId,
-            tenantId,
+            organizationId,
             metadata: { toolId }
         });
     },
@@ -322,7 +331,7 @@ export const auditLog = {
     async integrationCreate(
         connectionId: string,
         actorId?: string,
-        tenantId?: string,
+        organizationId?: string,
         metadata?: Record<string, unknown>
     ) {
         await createAuditLog({
@@ -330,7 +339,7 @@ export const auditLog = {
             entityType: "IntegrationConnection",
             entityId: connectionId,
             actorId,
-            tenantId,
+            organizationId,
             metadata
         });
     },
@@ -338,7 +347,7 @@ export const auditLog = {
     async integrationUpdate(
         connectionId: string,
         actorId?: string,
-        tenantId?: string,
+        organizationId?: string,
         changes?: Record<string, unknown>
     ) {
         await createAuditLog({
@@ -346,7 +355,7 @@ export const auditLog = {
             entityType: "IntegrationConnection",
             entityId: connectionId,
             actorId,
-            tenantId,
+            organizationId,
             metadata: { changes }
         });
     },
@@ -354,7 +363,7 @@ export const auditLog = {
     async integrationDelete(
         connectionId: string,
         actorId?: string,
-        tenantId?: string,
+        organizationId?: string,
         metadata?: Record<string, unknown>
     ) {
         await createAuditLog({
@@ -362,7 +371,7 @@ export const auditLog = {
             entityType: "IntegrationConnection",
             entityId: connectionId,
             actorId,
-            tenantId,
+            organizationId,
             metadata
         });
     },
@@ -370,7 +379,7 @@ export const auditLog = {
     async webhookCreate(
         triggerId: string,
         actorId?: string,
-        tenantId?: string,
+        organizationId?: string,
         metadata?: Record<string, unknown>
     ) {
         await createAuditLog({
@@ -378,7 +387,7 @@ export const auditLog = {
             entityType: "AgentTrigger",
             entityId: triggerId,
             actorId,
-            tenantId,
+            organizationId,
             metadata
         });
     },
@@ -389,14 +398,14 @@ export const auditLog = {
         agentId: string,
         source: string,
         actorId?: string,
-        tenantId?: string
+        organizationId?: string
     ) {
         await createAuditLog({
             action: "AGENT_INVOKE",
             entityType: "AgentRun",
             entityId: runId,
             actorId,
-            tenantId,
+            organizationId,
             metadata: { agentId, source }
         });
     },
@@ -407,7 +416,7 @@ export const auditLog = {
         agentId: string,
         status: "success" | "error",
         actorId?: string,
-        tenantId?: string,
+        organizationId?: string,
         metadata?: Record<string, unknown>
     ) {
         await createAuditLog({
@@ -415,7 +424,7 @@ export const auditLog = {
             entityType: "McpTool",
             entityId: toolName,
             actorId,
-            tenantId,
+            organizationId,
             metadata: { agentId, status, ...metadata }
         });
     },
@@ -426,14 +435,14 @@ export const auditLog = {
         targetAgentSlug: string,
         depth: number,
         actorId?: string,
-        tenantId?: string
+        organizationId?: string
     ) {
         await createAuditLog({
             action: "AGENT_CHAIN_INVOKE",
             entityType: "AgentChain",
             entityId: `${sourceAgentId}->${targetAgentSlug}`,
             actorId,
-            tenantId,
+            organizationId,
             metadata: { sourceAgentId, targetAgentSlug, depth }
         });
     },
@@ -443,7 +452,7 @@ export const auditLog = {
         entityId: string,
         entityType: "agent" | "org" | "user",
         actorId?: string,
-        tenantId?: string,
+        organizationId?: string,
         changes?: Record<string, unknown>
     ) {
         await createAuditLog({
@@ -451,7 +460,7 @@ export const auditLog = {
             entityType: `BudgetPolicy:${entityType}`,
             entityId,
             actorId,
-            tenantId,
+            organizationId,
             metadata: { changes }
         });
     },
@@ -461,7 +470,7 @@ export const auditLog = {
         policyType: "budget" | "guardrail" | "learning",
         agentId: string,
         actorId?: string,
-        tenantId?: string,
+        organizationId?: string,
         changes?: Record<string, unknown>
     ) {
         const actionMap = {
@@ -475,7 +484,7 @@ export const auditLog = {
             entityType: `${policyType.charAt(0).toUpperCase() + policyType.slice(1)}Policy`,
             entityId: agentId,
             actorId,
-            tenantId,
+            organizationId,
             metadata: { changes }
         });
     }
@@ -488,7 +497,7 @@ export async function queryAuditLogs(options: {
     entityType?: string;
     entityId?: string;
     actorId?: string;
-    tenantId?: string;
+    organizationId?: string;
     action?: AuditAction;
     from?: Date;
     to?: Date;
@@ -500,7 +509,9 @@ export async function queryAuditLogs(options: {
     if (options.entityType) where.entityType = options.entityType;
     if (options.entityId) where.entityId = options.entityId;
     if (options.actorId) where.actorId = options.actorId;
-    if (options.tenantId) where.tenantId = options.tenantId;
+    if (options.organizationId) {
+        where.metadata = { path: ["organizationId"], equals: options.organizationId };
+    }
     if (options.action) where.action = options.action;
 
     if (options.from || options.to) {

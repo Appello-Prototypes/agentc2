@@ -81,12 +81,16 @@ async function authenticateRequest(
 
         const validApiKey = process.env.MCP_API_KEY;
         if (validApiKey && apiKey === validApiKey) {
-            const orgSlug = orgSlugHeader || process.env.MCP_API_ORGANIZATION_SLUG;
-            if (orgSlug) {
-                const context = await resolveOrgContext(orgSlug);
-                if (context) {
-                    return context;
-                }
+            const configuredOrgSlug = process.env.MCP_API_ORGANIZATION_SLUG;
+            if (!configuredOrgSlug) {
+                console.error(
+                    "[MCP] MCP_API_KEY present but MCP_API_ORGANIZATION_SLUG not set. Rejected."
+                );
+                return null;
+            }
+            const context = await resolveOrgContext(configuredOrgSlug);
+            if (context) {
+                return context;
             }
         }
 
@@ -861,8 +865,8 @@ export async function POST(request: NextRequest) {
                 if (route.applyDefaults) {
                     const workspaceId = await getDefaultWorkspaceIdForUser(userId);
                     if (route.name.startsWith("agent-")) {
-                        if (organizationId && scopedParams.tenantId === undefined) {
-                            scopedParams.tenantId = organizationId;
+                        if (organizationId && scopedParams.organizationId === undefined) {
+                            scopedParams.organizationId = organizationId;
                         }
                     }
                     if (workspaceId && scopedParams.workspaceId === undefined) {
@@ -942,10 +946,7 @@ export async function POST(request: NextRequest) {
                             { OR: [{ slug: agentSlug }, { id: agentSlug }] },
                             { isActive: true },
                             {
-                                OR: [
-                                    { workspace: { organizationId } },
-                                    { tenantId: organizationId }
-                                ]
+                                workspace: { organizationId }
                             }
                         ]
                     },
@@ -1025,7 +1026,7 @@ export async function POST(request: NextRequest) {
                     getInternalBaseUrl()
                 );
                 const requestContext = scopedParams.requestContext ?? {
-                    tenantId: organizationId
+                    organizationId: organizationId
                 };
 
                 const execResponse = await fetch(execUrl, {
@@ -1370,7 +1371,7 @@ export async function POST(request: NextRequest) {
             }
 
             const requestContext = (params?.requestContext as Record<string, unknown>) ?? {
-                tenantId: organizationId
+                organizationId: organizationId
             };
 
             const execUrl = new URL(`/api/workflows/${workflowSlug}/execute`, getInternalBaseUrl());

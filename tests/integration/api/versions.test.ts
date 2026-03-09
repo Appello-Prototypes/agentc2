@@ -176,7 +176,7 @@ describe("Versions API", () => {
             const createdVersion = await prismaMock.agentVersion.create({
                 data: {
                     agentId: agent!.id,
-                    tenantId: agent!.tenantId,
+                    organizationId: agent!.organizationId,
                     version: newVersionNumber,
                     description: "New version",
                     instructions: agent!.instructions,
@@ -296,7 +296,7 @@ describe("Versions API", () => {
             const rollbackVersion = await prismaMock.agentVersion.create({
                 data: {
                     agentId: "test-agent-uuid",
-                    tenantId: "test-tenant",
+                    organizationId: "test-tenant",
                     version: (lastVersion?.version || 0) + 1,
                     description: "Rollback to version 1",
                     changesJson: {
@@ -323,7 +323,7 @@ describe("Versions API", () => {
             const alert = await prismaMock.agentAlert.create({
                 data: {
                     agentId: "test-agent-uuid",
-                    tenantId: "test-tenant",
+                    organizationId: "test-tenant",
                     severity: "INFO",
                     source: "SYSTEM",
                     title: "Agent rolled back",
@@ -338,7 +338,7 @@ describe("Versions API", () => {
         it("should create audit log entry for rollback", async () => {
             prismaMock.auditLog.create.mockResolvedValue({
                 id: "audit-uuid",
-                tenantId: "test-tenant",
+                organizationId: "test-tenant",
                 action: "AGENT_ROLLBACK",
                 entityType: "Agent",
                 entityId: "test-agent-uuid",
@@ -348,7 +348,7 @@ describe("Versions API", () => {
 
             await prismaMock.auditLog.create({
                 data: {
-                    tenantId: "test-tenant",
+                    organizationId: "test-tenant",
                     action: "AGENT_ROLLBACK",
                     entityType: "Agent",
                     entityId: "test-agent-uuid",

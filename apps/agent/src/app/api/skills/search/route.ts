@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
 
         // Get all skills with their tool counts
         const allSkills = await prisma.skill.findMany({
-            where: { type: { in: ["SYSTEM", "USER"] } },
+            where: {},
             select: {
                 slug: true,
                 name: true,

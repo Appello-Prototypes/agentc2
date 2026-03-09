@@ -216,7 +216,7 @@ describe("Cross-Tenant Isolation", () => {
             );
         });
 
-        it("campaign-chain scopes by tenantId", async () => {
+        it("campaign-chain scopes by organizationId", async () => {
             mockAuthenticateRequest.mockResolvedValue({
                 userId: "user-1",
                 organizationId: ORG_A
@@ -232,7 +232,7 @@ describe("Cross-Tenant Isolation", () => {
             expect(prismaMock.campaign.findFirst).toHaveBeenCalledWith(
                 expect.objectContaining({
                     where: expect.objectContaining({
-                        tenantId: ORG_A
+                        organizationId: ORG_A
                     })
                 })
             );

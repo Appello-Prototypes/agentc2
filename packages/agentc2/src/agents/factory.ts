@@ -323,7 +323,8 @@ export async function createAgentFromConfigAsync(
 
     // Resolve model — prefer org-scoped API key, fall back to string-based model router
     const modelName = resolveModelName(config.modelProvider, config.modelName);
-    const organizationId = requestContext?.resource?.tenantId || requestContext?.tenantId;
+    const organizationId =
+        requestContext?.resource?.organizationId || requestContext?.organizationId;
     const resolvedModel = await resolveModelForOrg(config.modelProvider, modelName, organizationId);
     const model = resolvedModel ?? `${config.modelProvider}/${modelName}`;
 

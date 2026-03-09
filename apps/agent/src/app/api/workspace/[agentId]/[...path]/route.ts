@@ -75,16 +75,15 @@ async function verifyAgentOrgOwnership(
     userOrgId: string
 ): Promise<boolean | null> {
     const agent = await prisma.agent.findFirst({
-        where: { slug: agentSlug },
+        where: { slug: agentSlug, workspace: { organizationId: userOrgId } },
         select: {
-            tenantId: true,
             workspace: { select: { organizationId: true } }
         }
     });
 
     if (!agent) return null;
 
-    const agentOrgId = agent.workspace?.organizationId || agent.tenantId;
+    const agentOrgId = agent.workspace?.organizationId;
     if (!agentOrgId) return null;
 
     return agentOrgId === userOrgId;

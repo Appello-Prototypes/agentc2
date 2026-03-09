@@ -19,7 +19,7 @@ import { enforceInputGuardrails, enforceOutputGuardrails } from "../guardrails";
  */
 export function createInputGuardrailProcessor(
     agentId: string,
-    tenantId?: string
+    organizationId?: string
 ): Processor<"input-guardrail"> {
     return {
         id: "input-guardrail" as const,
@@ -41,7 +41,7 @@ export function createInputGuardrailProcessor(
 
             if (!text) return messages;
 
-            const result = await enforceInputGuardrails(agentId, text, { tenantId });
+            const result = await enforceInputGuardrails(agentId, text, { organizationId });
 
             if (result.blocked) {
                 const reasons = result.violations.map((v) => v.message).join("; ");
@@ -61,7 +61,7 @@ export function createInputGuardrailProcessor(
  */
 export function createOutputGuardrailProcessor(
     agentId: string,
-    tenantId?: string
+    organizationId?: string
 ): Processor<"output-guardrail"> {
     return {
         id: "output-guardrail" as const,
@@ -83,7 +83,7 @@ export function createOutputGuardrailProcessor(
 
             if (!text) return messages;
 
-            const result = await enforceOutputGuardrails(agentId, text, { tenantId });
+            const result = await enforceOutputGuardrails(agentId, text, { organizationId });
 
             if (result.blocked) {
                 const reasons = result.violations.map((v) => v.message).join("; ");

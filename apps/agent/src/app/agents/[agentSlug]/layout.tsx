@@ -30,7 +30,7 @@ interface Agent {
     modelName: string;
     isActive: boolean;
     isArchived: boolean;
-    type: "SYSTEM" | "USER" | "DEMO";
+    type: "USER" | "DEMO";
     deploymentMode?: string;
     visibility: string;
     publicToken: string | null;
@@ -45,7 +45,7 @@ interface AgentListItem {
     slug: string;
     name: string;
     isActive: boolean;
-    type: "SYSTEM" | "USER" | "DEMO";
+    type: "USER" | "DEMO";
 }
 
 /** Format model name for display (e.g., "claude-sonnet-4-20250514" -> "Claude Sonnet 4") */
@@ -304,7 +304,7 @@ export default function AgentDetailLayout({ children }: { children: React.ReactN
                                     entityName={agent.name}
                                     entitySlug={agent.slug}
                                     isArchived={agent.isArchived}
-                                    isSystem={agent.type === "SYSTEM"}
+                                    isSystem={false}
                                     isPlaybookSourced={!!agent.playbookInstallationId}
                                     variant="buttons"
                                     redirectTo="/agents"

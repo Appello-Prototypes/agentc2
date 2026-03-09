@@ -36,7 +36,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         const template = await prisma.campaignTemplate.findFirst({
             where: {
                 id,
-                OR: [{ createdBy: { in: memberIds } }, { isSystem: true }]
+                createdBy: { in: memberIds }
             },
             include: {
                 campaigns: {
@@ -89,7 +89,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         const existing = await prisma.campaignTemplate.findFirst({
             where: {
                 id,
-                OR: [{ createdBy: { in: memberIds } }, { isSystem: true }]
+                createdBy: { in: memberIds }
             },
             select: { id: true }
         });
@@ -152,7 +152,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
         const existing = await prisma.campaignTemplate.findFirst({
             where: {
                 id,
-                OR: [{ createdBy: { in: memberIds } }, { isSystem: true }]
+                createdBy: { in: memberIds }
             },
             select: { id: true }
         });

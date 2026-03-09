@@ -96,7 +96,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         const outputAction = await prisma.outputAction.create({
             data: {
                 agentId,
-                tenantId: context.organizationId,
                 name,
                 type,
                 configJson,

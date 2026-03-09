@@ -92,8 +92,7 @@ export default function SkillsPage() {
 
     // Summary stats
     const totalSkills = skills.length;
-    const systemSkills = skills.filter((s) => s.type === "SYSTEM").length;
-    const userSkills = skills.filter((s) => s.type === "USER").length;
+    const userSkills = skills.length;
     const totalTools = skills.reduce((sum, s) => sum + s.tools.length, 0);
     const inUse = skills.filter((s) => s.agents.length > 0).length;
     const integrationSkills = skills.filter((s) => s.category === "integration").length;
@@ -133,12 +132,6 @@ export default function SkillsPage() {
                     <CardContent className="p-4">
                         <p className="text-muted-foreground text-xs font-medium">Total Skills</p>
                         <p className="text-2xl font-bold">{totalSkills}</p>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardContent className="p-4">
-                        <p className="text-muted-foreground text-xs font-medium">System</p>
-                        <p className="text-2xl font-bold">{systemSkills}</p>
                     </CardContent>
                 </Card>
                 <Card>
@@ -196,7 +189,7 @@ export default function SkillsPage() {
                     </SelectTrigger>
                     <SelectContent>
                         <SelectItem value="all">All Types</SelectItem>
-                        <SelectItem value="SYSTEM">System</SelectItem>
+
                         <SelectItem value="USER">User</SelectItem>
                     </SelectContent>
                 </Select>
@@ -231,14 +224,7 @@ export default function SkillsPage() {
                                             <Badge variant="outline" className="text-[10px]">
                                                 v{skill.version}
                                             </Badge>
-                                            <Badge
-                                                variant={
-                                                    skill.type === "SYSTEM"
-                                                        ? "default"
-                                                        : "secondary"
-                                                }
-                                                className="text-[10px]"
-                                            >
+                                            <Badge variant="secondary" className="text-[10px]">
                                                 {skill.type}
                                             </Badge>
                                         </div>

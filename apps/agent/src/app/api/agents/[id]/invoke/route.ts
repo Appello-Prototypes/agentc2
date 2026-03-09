@@ -141,7 +141,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         // Enrich context with authenticated org/user so tools get proper scoping
         const enrichedContext = {
             ...(context || {}),
-            tenantId: context?.tenantId || authResult.context.organizationId,
+            organizationId: context?.organizationId || authResult.context.organizationId,
             userId: context?.userId || authResult.context.userId
         };
 
@@ -360,7 +360,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                     input,
                     agentId: record.id,
                     agentSlug: record.slug,
-                    tenantId: record.tenantId || undefined
+                    organizationId: record.workspace?.organizationId || undefined
                 });
                 runHandle = {
                     runId: turnHandle.runId,
@@ -382,7 +382,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                     userId: context?.userId,
                     threadId: context.threadId,
                     sessionId: context?.sessionId,
-                    tenantId: record.tenantId || undefined
+                    organizationId: record.workspace?.organizationId || undefined
                 });
                 runHandle = {
                     runId: convHandle.runId,
@@ -405,7 +405,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 userId: context?.userId,
                 threadId: context?.threadId,
                 sessionId: context?.sessionId,
-                tenantId: record.tenantId || undefined
+                organizationId: record.workspace?.organizationId || undefined
             });
         }
         // Audit log the invocation
@@ -414,14 +414,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             record.id,
             runSource,
             context?.userId,
-            record.tenantId || undefined
+            record.workspace?.organizationId || undefined
         );
 
         try {
             // Enforce input guardrails before execution
             const inputCheck = await enforceInputGuardrails(record.id, input, {
                 runId: runHandle.runId,
-                tenantId: record.tenantId || undefined
+                organizationId: record.workspace?.organizationId || undefined
             });
             if (inputCheck.blocked) {
                 await runHandle.fail(
@@ -779,7 +779,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             if (responseText) {
                 const outputCheck = await enforceOutputGuardrails(record.id, responseText, {
                     runId: runHandle.runId,
-                    tenantId: record.tenantId || undefined
+                    organizationId: record.workspace?.organizationId || undefined
                 });
                 if (outputCheck.blocked) {
                     return NextResponse.json({

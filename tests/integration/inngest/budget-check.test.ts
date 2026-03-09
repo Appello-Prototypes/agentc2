@@ -88,7 +88,7 @@ describe("Inngest: budget-check", () => {
                     return prismaMock.agentAlert.create({
                         data: {
                             agentId: policy.agentId,
-                            tenantId: policy.tenantId,
+                            organizationId: policy.organizationId,
                             severity,
                             source: "BUDGET",
                             title:
@@ -147,7 +147,7 @@ describe("Inngest: budget-check", () => {
                     return prismaMock.agentAlert.create({
                         data: {
                             agentId: policy.agentId,
-                            tenantId: policy.tenantId,
+                            organizationId: policy.organizationId,
                             severity,
                             source: "BUDGET",
                             title: "Budget exceeded",

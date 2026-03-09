@@ -132,7 +132,6 @@ export async function POST(
         const rollbackVersion = await prisma.agentVersion.create({
             data: {
                 agentId,
-                tenantId: agent!.tenantId,
                 version: newVersion,
                 description: `Rollback to version ${targetVersion}${reason ? `: ${reason}` : ""}`,
                 instructions: updatedAgent.instructions,
@@ -188,7 +187,6 @@ export async function POST(
         // Create audit log
         await prisma.auditLog.create({
             data: {
-                tenantId: agent!.tenantId,
                 actorId: createdBy,
                 action: "VERSION_ROLLBACK",
                 entityType: "Agent",

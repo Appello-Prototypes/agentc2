@@ -24,7 +24,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         const event = await prisma.triggerEvent.findFirst({
             where: {
                 id,
-                OR: [{ workspaceId: workspaceContext.workspaceId }, { workspaceId: null }]
+                workspaceId: workspaceContext.workspaceId
             },
             include: {
                 trigger: {

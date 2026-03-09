@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
 
         let slug = generateSlug(name);
         let suffix = 2;
-        while (await prisma.pulse.findUnique({ where: { slug } })) {
+        while (await prisma.pulse.findFirst({ where: { slug, workspaceId } })) {
             slug = `${generateSlug(name)}-${suffix}`;
             suffix++;
         }

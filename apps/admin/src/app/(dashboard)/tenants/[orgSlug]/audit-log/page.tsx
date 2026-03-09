@@ -20,9 +20,8 @@ export default async function TenantAuditLogPage({
 
     const tz = await getServerTimezone();
 
-    // Get tenant audit logs (from the customer-facing audit log table)
     const logs = await prisma.auditLog.findMany({
-        where: { tenantId: org.id },
+        where: { metadata: { path: ["organizationId"], equals: org.id } },
         orderBy: { createdAt: "desc" },
         take: 100
     });

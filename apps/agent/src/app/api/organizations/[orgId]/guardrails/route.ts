@@ -29,21 +29,8 @@ export async function GET(
             return membership.response;
         }
 
-        const org = await prisma.organization.findFirst({
-            where: {
-                OR: [{ slug: orgId }, { id: orgId }]
-            }
-        });
-
-        if (!org) {
-            return NextResponse.json(
-                { success: false, error: `Organization '${orgId}' not found` },
-                { status: 404 }
-            );
-        }
-
         const policy = await prisma.orgGuardrailPolicy.findUnique({
-            where: { organizationId: org.id }
+            where: { organizationId: membership.organizationId }
         });
 
         return NextResponse.json({
@@ -100,34 +87,23 @@ export async function PUT(
         const { configJson } = parsed.data;
         const createdBy = authResult.context.userId;
 
-        const org = await prisma.organization.findFirst({
-            where: {
-                OR: [{ slug: orgId }, { id: orgId }]
-            }
-        });
-
-        if (!org) {
-            return NextResponse.json(
-                { success: false, error: `Organization '${orgId}' not found` },
-                { status: 404 }
-            );
-        }
+        const resolvedOrgId = membership.organizationId;
 
         const existing = await prisma.orgGuardrailPolicy.findUnique({
-            where: { organizationId: org.id }
+            where: { organizationId: resolvedOrgId }
         });
 
         const newVersion = (existing?.version || 0) + 1;
 
         const policy = await prisma.orgGuardrailPolicy.upsert({
-            where: { organizationId: org.id },
+            where: { organizationId: resolvedOrgId },
             update: {
                 configJson: configJson as Prisma.InputJsonValue,
                 version: newVersion,
                 createdBy
             },
             create: {
-                organizationId: org.id,
+                organizationId: resolvedOrgId,
                 configJson: configJson as Prisma.InputJsonValue,
                 version: 1,
                 createdBy
@@ -136,13 +112,12 @@ export async function PUT(
 
         await prisma.auditLog.create({
             data: {
-                tenantId: org.id,
                 actorId: createdBy,
                 action: "ORG_GUARDRAIL_UPDATE",
                 entityType: "OrgGuardrailPolicy",
                 entityId: policy.id,
                 metadata: {
-                    organizationId: org.id,
+                    organizationId: resolvedOrgId,
                     version: policy.version
                 }
             }

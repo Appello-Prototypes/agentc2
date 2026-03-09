@@ -49,7 +49,7 @@ describe("Inngest: guardrail-event", () => {
                     data: {
                         agentId: eventData.agentId,
                         runId: eventData.runId,
-                        tenantId: agent.tenantId,
+                        organizationId: agent.organizationId,
                         eventType: eventData.eventType,
                         ruleName: eventData.ruleName,
                         inputText: eventData.inputText,
@@ -97,7 +97,7 @@ describe("Inngest: guardrail-event", () => {
                 return prismaMock.agentAlert.create({
                     data: {
                         agentId: eventData.agentId,
-                        tenantId: agent.tenantId,
+                        organizationId: agent.organizationId,
                         severity: "WARNING",
                         source: "GUARDRAIL",
                         title: "Content blocked by guardrail",

@@ -1,12 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@repo/database";
-import { createAgentFromConfig, agentResolver, resolveModelOverride } from "@repo/agentc2/agents";
+import { agentResolver, resolveModelOverride } from "@repo/agentc2/agents";
 import { requireAuth } from "@/lib/authz/require-auth";
 import { requireAgentAccess } from "@/lib/authz/require-agent-access";
-
-// Feature flag for using new Agent model vs legacy StoredAgent
-// Default to true for the new database-driven agents
-const USE_DB_AGENTS = process.env.FEATURE_DB_AGENTS !== "false";
 
 /**
  * POST /api/agents/[id]/test
@@ -34,68 +29,21 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             );
         }
 
-        if (USE_DB_AGENTS) {
-            // Model routing (pre-resolve)
-            const { modelOverride: routedModelOverride } = await resolveModelOverride(id, prompt);
+        // Model routing (pre-resolve)
+        const { modelOverride: routedModelOverride } = await resolveModelOverride(id, prompt);
 
-            // Use AgentResolver to get agent (supports both slug and id)
-            // MCP-enabled agents automatically receive all MCP tools via the resolver
-            const { agent, record, source } = await agentResolver.resolve({
-                slug: id,
-                requestContext,
-                modelOverride: routedModelOverride
-            });
-
-            // Generate response with maxSteps from database or default (matches production channels)
-            const startTime = Date.now();
-            const response = await agent.generate(prompt, {
-                maxSteps: record?.maxSteps ?? 5
-            });
-            const durationMs = Date.now() - startTime;
-
-            return NextResponse.json({
-                success: true,
-                response: {
-                    text: response.text,
-                    durationMs,
-                    model: record ? `${record.modelProvider}/${record.modelName}` : "unknown",
-                    toolCalls: response.toolCalls?.length || 0
-                },
-                source
-            });
-        }
-
-        // Legacy: Use StoredAgent model
-        const storedAgent = await prisma.storedAgent.findUnique({
-            where: { id }
+        // Use AgentResolver to get agent (supports both slug and id)
+        // MCP-enabled agents automatically receive all MCP tools via the resolver
+        const { agent, record, source } = await agentResolver.resolve({
+            slug: id,
+            requestContext,
+            modelOverride: routedModelOverride
         });
 
-        if (!storedAgent) {
-            return NextResponse.json(
-                { success: false, error: `Agent '${id}' not found` },
-                { status: 404 }
-            );
-        }
-
-        // Create agent instance from config
-        const agent = createAgentFromConfig({
-            id: storedAgent.id,
-            name: storedAgent.name,
-            description: storedAgent.description,
-            instructions: storedAgent.instructions,
-            modelProvider: storedAgent.modelProvider,
-            modelName: storedAgent.modelName,
-            temperature: storedAgent.temperature,
-            tools: storedAgent.tools,
-            memory: storedAgent.memory,
-            metadata: storedAgent.metadata as Record<string, unknown> | null,
-            isActive: storedAgent.isActive
-        });
-
-        // Generate response
+        // Generate response with maxSteps from database or default (matches production channels)
         const startTime = Date.now();
         const response = await agent.generate(prompt, {
-            maxSteps: 5
+            maxSteps: record?.maxSteps ?? 5
         });
         const durationMs = Date.now() - startTime;
 
@@ -104,10 +52,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             response: {
                 text: response.text,
                 durationMs,
-                model: `${storedAgent.modelProvider}/${storedAgent.modelName}`,
+                model: record ? `${record.modelProvider}/${record.modelName}` : "unknown",
                 toolCalls: response.toolCalls?.length || 0
             },
-            source: "legacy"
+            source
         });
     } catch (error) {
         console.error("[Agent Test] Error:", error);

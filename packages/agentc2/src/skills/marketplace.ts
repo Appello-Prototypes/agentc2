@@ -77,7 +77,11 @@ export async function installSkill(params: {
         include: { tools: true, documents: true }
     });
 
-    // Create a copy of the skill in the target workspace
+    const targetWs = await prisma.workspace.findUniqueOrThrow({
+        where: { id: params.targetWorkspaceId },
+        select: { organizationId: true }
+    });
+
     const installed = await prisma.skill.create({
         data: {
             slug: source.slug,
@@ -88,6 +92,7 @@ export async function installSkill(params: {
             category: source.category,
             tags: source.tags,
             workspaceId: params.targetWorkspaceId,
+            organizationId: targetWs.organizationId,
             metadata: {
                 installedFrom: params.sourceSkillId,
                 installedAt: new Date().toISOString()

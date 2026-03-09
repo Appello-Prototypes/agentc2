@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
 import { getDemoSession } from "@/lib/standalone-auth";
+import { getUserOrganizationId, getDefaultWorkspaceIdForUser } from "@/lib/organization";
 
 async function getOrgMemberIds(userId: string): Promise<string[]> {
     const membership = await prisma.membership.findFirst({
@@ -26,11 +27,15 @@ export async function GET(request: NextRequest) {
     }
 
     try {
+        const organizationId = await getUserOrganizationId(session.user.id);
         const memberIds = await getOrgMemberIds(session.user.id);
 
         const templates = await prisma.campaignTemplate.findMany({
             where: {
-                OR: [{ createdBy: { in: memberIds } }, { isSystem: true }]
+                OR: [
+                    ...(organizationId ? [{ organizationId }] : []),
+                    { createdBy: { in: memberIds } }
+                ]
             },
             orderBy: { createdAt: "desc" },
             include: {
@@ -89,6 +94,15 @@ export async function POST(request: NextRequest) {
             "-" +
             Date.now().toString(36);
 
+        const organizationId = await getUserOrganizationId(session.user.id);
+        const workspaceId = await getDefaultWorkspaceIdForUser(session.user.id);
+        if (!organizationId || !workspaceId) {
+            return NextResponse.json(
+                { error: "No organization or workspace found" },
+                { status: 400 }
+            );
+        }
+
         const template = await prisma.campaignTemplate.create({
             data: {
                 slug,
@@ -103,6 +117,8 @@ export async function POST(request: NextRequest) {
                 requireApproval: requireApproval || false,
                 maxCostUsd: maxCostUsd || null,
                 timeoutMinutes: timeoutMinutes || null,
+                organizationId,
+                workspaceId,
                 createdBy: session.user.id
             }
         });

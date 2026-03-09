@@ -75,7 +75,6 @@ export async function DELETE(
         // Log audit event
         await prisma.auditLog.create({
             data: {
-                tenantId: session.tenantId,
                 actorId: context.userId,
                 action: "LEARNING_SESSION_CANCELLED",
                 entityType: "LearningSession",

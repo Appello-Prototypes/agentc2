@@ -78,7 +78,7 @@ export async function GET(
             }),
             prisma.costEvent.findMany({
                 where: {
-                    tenantId: org.id,
+                    agent: { workspace: { organizationId: org.id } },
                     createdAt: { gte: startOfMonth }
                 },
                 select: {

@@ -134,7 +134,8 @@ export async function POST(
             await refreshWorkflowMetrics(workflow.id, new Date());
 
             const organizationId =
-                body.requestContext?.tenantId || body.requestContext?.resource?.tenantId;
+                body.requestContext?.organizationId ||
+                body.requestContext?.resource?.organizationId;
             if (organizationId && result.suspended?.stepId) {
                 try {
                     await createEngagement({

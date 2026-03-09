@@ -213,7 +213,7 @@ async function buildRunChain(runId: string, organizationId: string): Promise<Cau
     const run = await prisma.agentRun.findFirst({
         where: {
             id: runId,
-            OR: [{ tenantId: organizationId }, { agent: { workspace: { organizationId } } }]
+            agent: { workspace: { organizationId } }
         },
         include: {
             agent: { select: { slug: true, name: true } },

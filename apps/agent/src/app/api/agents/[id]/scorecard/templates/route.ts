@@ -33,8 +33,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                         name: template.name,
                         description: template.description,
                         category: template.category,
-                        criteria: template.criteria as unknown as Prisma.InputJsonValue,
-                        isSystem: true
+                        criteria: template.criteria as unknown as Prisma.InputJsonValue
                     }
                 });
             }
@@ -52,8 +51,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                 name: t.name,
                 description: t.description,
                 category: t.category,
-                criteria: t.criteria,
-                isSystem: t.isSystem
+                criteria: t.criteria
             }))
         });
     } catch (error) {
@@ -95,11 +93,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             );
         }
 
-        const agent = await prisma.agent.findUnique({
-            where: { id: agentId },
-            select: { tenantId: true }
-        });
-
         const template = await prisma.scorecardTemplate.findUnique({
             where: { id: templateId }
         });
@@ -133,7 +126,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             scorecard = await prisma.agentScorecard.create({
                 data: {
                     agentId,
-                    tenantId: agent!.tenantId,
                     criteria: template.criteria as Prisma.InputJsonValue,
                     templateId: template.id
                 }

@@ -53,13 +53,13 @@ export async function POST(
             where: { webhookPath: path },
             include: {
                 agent: {
-                    select: { id: true, slug: true, name: true, isActive: true }
+                    select: { id: true, slug: true, name: true, isActive: true, workspaceId: true }
                 },
                 workflow: {
-                    select: { id: true, slug: true, name: true, isActive: true }
+                    select: { id: true, slug: true, name: true, isActive: true, workspaceId: true }
                 },
                 network: {
-                    select: { id: true, slug: true, name: true, isActive: true }
+                    select: { id: true, slug: true, name: true, isActive: true, workspaceId: true }
                 }
             }
         });
@@ -162,14 +162,12 @@ export async function POST(
         }
 
         // ── Create trigger event AFTER signature verification ──
-        let workspaceId = trigger.workspaceId;
-        if (!workspaceId) {
-            const defaultWorkspace = await prisma.workspace.findFirst({
-                where: { isDefault: true },
-                select: { id: true }
-            });
-            workspaceId = defaultWorkspace?.id ?? null;
-        }
+        const workspaceId: string | null =
+            trigger.workspaceId ??
+            trigger.agent?.workspaceId ??
+            trigger.workflow?.workspaceId ??
+            trigger.network?.workspaceId ??
+            null;
 
         const triggerEvent = await createTriggerEventRecord({
             triggerId: trigger.id,

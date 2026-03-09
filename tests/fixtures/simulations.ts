@@ -127,7 +127,7 @@ export function generateSessions(
 export const mockSimulationRun = {
     id: "sim-run-uuid",
     agentId: "test-agent-uuid",
-    tenantId: null,
+    organizationId: null,
     status: "COMPLETED" as const,
     runType: "TEST" as const,
     inputText: "Hey, I submitted my timesheet last Friday but it still shows as pending.",
@@ -156,7 +156,7 @@ export function generateSimulationRuns(count: number, sessionId: string, agentId
     return Array.from({ length: count }, (_, i) => ({
         id: faker.string.uuid(),
         agentId,
-        tenantId: null,
+        organizationId: null,
         status: faker.helpers.weightedArrayElement([
             { value: "COMPLETED", weight: 9 },
             { value: "FAILED", weight: 1 }

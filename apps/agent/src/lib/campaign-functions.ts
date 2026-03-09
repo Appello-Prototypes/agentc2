@@ -99,11 +99,22 @@ async function invokeCampaignAgent(opts: {
     prompt: string;
     campaignId: string;
     phase: string;
+    organizationId?: string;
+    workspaceId?: string;
     metadata?: Record<string, unknown>;
 }): Promise<{ runId: string; output: string }> {
+    let { organizationId, workspaceId } = opts;
+    if (!organizationId || !workspaceId) {
+        const ctx = await getCampaignContext(opts.campaignId);
+        organizationId = organizationId || ctx.organizationId;
+        workspaceId = workspaceId || ctx.workspaceId;
+    }
+
     const { agent, record } = await agentResolver.resolve({
         slug: opts.agentSlug,
-        loadAllSkills: true // Campaign agents need full capability
+        loadAllSkills: true,
+        ...(workspaceId ? { workspaceId } : {}),
+        ...(organizationId ? { organizationId } : {})
     });
     if (!record) throw new Error(`${opts.agentSlug} agent not found in database`);
 
@@ -112,6 +123,7 @@ async function invokeCampaignAgent(opts: {
         agentSlug: record.slug,
         input: opts.prompt,
         source: "event",
+        organizationId,
         metadata: { campaignId: opts.campaignId, phase: opts.phase, ...opts.metadata }
     });
 
@@ -186,6 +198,14 @@ async function logCampaignEvent(
             metadata: (metadata ?? undefined) as Prisma.InputJsonValue | undefined
         }
     });
+}
+
+async function getCampaignContext(campaignId: string) {
+    const c = await prisma.campaign.findUnique({
+        where: { id: campaignId },
+        select: { organizationId: true, workspaceId: true }
+    });
+    return { organizationId: c?.organizationId, workspaceId: c?.workspaceId };
 }
 
 // ─── Note: Schemas previously used by generateObject have been removed. ──────
@@ -726,32 +746,48 @@ export const campaignExecuteFunction = inngest.createFunction(
 
                     // Bridge into ApprovalRequest for unified Command governance
                     try {
-                        const defaultWs = await prisma.workspace.findFirst({
-                            where: { isDefault: true },
-                            select: { id: true, organizationId: true }
+                        // Derive org from campaign creator's membership
+                        const camp = await prisma.campaign.findUnique({
+                            where: { id: campaignId },
+                            select: { createdBy: true, organizationId: true }
                         });
-                        if (defaultWs) {
-                            await prisma.approvalRequest.create({
-                                data: {
-                                    organizationId: defaultWs.organizationId,
-                                    workspaceId: defaultWs.id,
-                                    sourceType: "campaign",
-                                    sourceId: `campaign:${campaignId}:seq:${seq}`,
-                                    status: "pending",
-                                    reviewContext: {
-                                        type: "mission-sequence-approval",
-                                        campaignId,
-                                        sequence: seq,
-                                        missionIds: missions
-                                            .filter((m) => m.requiresApproval)
-                                            .map((m) => m.id),
-                                        missionNames: missions
-                                            .filter((m) => m.requiresApproval)
-                                            .map((m) => m.name?.slice(0, 100) ?? m.id)
-                                    },
-                                    metadata: { campaignId, sequence: seq }
-                                }
+                        let orgId = camp?.organizationId ?? null;
+                        if (!orgId && camp?.createdBy) {
+                            const mem = await prisma.membership.findFirst({
+                                where: { userId: camp.createdBy },
+                                orderBy: { createdAt: "asc" },
+                                select: { organizationId: true }
                             });
+                            orgId = mem?.organizationId ?? null;
+                        }
+                        if (orgId) {
+                            const defaultWs = await prisma.workspace.findFirst({
+                                where: { organizationId: orgId, isDefault: true },
+                                select: { id: true, organizationId: true }
+                            });
+                            if (defaultWs) {
+                                await prisma.approvalRequest.create({
+                                    data: {
+                                        organizationId: defaultWs.organizationId,
+                                        workspaceId: defaultWs.id,
+                                        sourceType: "campaign",
+                                        sourceId: `campaign:${campaignId}:seq:${seq}`,
+                                        status: "pending",
+                                        reviewContext: {
+                                            type: "mission-sequence-approval",
+                                            campaignId,
+                                            sequence: seq,
+                                            missionIds: missions
+                                                .filter((m) => m.requiresApproval)
+                                                .map((m) => m.id),
+                                            missionNames: missions
+                                                .filter((m) => m.requiresApproval)
+                                                .map((m) => m.name?.slice(0, 100) ?? m.id)
+                                        },
+                                        metadata: { campaignId, sequence: seq }
+                                    }
+                                });
+                            }
                         }
                     } catch (err) {
                         console.warn("[Campaign] Failed to create ApprovalRequest:", err);
@@ -1207,12 +1243,16 @@ async function executeTask(
     // Extract tool hints from coordinating instructions for filtering
     const toolHints = instructions?.toolHints as string[] | undefined;
 
+    // Resolve org/workspace context from the campaign
+    const campaignCtx = await getCampaignContext(campaignId);
+
     // Resolve the agent with all skills loaded for campaign execution
     const { agent, record, activeSkills } = await agentResolver.resolve({
         slug: agentSlug,
-        loadAllSkills: true, // Campaign tasks need full capability
-        // If the planner specified tool hints, use them to reduce token overhead
-        ...(toolHints?.length ? { toolFilter: toolHints } : {})
+        loadAllSkills: true,
+        ...(toolHints?.length ? { toolFilter: toolHints } : {}),
+        ...(campaignCtx.workspaceId ? { workspaceId: campaignCtx.workspaceId } : {}),
+        ...(campaignCtx.organizationId ? { organizationId: campaignCtx.organizationId } : {})
     });
 
     if (!record) {
@@ -1260,7 +1300,7 @@ Report your results clearly and completely.`;
         agentSlug: record.slug,
         input: prompt,
         source: "event",
-        tenantId: undefined,
+        organizationId: campaignCtx.organizationId,
         metadata: {
             campaignId,
             missionId: mission.id,
@@ -1289,11 +1329,11 @@ Report your results clearly and completely.`;
 
                     // If this is a tool-not-found error, clear MCP cache before retry
                     // so the next attempt gets a fresh connection to MCP servers
-                    if (isToolNotFoundError(lastRetryError) && record.tenantId) {
+                    if (isToolNotFoundError(lastRetryError) && record.workspace?.organizationId) {
                         console.warn(
-                            `[Campaign] Tool not found — clearing MCP cache for org ${record.tenantId} before retry`
+                            `[Campaign] Tool not found — clearing MCP cache for org ${record.workspace.organizationId} before retry`
                         );
-                        invalidateMcpCacheForOrg(record.tenantId);
+                        invalidateMcpCacheForOrg(record.workspace.organizationId);
                     }
 
                     console.warn(

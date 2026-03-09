@@ -55,8 +55,14 @@ export default async function FinancialsPage() {
                 billedCostUsd: true,
                 costUsd: true,
                 platformCostUsd: true,
-                tenantId: true,
-                createdAt: true
+                createdAt: true,
+                agent: {
+                    select: {
+                        workspace: {
+                            select: { organizationId: true }
+                        }
+                    }
+                }
             }
         }),
         prisma.orgSubscription.findMany({
@@ -187,11 +193,11 @@ export default async function FinancialsPage() {
     const tenantRevMap: Record<string, number> = {};
     const tenantCostMap: Record<string, number> = {};
     for (const e of currentMonthEvents) {
-        if (e.tenantId) {
-            tenantRevMap[e.tenantId] =
-                (tenantRevMap[e.tenantId] ?? 0) + (e.billedCostUsd ?? e.costUsd ?? 0);
-            tenantCostMap[e.tenantId] =
-                (tenantCostMap[e.tenantId] ?? 0) + (e.platformCostUsd ?? e.costUsd ?? 0);
+        const orgId = e.agent?.workspace?.organizationId;
+        if (orgId) {
+            tenantRevMap[orgId] = (tenantRevMap[orgId] ?? 0) + (e.billedCostUsd ?? e.costUsd ?? 0);
+            tenantCostMap[orgId] =
+                (tenantCostMap[orgId] ?? 0) + (e.platformCostUsd ?? e.costUsd ?? 0);
         }
     }
 

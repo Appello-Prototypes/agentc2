@@ -6,7 +6,7 @@ import { faker } from "@faker-js/faker";
 export const mockRun = {
     id: "test-run-uuid",
     agentId: "test-agent-uuid",
-    tenantId: "test-tenant",
+    organizationId: "test-tenant",
     status: "COMPLETED" as const,
     runType: "INTERACTIVE" as const,
     inputText: "Hello, how can you help me today?",
@@ -89,7 +89,7 @@ export const mockTrace = {
     id: "test-trace-uuid",
     runId: "test-run-uuid",
     agentId: "test-agent-uuid",
-    tenantId: "test-tenant",
+    organizationId: "test-tenant",
     status: "COMPLETED" as const,
     inputText: "Hello, how can you help me today?",
     outputText: "I'm a helpful AI assistant.",

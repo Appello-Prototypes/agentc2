@@ -163,7 +163,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
         const agent = await prisma.agent.findUnique({
             where: { id: agentId },
-            select: { tenantId: true, version: true }
+            select: { version: true }
         });
 
         // Check for existing active session
@@ -192,7 +192,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         const session = await prisma.learningSession.create({
             data: {
                 agentId,
-                tenantId: agent!.tenantId,
                 status: "COLLECTING",
                 baselineVersion: agent!.version,
                 scorerConfig: { scorers: [] },

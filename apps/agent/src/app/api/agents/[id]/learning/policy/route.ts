@@ -75,7 +75,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
         const agent = await prisma.agent.findUnique({
             where: { id: agentId },
-            select: { tenantId: true, slug: true }
+            select: { slug: true }
         });
 
         // Validate and extract policy fields
@@ -97,7 +97,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             where: { agentId },
             create: {
                 agentId,
-                tenantId: agent!.tenantId,
                 enabled: enabled ?? true,
                 autoPromotionEnabled: autoPromotionEnabled ?? false,
                 scheduledEnabled: scheduledEnabled ?? true,
@@ -126,7 +125,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         // Audit log
         await prisma.auditLog.create({
             data: {
-                tenantId: agent!.tenantId,
                 actorId: updatedBy || "unknown",
                 action: "LEARNING_POLICY_UPDATED",
                 entityType: "LearningPolicy",

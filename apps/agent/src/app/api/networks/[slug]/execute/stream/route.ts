@@ -132,7 +132,7 @@ export async function POST(
                         {
                             networkRunId: run.id,
                             networkSlug: network.slug,
-                            tenantId: networkOrgId || undefined,
+                            organizationId: networkOrgId || undefined,
                             inputMessage: message
                         },
                         {

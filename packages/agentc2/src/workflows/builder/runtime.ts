@@ -284,7 +284,8 @@ async function executeAgentStep(
     const prompt = resolveTemplate(config.promptTemplate || "", context) as string;
     const { agent } = await agentResolver.resolve({
         slug: agentSlug,
-        requestContext
+        requestContext,
+        fallbackToSystem: false
     });
 
     let agentRunId: string | undefined;
@@ -404,7 +405,8 @@ async function executeToolStep(
         throw new Error(`Tool step "${step.id}" missing toolId`);
     }
 
-    const organizationId = requestContext?.resource?.tenantId || requestContext?.tenantId;
+    const organizationId =
+        requestContext?.resource?.organizationId || requestContext?.organizationId;
     const tools = await getToolsByNamesAsync([config.toolId], organizationId);
     const tool = tools[config.toolId];
     if (!tool) {

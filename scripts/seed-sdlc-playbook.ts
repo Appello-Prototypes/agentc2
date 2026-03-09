@@ -732,7 +732,6 @@ async function main() {
                 await prisma.agentScorecard.create({
                     data: {
                         agentId: existing.id,
-                        tenantId: org.id,
                         criteria: agentDef.scorecard.criteria
                     }
                 });
@@ -743,7 +742,6 @@ async function main() {
                 await prisma.agentTestCase.create({
                     data: {
                         agentId: existing.id,
-                        tenantId: org.id,
                         name: tc.name,
                         inputText: tc.inputText,
                         expectedOutput: tc.expectedOutput,
@@ -757,7 +755,6 @@ async function main() {
                 await prisma.guardrailPolicy.create({
                     data: {
                         agentId: existing.id,
-                        tenantId: org.id,
                         configJson: agentDef.guardrail
                     }
                 });

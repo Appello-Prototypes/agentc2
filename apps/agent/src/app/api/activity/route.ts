@@ -34,9 +34,14 @@ export async function GET(request: NextRequest) {
         const since = searchParams.get("since"); // ISO timestamp for polling new events
         const limit = Math.min(parseInt(searchParams.get("limit") || "50"), 200);
 
-        // Build where clause -- scoped to current org
+        // Build where clause -- scoped to current org via workspace IDs
+        const orgWorkspaces = await prisma.workspace.findMany({
+            where: { organizationId: authContext.organizationId },
+            select: { id: true }
+        });
+        const orgWorkspaceIds = orgWorkspaces.map((w) => w.id);
         const where: Prisma.ActivityEventWhereInput = {
-            tenantId: authContext.organizationId
+            workspaceId: { in: orgWorkspaceIds }
         };
 
         if (typeFilter) {
@@ -120,7 +125,7 @@ export async function GET(request: NextRequest) {
 
         if (isPolling) {
             const fullWhere: Prisma.ActivityEventWhereInput = {
-                tenantId: authContext.organizationId
+                workspaceId: { in: orgWorkspaceIds }
             };
             if (agentSlug) fullWhere.agentSlug = agentSlug;
             if (typeFilter)

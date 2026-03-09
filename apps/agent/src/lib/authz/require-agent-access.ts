@@ -12,7 +12,7 @@ export async function requireAgentAccess(
             AND: [
                 { OR: [{ id: agentRef }, { slug: agentRef }] },
                 { isActive: true },
-                { OR: [{ workspace: { organizationId } }, { tenantId: organizationId }] }
+                { workspace: { organizationId } }
             ]
         },
         select: { id: true }

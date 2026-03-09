@@ -31,7 +31,7 @@ export interface AgentInfo {
     slug: string;
     name: string;
     isActive: boolean;
-    type: "SYSTEM" | "USER" | "DEMO";
+    type: "USER" | "DEMO";
     visibility?: "PRIVATE" | "ORGANIZATION" | "PUBLIC";
     ownerId?: string | null;
     description?: string;
@@ -143,9 +143,6 @@ export function AgentSelector({ value, onChange, disabled }: AgentSelectorProps)
                         (a) => a.type === "USER" && a.visibility !== "ORGANIZATION"
                     );
                     const orgAgents = agents.filter((a) => a.visibility === "ORGANIZATION");
-                    const systemAgents = agents.filter(
-                        (a) => a.type === "SYSTEM" && a.visibility !== "ORGANIZATION"
-                    );
                     const groups: { label: string; items: AgentInfo[] }[] = [];
 
                     if (ownAgents.length > 0) {
@@ -153,9 +150,6 @@ export function AgentSelector({ value, onChange, disabled }: AgentSelectorProps)
                     }
                     if (orgAgents.length > 0) {
                         groups.push({ label: "Organization", items: orgAgents });
-                    }
-                    if (systemAgents.length > 0) {
-                        groups.push({ label: "System", items: systemAgents });
                     }
 
                     if (groups.length === 0) {

@@ -102,11 +102,6 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             return NextResponse.json({ success: false, error: validation.error }, { status: 400 });
         }
 
-        const agent = await prisma.agent.findUnique({
-            where: { id: agentId },
-            select: { tenantId: true }
-        });
-
         // Check if scorecard exists
         const existing = await prisma.agentScorecard.findUnique({
             where: { agentId }
@@ -130,7 +125,6 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             scorecard = await prisma.agentScorecard.create({
                 data: {
                     agentId,
-                    tenantId: agent!.tenantId,
                     criteria: criteria as unknown as Prisma.InputJsonValue,
                     samplingRate: samplingRate ?? 1.0,
                     auditorModel: auditorModel ?? "gpt-4o-mini",

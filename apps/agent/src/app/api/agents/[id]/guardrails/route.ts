@@ -122,7 +122,6 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             },
             create: {
                 agentId,
-                tenantId: context.organizationId,
                 configJson,
                 version: 1,
                 createdBy
@@ -132,7 +131,6 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         // Create audit log
         await prisma.auditLog.create({
             data: {
-                tenantId: context.organizationId,
                 actorId: createdBy,
                 action: "GUARDRAIL_UPDATE",
                 entityType: "GuardrailPolicy",

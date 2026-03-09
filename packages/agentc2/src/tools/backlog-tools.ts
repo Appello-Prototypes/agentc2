@@ -26,7 +26,7 @@ const baseOutputSchema = z.object({ success: z.boolean().optional() }).passthrou
 async function resolveAgent(agentSlug: string) {
     const agent = await prisma.agent.findFirst({
         where: { slug: agentSlug },
-        select: { id: true, slug: true, name: true, tenantId: true, workspaceId: true }
+        select: { id: true, slug: true, name: true, workspaceId: true }
     });
     if (!agent) {
         throw new Error(`Agent not found: ${agentSlug}`);
@@ -37,19 +37,11 @@ async function resolveAgent(agentSlug: string) {
 /**
  * Get or create a backlog for an agent. Upsert pattern.
  */
-async function getOrCreateBacklog(
-    agentId: string,
-    tenantId?: string | null,
-    workspaceId?: string | null
-) {
+async function getOrCreateBacklog(agentId: string, workspaceId: string) {
     let backlog = await prisma.backlog.findUnique({ where: { agentId } });
     if (!backlog) {
         backlog = await prisma.backlog.create({
-            data: {
-                agentId,
-                tenantId: tenantId ?? undefined,
-                workspaceId: workspaceId ?? undefined
-            }
+            data: { agentId, workspaceId }
         });
     }
     return backlog;
@@ -68,7 +60,7 @@ export const backlogGetTool = createTool({
     outputSchema: baseOutputSchema,
     execute: async ({ agentSlug }) => {
         const agent = await resolveAgent(agentSlug);
-        const backlog = await getOrCreateBacklog(agent.id, agent.tenantId, agent.workspaceId);
+        const backlog = await getOrCreateBacklog(agent.id, agent.workspaceId);
 
         const counts = await prisma.backlogTask.groupBy({
             by: ["status"],
@@ -138,7 +130,7 @@ export const backlogAddTaskTool = createTool({
         contextJson
     }) => {
         const agent = await resolveAgent(agentSlug);
-        const backlog = await getOrCreateBacklog(agent.id, agent.tenantId, agent.workspaceId);
+        const backlog = await getOrCreateBacklog(agent.id, agent.workspaceId);
 
         // Deduplication: check for an existing task with the same title (case-insensitive, any status)
         const existing = await prisma.backlogTask.findFirst({
@@ -190,8 +182,7 @@ export const backlogAddTaskTool = createTool({
             source: source ?? "agent",
             taskId: task.id,
             tags: tags ?? [],
-            tenantId: agent.tenantId ?? undefined,
-            workspaceId: agent.workspaceId ?? undefined
+            workspaceId: agent.workspaceId
         });
 
         return {
@@ -316,7 +307,6 @@ export const backlogUpdateTaskTool = createTool({
                                 id: true,
                                 slug: true,
                                 name: true,
-                                tenantId: true,
                                 workspaceId: true
                             }
                         }
@@ -373,8 +363,7 @@ export const backlogUpdateTaskTool = createTool({
                 status:
                     status === "COMPLETED" ? "success" : status === "FAILED" ? "failure" : "info",
                 taskId: task.id,
-                tenantId: agent.tenantId ?? undefined,
-                workspaceId: agent.workspaceId ?? undefined
+                workspaceId: agent.workspaceId
             });
         }
 
@@ -416,7 +405,6 @@ export const backlogCompleteTaskTool = createTool({
                                 id: true,
                                 slug: true,
                                 name: true,
-                                tenantId: true,
                                 workspaceId: true
                             }
                         }
@@ -448,8 +436,7 @@ export const backlogCompleteTaskTool = createTool({
             detail: result,
             status: "success",
             taskId: task.id,
-            tenantId: agent.tenantId ?? undefined,
-            workspaceId: agent.workspaceId ?? undefined
+            workspaceId: agent.workspaceId
         });
 
         return {

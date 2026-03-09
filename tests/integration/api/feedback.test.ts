@@ -120,7 +120,7 @@ describe("Feedback API", () => {
                 create: {
                     runId: feedbackData.runId,
                     agentId: "test-agent-uuid",
-                    tenantId: "test-tenant",
+                    organizationId: "test-tenant",
                     thumbs: feedbackData.thumbs,
                     rating: feedbackData.rating,
                     comment: feedbackData.comment

@@ -105,7 +105,8 @@ interface ToolDefinition {
  */
 export async function generateSkillForMcpServer(
     serverKey: string,
-    tools: ToolDefinition[]
+    tools: ToolDefinition[],
+    context?: { workspaceId?: string; organizationId?: string }
 ): Promise<{ skillId: string; slug: string; created: boolean; toolCount: number }> {
     const serverConfig = SERVER_SKILL_MAP[serverKey];
 
@@ -128,7 +129,7 @@ export async function generateSkillForMcpServer(
 
     // Upsert the skill (slug is compound-unique with workspaceId, so use findFirst)
     const existing = await prisma.skill.findFirst({
-        where: { slug, workspaceId: null }
+        where: { slug, ...(context?.workspaceId ? { workspaceId: context.workspaceId } : {}) }
     });
     const skill = existing
         ? await prisma.skill.update({
@@ -136,7 +137,16 @@ export async function generateSkillForMcpServer(
               data: { name, description, instructions, category, tags }
           })
         : await prisma.skill.create({
-              data: { slug, name, description, instructions, category, tags, type: "SYSTEM" }
+              data: {
+                  slug,
+                  name,
+                  description,
+                  instructions,
+                  category,
+                  tags,
+                  workspaceId: context!.workspaceId!,
+                  organizationId: context!.organizationId!
+              }
           });
 
     // Update tool attachments

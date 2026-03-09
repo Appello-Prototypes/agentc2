@@ -185,7 +185,6 @@ async function processSlackFeedback(params: {
             data: {
                 runId: params.runId,
                 agentId: params.agentId,
-                tenantId: params.organizationId,
                 comment: params.text,
                 source: "slack"
             }
@@ -598,7 +597,7 @@ async function listActiveAgents(
     const agents = await prisma.agent.findMany({
         where: {
             isActive: true,
-            type: { in: ["SYSTEM", "USER"] },
+            type: "USER",
             ...(organizationId ? { workspace: { organizationId } } : {})
         },
         select: { slug: true, name: true, description: true },
@@ -1092,7 +1091,7 @@ async function processMessage(
             slug,
             requestContext: {
                 userId,
-                tenantId: installation?.organizationId ?? instanceBinding?.organizationId,
+                organizationId: installation?.organizationId ?? instanceBinding?.organizationId,
                 metadata: requestMetadata
             },
             threadId: memoryThread,

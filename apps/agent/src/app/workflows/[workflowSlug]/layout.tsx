@@ -19,7 +19,7 @@ interface WorkflowDetail {
     isPublished: boolean;
     isActive: boolean;
     isArchived: boolean;
-    type?: "SYSTEM" | "USER";
+    type?: "USER";
     runCount: number;
     visibility: string;
     publicToken: string | null;
@@ -140,7 +140,7 @@ export default function WorkflowLayout({ children }: { children: React.ReactNode
                                     entityName={workflow.name}
                                     entitySlug={workflow.slug}
                                     isArchived={workflow.isArchived}
-                                    isSystem={workflow.type === "SYSTEM"}
+                                    isSystem={false}
                                     variant="buttons"
                                     redirectTo="/workflows"
                                 />

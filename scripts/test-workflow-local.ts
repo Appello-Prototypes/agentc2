@@ -56,7 +56,7 @@ async function main() {
                 repository: "Appello-Prototypes/agentc2",
                 labels: ["test", "signatures"]
             },
-            requestContext: { tenantId: orgId },
+            requestContext: { organizationId: orgId },
             workflowMeta: { runId, workflowSlug: "sdlc-bugfix" },
             onStepEvent: (event) => {
                 console.log(`[STEP] ${event.stepId} (${event.stepType}) => ${event.status}`);

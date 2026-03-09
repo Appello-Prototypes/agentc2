@@ -44,7 +44,6 @@ export async function authenticateRequest(
         }
 
         const orgSlugHeader = request!.headers.get("x-organization-slug")?.trim();
-        const orgIdHeader = request!.headers.get("x-organization-id")?.trim();
 
         const resolveOrgContext = async (orgSlug: string, userIdHint?: string | null) => {
             const org = await prisma.organization.findUnique({
@@ -77,34 +76,23 @@ export async function authenticateRequest(
             return { userId: ownerMembership.userId, organizationId: org.id };
         };
 
-        // Check against MCP_API_KEY env var
+        // Check against MCP_API_KEY env var (locked to its configured org only)
         const validApiKey = process.env.MCP_API_KEY;
         if (validApiKey && apiKey === validApiKey) {
             console.warn(
                 "[api-auth] DEPRECATED: Global MCP_API_KEY used for authentication. " +
                     "Migrate to per-org API keys via /api/organizations/[orgId]/mcp-api-key"
             );
-            // X-Organization-Id takes priority (injected by agent workspace context)
-            if (orgIdHeader) {
-                const org = await prisma.organization.findUnique({
-                    where: { id: orgIdHeader },
-                    select: { id: true }
-                });
-                if (org) {
-                    const ownerMembership = await prisma.membership.findFirst({
-                        where: { organizationId: org.id, role: "owner" },
-                        select: { userId: true }
-                    });
-                    if (ownerMembership) {
-                        return { userId: ownerMembership.userId, organizationId: org.id };
-                    }
-                }
+            const configuredOrgSlug = process.env.MCP_API_ORGANIZATION_SLUG;
+            if (!configuredOrgSlug) {
+                console.error(
+                    "[api-auth] MCP_API_KEY present but MCP_API_ORGANIZATION_SLUG not set. " +
+                        "Global API key rejected."
+                );
+                return null;
             }
-            const orgSlug = orgSlugHeader || process.env.MCP_API_ORGANIZATION_SLUG;
-            if (orgSlug) {
-                const context = await resolveOrgContext(orgSlug);
-                if (context) return context;
-            }
+            const context = await resolveOrgContext(configuredOrgSlug);
+            if (context) return context;
         }
 
         // Check against ToolCredential table (database-stored API keys)

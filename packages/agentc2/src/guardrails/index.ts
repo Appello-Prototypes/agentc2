@@ -332,13 +332,13 @@ function normalizeGuardrailConfig(raw: Record<string, unknown>): GuardrailConfig
  */
 async function loadGuardrailConfig(opts: {
     agentId: string;
-    tenantId?: string;
+    organizationId?: string;
 }): Promise<GuardrailConfig | null> {
     const [agentPolicy, orgPolicy] = await Promise.all([
         prisma.guardrailPolicy.findUnique({ where: { agentId: opts.agentId } }),
-        opts.tenantId
+        opts.organizationId
             ? prisma.orgGuardrailPolicy.findUnique({
-                  where: { organizationId: opts.tenantId }
+                  where: { organizationId: opts.organizationId }
               })
             : null
     ]);
@@ -366,14 +366,13 @@ async function recordGuardrailEvent(
     eventType: "BLOCKED" | "FLAGGED" | "MODIFIED",
     details: Record<string, unknown>,
     runId?: string,
-    tenantId?: string
+    organizationId?: string
 ) {
     try {
         await prisma.guardrailEvent.create({
             data: {
                 agentId,
                 runId,
-                tenantId,
                 type: eventType,
                 guardrailKey,
                 reason: details.message ? String(details.message) : `${eventType}: ${guardrailKey}`,
@@ -390,7 +389,7 @@ async function recordGuardrailEvent(
             status: eventType === "BLOCKED" ? "warning" : "info",
             source: "guardrail",
             runId,
-            tenantId,
+            organizationId,
             metadata: { guardrailKey, eventType }
         });
     } catch (error) {
@@ -404,9 +403,9 @@ async function recordGuardrailEvent(
 export async function enforceInputGuardrails(
     agentId: string,
     input: string,
-    options?: { runId?: string; tenantId?: string }
+    options?: { runId?: string; organizationId?: string }
 ): Promise<GuardrailResult> {
-    const config = await loadGuardrailConfig({ agentId, tenantId: options?.tenantId });
+    const config = await loadGuardrailConfig({ agentId, organizationId: options?.organizationId });
     if (!config?.input) {
         return { blocked: false, violations: [] };
     }
@@ -464,7 +463,7 @@ export async function enforceInputGuardrails(
                 v.severity === "block" ? "BLOCKED" : "FLAGGED",
                 { message: v.message, inputPreview: input.slice(0, 200) },
                 options?.runId,
-                options?.tenantId
+                options?.organizationId
             );
         }
     }
@@ -485,9 +484,9 @@ export async function enforceInputGuardrails(
 export async function enforceOutputGuardrails(
     agentId: string,
     output: string,
-    options?: { runId?: string; tenantId?: string }
+    options?: { runId?: string; organizationId?: string }
 ): Promise<GuardrailResult> {
-    const config = await loadGuardrailConfig({ agentId, tenantId: options?.tenantId });
+    const config = await loadGuardrailConfig({ agentId, organizationId: options?.organizationId });
     if (!config?.output) {
         return { blocked: false, violations: [] };
     }
@@ -550,7 +549,7 @@ export async function enforceOutputGuardrails(
                 v.severity === "block" ? "BLOCKED" : "FLAGGED",
                 { message: v.message, outputPreview: output.slice(0, 200) },
                 options?.runId,
-                options?.tenantId
+                options?.organizationId
             );
         }
     }
@@ -564,8 +563,8 @@ export async function enforceOutputGuardrails(
  */
 export async function getExecutionLimits(
     agentId: string,
-    tenantId?: string
+    organizationId?: string
 ): Promise<GuardrailConfig["execution"] | null> {
-    const config = await loadGuardrailConfig({ agentId, tenantId });
+    const config = await loadGuardrailConfig({ agentId, organizationId });
     return config?.execution || null;
 }

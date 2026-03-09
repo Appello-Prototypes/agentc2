@@ -179,7 +179,7 @@ describe("Runs API", () => {
 
             const runData = {
                 agentId: "test-agent-uuid",
-                tenantId: "test-tenant",
+                organizationId: "test-tenant",
                 status: "RUNNING",
                 runType: "INTERACTIVE",
                 inputText: "Hello, agent!",
@@ -212,7 +212,7 @@ describe("Runs API", () => {
                 data: {
                     runId: run.id,
                     agentId: run.agentId,
-                    tenantId: run.tenantId,
+                    organizationId: run.organizationId,
                     status: "RUNNING",
                     inputText: run.inputText
                 } as never
@@ -366,7 +366,7 @@ describe("Runs API", () => {
             await prismaMock.agentAlert.create({
                 data: {
                     agentId: "test-agent-uuid",
-                    tenantId: "test-tenant",
+                    organizationId: "test-tenant",
                     severity: "INFO",
                     source: "SYSTEM",
                     title: "Run cancelled"
@@ -424,7 +424,7 @@ describe("Runs API", () => {
             const createdRun = await prismaMock.agentRun.create({
                 data: {
                     agentId: originalRun!.agentId,
-                    tenantId: originalRun!.tenantId,
+                    organizationId: originalRun!.organizationId,
                     inputText: originalRun!.inputText,
                     runType: "RERUN",
                     status: "RUNNING"

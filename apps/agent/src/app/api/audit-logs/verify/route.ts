@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
         };
 
         const where: Record<string, unknown> = {
-            tenantId: authContext.organizationId
+            organizationId: authContext.organizationId
         };
         if (startDate || endDate) {
             const createdAt: Record<string, Date> = {};
@@ -51,7 +51,6 @@ export async function POST(request: NextRequest) {
             const firstLog = logs[0]!;
             const preceding = await prisma.auditLog.findFirst({
                 where: {
-                    tenantId: authContext.organizationId,
                     createdAt: { lt: firstLog.createdAt }
                 },
                 orderBy: { createdAt: "desc" },
@@ -67,7 +66,9 @@ export async function POST(request: NextRequest) {
                     entityType: log.entityType,
                     entityId: log.entityId,
                     actorId: log.actorId,
-                    tenantId: log.tenantId
+                    organizationId: (log.metadata as Record<string, unknown>)?.organizationId as
+                        | string
+                        | null
                 },
                 previousHash
             );

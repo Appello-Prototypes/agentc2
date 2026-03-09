@@ -66,7 +66,8 @@ export async function GET(request: NextRequest) {
                     agent = await prisma.agent.findFirst({
                         where: {
                             slug: agentSlug,
-                            isActive: true
+                            isActive: true,
+                            workspace: { organizationId: authContext.organizationId }
                         },
                         select: {
                             id: true,

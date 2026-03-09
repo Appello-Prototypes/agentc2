@@ -49,7 +49,7 @@ export async function PATCH(
                                 id: true,
                                 slug: true,
                                 name: true,
-                                tenantId: true,
+                                workspace: { select: { organizationId: true } },
                                 workspaceId: true
                             }
                         }
@@ -109,7 +109,7 @@ export async function PATCH(
                           ? "failure"
                           : "info",
                 taskId: task.id,
-                tenantId: agent.tenantId ?? undefined,
+                organizationId: agent.workspace?.organizationId ?? undefined,
                 workspaceId: agent.workspaceId ?? undefined
             });
         }

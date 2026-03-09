@@ -65,6 +65,11 @@ export async function POST(request: NextRequest) {
             const { twiml } = await service.handleIncomingCall(from, to, callSid);
 
             // Log the call
+            const voiceConnection = await prisma.integrationConnection.findFirst({
+                where: { provider: { key: "twilio-voice" }, isActive: true },
+                select: { organizationId: true }
+            });
+
             await prisma.voiceCallLog.create({
                 data: {
                     callSid,
@@ -72,7 +77,8 @@ export async function POST(request: NextRequest) {
                     fromNumber: from,
                     toNumber: to,
                     status: "ringing",
-                    agentSlug: process.env.VOICE_DEFAULT_AGENT_SLUG || "mcp-agent"
+                    agentSlug: process.env.VOICE_DEFAULT_AGENT_SLUG || "mcp-agent",
+                    organizationId: voiceConnection?.organizationId || ""
                 }
             });
 

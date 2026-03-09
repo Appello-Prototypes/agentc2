@@ -82,7 +82,6 @@ export async function POST(
         // Create audit log
         await prisma.auditLog.create({
             data: {
-                tenantId: session.tenantId,
                 actorId: rejectedBy,
                 action: "LEARNING_SESSION_REJECTED",
                 entityType: "LearningSession",

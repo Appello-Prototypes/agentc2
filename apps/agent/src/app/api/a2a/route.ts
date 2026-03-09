@@ -173,7 +173,7 @@ async function handleTaskSend(
             const hydrated = await agentResolver.resolve({
                 slug: agentSlug,
                 requestContext: {
-                    resource: { tenantId: organizationId }
+                    resource: { organizationId: organizationId }
                 }
             });
 

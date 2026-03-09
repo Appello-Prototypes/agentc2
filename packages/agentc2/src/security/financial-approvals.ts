@@ -10,7 +10,7 @@ import { prisma } from "@repo/database";
  */
 export async function requestFinancialApproval(params: {
     organizationId: string;
-    workspaceId?: string;
+    workspaceId: string;
     agentId: string;
     toolId: string;
     amountUsd: number;

@@ -42,7 +42,7 @@ const networkCreateSchema = z
         isActive: z.boolean().optional(),
         workspaceId: z.string().optional().nullable(),
         ownerId: z.string().optional().nullable(),
-        type: z.enum(["USER", "SYSTEM"]).optional(),
+        type: z.literal("USER").optional(),
         primitives: z.array(networkPrimitiveSchema).optional(),
         versionDescription: z.string().optional(),
         createdBy: z.string().optional().nullable(),
@@ -122,7 +122,7 @@ export const networkCreateTool = createTool({
                 maxSteps: input.maxSteps ?? 10,
                 isPublished: input.isPublished ?? false,
                 isActive: input.isActive ?? true,
-                workspaceId: input.workspaceId ?? null,
+                workspaceId: input.workspaceId!,
                 ownerId: input.ownerId ?? null,
                 type: input.type ?? "USER"
             }
@@ -224,10 +224,6 @@ export const networkUpdateTool = createTool({
 
         if (!existing) {
             throw new Error(`Network '${networkId}' not found`);
-        }
-
-        if (existing.type === "SYSTEM") {
-            throw new Error("SYSTEM networks cannot be modified");
         }
 
         let restoreTopology: Record<string, unknown> | null = null;
@@ -361,10 +357,6 @@ export const networkDeleteTool = createTool({
 
         if (!existing) {
             throw new Error(`Network '${networkId}' not found`);
-        }
-
-        if (existing.type === "SYSTEM") {
-            throw new Error("SYSTEM networks cannot be deleted");
         }
 
         const action = mode || "delete";

@@ -95,7 +95,13 @@ export async function POST(
                 OR: [{ slug: agentSlug }, { id: agentSlug }],
                 workspace: { organizationId: authContext.organizationId }
             },
-            select: { id: true, slug: true, name: true, tenantId: true, workspaceId: true }
+            select: {
+                id: true,
+                slug: true,
+                name: true,
+                workspace: { select: { organizationId: true } },
+                workspaceId: true
+            }
         });
 
         if (!agent) {
@@ -111,8 +117,7 @@ export async function POST(
             backlog = await prisma.backlog.create({
                 data: {
                     agentId: agent.id,
-                    tenantId: agent.tenantId ?? undefined,
-                    workspaceId: agent.workspaceId ?? undefined
+                    workspaceId: agent.workspaceId ?? ""
                 }
             });
         }
@@ -141,7 +146,7 @@ export async function POST(
             status: "info",
             source: body.source ?? "api",
             taskId: task.id,
-            tenantId: agent.tenantId ?? undefined,
+            organizationId: agent.workspace?.organizationId ?? undefined,
             workspaceId: agent.workspaceId ?? undefined
         });
 

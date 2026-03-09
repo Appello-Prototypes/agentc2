@@ -234,12 +234,14 @@ export async function POST(request: NextRequest) {
         try {
             // Resolve org member IDs so campaign triggers are scoped to the org
             let orgMemberIds: string[] | null = null;
+            let resolvedOrgId: string | null = null;
             if (organizationSlug) {
                 const org = await prisma.organization.findFirst({
                     where: { slug: organizationSlug },
                     select: { id: true }
                 });
                 if (org) {
+                    resolvedOrgId = org.id;
                     const members = await prisma.membership.findMany({
                         where: { organizationId: org.id },
                         select: { userId: true }
@@ -258,7 +260,7 @@ export async function POST(request: NextRequest) {
                         isActive: true,
                         eventName,
                         template: {
-                            OR: [{ createdBy: { in: orgMemberIds } }, { isSystem: true }]
+                            createdBy: { in: orgMemberIds }
                         }
                     },
                     include: {
@@ -317,6 +319,13 @@ export async function POST(request: NextRequest) {
 
                     const slug = ct.template.slug + "-triggered-" + Date.now().toString(36);
 
+                    const defaultWs = resolvedOrgId
+                        ? await prisma.workspace.findFirst({
+                              where: { organizationId: resolvedOrgId, isDefault: true },
+                              select: { id: true }
+                          })
+                        : null;
+
                     const campaign = await prisma.campaign.create({
                         data: {
                             slug,
@@ -334,7 +343,9 @@ export async function POST(request: NextRequest) {
                             templateId: ct.template.id,
                             runNumber,
                             parameterValues: parameterValues as unknown as Prisma.InputJsonValue,
-                            status: CampaignStatus.PLANNING
+                            status: CampaignStatus.PLANNING,
+                            organizationId: resolvedOrgId || "",
+                            workspaceId: defaultWs?.id || ""
                         }
                     });
 

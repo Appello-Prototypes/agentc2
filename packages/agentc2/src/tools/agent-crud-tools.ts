@@ -50,8 +50,8 @@ const agentCreateSchema = z
         workflows: z.array(z.string()).optional(),
         toolIds: z.array(z.string()).optional(),
         tools: z.array(agentToolBindingSchema).optional(),
-        type: z.enum(["USER", "SYSTEM"]).optional(),
-        tenantId: z.string().optional().nullable(),
+        type: z.literal("USER").optional(),
+        organizationId: z.string().optional().nullable(),
         workspaceId: z.string().optional().nullable(),
         ownerId: z.string().optional().nullable(),
         visibility: z.enum(["PRIVATE", "ORGANIZATION", "PUBLIC"]).optional(),
@@ -65,6 +65,10 @@ const agentCreateSchema = z
 
 const agentReadSchema = z.object({
     agentId: z.string(),
+    workspaceId: z
+        .string()
+        .optional()
+        .describe("Workspace ID for tenant-scoped lookup (auto-injected)"),
     include: z
         .object({
             tools: z.boolean().optional(),
@@ -79,6 +83,10 @@ const agentReadSchema = z.object({
 const agentUpdateSchema = z
     .object({
         agentId: z.string(),
+        workspaceId: z
+            .string()
+            .optional()
+            .describe("Workspace ID for tenant-scoped lookup (auto-injected)"),
         restoreVersionId: z.string().optional(),
         restoreVersion: z.number().optional(),
         versionDescription: z.string().optional(),
@@ -89,6 +97,10 @@ const agentUpdateSchema = z
 
 const agentDeleteSchema = z.object({
     agentId: z.string(),
+    workspaceId: z
+        .string()
+        .optional()
+        .describe("Workspace ID for tenant-scoped lookup (auto-injected)"),
     mode: z.enum(["delete", "archive"]).optional()
 });
 
@@ -285,9 +297,13 @@ export const agentCreateTool = createTool({
     }),
     execute: async (input) => {
         const slug = input.slug || generateSlug(input.name);
-        const existing = await prisma.agent.findFirst({ where: { slug } });
-        if (existing) {
-            throw new Error(`Agent with slug '${slug}' already exists`);
+        if (input.workspaceId) {
+            const existing = await prisma.agent.findFirst({
+                where: { slug, workspaceId: input.workspaceId }
+            });
+            if (existing) {
+                throw new Error(`Agent with slug '${slug}' already exists in this workspace`);
+            }
         }
 
         const modelConfig = buildModelConfig(
@@ -331,8 +347,7 @@ export const agentCreateTool = createTool({
                 subAgents: input.subAgents ?? [],
                 workflows: input.workflows ?? [],
                 type: input.type ?? "USER",
-                tenantId: input.tenantId ?? null,
-                workspaceId: input.workspaceId ?? null,
+                workspaceId: input.workspaceId!,
                 ownerId: input.ownerId ?? null,
                 visibility: input.visibility ?? "PRIVATE",
                 requiresApproval: input.requiresApproval ?? false,
@@ -386,7 +401,7 @@ export const agentReadTool = createTool({
         schedules: z.array(z.any()).optional(),
         triggers: z.array(z.any()).optional()
     }),
-    execute: async ({ agentId, include }) => {
+    execute: async ({ agentId, workspaceId, include }) => {
         const includeConfig: Record<string, boolean> = {};
         const includeTools = include?.tools ?? true;
 
@@ -396,8 +411,9 @@ export const agentReadTool = createTool({
         if (include?.schedules) includeConfig.schedules = true;
         if (include?.triggers) includeConfig.triggers = true;
 
+        const scopeFilter = workspaceId ? { workspaceId } : {};
         const agent = await prisma.agent.findFirst({
-            where: { OR: [{ slug: agentId }, { id: agentId }] },
+            where: { OR: [{ slug: agentId }, { id: agentId }], ...scopeFilter },
             include: includeConfig
         });
 
@@ -425,6 +441,7 @@ export const agentUpdateTool = createTool({
     }),
     execute: async ({
         agentId,
+        workspaceId,
         restoreVersionId,
         restoreVersion,
         versionDescription,
@@ -435,17 +452,14 @@ export const agentUpdateTool = createTool({
             throw new Error("Update requires data or a restoreVersion value");
         }
 
+        const scopeFilter = workspaceId ? { workspaceId } : {};
         const existing = await prisma.agent.findFirst({
-            where: { OR: [{ slug: agentId }, { id: agentId }] },
+            where: { OR: [{ slug: agentId }, { id: agentId }], ...scopeFilter },
             include: { tools: true }
         });
 
         if (!existing) {
             throw new Error(`Agent '${agentId}' not found`);
-        }
-
-        if (existing.type === "SYSTEM" && process.env.ALLOW_SYSTEM_AGENT_OVERRIDE !== "true") {
-            throw new Error("SYSTEM agents cannot be modified");
         }
 
         let restoreSnapshot: Record<string, unknown> | null = null;
@@ -527,7 +541,6 @@ export const agentUpdateTool = createTool({
             subAgents: payload.subAgents ?? existing.subAgents,
             workflows: payload.workflows ?? existing.workflows,
             type: payload.type ?? existing.type,
-            tenantId: payload.tenantId ?? existing.tenantId,
             workspaceId: payload.workspaceId ?? existing.workspaceId,
             ownerId: payload.ownerId ?? existing.ownerId,
             visibility: payload.visibility ?? existing.visibility,
@@ -552,7 +565,6 @@ export const agentUpdateTool = createTool({
         await prisma.agentVersion.create({
             data: {
                 agentId: existing.id,
-                tenantId: existing.tenantId,
                 version: nextVersion,
                 description: versionDescription || "Agent update",
                 instructions: existing.instructions,
@@ -607,17 +619,14 @@ export const agentDeleteTool = createTool({
         success: z.boolean(),
         message: z.string().optional()
     }),
-    execute: async ({ agentId, mode }) => {
+    execute: async ({ agentId, workspaceId, mode }) => {
+        const scopeFilter = workspaceId ? { workspaceId } : {};
         const existing = await prisma.agent.findFirst({
-            where: { OR: [{ slug: agentId }, { id: agentId }] }
+            where: { OR: [{ slug: agentId }, { id: agentId }], ...scopeFilter }
         });
 
         if (!existing) {
             throw new Error(`Agent '${agentId}' not found`);
-        }
-
-        if (existing.type === "SYSTEM" && process.env.ALLOW_SYSTEM_AGENT_OVERRIDE !== "true") {
-            throw new Error("SYSTEM agents cannot be deleted");
         }
 
         const action = mode || "delete";

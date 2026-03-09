@@ -8,7 +8,7 @@ import { csvAdapter } from "./adapters/csv-adapter";
 export interface BimIngestRequest {
     modelId?: string;
     modelName: string;
-    workspaceId?: string;
+    workspaceId: string;
     ownerId?: string;
     sourceFormat: string;
     sourceUri?: string;

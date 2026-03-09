@@ -114,7 +114,7 @@ export async function POST(
             await processNetworkStreamWithSubRuns(result, {
                 networkRunId: run.id,
                 networkSlug: network.slug,
-                tenantId: networkOrgId || undefined,
+                organizationId: networkOrgId || undefined,
                 inputMessage: message
             });
 

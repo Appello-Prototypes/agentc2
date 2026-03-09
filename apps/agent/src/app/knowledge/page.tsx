@@ -328,7 +328,6 @@ export default function KnowledgePage() {
                                 <SelectContent>
                                     <SelectItem value="all">All Types</SelectItem>
                                     <SelectItem value="USER">User</SelectItem>
-                                    <SelectItem value="SYSTEM">System</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
@@ -400,11 +399,7 @@ export default function KnowledgePage() {
                                                     </td>
                                                     <td className="px-4 py-3">
                                                         <Badge
-                                                            variant={
-                                                                doc.type === "SYSTEM"
-                                                                    ? "outline"
-                                                                    : "secondary"
-                                                            }
+                                                            variant="secondary"
                                                             className="text-[10px]"
                                                         >
                                                             {doc.type}

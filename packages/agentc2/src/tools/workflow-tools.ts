@@ -196,9 +196,7 @@ export const workflowExecuteTool = createTool({
                         });
                     }
                     if (result.status === "suspended") {
-                        const suspStep = result.steps.find(
-                            (s) => s.status === "suspended"
-                        );
+                        const suspStep = result.steps.find((s) => s.status === "suspended");
                         await prisma.workflowRun.update({
                             where: { id: run.id },
                             data: {
@@ -214,9 +212,7 @@ export const workflowExecuteTool = createTool({
                         });
                     } else {
                         const finalStatus =
-                            result.status === "failed"
-                                ? RunStatus.FAILED
-                                : RunStatus.COMPLETED;
+                            result.status === "failed" ? RunStatus.FAILED : RunStatus.COMPLETED;
                         await prisma.workflowRun.update({
                             where: { id: run.id },
                             data: {
@@ -247,7 +243,8 @@ export const workflowExecuteTool = createTool({
                 success: true,
                 runId: run.id,
                 status: "running",
-                message: "Workflow started asynchronously. Use workflow_get_run to poll for results."
+                message:
+                    "Workflow started asynchronously. Use workflow_get_run to poll for results."
             };
         }
 
@@ -264,7 +261,10 @@ export const workflowExecuteTool = createTool({
         const raceResult = await Promise.race([
             executionPromise.then((r) => ({ kind: "done" as const, value: r })),
             new Promise<{ kind: "timeout"; value: typeof timeoutSymbol }>((resolve) =>
-                setTimeout(() => resolve({ kind: "timeout", value: timeoutSymbol }), SYNC_TIMEOUT_MS)
+                setTimeout(
+                    () => resolve({ kind: "timeout", value: timeoutSymbol }),
+                    SYNC_TIMEOUT_MS
+                )
             )
         ]);
 
@@ -300,9 +300,7 @@ export const workflowExecuteTool = createTool({
                         });
                     }
                     if (result.status === "suspended") {
-                        const suspStep = result.steps.find(
-                            (s) => s.status === "suspended"
-                        );
+                        const suspStep = result.steps.find((s) => s.status === "suspended");
                         await prisma.workflowRun.update({
                             where: { id: run.id },
                             data: {
@@ -318,9 +316,7 @@ export const workflowExecuteTool = createTool({
                         });
                     } else {
                         const finalStatus =
-                            result.status === "failed"
-                                ? RunStatus.FAILED
-                                : RunStatus.COMPLETED;
+                            result.status === "failed" ? RunStatus.FAILED : RunStatus.COMPLETED;
                         await prisma.workflowRun.update({
                             where: { id: run.id },
                             data: {

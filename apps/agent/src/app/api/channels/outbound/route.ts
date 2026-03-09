@@ -295,6 +295,8 @@ async function logOutboundMessage(data: {
                 channel: data.channel,
                 channelId,
                 agentSlug: data.agentSlug || "mcp-agent",
+                organizationId: "",
+                workspaceId: "",
                 metadata: {
                     lastOutboundMessage: data.message.substring(0, 500),
                     lastOutboundAt: new Date().toISOString(),

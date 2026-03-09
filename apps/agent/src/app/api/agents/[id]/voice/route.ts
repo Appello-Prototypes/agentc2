@@ -61,7 +61,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
         const record = await prisma.agent.findFirst({
             where: { OR: [{ id }, { slug: id }] },
-            select: { id: true, slug: true, tenantId: true }
+            select: { id: true, slug: true, workspace: { select: { organizationId: true } } }
         });
         if (!record) {
             return NextResponse.json({ error: "Agent not found" }, { status: 404 });
@@ -71,7 +71,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             slug: record.slug,
             requestContext: {
                 userId: authResult.context.userId,
-                tenantId: record.tenantId || undefined
+                organizationId: record.workspace?.organizationId || undefined
             }
         });
         if (!hydrated) {

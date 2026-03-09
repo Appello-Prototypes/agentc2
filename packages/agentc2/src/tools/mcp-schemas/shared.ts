@@ -254,8 +254,8 @@ export const agentCreateInputSchema: JsonSchema = {
         workflows: { type: "array", items: { type: "string" } },
         toolIds: { type: "array", items: { type: "string" } },
         tools: { type: "array", items: agentToolBindingSchema },
-        type: { type: "string", enum: ["USER", "SYSTEM"] },
-        tenantId: { type: "string" },
+        type: { type: "string", enum: ["USER"] },
+        organizationId: { type: "string" },
         workspaceId: { type: "string" },
         ownerId: { type: "string" },
         visibility: { type: "string", enum: ["PRIVATE", "ORGANIZATION", "PUBLIC"] },
@@ -302,7 +302,7 @@ export const workflowCreateInputSchema: JsonSchema = {
         isActive: { type: "boolean" },
         workspaceId: { type: "string" },
         ownerId: { type: "string" },
-        type: { type: "string", enum: ["USER", "SYSTEM"] },
+        type: { type: "string", enum: ["USER"] },
         versionDescription: { type: "string" },
         createdBy: { type: "string" }
     },
@@ -341,7 +341,7 @@ export const networkCreateInputSchema: JsonSchema = {
         isActive: { type: "boolean" },
         workspaceId: { type: "string" },
         ownerId: { type: "string" },
-        type: { type: "string", enum: ["USER", "SYSTEM"] },
+        type: { type: "string", enum: ["USER"] },
         primitives: { type: "array", items: networkPrimitiveSchema },
         versionDescription: { type: "string" },
         createdBy: { type: "string" }

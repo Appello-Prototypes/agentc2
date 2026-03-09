@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@repo/database";
 import { requireAuth, requireAgentAccess } from "@/lib/authz";
 import {
     getFinancialApprovals,
@@ -48,8 +49,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         if (accessResult.response) return accessResult.response;
 
         const body = await request.json();
+        const agentRecord = await prisma.agent.findUnique({
+            where: { id: accessResult.agentId! },
+            select: { workspaceId: true, workspace: { select: { organizationId: true } } }
+        });
         const approval = await requestFinancialApproval({
-            organizationId: authResult.context.organizationId,
+            organizationId:
+                agentRecord?.workspace?.organizationId || authResult.context.organizationId,
+            workspaceId: agentRecord?.workspaceId || "",
             agentId: accessResult.agentId!,
             toolId: body.toolId,
             amountUsd: body.amountUsd,

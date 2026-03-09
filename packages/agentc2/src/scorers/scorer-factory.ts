@@ -677,7 +677,7 @@ export async function generateAAR(
     }
 
     try {
-        const orgId = context.organizationId || context.tenantId || undefined;
+        const orgId = context.organizationId || context.organizationId || undefined;
         const model = await resolveModelForOrg("openai", auditorModel, orgId);
         if (!model) {
             console.warn("[AAR] No OpenAI API key configured, skipping AAR generation");

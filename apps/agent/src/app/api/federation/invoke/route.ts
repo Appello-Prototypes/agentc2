@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
                 const hydrated = await agentResolver.resolve({
                     slug: agentSlug,
                     requestContext: {
-                        resource: { tenantId: organizationId }
+                        resource: { organizationId: organizationId }
                     }
                 });
 

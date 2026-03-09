@@ -8,7 +8,7 @@ export const mockAgent = {
     slug: "test-agent",
     name: "Test Agent",
     description: "A test agent for unit tests",
-    tenantId: "test-tenant",
+    organizationId: "test-tenant",
     type: "USER" as const,
     modelProvider: "anthropic",
     modelName: "claude-sonnet-4-20250514",
@@ -36,7 +36,7 @@ export const mockSystemAgent = {
     id: "system-agent-uuid",
     slug: "assistant",
     name: "AI Assistant",
-    type: "SYSTEM" as const,
+    type: "USER" as const,
     memoryEnabled: true,
     memoryConfig: { lastMessages: 10 }
 };
@@ -51,7 +51,7 @@ export function generateAgent(overrides: Partial<typeof mockAgent> = {}) {
         slug: faker.helpers.slugify(faker.company.name()).toLowerCase(),
         name: faker.company.name(),
         description: faker.lorem.sentence(),
-        tenantId: faker.string.uuid(),
+        organizationId: faker.string.uuid(),
         createdAt: faker.date.past(),
         updatedAt: faker.date.recent(),
         ...overrides

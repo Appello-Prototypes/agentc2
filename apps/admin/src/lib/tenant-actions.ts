@@ -28,28 +28,42 @@ export async function createTenant(input: CreateTenantInput, performedBy: string
     });
     if (existing) throw new Error(`Slug "${input.slug}" is already in use`);
 
-    const org = await prisma.organization.create({
-        data: {
-            name: input.name,
-            slug: input.slug,
-            description: input.description,
-            status: input.status || "active",
-            maxAgents: input.maxAgents,
-            maxWorkspaces: input.maxWorkspaces,
-            maxRunsPerMonth: input.maxRunsPerMonth,
-            maxSeats: input.maxSeats,
-            timezone: input.timezone
-        }
-    });
+    const { org } = await prisma.$transaction(async (tx) => {
+        const org = await tx.organization.create({
+            data: {
+                name: input.name,
+                slug: input.slug,
+                description: input.description,
+                status: input.status || "active",
+                maxAgents: input.maxAgents,
+                maxWorkspaces: input.maxWorkspaces,
+                maxRunsPerMonth: input.maxRunsPerMonth,
+                maxSeats: input.maxSeats,
+                timezone: input.timezone
+            }
+        });
 
-    await prisma.tenantLifecycleEvent.create({
-        data: {
-            organizationId: org.id,
-            fromStatus: "provisioning",
-            toStatus: org.status,
-            reason: "Created by admin",
-            performedBy
-        }
+        await tx.workspace.create({
+            data: {
+                organizationId: org.id,
+                name: "Production",
+                slug: "production",
+                environment: "production",
+                isDefault: true
+            }
+        });
+
+        await tx.tenantLifecycleEvent.create({
+            data: {
+                organizationId: org.id,
+                fromStatus: "provisioning",
+                toStatus: org.status,
+                reason: "Created by admin",
+                performedBy
+            }
+        });
+
+        return { org };
     });
 
     return org;

@@ -116,19 +116,20 @@ export async function deployPlaybook(opts: DeployPlaybookOptions) {
         const createdNetworkIds: string[] = [];
         const createdCampaignIds: string[] = [];
 
-        // Preload existing slugs -- all entity slugs are now globally unique.
         const existingDocSlugs = new Set<string>();
         const existingSkillSlugs = new Set<string>();
         const existingWfSlugs = new Set<string>();
         const existingNetSlugs = new Set<string>();
         const existingCampaignSlugs = new Set<string>();
         if (opts.cleanSlugs) {
+            const wsFilter = { workspaceId: opts.targetWorkspaceId };
+            const orgFilter = { organizationId: opts.targetOrgId };
             const [docs, skills, wfs, nets, campaigns] = await Promise.all([
-                prisma.document.findMany({ select: { slug: true } }),
-                prisma.skill.findMany({ select: { slug: true } }),
-                prisma.workflow.findMany({ select: { slug: true } }),
-                prisma.network.findMany({ select: { slug: true } }),
-                prisma.campaign.findMany({ select: { slug: true } })
+                prisma.document.findMany({ where: wsFilter, select: { slug: true } }),
+                prisma.skill.findMany({ where: wsFilter, select: { slug: true } }),
+                prisma.workflow.findMany({ where: wsFilter, select: { slug: true } }),
+                prisma.network.findMany({ where: wsFilter, select: { slug: true } }),
+                prisma.campaign.findMany({ where: orgFilter, select: { slug: true } })
             ]);
             docs.forEach((d) => existingDocSlugs.add(d.slug));
             skills.forEach((s) => existingSkillSlugs.add(s.slug));
@@ -211,6 +212,7 @@ export async function deployPlaybook(opts: DeployPlaybookOptions) {
                         playbookInstallationId: installation.id
                     },
                     workspaceId: opts.targetWorkspaceId,
+                    organizationId: opts.targetOrgId,
                     version: 1
                 }
             });
@@ -293,7 +295,7 @@ export async function deployPlaybook(opts: DeployPlaybookOptions) {
 
             if (tasksToSeed.length > 0) {
                 const backlog = await prisma.backlog.create({
-                    data: { agentId: agent.id }
+                    data: { agentId: agent.id, workspaceId: opts.targetWorkspaceId }
                 });
                 for (const task of tasksToSeed) {
                     await prisma.backlogTask.create({
@@ -468,7 +470,8 @@ export async function deployPlaybook(opts: DeployPlaybookOptions) {
                     slug: campSlug,
                     name: campTemplate.name,
                     status: "PLANNING",
-                    tenantId: opts.targetOrgId,
+                    organizationId: opts.targetOrgId,
+                    workspaceId: opts.targetWorkspaceId,
                     createdBy: opts.userId,
                     intent: campTemplate.intent,
                     endState: campTemplate.endState,

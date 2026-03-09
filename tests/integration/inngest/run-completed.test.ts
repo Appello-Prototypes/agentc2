@@ -54,7 +54,7 @@ describe("Inngest: run-completed", () => {
                     data: {
                         runId: run.id,
                         agentId: run.agentId,
-                        tenantId: run.tenantId,
+                        organizationId: run.organizationId,
                         modelName: run.modelName || "unknown",
                         promptTokens: run.promptTokens || 0,
                         completionTokens: run.completionTokens || 0,
@@ -140,7 +140,7 @@ describe("Inngest: run-completed", () => {
                     return prismaMock.agentAlert.create({
                         data: {
                             agentId: eventData.agentId,
-                            tenantId: "test-tenant",
+                            organizationId: "test-tenant",
                             severity: percentUsed >= 100 ? "CRITICAL" : "WARNING",
                             source: "BUDGET",
                             title: "Budget threshold reached",

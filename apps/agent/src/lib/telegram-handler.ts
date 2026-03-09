@@ -115,7 +115,7 @@ export async function listActiveAgents(
     const agents = await prisma.agent.findMany({
         where: {
             isActive: true,
-            type: { in: ["SYSTEM", "USER"] },
+            type: "USER",
             ...(organizationId ? { workspace: { organizationId } } : {})
         },
         select: { slug: true, name: true, description: true },
@@ -165,12 +165,19 @@ async function getOrCreateSession(
     });
 
     if (!session) {
+        const defaultWs = organizationId
+            ? await prisma.workspace.findFirst({
+                  where: { organizationId, isDefault: true },
+                  select: { id: true }
+              })
+            : null;
         session = await prisma.channelSession.create({
             data: {
                 channel: "telegram",
                 channelId,
                 agentSlug: defaultAgentSlug,
-                organizationId,
+                organizationId: organizationId ?? "",
+                workspaceId: defaultWs?.id ?? "",
                 metadata: { chatId, userId }
             }
         });
@@ -367,7 +374,7 @@ export async function handleTelegramMessage(
             slug: agentSlug,
             requestContext: {
                 userId,
-                tenantId: ctx.organizationId ?? instanceBinding?.organizationId,
+                organizationId: ctx.organizationId ?? instanceBinding?.organizationId,
                 metadata: requestMetadata
             },
             threadId: memoryThread,
@@ -479,9 +486,7 @@ export async function handleTelegramMessage(
             completionTokens = managedResult.totalCompletionTokens;
 
             if (managedResult.abortReason) {
-                console.warn(
-                    `[Telegram] managedGenerate aborted: ${managedResult.abortReason}`
-                );
+                console.warn(`[Telegram] managedGenerate aborted: ${managedResult.abortReason}`);
             }
         } else {
             const generateOptions = {

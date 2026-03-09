@@ -59,7 +59,7 @@ const messageHandler: MessageHandler = async (message, agent) => {
 
     const { record } = await agentResolver.resolve({
         slug: agentSlug,
-        requestContext: { tenantId: channelOrgId ?? undefined }
+        requestContext: { organizationId: channelOrgId ?? undefined }
     });
     const agentId = record?.id || agentSlug;
 

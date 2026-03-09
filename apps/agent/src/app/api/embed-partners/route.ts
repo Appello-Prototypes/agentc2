@@ -83,8 +83,8 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const existing = await prisma.embedPartner.findUnique({
-            where: { slug },
+        const existing = await prisma.embedPartner.findFirst({
+            where: { slug, organizationId },
             select: { id: true }
         });
         if (existing) {

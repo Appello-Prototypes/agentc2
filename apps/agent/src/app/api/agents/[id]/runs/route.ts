@@ -320,11 +320,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 resource: {
                     ...contextVars,
                     userId: context.userId,
-                    tenantId: context.organizationId
+                    organizationId: context.organizationId
                 },
                 metadata: contextVars,
                 userId: context.userId,
-                tenantId: context.organizationId
+                organizationId: context.organizationId
             },
             modelOverride: routedModelOverride
         });

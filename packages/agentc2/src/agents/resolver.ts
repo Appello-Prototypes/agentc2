@@ -51,7 +51,7 @@ type AgentToolRecord = Prisma.AgentToolGetPayload<object>;
 export interface ResourceContext {
     userId?: string;
     userName?: string;
-    tenantId?: string;
+    organizationId?: string;
     workspaceId?: string;
 }
 
@@ -81,8 +81,8 @@ export interface RequestContext {
     userId?: string;
     /** @deprecated Use resource.userName instead */
     userName?: string;
-    /** @deprecated Use resource.tenantId instead */
-    tenantId?: string;
+    /** @deprecated Use resource.organizationId instead */
+    organizationId?: string;
     /** @deprecated Use thread.sessionId instead */
     sessionId?: string;
     /** Workspace ID for multi-tenant agent resolution */
@@ -100,7 +100,7 @@ function normalizeRequestContext(context?: RequestContext): RequestContext {
         resource: {
             userId: context.resource?.userId || context.userId,
             userName: context.resource?.userName || context.userName,
-            tenantId: context.resource?.tenantId || context.tenantId
+            organizationId: context.resource?.organizationId || context.organizationId
         },
         thread: {
             id: context.thread?.id,
@@ -303,39 +303,34 @@ export class AgentResolver {
         // Derive workspaceId from request context for tenant isolation
         const workspaceId =
             requestContext?.workspaceId || requestContext?.resource?.workspaceId || undefined;
+        const organizationId =
+            requestContext?.organizationId || requestContext?.resource?.organizationId || undefined;
 
         // Build where clause with workspace isolation
-        // When workspaceId is available, prefer workspace-scoped agents but fall back to
-        // other workspaces in the same org and system agents (null workspaceId).
-        const organizationId = requestContext?.tenantId || undefined;
         const slugWhere = slug
             ? {
                   slug,
                   isActive: true,
                   ...(workspaceId
-                      ? {
-                            OR: [
-                                { workspaceId },
-                                { workspaceId: null },
-                                ...(organizationId ? [{ workspace: { organizationId } }] : [])
-                            ]
-                        }
+                      ? { workspaceId }
                       : organizationId
-                        ? {
-                              OR: [{ workspace: { organizationId } }, { workspaceId: null }]
-                          }
+                        ? { workspace: { organizationId } }
                         : {})
               }
             : undefined;
 
-        const idWhere = id ? { id, isActive: true } : undefined;
+        const idWhere = id
+            ? {
+                  id,
+                  isActive: true,
+                  ...(organizationId ? { workspace: { organizationId } } : {})
+              }
+            : undefined;
 
         // Try database first
         const record = await prisma.agent.findFirst({
             where: slugWhere || idWhere!,
-            include: { tools: true, workspace: { select: { organizationId: true } } },
-            // When workspace-scoped, prefer workspace agents over system agents
-            ...(workspaceId && slug ? { orderBy: { workspaceId: "asc" as const } } : {})
+            include: { tools: true, workspace: { select: { organizationId: true } } }
         });
 
         if (record) {
@@ -348,10 +343,9 @@ export class AgentResolver {
                 organizationId: recordOrgId
             });
 
-            // Check hydration cache (keyed by slug:version:threadId:loadAllSkills)
             const justActivatedKey =
                 this.currentResolveOptions?.justActivatedSlugs?.sort().join(",") || "";
-            const cacheKey = `${record.slug}:${record.version}:${threadId || "none"}:${loadAllSkills ? "all" : "prog"}:${justActivatedKey}`;
+            const cacheKey = `${recordOrgId || "no-org"}:${record.slug}:${record.version}:${threadId || "none"}:${loadAllSkills ? "all" : "prog"}:${justActivatedKey}`;
             const cached = this.hydrationCache.get(cacheKey);
             if (cached && cached.expiresAt > Date.now()) {
                 console.log(
@@ -372,8 +366,7 @@ export class AgentResolver {
                 });
                 const role =
                     (membership?.role as ToolExecutionContext["callingUserRole"]) || "viewer";
-                const executionMode: ToolExecutionContext["executionMode"] =
-                    record.type === "SYSTEM" ? "org" : "user";
+                const executionMode: ToolExecutionContext["executionMode"] = "user";
                 toolExecCtx = {
                     organizationId: recordOrgId,
                     callingUserId,
@@ -486,10 +479,9 @@ export class AgentResolver {
         // Get tools from registry AND MCP (async)
         const toolNames = record.tools.map((t: { toolId: string }) => t.toolId);
         const organizationId =
-            context?.resource?.tenantId ||
-            context?.tenantId ||
-            record.workspace?.organizationId ||
-            record.tenantId;
+            context?.resource?.organizationId ||
+            context?.organizationId ||
+            record.workspace?.organizationId;
 
         // Build memory if enabled (needs orgId for working memory consolidation model)
         const memory = record.memoryEnabled
@@ -823,7 +815,6 @@ export class AgentResolver {
                 detail: `Missing tools: ${missingTools.join(", ")}. Loaded: ${loadedToolNames.size}/${expectedToolNames.size}.`,
                 status: "warning",
                 source: "tool-health",
-                tenantId: record.tenantId || undefined,
                 metadata: {
                     missingTools,
                     expectedCount: expectedToolNames.size,
@@ -916,8 +907,7 @@ export class AgentResolver {
                 });
                 const role = (membership?.role ||
                     "viewer") as ToolExecutionContext["callingUserRole"];
-                const executionMode: ToolExecutionContext["executionMode"] =
-                    record.type === "SYSTEM" ? "org" : "user";
+                const executionMode: ToolExecutionContext["executionMode"] = "user";
                 execCtxFields = {
                     callingUserId,
                     callingUserRole: role,
@@ -1002,7 +992,6 @@ export class AgentResolver {
                     detail: trifecta.warning,
                     status: "warning",
                     source: "security",
-                    tenantId: record.tenantId || undefined,
                     metadata: { flags: trifecta.flags }
                 });
             }
@@ -1072,7 +1061,6 @@ export class AgentResolver {
 
         // --- Mastra Processors ---
         // Wire guardrail processors + memory processors at the Agent level
-        const tenantId = organizationId || record.tenantId || undefined;
         // Model-aware TokenLimiter: use contextConfig.maxContextTokens from agent,
         // or fall back to hardcoded 12K for agents without contextConfig
         const contextConfig = (record as Record<string, unknown>).contextConfig as
@@ -1083,11 +1071,11 @@ export class AgentResolver {
             ? Math.min(contextConfig.maxContextTokens, 50_000) // cap at 50K for safety
             : 12_000;
         const inputProcessors = [
-            createInputGuardrailProcessor(record.id, tenantId),
+            createInputGuardrailProcessor(record.id, organizationId),
             new TokenLimiter(tokenLimit)
         ];
         const outputProcessors = [
-            createOutputGuardrailProcessor(record.id, tenantId),
+            createOutputGuardrailProcessor(record.id, organizationId),
             new ToolCallFilter(),
             new TokenLimiter(tokenLimit)
         ];
@@ -1264,7 +1252,6 @@ export class AgentResolver {
                 detail: issues.join("; "),
                 status: "warning",
                 source: "agent-readiness",
-                tenantId: record.tenantId || undefined,
                 metadata: {
                     issues,
                     instructionsLength: finalInstructions?.length ?? 0,
@@ -1422,8 +1409,9 @@ export class AgentResolver {
         // exists in the platform but isn't directly linked to this agent.
         const unlinkedSlugs = [...activatedSet].filter((s) => !loadedSkillSlugs.has(s));
         if (unlinkedSlugs.length > 0) {
+            const orgFilter = organizationId ? { organizationId } : {};
             const unlinkedSkills = await prisma.skill.findMany({
-                where: { slug: { in: unlinkedSlugs } },
+                where: { slug: { in: unlinkedSlugs }, ...orgFilter },
                 include: {
                     documents: {
                         include: {
@@ -1553,8 +1541,8 @@ export class AgentResolver {
             if (key === "userName" && normalized.resource?.userName) {
                 return String(normalized.resource.userName);
             }
-            if (key === "tenantId" && normalized.resource?.tenantId) {
-                return String(normalized.resource.tenantId);
+            if (key === "organizationId" && normalized.resource?.organizationId) {
+                return String(normalized.resource.organizationId);
             }
             if (key === "sessionId" && normalized.thread?.sessionId) {
                 return String(normalized.thread.sessionId);
@@ -1585,10 +1573,9 @@ export class AgentResolver {
         context: RequestContext
     ): Promise<RequestContext> {
         const organizationId =
-            context.resource?.tenantId ||
-            context.tenantId ||
-            record.workspace?.organizationId ||
-            record.tenantId;
+            context.resource?.organizationId ||
+            context.organizationId ||
+            record.workspace?.organizationId;
 
         if (!organizationId) return context;
 
@@ -1954,7 +1941,7 @@ export class AgentResolver {
                 const { agent } = await this.resolve({
                     slug,
                     requestContext,
-                    fallbackToSystem: true
+                    fallbackToSystem: false
                 });
                 agents[slug] = agent;
             } catch (error) {
@@ -1989,7 +1976,6 @@ export class AgentResolver {
      * List all agents accessible by a user, respecting org boundaries.
      *
      * Visibility rules:
-     * - SYSTEM agents: only global (workspaceId=null) or same-org workspace
      * - User's own agents (ownerId match)
      * - ORGANIZATION-visible agents in the same org
      * - PUBLIC agents
@@ -2004,15 +1990,9 @@ export class AgentResolver {
                 where: {
                     isActive: true,
                     OR: [
-                        // Global system agents (no workspace affiliation)
-                        { type: "SYSTEM", workspaceId: null },
-                        // Org-scoped system agents
-                        ...(organizationId
-                            ? [{ type: "SYSTEM" as const, workspace: { organizationId } }]
-                            : []),
                         // User's own agents
                         { ownerId: userId },
-                        // Org-shared agents (USER or SYSTEM with ORGANIZATION visibility)
+                        // Org-shared agents
                         ...(organizationId
                             ? [
                                   {
@@ -2029,11 +2009,11 @@ export class AgentResolver {
                 orderBy: [{ type: "asc" }, { name: "asc" }]
             });
         } else {
-            // No user - only global SYSTEM agents and public agents
+            // No user - only public agents
             agents = await prisma.agent.findMany({
                 where: {
                     isActive: true,
-                    OR: [{ type: "SYSTEM", workspaceId: null }, { visibility: "PUBLIC" }]
+                    visibility: "PUBLIC"
                 },
                 include: { tools: true, workspace: { select: { organizationId: true } } },
                 orderBy: [{ type: "asc" }, { name: "asc" }]
@@ -2049,31 +2029,7 @@ export class AgentResolver {
             return true;
         });
 
-        // Deduplicate by slug: the compound unique @@unique([workspaceId, slug])
-        // allows the same slug across different workspaces. When multiple agents
-        // share a slug, prefer workspace-scoped over global (workspaceId=null).
-        const slugMap = new Map<string, AgentRecordWithTools>();
-        for (const a of visible) {
-            const existing = slugMap.get(a.slug);
-            if (!existing || (a.workspaceId && !existing.workspaceId)) {
-                slugMap.set(a.slug, a);
-            }
-        }
-        return [...slugMap.values()];
-    }
-
-    /**
-     * List all SYSTEM agents (core platform agents only, excludes DEMO)
-     */
-    async listSystem(): Promise<AgentRecordWithTools[]> {
-        return prisma.agent.findMany({
-            where: {
-                type: "SYSTEM",
-                isActive: true
-            },
-            include: { tools: true, workspace: { select: { organizationId: true } } },
-            orderBy: { name: "asc" }
-        });
+        return visible;
     }
 
     /**
@@ -2088,7 +2044,7 @@ export class AgentResolver {
             where: {
                 slug,
                 isActive: true,
-                ...(workspaceId ? { OR: [{ workspaceId }, { workspaceId: null }] } : {}),
+                ...(workspaceId ? { workspaceId } : {}),
                 ...(organizationId ? { workspace: { organizationId } } : {})
             }
         });
@@ -2106,7 +2062,7 @@ export class AgentResolver {
         return prisma.agent.findFirst({
             where: {
                 slug,
-                ...(workspaceId ? { OR: [{ workspaceId }, { workspaceId: null }] } : {}),
+                ...(workspaceId ? { workspaceId } : {}),
                 ...(organizationId ? { workspace: { organizationId } } : {})
             },
             include: { tools: true, workspace: { select: { organizationId: true } } }

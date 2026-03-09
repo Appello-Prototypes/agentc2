@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
                     const activeRuns = await prisma.agentRun.findMany({
                         where: {
                             status: { in: ["RUNNING", "QUEUED"] },
-                            tenantId: orgId
+                            agent: { workspace: { organizationId: orgId } }
                         },
                         include: {
                             agent: {

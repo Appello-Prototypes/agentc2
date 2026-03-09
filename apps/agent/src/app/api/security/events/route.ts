@@ -63,7 +63,7 @@ export async function GET(request: NextRequest) {
         });
 
         if (membership) {
-            where.tenantId = membership.organizationId;
+            where.organizationId = membership.organizationId;
         }
 
         const [events, total] = await Promise.all([

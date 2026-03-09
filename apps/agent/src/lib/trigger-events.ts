@@ -73,7 +73,7 @@ export async function ensureSlackTrigger(
     const trigger = await prisma.agentTrigger.create({
         data: {
             agentId,
-            workspaceId,
+            workspaceId: workspaceId || "",
             name: `Slack Messages → ${agentName}`,
             description: "Incoming Slack messages routed to this agent",
             triggerType: "slack_listener",
@@ -89,6 +89,7 @@ export async function createTriggerEventRecord(options: {
     triggerId?: string | null;
     agentId?: string | null;
     workspaceId?: string | null;
+    organizationId?: string | null;
     runId?: string | null;
     status?: TriggerEventStatus;
     sourceType: string;
@@ -159,7 +160,8 @@ export async function createTriggerEventRecord(options: {
             sourceType: options.sourceType,
             entityType: options.entityType
         },
-        workspaceId: options.workspaceId || undefined
+        workspaceId: options.workspaceId || undefined,
+        organizationId: options.organizationId || undefined
     });
 
     return result;

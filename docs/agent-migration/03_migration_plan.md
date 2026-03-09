@@ -1,3 +1,5 @@
+> **DEPRECATED**: This document predates the Multi-Tenant Isolation Overhaul. SYSTEM agents have been removed in favor of the playbook-as-seed model. The `tenantId` field has been replaced by `organizationId`/`workspaceId`. Slugs are now workspace-scoped, not globally unique. See the overhaul plan for current architecture.
+
 # Agent Migration - Migration Plan
 
 ## Overview

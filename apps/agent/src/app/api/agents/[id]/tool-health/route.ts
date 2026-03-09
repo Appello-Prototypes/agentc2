@@ -29,7 +29,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                 id: true,
                 slug: true,
                 name: true,
-                tenantId: true,
+                workspace: { select: { organizationId: true } },
                 metadata: true,
                 tools: { select: { toolId: true } },
                 skills: {
@@ -43,8 +43,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                             }
                         }
                     }
-                },
-                workspace: { select: { organizationId: true } }
+                }
             }
         });
 
@@ -75,7 +74,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         }
 
         // Check which MCP tools are currently loadable
-        const organizationId = agent.workspace?.organizationId || agent.tenantId;
+        const organizationId = agent.workspace?.organizationId;
         let mcpAvailable: string[] = [];
         let mcpErrors: Record<string, string> = {};
         try {

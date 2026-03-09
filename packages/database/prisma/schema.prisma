@@ -207,6 +207,15 @@ model Organization {
     channelCredentials ChannelCredentials[]
     voiceCallLogs      VoiceCallLog[]
 
+    // Campaign system
+    campaigns         Campaign[]
+    campaignTemplates CampaignTemplate[]
+    campaignSchedules CampaignSchedule[]
+    campaignTriggers  CampaignTrigger[]
+
+    // Deployments
+    deployments Deployment[]
+
     @@index([slug])
     @@index([status])
     @@map("organization")
@@ -253,7 +262,23 @@ model Workspace {
     // Pulse collectives
     pulses Pulse[]
 
-    @@unique([slug]) // Global slug uniqueness for federation
+    // Campaign system
+    campaigns         Campaign[]
+    campaignTemplates CampaignTemplate[]
+
+    // Deployments
+    deployments Deployment[]
+
+    // Community
+    communityBoards CommunityBoard[]
+
+    // Channels
+    channelSessions ChannelSession[]
+
+    // Backlogs
+    backlogs Backlog[]
+
+    @@unique([organizationId, slug])
     @@index([organizationId])
     @@map("workspace")
 }
@@ -588,8 +613,8 @@ model ApprovalRequest {
     id             String        @id @default(cuid())
     organizationId String
     organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-    workspaceId    String?
-    workspace      Workspace?    @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+    workspaceId    String
+    workspace      Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
     agentId        String?
     agent          Agent?        @relation(fields: [agentId], references: [id], onDelete: SetNull)
     triggerEventId String?
@@ -673,7 +698,6 @@ model CrmAuditLog {
 
 // Agent Type Enum
 enum AgentType {
-    SYSTEM // Seeded from code, protected from deletion (core platform agents)
     USER // User-created, fully editable
     DEMO // Example/demo agents, discoverable but not production
 }
@@ -730,13 +754,11 @@ enum TriggerEventStatus {
 
 // Workflow Type Enum
 enum WorkflowType {
-    SYSTEM // Code-defined, protected
     USER // User-created
 }
 
 // Network Type Enum
 enum NetworkType {
-    SYSTEM
     USER
 }
 
@@ -825,9 +847,8 @@ model Agent {
 
     // Permissions/tenancy
     type        AgentType       @default(USER)
-    tenantId    String? // Multi-tenant isolation (legacy, use workspaceId)
-    workspaceId String?
-    workspace   Workspace?      @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+    workspaceId String
+    workspace   Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
     ownerId     String?
     owner       User?           @relation(fields: [ownerId], references: [id])
     visibility  AgentVisibility @default(PRIVATE)
@@ -921,10 +942,9 @@ model Agent {
     sourceAgentVersion Int?
     customizedFields   String[]
 
-    @@unique([slug]) // Global slug uniqueness for federation and publishing
+    @@unique([workspaceId, slug])
     @@index([workspaceId])
     @@index([ownerId])
-    @@index([tenantId])
     @@index([type])
     @@index([visibility])
     @@map("agent")
@@ -964,7 +984,6 @@ model AgentVersion {
     id            String   @id @default(cuid())
     agentId       String
     agent         Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
-    tenantId      String?
     version       Int
     description   String?  @db.Text
     instructions  String   @db.Text
@@ -985,25 +1004,25 @@ model AgentVersion {
 
 // Agent Schedule - Cron-based recurring execution
 model AgentSchedule {
-    id          String     @id @default(cuid())
+    id          String    @id @default(cuid())
     agentId     String
-    agent       Agent      @relation(fields: [agentId], references: [id], onDelete: Cascade)
-    workspaceId String?
-    workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+    agent       Agent     @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    workspaceId String
+    workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
     name        String
     description String?
-    task        String?    @db.Text
+    task        String?   @db.Text
     cronExpr    String // Cron expression (e.g., "0 17 * * FRI")
-    timezone    String     @default("UTC")
+    timezone    String    @default("UTC")
     inputJson   Json? // Default input for scheduled runs
-    isActive    Boolean    @default(true)
-    isArchived  Boolean    @default(false)
+    isActive    Boolean   @default(true)
+    isArchived  Boolean   @default(false)
     archivedAt  DateTime?
     lastRunAt   DateTime?
     nextRunAt   DateTime?
-    runCount    Int        @default(0)
-    createdAt   DateTime   @default(now())
-    updatedAt   DateTime   @updatedAt
+    runCount    Int       @default(0)
+    createdAt   DateTime  @default(now())
+    updatedAt   DateTime  @updatedAt
     createdBy   String?
     color       String?
 
@@ -1033,8 +1052,8 @@ model AgentTrigger {
     networkId  String?
     network    Network?  @relation(fields: [networkId], references: [id], onDelete: Cascade)
 
-    workspaceId           String?
-    workspace             Workspace?              @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+    workspaceId           String
+    workspace             Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
     name                  String
     description           String?
     triggerType           String // "webhook", "event", "mcp"
@@ -1130,8 +1149,8 @@ model GmailIntegration {
     id                      String                 @id @default(cuid())
     agentId                 String
     agent                   Agent                  @relation(fields: [agentId], references: [id], onDelete: Cascade)
-    workspaceId             String?
-    workspace               Workspace?             @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+    workspaceId             String
+    workspace               Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
     integrationConnectionId String?
     integrationConnection   IntegrationConnection? @relation(fields: [integrationConnectionId], references: [id], onDelete: SetNull)
     gmailAddress            String
@@ -1384,57 +1403,41 @@ model MastraWorkflowSnapshot {
     @@ignore
 }
 
-// Legacy Stored Agents - Kept for backwards compatibility during migration
-model StoredAgent {
-    id            String   @id @default(cuid())
-    name          String
-    description   String?
-    instructions  String   @db.Text
-    modelProvider String // "openai", "anthropic", etc.
-    modelName     String // "gpt-4o", "claude-sonnet", etc.
-    temperature   Float?   @default(0.7)
-    tools         String[] // Tool names to attach
-    memory        Boolean  @default(false)
-    metadata      Json?
-    isActive      Boolean  @default(true)
-    createdAt     DateTime @default(now())
-    updatedAt     DateTime @updatedAt
-
-    @@map("stored_agent")
-}
-
 // ==============================
 // Channel System Models
 // ==============================
 
 // Channel Session - Tracks conversations per channel/user
 model ChannelSession {
-    id             String        @id @default(cuid())
+    id             String       @id @default(cuid())
     channel        String // "whatsapp" | "telegram" | "voice"
     channelId      String // Phone number, chat ID, or call SID
     agentSlug      String // Which agent handles this conversation
-    organizationId String? // Tenant boundary
-    organization   Organization? @relation(fields: [organizationId], references: [id])
+    organizationId String
+    organization   Organization @relation(fields: [organizationId], references: [id])
+    workspaceId    String
+    workspace      Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
     metadata       Json? // Channel-specific data (e.g., username, group info)
-    lastActive     DateTime      @default(now())
-    createdAt      DateTime      @default(now())
+    lastActive     DateTime     @default(now())
+    createdAt      DateTime     @default(now())
 
     @@unique([channel, channelId])
     @@index([channel])
     @@index([agentSlug])
     @@index([organizationId])
+    @@index([workspaceId])
     @@map("channel_session")
 }
 
 // Channel Credentials - Stores encrypted credentials for each channel
 model ChannelCredentials {
-    id             String        @id @default(cuid())
-    channel        String        @unique // "whatsapp" | "telegram" | "voice"
+    id             String       @id @default(cuid())
+    channel        String       @unique // "whatsapp" | "telegram" | "voice"
     credentials    Json // Encrypted credentials (WhatsApp session, bot tokens, etc.)
-    isActive       Boolean       @default(true)
-    organizationId String? // Tenant boundary
-    organization   Organization? @relation(fields: [organizationId], references: [id])
-    updatedAt      DateTime      @updatedAt
+    isActive       Boolean      @default(true)
+    organizationId String
+    organization   Organization @relation(fields: [organizationId], references: [id])
+    updatedAt      DateTime     @updatedAt
 
     @@index([organizationId])
     @@map("channel_credentials")
@@ -1442,22 +1445,22 @@ model ChannelCredentials {
 
 // Voice Call Log - Tracks voice call history
 model VoiceCallLog {
-    id             String        @id @default(cuid())
-    callSid        String        @unique // Twilio call SID
+    id             String       @id @default(cuid())
+    callSid        String       @unique // Twilio call SID
     direction      String // "inbound" | "outbound"
     fromNumber     String
     toNumber       String
     agentSlug      String?
-    organizationId String? // Tenant boundary
-    organization   Organization? @relation(fields: [organizationId], references: [id])
+    organizationId String
+    organization   Organization @relation(fields: [organizationId], references: [id])
     status         String // "ringing" | "in-progress" | "completed" | "failed" | "busy" | "no-answer"
     duration       Int? // Duration in seconds
     recordingUrl   String?
-    transcript     String?       @db.Text
+    transcript     String?      @db.Text
     metadata       Json?
-    startedAt      DateTime      @default(now())
+    startedAt      DateTime     @default(now())
     endedAt        DateTime?
-    createdAt      DateTime      @default(now())
+    createdAt      DateTime     @default(now())
 
     @@index([fromNumber])
     @@index([toNumber])
@@ -1514,7 +1517,6 @@ model AgentRun {
     id               String    @id @default(cuid())
     agentId          String
     agent            Agent     @relation(fields: [agentId], references: [id], onDelete: Cascade)
-    tenantId         String?
     runType          RunType   @default(PROD)
     status           RunStatus @default(QUEUED)
     inputText        String    @db.Text
@@ -1576,7 +1578,6 @@ model AgentRun {
 
     @@index([agentId, createdAt])
     @@index([status])
-    @@index([tenantId])
     @@index([experimentId])
     @@index([source])
     @@index([sessionId])
@@ -1624,7 +1625,6 @@ model AgentTrace {
     run                  AgentRun  @relation(fields: [runId], references: [id], onDelete: Cascade)
     agentId              String
     agent                Agent     @relation(fields: [agentId], references: [id], onDelete: Cascade)
-    tenantId             String?
     status               RunStatus @default(RUNNING)
     inputText            String    @db.Text
     outputText           String?   @db.Text
@@ -1643,7 +1643,6 @@ model AgentTrace {
 
     @@index([runId])
     @@index([agentId, createdAt])
-    @@index([tenantId])
     @@map("agent_trace")
 }
 
@@ -1652,7 +1651,6 @@ model AgentTraceStep {
     id         String     @id @default(cuid())
     traceId    String
     trace      AgentTrace @relation(fields: [traceId], references: [id], onDelete: Cascade)
-    tenantId   String?
     stepNumber Int
     type       String // "llm" | "tool" | "memory" | "guardrail"
     content    Json // Step-specific content
@@ -1660,7 +1658,6 @@ model AgentTraceStep {
     durationMs Int?
 
     @@index([traceId, stepNumber])
-    @@index([tenantId])
     @@map("agent_trace_step")
 }
 
@@ -1673,7 +1670,6 @@ model AgentToolCall {
     trace       AgentTrace?   @relation(fields: [traceId], references: [id], onDelete: Cascade)
     turnId      String?
     turn        AgentRunTurn? @relation(fields: [turnId], references: [id], onDelete: Cascade)
-    tenantId    String?
     toolKey     String
     mcpServerId String?
     toolSource  String? // "registry", "mcp:hubspot", "skill:research-assistant"
@@ -1688,7 +1684,6 @@ model AgentToolCall {
     @@index([turnId])
     @@index([traceId, toolKey])
     @@index([toolKey, runId]) // Enables fast lookup for Slack feedback detection
-    @@index([tenantId])
     @@map("agent_tool_call")
 }
 
@@ -1697,7 +1692,6 @@ model AgentAlert {
     id         String        @id @default(cuid())
     agentId    String
     agent      Agent         @relation(fields: [agentId], references: [id], onDelete: Cascade)
-    tenantId   String?
     severity   AlertSeverity @default(INFO)
     message    String        @db.Text
     source     AlertSource   @default(SYSTEM)
@@ -1705,14 +1699,12 @@ model AgentAlert {
     resolvedAt DateTime?
 
     @@index([agentId, createdAt, severity])
-    @@index([tenantId])
     @@map("agent_alert")
 }
 
 // Audit Log - All write operations
 model AuditLog {
     id            String   @id @default(cuid())
-    tenantId      String?
     actorId       String?
     action        String
     entityType    String
@@ -1721,7 +1713,6 @@ model AuditLog {
     integrityHash String?  @db.VarChar(64)
     createdAt     DateTime @default(now())
 
-    @@index([tenantId, createdAt])
     @@index([entityId])
     @@map("audit_log")
 }
@@ -1733,7 +1724,6 @@ model AgentEvaluation {
     run           AgentRun @relation(fields: [runId], references: [id], onDelete: Cascade)
     agentId       String
     agent         Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
-    tenantId      String?
     scoresJson    Json // {criterion_id: score} or legacy {relevancy: 0.9, ...}
     scorerVersion String?
 
@@ -1769,7 +1759,6 @@ model AgentEvaluation {
 
     @@index([runId])
     @@index([agentId, createdAt])
-    @@index([tenantId])
     @@index([evaluationTier])
     @@map("agent_evaluation")
 }
@@ -1783,7 +1772,6 @@ model AgentFeedback {
     turn      AgentRunTurn? @relation(fields: [turnId], references: [id], onDelete: Cascade)
     agentId   String
     agent     Agent         @relation(fields: [agentId], references: [id], onDelete: Cascade)
-    tenantId  String?
     thumbs    Boolean? // true = up, false = down
     rating    Int? // 1-5 scale
     comment   String?       @db.Text
@@ -1793,7 +1781,6 @@ model AgentFeedback {
     @@index([runId])
     @@index([turnId])
     @@index([agentId])
-    @@index([tenantId])
     @@map("agent_feedback")
 }
 
@@ -1802,7 +1789,6 @@ model TestSuite {
     id          String   @id @default(cuid())
     agentId     String
     agent       Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
-    tenantId    String?
     name        String
     description String?  @db.Text
     version     Int      @default(1)
@@ -1815,7 +1801,6 @@ model TestSuite {
     testCases AgentTestCase[]
 
     @@index([agentId])
-    @@index([tenantId])
     @@map("test_suite")
 }
 
@@ -1824,7 +1809,6 @@ model AgentTestCase {
     id             String   @id @default(cuid())
     agentId        String
     agent          Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
-    tenantId       String?
     name           String
     inputText      String   @db.Text
     expectedOutput String?  @db.Text
@@ -1850,7 +1834,6 @@ model AgentTestCase {
     testRuns AgentTestRun[]
 
     @@index([agentId])
-    @@index([tenantId])
     @@index([suiteId])
     @@map("agent_test_case")
 }
@@ -1862,7 +1845,6 @@ model AgentTestRun {
     testCase   AgentTestCase @relation(fields: [testCaseId], references: [id], onDelete: Cascade)
     agentId    String
     agent      Agent         @relation(fields: [agentId], references: [id], onDelete: Cascade)
-    tenantId   String?
     versionId  String?
     runId      String?       @unique
     run        AgentRun?     @relation(fields: [runId], references: [id], onDelete: SetNull)
@@ -1875,7 +1857,6 @@ model AgentTestRun {
 
     @@index([testCaseId])
     @@index([agentId])
-    @@index([tenantId])
     @@map("agent_test_run")
 }
 
@@ -1884,14 +1865,12 @@ model AgentConversation {
     id           String    @id @default(cuid())
     agentId      String
     agent        Agent     @relation(fields: [agentId], references: [id], onDelete: Cascade)
-    tenantId     String?
     runId        String?   @unique
     run          AgentRun? @relation(fields: [runId], references: [id], onDelete: SetNull)
     messagesJson Json // Array of {role, content, timestamp}
     createdAt    DateTime  @default(now())
 
     @@index([agentId])
-    @@index([tenantId])
     @@map("agent_conversation")
 }
 
@@ -1904,7 +1883,6 @@ model BudgetPolicy {
     workflow        Workflow? @relation(fields: [workflowId], references: [id], onDelete: Cascade)
     networkId       String?   @unique
     network         Network?  @relation(fields: [networkId], references: [id], onDelete: Cascade)
-    tenantId        String?
     enabled         Boolean   @default(false)
     monthlyLimitUsd Float?
     alertAtPct      Float?    @default(80) // Alert when usage reaches this percentage
@@ -1921,7 +1899,6 @@ model BudgetPolicy {
     @@index([agentId])
     @@index([workflowId])
     @@index([networkId])
-    @@index([tenantId])
     @@map("budget_policy")
 }
 
@@ -1934,7 +1911,6 @@ model CostEvent {
     turn             AgentRunTurn?   @relation(fields: [turnId], references: [id], onDelete: Cascade)
     agentId          String
     agent            Agent           @relation(fields: [agentId], references: [id], onDelete: Cascade)
-    tenantId         String?
     userId           String?
     provider         String
     modelName        String
@@ -1951,7 +1927,6 @@ model CostEvent {
     @@index([runId])
     @@index([turnId])
     @@index([agentId, createdAt])
-    @@index([tenantId])
     @@index([userId, createdAt])
     @@map("cost_event")
 }
@@ -1967,7 +1942,6 @@ model AgentCostDaily {
     id                String   @id @default(cuid())
     agentId           String
     agent             Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
-    tenantId          String?
     date              DateTime @db.Date
     totalCostUsd      Float    @default(0)
     promptCostUsd     Float    @default(0)
@@ -1976,7 +1950,6 @@ model AgentCostDaily {
 
     @@unique([agentId, date])
     @@index([agentId, date])
-    @@index([tenantId])
     @@map("agent_cost_daily")
 }
 
@@ -1985,7 +1958,6 @@ model AgentModelCostDaily {
     id        String   @id @default(cuid())
     agentId   String
     agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
-    tenantId  String?
     modelName String
     date      DateTime @db.Date
     costUsd   Float    @default(0)
@@ -1994,7 +1966,6 @@ model AgentModelCostDaily {
 
     @@unique([agentId, modelName, date])
     @@index([agentId, modelName, date])
-    @@index([tenantId])
     @@map("agent_model_cost_daily")
 }
 
@@ -2003,7 +1974,6 @@ model CostRecommendation {
     id                  String   @id @default(cuid())
     agentId             String
     agent               Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
-    tenantId            String?
     type                String // "model_switch", "prompt_optimization", etc.
     title               String
     description         String   @db.Text
@@ -2011,7 +1981,6 @@ model CostRecommendation {
     createdAt           DateTime @default(now())
 
     @@index([agentId, createdAt])
-    @@index([tenantId])
     @@map("cost_recommendation")
 }
 
@@ -2020,7 +1989,6 @@ model GuardrailPolicy {
     id         String   @id @default(cuid())
     agentId    String   @unique
     agent      Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
-    tenantId   String?
     configJson Json // Full guardrail configuration
     version    Int      @default(1)
     createdBy  String?
@@ -2028,7 +1996,6 @@ model GuardrailPolicy {
     updatedAt  DateTime @updatedAt
 
     @@index([agentId])
-    @@index([tenantId])
     @@map("guardrail_policy")
 }
 
@@ -2037,7 +2004,6 @@ model GuardrailEvent {
     id            String             @id @default(cuid())
     agentId       String
     agent         Agent              @relation(fields: [agentId], references: [id], onDelete: Cascade)
-    tenantId      String?
     runId         String?
     run           AgentRun?          @relation(fields: [runId], references: [id], onDelete: SetNull)
     type          GuardrailEventType
@@ -2048,7 +2014,6 @@ model GuardrailEvent {
     createdAt     DateTime           @default(now())
 
     @@index([agentId, createdAt])
-    @@index([tenantId])
     @@map("guardrail_event")
 }
 
@@ -2072,7 +2037,6 @@ model AgentStatsDaily {
     id              String   @id @default(cuid())
     agentId         String
     agent           Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
-    tenantId        String?
     date            DateTime @db.Date
     totalRuns       Int      @default(0)
     successRate     Float?
@@ -2082,7 +2046,6 @@ model AgentStatsDaily {
 
     @@unique([agentId, date])
     @@index([agentId, date])
-    @@index([tenantId])
     @@map("agent_stats_daily")
 }
 
@@ -2091,7 +2054,6 @@ model AgentMetricDaily {
     id           String   @id @default(cuid())
     agentId      String
     agent        Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
-    tenantId     String?
     date         DateTime @db.Date
     runs         Int      @default(0)
     successRate  Float?
@@ -2101,7 +2063,6 @@ model AgentMetricDaily {
 
     @@unique([agentId, date])
     @@index([agentId, date])
-    @@index([tenantId])
     @@map("agent_metric_daily")
 }
 
@@ -2110,7 +2071,6 @@ model AgentToolMetricDaily {
     id            String   @id @default(cuid())
     agentId       String
     agent         Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
-    tenantId      String?
     toolKey       String
     date          DateTime @db.Date
     callCount     Int      @default(0)
@@ -2119,7 +2079,6 @@ model AgentToolMetricDaily {
 
     @@unique([agentId, toolKey, date])
     @@index([agentId, toolKey, date])
-    @@index([tenantId])
     @@map("agent_tool_metric_daily")
 }
 
@@ -2128,7 +2087,6 @@ model AgentModelMetricDaily {
     id            String   @id @default(cuid())
     agentId       String
     agent         Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
-    tenantId      String?
     modelProvider String
     modelName     String
     date          DateTime @db.Date
@@ -2139,7 +2097,6 @@ model AgentModelMetricDaily {
 
     @@unique([agentId, modelName, date])
     @@index([agentId, modelName, date])
-    @@index([tenantId])
     @@map("agent_model_metric_daily")
 }
 
@@ -2148,7 +2105,6 @@ model AgentQualityMetricDaily {
     id          String   @id @default(cuid())
     agentId     String
     agent       Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
-    tenantId    String?
     scorerKey   String
     date        DateTime @db.Date
     avgScore    Float?
@@ -2156,17 +2112,15 @@ model AgentQualityMetricDaily {
 
     @@unique([agentId, scorerKey, date])
     @@index([agentId, scorerKey, date])
-    @@index([tenantId])
     @@map("agent_quality_metric_daily")
 }
 
 // Agent Health Score - Composite daily health metric per agent
 model AgentHealthScore {
-    id       String   @id @default(cuid())
-    agentId  String
-    agent    Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
-    tenantId String?
-    date     DateTime @db.Date
+    id      String   @id @default(cuid())
+    agentId String
+    agent   Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    date    DateTime @db.Date
 
     // Composite components (0.0-1.0)
     evalScore            Float // Weighted avg of last N eval scores
@@ -2189,7 +2143,6 @@ model AgentHealthScore {
 
     @@unique([agentId, date])
     @@index([agentId, date])
-    @@index([tenantId])
     @@map("agent_health_score")
 }
 
@@ -2198,14 +2151,12 @@ model AgentFeedbackAggregateDaily {
     id            String   @id @default(cuid())
     agentId       String
     agent         Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
-    tenantId      String?
     date          DateTime @db.Date
     positiveCount Int      @default(0)
     negativeCount Int      @default(0)
 
     @@unique([agentId, date])
     @@index([agentId, date])
-    @@index([tenantId])
     @@map("agent_feedback_aggregate_daily")
 }
 
@@ -2216,7 +2167,6 @@ model AgentVersionStats {
     version     AgentVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
     agentId     String
     agent       Agent        @relation(fields: [agentId], references: [id], onDelete: Cascade)
-    tenantId    String?
     runs        Int          @default(0)
     successRate Float?
     avgQuality  Float?
@@ -2224,7 +2174,6 @@ model AgentVersionStats {
 
     @@unique([versionId])
     @@index([versionId])
-    @@index([tenantId])
     @@map("agent_version_stats")
 }
 
@@ -2233,26 +2182,23 @@ model EvaluationTheme {
     id        String   @id @default(cuid())
     agentId   String
     agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
-    tenantId  String?
     theme     String
     sentiment String? // "positive", "negative", "neutral"
     count     Int      @default(0)
     createdAt DateTime @default(now())
 
     @@index([agentId, createdAt])
-    @@index([tenantId])
     @@map("evaluation_theme")
 }
 
 // Insight - AI-generated insights
 model Insight {
-    id          String  @id @default(cuid())
+    id          String @id @default(cuid())
     agentId     String
-    agent       Agent   @relation(fields: [agentId], references: [id], onDelete: Cascade)
-    tenantId    String?
+    agent       Agent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
     type        String // "performance", "cost", "quality", "warning", "info"
     title       String
-    description String  @db.Text
+    description String @db.Text
 
     // Action pipeline (insights can trigger downstream events)
     actionType   String? @default("informational") // "learning_trigger" | "alert" | "scorecard_adjustment" | "informational"
@@ -2262,7 +2208,6 @@ model Insight {
     createdAt DateTime @default(now())
 
     @@index([agentId, createdAt])
-    @@index([tenantId])
     @@map("insight")
 }
 
@@ -2317,7 +2262,6 @@ model LearningSession {
     id              String                @id @default(cuid())
     agentId         String
     agent           Agent                 @relation(fields: [agentId], references: [id], onDelete: Cascade)
-    tenantId        String?
     status          LearningSessionStatus @default(COLLECTING)
     runCount        Int                   @default(0) // Number of runs analyzed
     datasetHash     String? // SHA256 hash of run IDs for provenance
@@ -2338,7 +2282,6 @@ model LearningSession {
     approval    LearningApproval?
 
     @@index([agentId, createdAt])
-    @@index([tenantId])
     @@index([status])
     @@map("learning_session")
 }
@@ -2348,7 +2291,6 @@ model LearningDataset {
     id                String          @id @default(cuid())
     sessionId         String          @unique
     session           LearningSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-    tenantId          String?
     runIds            String[] // Array of AgentRun IDs included
     selectionCriteria Json? // Criteria used to select runs
     datasetHash       String // SHA256 hash for reproducibility
@@ -2359,7 +2301,6 @@ model LearningDataset {
     createdAt         DateTime        @default(now())
 
     @@index([sessionId])
-    @@index([tenantId])
     @@index([datasetHash])
     @@map("learning_dataset")
 }
@@ -2369,7 +2310,6 @@ model LearningSignal {
     id           String             @id @default(cuid())
     sessionId    String
     session      LearningSession    @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-    tenantId     String?
     type         LearningSignalType
     severity     String? // "low", "medium", "high"
     pattern      String             @db.Text // Description of the pattern
@@ -2379,7 +2319,6 @@ model LearningSignal {
     createdAt    DateTime           @default(now())
 
     @@index([sessionId])
-    @@index([tenantId])
     @@index([type])
     @@map("learning_signal")
 }
@@ -2389,7 +2328,6 @@ model LearningProposal {
     id                 String          @id @default(cuid())
     sessionId          String
     session            LearningSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-    tenantId           String?
     proposalType       String // "instructions", "tools", "memory", "model", "combined"
     title              String
     description        String          @db.Text
@@ -2413,7 +2351,6 @@ model LearningProposal {
     experiments LearningExperiment[]
 
     @@index([sessionId])
-    @@index([tenantId])
     @@index([riskTier])
     @@map("learning_proposal")
 }
@@ -2425,7 +2362,6 @@ model LearningExperiment {
     session            LearningSession          @relation(fields: [sessionId], references: [id], onDelete: Cascade)
     proposalId         String
     proposal           LearningProposal         @relation(fields: [proposalId], references: [id], onDelete: Cascade)
-    tenantId           String?
     status             LearningExperimentStatus @default(PENDING)
     baselineVersionId  String? // Current agent version
     candidateVersionId String? // New version to test
@@ -2452,7 +2388,6 @@ model LearningExperiment {
 
     @@index([sessionId])
     @@index([proposalId])
-    @@index([tenantId])
     @@index([status])
     @@map("learning_experiment")
 }
@@ -2462,7 +2397,6 @@ model LearningApproval {
     id                String          @id @default(cuid())
     sessionId         String          @unique
     session           LearningSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-    tenantId          String?
     decision          String // "approved", "rejected", "deferred", "auto_approved"
     rationale         String?         @db.Text
     approvedBy        String? // User ID (null for auto-approval)
@@ -2474,7 +2408,6 @@ model LearningApproval {
     autoApproved Boolean @default(false) // Whether this was auto-approved
 
     @@index([sessionId])
-    @@index([tenantId])
     @@index([autoApproved])
     @@map("learning_approval")
 }
@@ -2484,7 +2417,6 @@ model LearningPolicy {
     id                   String    @id @default(cuid())
     agentId              String    @unique
     agent                Agent     @relation(fields: [agentId], references: [id], onDelete: Cascade)
-    tenantId             String?
     enabled              Boolean   @default(true) // Master switch for continuous learning
     autoPromotionEnabled Boolean   @default(false) // Allow auto-promotion for low-risk changes
     scheduledEnabled     Boolean   @default(true) // Enable scheduled backstop triggers
@@ -2505,7 +2437,6 @@ model LearningPolicy {
     updatedBy String?
 
     @@index([agentId])
-    @@index([tenantId])
     @@map("learning_policy")
 }
 
@@ -2514,7 +2445,6 @@ model LearningMetricDaily {
     id                 String   @id @default(cuid())
     agentId            String
     agent              Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
-    tenantId           String?
     date               DateTime @db.Date
     sessionsStarted    Int      @default(0)
     sessionsCompleted  Int      @default(0)
@@ -2539,7 +2469,6 @@ model LearningMetricDaily {
 
     @@unique([agentId, date])
     @@index([agentId, date])
-    @@index([tenantId])
     @@map("learning_metric_daily")
 }
 
@@ -2625,8 +2554,8 @@ model Workflow {
     metadata    Json?
 
     // Tenancy
-    workspaceId String?
-    workspace   Workspace?   @relation(fields: [workspaceId], references: [id])
+    workspaceId String
+    workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
     ownerId     String?
     type        WorkflowType @default(USER)
 
@@ -2653,7 +2582,7 @@ model Workflow {
     budgetPolicy      BudgetPolicy?
     testCases         WorkflowTestCase[]
 
-    @@unique([slug]) // Global slug uniqueness for federation and publishing
+    @@unique([workspaceId, slug])
     @@index([workspaceId])
     @@index([isPublished])
     @@index([visibility])
@@ -2788,7 +2717,7 @@ model WorkflowRunStep {
 // Network Definition
 model Network {
     id          String  @id @default(cuid())
-    slug        String  @unique
+    slug        String
     name        String
     description String? @db.Text
 
@@ -2823,8 +2752,8 @@ model Network {
     metadata    Json?
 
     // Tenancy
-    workspaceId String?
-    workspace   Workspace?  @relation(fields: [workspaceId], references: [id])
+    workspaceId String
+    workspace   Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
     ownerId     String?
     type        NetworkType @default(USER)
 
@@ -2851,7 +2780,7 @@ model Network {
     budgetPolicy  BudgetPolicy?
     testCases     NetworkTestCase[]
 
-    @@index([slug])
+    @@unique([workspaceId, slug])
     @@index([workspaceId])
     @@index([isPublished])
     @@index([visibility])
@@ -3039,6 +2968,12 @@ model NetworkMetricDaily {
 model Deployment {
     id String @id @default(cuid())
 
+    // Tenancy
+    organizationId String
+    organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+    workspaceId    String
+    workspace      Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+
     // What is being deployed
     entityType String // "agent", "workflow", "network"
     entityId   String
@@ -3061,8 +2996,10 @@ model Deployment {
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
 
-    @@unique([entityType, entityId, environment])
+    @@unique([workspaceId, entityType, entityId, environment])
     @@index([entityType, entityId])
+    @@index([organizationId])
+    @@index([workspaceId])
     @@map("deployment")
 }
 
@@ -3083,8 +3020,8 @@ model BimModel {
     metadata     Json?
 
     // Tenancy
-    workspaceId String?
-    workspace   Workspace? @relation(fields: [workspaceId], references: [id])
+    workspaceId String
+    workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
     ownerId     String?
 
     // Relations
@@ -3310,17 +3247,16 @@ model Document {
     tags     String[]
     metadata Json?
 
-    workspaceId String?
-    workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+    workspaceId String
+    workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
 
-    organizationId String?
-    organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+    organizationId String
+    organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
     version  Int               @default(1)
     versions DocumentVersion[]
     skills   SkillDocument[]
 
-    type      String   @default("USER") @map("doc_type")
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
     createdBy String?
@@ -3362,11 +3298,11 @@ model Skill {
     tags     String[]
     metadata Json?
 
-    workspaceId String?
-    workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+    workspaceId String
+    workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
 
-    organizationId String?
-    organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+    organizationId String
+    organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
     version  Int            @default(1)
     versions SkillVersion[]
@@ -3375,7 +3311,6 @@ model Skill {
     tools     SkillTool[]
     agents    AgentSkill[]
 
-    type      String   @default("USER")
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
     createdBy String?
@@ -3598,7 +3533,7 @@ model AgentInstance {
     channelBindings InstanceChannelBinding[]
     runs            AgentRun[]
 
-    @@unique([slug]) // Global slug uniqueness for federation
+    @@unique([organizationId, slug])
     @@index([agentId])
     @@index([contextType, contextId])
     @@index([organizationId])
@@ -3648,13 +3583,12 @@ model InstanceChannelBinding {
 
 // Scorecard Template - Reusable evaluation criteria templates for common agent types
 model ScorecardTemplate {
-    id          String  @id @default(cuid())
-    slug        String  @unique
+    id          String @id @default(cuid())
+    slug        String @unique
     name        String
-    description String  @db.Text
+    description String @db.Text
     category    String // "crm", "email", "research", "support", "data", "general"
     criteria    Json // Array of ScorecardCriterion objects
-    isSystem    Boolean @default(true) // System templates vs user-created
 
     // Relations
     scorecards AgentScorecard[]
@@ -3667,10 +3601,9 @@ model ScorecardTemplate {
 
 // Agent Scorecard - Custom evaluation criteria per agent
 model AgentScorecard {
-    id       String  @id @default(cuid())
-    agentId  String  @unique
-    agent    Agent   @relation(fields: [agentId], references: [id], onDelete: Cascade)
-    tenantId String?
+    id      String @id @default(cuid())
+    agentId String @unique
+    agent   Agent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
 
     // Core content
     criteria Json // Array of ScorecardCriterion objects
@@ -3691,7 +3624,6 @@ model AgentScorecard {
     createdBy String?
 
     @@index([agentId])
-    @@index([tenantId])
     @@map("agent_scorecard")
 }
 
@@ -3702,7 +3634,6 @@ model CalibrationCheck {
     evaluation   AgentEvaluation @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
     agentId      String
     agent        Agent           @relation(fields: [agentId], references: [id], onDelete: Cascade)
-    tenantId     String?
 
     // Comparison data
     auditorGrade Float // The auditor's overall grade
@@ -3718,7 +3649,6 @@ model CalibrationCheck {
     createdAt DateTime @default(now())
 
     @@index([agentId, createdAt])
-    @@index([tenantId])
     @@map("calibration_check")
 }
 
@@ -3936,7 +3866,6 @@ model AgentRecommendation {
     agent        Agent            @relation(fields: [agentId], references: [id], onDelete: Cascade)
     evaluationId String?
     evaluation   AgentEvaluation? @relation(fields: [evaluationId], references: [id])
-    tenantId     String?
     type         String // "sustain" | "improve" | "skill_development" | "document_creation"
     category     String // "classification" | "enrichment" | "tone" | "routing" | "safety"
     title        String
@@ -3953,7 +3882,6 @@ model AgentRecommendation {
 
     @@index([agentId, status])
     @@index([agentId, type])
-    @@index([tenantId])
     @@map("agent_recommendation")
 }
 
@@ -4020,13 +3948,16 @@ enum MissionTaskType {
 
 // Campaign - Top-level objective container (Mission Command)
 model Campaign {
-    id        String         @id @default(cuid())
-    slug      String         @unique
-    name      String
-    status    CampaignStatus @default(PLANNING)
-    tenantId  String?
-    createdBy String? // userId
-    ownerId   String? // agentId of the "commander" agent, if any
+    id             String         @id @default(cuid())
+    slug           String
+    name           String
+    status         CampaignStatus @default(PLANNING)
+    organizationId String
+    organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+    workspaceId    String
+    workspace      Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+    createdBy      String? // userId
+    ownerId        String? // agentId of the "commander" agent, if any
 
     // Mission Command fields
     intent      String   @db.Text // Commander's intent: the WHY
@@ -4076,7 +4007,9 @@ model Campaign {
     missions Mission[]
     logs     CampaignLog[]
 
-    @@index([tenantId])
+    @@unique([organizationId, slug])
+    @@index([organizationId])
+    @@index([workspaceId])
     @@index([status])
     @@index([createdBy])
     @@index([templateId])
@@ -4086,21 +4019,24 @@ model Campaign {
 
 // CampaignTemplate - Reusable campaign definitions with optional scheduling
 model CampaignTemplate {
-    id               String   @id @default(cuid())
-    slug             String   @unique
+    id               String       @id @default(cuid())
+    slug             String
     name             String
-    description      String?  @db.Text
+    description      String?      @db.Text
+    organizationId   String
+    organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+    workspaceId      String
+    workspace        Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
     category         String? // "sales", "operations", "safety", etc.
-    intentTemplate   String   @db.Text // Supports {{paramName}} interpolation
-    endStateTemplate String   @db.Text
+    intentTemplate   String       @db.Text // Supports {{paramName}} interpolation
+    endStateTemplate String       @db.Text
     constraints      String[]
     restraints       String[]
     parameters       Json? // { "customerName": { type: "string", required: true } }
-    requireApproval  Boolean  @default(false)
+    requireApproval  Boolean      @default(false)
     maxCostUsd       Float?
     timeoutMinutes   Int?
-    isSystem         Boolean  @default(false)
-    isActive         Boolean  @default(true)
+    isActive         Boolean      @default(true)
     createdBy        String?
 
     createdAt DateTime @default(now())
@@ -4110,27 +4046,33 @@ model CampaignTemplate {
     schedules CampaignSchedule[]
     triggers  CampaignTrigger[]
 
+    @@unique([organizationId, slug])
+    @@index([organizationId])
+    @@index([workspaceId])
     @@map("campaign_template")
 }
 
 // CampaignSchedule - Cron-based recurring campaign execution
 model CampaignSchedule {
-    id         String           @id @default(cuid())
-    templateId String
-    template   CampaignTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
-    name       String
-    cronExpr   String
-    timezone   String           @default("UTC")
-    inputJson  Json? // Parameter values for template interpolation
-    isActive   Boolean          @default(true)
-    lastRunAt  DateTime?
-    nextRunAt  DateTime?
-    runCount   Int              @default(0)
-    createdBy  String?
+    id             String           @id @default(cuid())
+    templateId     String
+    template       CampaignTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+    organizationId String
+    organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+    name           String
+    cronExpr       String
+    timezone       String           @default("UTC")
+    inputJson      Json? // Parameter values for template interpolation
+    isActive       Boolean          @default(true)
+    lastRunAt      DateTime?
+    nextRunAt      DateTime?
+    runCount       Int              @default(0)
+    createdBy      String?
 
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
 
+    @@index([organizationId])
     @@index([isActive, nextRunAt])
     @@map("campaign_schedule")
 }
@@ -4140,6 +4082,8 @@ model CampaignTrigger {
     id              String           @id @default(cuid())
     templateId      String
     template        CampaignTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+    organizationId  String
+    organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
     name            String
     triggerType     String // "webhook", "event"
     eventName       String?
@@ -4154,6 +4098,7 @@ model CampaignTrigger {
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
 
+    @@index([organizationId])
     @@index([eventName])
     @@index([triggerType, isActive])
     @@map("campaign_trigger")
@@ -4306,14 +4251,12 @@ model ActivityEvent {
     tags     String[]
 
     // Tenancy
-    tenantId    String?
     workspaceId String?
 
     @@index([timestamp])
     @@index([agentId, timestamp])
     @@index([type, timestamp])
     @@index([source, timestamp])
-    @@index([tenantId, timestamp])
     @@index([workspaceId, timestamp])
     @@map("activity_event")
 }
@@ -4374,13 +4317,13 @@ enum ActivityEventType {
 
 // Backlog - An agent's persistent work queue. One per agent.
 model Backlog {
-    id          String  @id @default(cuid())
-    agentId     String  @unique
-    agent       Agent   @relation(fields: [agentId], references: [id], onDelete: Cascade)
-    name        String  @default("Backlog")
-    description String? @db.Text
-    tenantId    String?
-    workspaceId String?
+    id          String    @id @default(cuid())
+    agentId     String    @unique
+    agent       Agent     @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    name        String    @default("Backlog")
+    description String?   @db.Text
+    workspaceId String
+    workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
 
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
@@ -4388,7 +4331,7 @@ model Backlog {
     tasks BacklogTask[]
 
     @@index([agentId])
-    @@index([tenantId])
+    @@index([workspaceId])
     @@map("backlog")
 }
 
@@ -4446,7 +4389,6 @@ model OutputAction {
     id         String           @id @default(cuid())
     agentId    String
     agent      Agent            @relation(fields: [agentId], references: [id], onDelete: Cascade)
-    tenantId   String?
     name       String
     type       OutputActionType
     configJson Json
@@ -4456,7 +4398,6 @@ model OutputAction {
     createdBy  String?
 
     @@index([agentId, isActive])
-    @@index([tenantId])
     @@map("output_action")
 }
 
@@ -5488,20 +5429,22 @@ model PlaybookReview {
 // ─── Community Board ────────────────────────────────────────────────────────────
 
 model CommunityBoard {
-    id             String        @id @default(cuid())
-    slug           String        @unique
+    id             String       @id @default(cuid())
+    slug           String
     name           String
-    description    String?       @db.Text
+    description    String?      @db.Text
     scope          String // "organization" | "global"
-    organizationId String?
-    organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-    culturePrompt  String?       @db.Text
+    organizationId String
+    organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+    workspaceId    String
+    workspace      Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+    culturePrompt  String?      @db.Text
     settings       Json?
-    isDefault      Boolean       @default(false)
-    postCount      Int           @default(0)
-    memberCount    Int           @default(0)
-    createdAt      DateTime      @default(now())
-    updatedAt      DateTime      @updatedAt
+    isDefault      Boolean      @default(false)
+    postCount      Int          @default(0)
+    memberCount    Int          @default(0)
+    createdAt      DateTime     @default(now())
+    updatedAt      DateTime     @updatedAt
 
     pulseId String?
     pulse   Pulse?  @relation(fields: [pulseId], references: [id], onDelete: Cascade)
@@ -5509,7 +5452,9 @@ model CommunityBoard {
     posts   CommunityPost[]
     members CommunityMember[]
 
+    @@unique([organizationId, slug])
     @@index([organizationId])
+    @@index([workspaceId])
     @@index([scope])
     @@index([pulseId])
     @@map("community_board")
@@ -5610,9 +5555,9 @@ model CommunityMember {
 // ──────────────────────────────────────────────
 
 model AgentSession {
-    id          String     @id @default(cuid())
-    workspaceId String?
-    workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+    id          String    @id @default(cuid())
+    workspaceId String
+    workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
 
     name        String?
     description String?
@@ -5704,7 +5649,7 @@ model EmbedPartner {
     organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
     name String // Display name (e.g., "Appello")
-    slug String @unique // URL-safe identifier
+    slug String // URL-safe identifier
 
     // HMAC signing secret for identity token verification (hex-encoded, 64 chars = 256 bits)
     signingSecret String
@@ -5726,6 +5671,7 @@ model EmbedPartner {
     users       EmbedPartnerUser[]
     deployments EmbedDeployment[]
 
+    @@unique([organizationId, slug])
     @@index([organizationId])
     @@map("embed_partner")
 }
@@ -5810,14 +5756,13 @@ model EmbedDeployment {
 
 model Pulse {
     id          String          @id @default(cuid())
-    slug        String          @unique
+    slug        String
     name        String
     goal        String          @db.Text
     description String?         @db.Text
     status      PulseStatus     @default(ACTIVE)
-    tenantId    String?
-    workspaceId String?
-    workspace   Workspace?      @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+    workspaceId String
+    workspace   Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
     createdBy   String?
     visibility  AgentVisibility @default(ORGANIZATION)
 
@@ -5837,8 +5782,8 @@ model Pulse {
     boards      CommunityBoard[]
     evaluations PulseEvaluation[]
 
+    @@unique([workspaceId, slug])
     @@index([workspaceId])
-    @@index([tenantId])
     @@index([status])
     @@map("pulse")
 }

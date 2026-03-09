@@ -48,12 +48,17 @@ export const inngest = new Inngest({
                 durationMs?: number;
                 totalTokens?: number;
                 costUsd?: number;
+                organizationId?: string;
+                workspaceId?: string;
+                isConversation?: boolean;
             };
         };
         "run/evaluate": {
             data: {
                 runId: string;
                 agentId: string;
+                organizationId?: string;
+                workspaceId?: string;
             };
         };
         "evaluation/completed": {
@@ -62,6 +67,8 @@ export const inngest = new Inngest({
                 runId: string;
                 agentId: string;
                 scores: Record<string, number>;
+                organizationId?: string;
+                workspaceId?: string;
             };
         };
         "guardrail/event": {
@@ -105,6 +112,8 @@ export const inngest = new Inngest({
                 pattern?: string;
                 evidence?: string;
                 category?: string;
+                organizationId?: string;
+                workspaceId?: string;
             };
         };
         "learning/session.start": {
@@ -112,7 +121,9 @@ export const inngest = new Inngest({
                 agentId: string;
                 triggerReason: string;
                 triggerType?: "threshold" | "scheduled" | "manual";
-                sessionId?: string; // If provided, use existing session instead of creating new
+                sessionId?: string;
+                organizationId?: string;
+                workspaceId?: string;
             };
         };
         "learning/session.scheduled": {
@@ -214,6 +225,7 @@ export const inngest = new Inngest({
             data: {
                 triggerId: string;
                 agentId: string;
+                triggerEventId?: string;
                 payload: Record<string, unknown>;
             };
         };
@@ -235,6 +247,7 @@ export const inngest = new Inngest({
                 alignmentRate: number;
                 avgDisagreement: number;
                 bias: number;
+                organizationId?: string;
             };
         };
         // Admin Portal Events

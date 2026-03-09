@@ -43,7 +43,10 @@ export default async function TenantBillingPage({
     startOfMonth.setHours(0, 0, 0, 0);
 
     const costEvents = await prisma.costEvent.findMany({
-        where: { tenantId: org.id, createdAt: { gte: startOfMonth } },
+        where: {
+            agent: { workspace: { organizationId: org.id } },
+            createdAt: { gte: startOfMonth }
+        },
         select: { costUsd: true, billedCostUsd: true, platformCostUsd: true }
     });
 

@@ -27,9 +27,10 @@ export async function POST(request: NextRequest, context: RouteContext) {
         }
 
         const result = await skillAttachToAgent(
-            agentId,
+            access.agentId,
             skillId,
-            typeof pinned === "boolean" ? pinned : undefined
+            typeof pinned === "boolean" ? pinned : undefined,
+            authContext.organizationId
         );
 
         return NextResponse.json(result, { status: 201 });
@@ -63,7 +64,11 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
             return NextResponse.json({ error: "skillId is required" }, { status: 400 });
         }
 
-        const result = await skillDetachFromAgent(agentId, skillId);
+        const result = await skillDetachFromAgent(
+            access.agentId,
+            skillId,
+            authContext.organizationId
+        );
 
         return NextResponse.json({ success: true, ...result });
     } catch (error) {
@@ -101,9 +106,8 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
             );
         }
 
-        // Find the AgentSkill junction by agentId + skillId
         const agentSkill = await prisma.agentSkill.findFirst({
-            where: { agentId, skillId }
+            where: { agentId: access.agentId, skillId }
         });
 
         if (!agentSkill) {

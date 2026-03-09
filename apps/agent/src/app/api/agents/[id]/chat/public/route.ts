@@ -270,7 +270,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 toolOriginMap: Object.keys(toolOriginMap).length > 0 ? toolOriginMap : undefined,
                 instructionsHash,
                 instructionsSnapshot: mergedInstructions || undefined,
-                tenantId: record?.tenantId || undefined
+                organizationId: record?.workspace?.organizationId || undefined
             })
                 .then((handle) => {
                     turnHandle = handle;

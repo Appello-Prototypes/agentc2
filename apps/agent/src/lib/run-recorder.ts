@@ -34,6 +34,23 @@ import { inngest } from "./inngest";
 import { recordActivity, inputPreview } from "@repo/agentc2/activity/service";
 import { calculateBilledCost } from "@repo/agentc2/budget";
 
+async function resolveAgentTenantContext(
+    agentId: string
+): Promise<{ organizationId?: string; workspaceId?: string }> {
+    try {
+        const agent = await prisma.agent.findUnique({
+            where: { id: agentId },
+            select: { workspaceId: true, workspace: { select: { organizationId: true } } }
+        });
+        return {
+            organizationId: agent?.workspace?.organizationId ?? undefined,
+            workspaceId: agent?.workspaceId ?? undefined
+        };
+    } catch {
+        return {};
+    }
+}
+
 const SENSITIVE_KEYS =
     /^(password|secret|token|credential|pin|passphrase|apiKey|api_key|accessToken|access_token|refreshToken|refresh_token)$/i;
 const MEMORY_TOOL_IDS = new Set([
@@ -103,7 +120,9 @@ export interface StartRunOptions {
     /** Optional session ID for channel sessions */
     sessionId?: string;
     /** Optional tenant ID for multi-tenancy */
-    tenantId?: string;
+    organizationId?: string;
+    /** Workspace ID for multi-tenancy */
+    workspaceId?: string;
     /** Additional metadata */
     metadata?: Record<string, unknown>;
     triggerType?: RunTriggerType;
@@ -248,7 +267,9 @@ export interface ContinueTurnOptions {
     /** Tool origin map */
     toolOriginMap?: Record<string, string>;
     /** Tenant ID */
-    tenantId?: string;
+    organizationId?: string;
+    /** Workspace ID */
+    workspaceId?: string;
 }
 
 /**
@@ -259,6 +280,15 @@ export interface ContinueTurnOptions {
  */
 export async function startRun(options: StartRunOptions): Promise<RunRecorderHandle> {
     const startTime = Date.now();
+
+    // Resolve tenant context at emit time (immutable snapshot)
+    let tenantOrgId = options.organizationId;
+    let tenantWsId = options.workspaceId;
+    if (!tenantOrgId || !tenantWsId) {
+        const resolved = await resolveAgentTenantContext(options.agentId);
+        tenantOrgId = tenantOrgId || resolved.organizationId;
+        tenantWsId = tenantWsId || resolved.workspaceId;
+    }
 
     // Create the run and trace in a transaction
     const { run, trace } = await prisma.$transaction(async (tx) => {
@@ -281,7 +311,6 @@ export async function startRun(options: StartRunOptions): Promise<RunRecorderHan
         const agentRun = await tx.agentRun.create({
             data: {
                 agentId: options.agentId,
-                tenantId: options.tenantId,
                 runType: options.source === "test" ? "TEST" : "PROD",
                 status: options.initialStatus ?? RunStatus.RUNNING,
                 inputText: options.input,
@@ -303,7 +332,6 @@ export async function startRun(options: StartRunOptions): Promise<RunRecorderHan
             data: {
                 runId: agentRun.id,
                 agentId: options.agentId,
-                tenantId: options.tenantId,
                 status: "RUNNING",
                 inputText: options.input,
                 stepsJson: [],
@@ -332,7 +360,8 @@ export async function startRun(options: StartRunOptions): Promise<RunRecorderHan
         status: "info",
         source: options.source || "api",
         runId: run.id,
-        tenantId: options.tenantId
+        organizationId: tenantOrgId,
+        workspaceId: tenantWsId
     });
 
     // Track tool calls in memory for step synthesis
@@ -438,9 +467,9 @@ export async function startRun(options: StartRunOptions): Promise<RunRecorderHan
                         markupMultiplier: number;
                     } | null = null;
                     try {
-                        const sub = options.tenantId
+                        const sub = options.organizationId
                             ? await tx.orgSubscription.findUnique({
-                                  where: { organizationId: options.tenantId },
+                                  where: { organizationId: options.organizationId },
                                   include: { plan: { select: { markupMultiplier: true } } }
                               })
                             : null;
@@ -458,7 +487,6 @@ export async function startRun(options: StartRunOptions): Promise<RunRecorderHan
                         data: {
                             runId: run.id,
                             agentId: options.agentId,
-                            tenantId: options.tenantId,
                             userId: options.userId,
                             provider: completeOptions.modelProvider,
                             modelName: completeOptions.modelName,
@@ -473,10 +501,10 @@ export async function startRun(options: StartRunOptions): Promise<RunRecorderHan
                     });
 
                     // Update subscription credit usage
-                    if (options.tenantId && markupResult) {
+                    if (options.organizationId && markupResult) {
                         await updateSubscriptionCredits(
                             tx,
-                            options.tenantId,
+                            options.organizationId,
                             markupResult.billedCostUsd
                         );
                     }
@@ -488,7 +516,6 @@ export async function startRun(options: StartRunOptions): Promise<RunRecorderHan
                         data: {
                             runId: run.id,
                             agentId: options.agentId,
-                            tenantId: options.tenantId,
                             scoresJson: completeOptions.scores
                         }
                     });
@@ -505,7 +532,9 @@ export async function startRun(options: StartRunOptions): Promise<RunRecorderHan
                         status: "COMPLETED",
                         durationMs,
                         totalTokens,
-                        costUsd: completeOptions.costUsd
+                        costUsd: completeOptions.costUsd,
+                        organizationId: tenantOrgId,
+                        workspaceId: tenantWsId
                     }
                 });
             } catch (inngestError) {
@@ -530,7 +559,8 @@ export async function startRun(options: StartRunOptions): Promise<RunRecorderHan
                 costUsd: completeOptions.costUsd,
                 durationMs,
                 tokenCount: totalTokens,
-                tenantId: options.tenantId
+                organizationId: tenantOrgId,
+                workspaceId: tenantWsId
             });
         },
 
@@ -575,7 +605,8 @@ export async function startRun(options: StartRunOptions): Promise<RunRecorderHan
                 source: options.source,
                 runId: run.id,
                 durationMs,
-                tenantId: options.tenantId
+                organizationId: tenantOrgId,
+                workspaceId: tenantWsId
             });
         },
 
@@ -604,7 +635,6 @@ export async function startRun(options: StartRunOptions): Promise<RunRecorderHan
                 data: {
                     runId: run.id,
                     traceId: trace.id,
-                    tenantId: options.tenantId,
                     toolKey: toolCall.toolKey,
                     mcpServerId,
                     toolSource,
@@ -893,7 +923,11 @@ export function extractToolCalls(response: {
  * the trace and setting COMPLETED status. Idempotent — safe to call multiple
  * times. Used by completeTurn (auto-finalize) and finalizeConversationRun.
  */
-async function finalizeConversationRunInternal(runId: string, agentId: string): Promise<void> {
+async function finalizeConversationRunInternal(
+    runId: string,
+    agentId: string,
+    tenantContext?: { organizationId?: string; workspaceId?: string }
+): Promise<void> {
     await prisma.$transaction(async (tx) => {
         // Gather all turn steps for the unified trace
         const allTurns = await tx.agentRunTurn.findMany({
@@ -957,6 +991,14 @@ async function finalizeConversationRunInternal(runId: string, agentId: string): 
         }
     });
 
+    // Resolve tenant context at emit time if not passed in
+    const resolvedCtx =
+        tenantContext?.organizationId && tenantContext?.workspaceId
+            ? tenantContext
+            : await resolveAgentTenantContext(agentId);
+    const orgId = tenantContext?.organizationId || resolvedCtx.organizationId;
+    const wsId = tenantContext?.workspaceId || resolvedCtx.workspaceId;
+
     // Fire run/completed event for evaluations, learning, etc.
     try {
         await inngest.send({
@@ -965,7 +1007,9 @@ async function finalizeConversationRunInternal(runId: string, agentId: string): 
                 runId,
                 agentId,
                 status: "COMPLETED",
-                isConversation: true
+                isConversation: true,
+                organizationId: orgId,
+                workspaceId: wsId
             }
         });
     } catch (inngestError) {
@@ -989,7 +1033,8 @@ function buildTurnMethods(
     agentSlug: string,
     startTime: number,
     toolOriginMap?: Record<string, string>,
-    tenantId?: string
+    organizationId?: string,
+    workspaceId?: string
 ): {
     completeTurn: TurnHandle["completeTurn"];
     failTurn: TurnHandle["failTurn"];
@@ -1163,9 +1208,9 @@ function buildTurnMethods(
                         markupMultiplier: number;
                     } | null = null;
                     try {
-                        const sub = tenantId
+                        const sub = organizationId
                             ? await tx.orgSubscription.findUnique({
-                                  where: { organizationId: tenantId },
+                                  where: { organizationId: organizationId },
                                   include: { plan: { select: { markupMultiplier: true } } }
                               })
                             : null;
@@ -1189,7 +1234,6 @@ function buildTurnMethods(
                             runId,
                             turnId,
                             agentId,
-                            tenantId,
                             userId: runRecord?.userId ?? null,
                             provider: completeOptions.modelProvider,
                             modelName: completeOptions.modelName,
@@ -1203,8 +1247,12 @@ function buildTurnMethods(
                         }
                     });
 
-                    if (tenantId && markupResult) {
-                        await updateSubscriptionCredits(tx, tenantId, markupResult.billedCostUsd);
+                    if (organizationId && markupResult) {
+                        await updateSubscriptionCredits(
+                            tx,
+                            organizationId,
+                            markupResult.billedCostUsd
+                        );
                     }
                 }
             });
@@ -1216,7 +1264,10 @@ function buildTurnMethods(
             // Auto-finalize: aggregate turn steps into trace and set COMPLETED.
             // If more turns arrive, continueTurn() will re-open the run.
             try {
-                await finalizeConversationRunInternal(runId, agentId);
+                await finalizeConversationRunInternal(runId, agentId, {
+                    organizationId,
+                    workspaceId
+                });
             } catch (finalizeError) {
                 console.warn(`[RunRecorder] Auto-finalize failed for run ${runId}:`, finalizeError);
             }
@@ -1246,7 +1297,6 @@ function buildTurnMethods(
                     runId,
                     turnId,
                     traceId,
-                    tenantId,
                     toolKey: toolCall.toolKey,
                     mcpServerId,
                     toolSource,
@@ -1279,6 +1329,15 @@ export async function startConversationRun(
 ): Promise<ConversationRunHandle> {
     const startTime = Date.now();
 
+    // Resolve tenant context at emit time (immutable snapshot)
+    let tenantOrgId = options.organizationId;
+    let tenantWsId = options.workspaceId;
+    if (!tenantOrgId || !tenantWsId) {
+        const resolved = await resolveAgentTenantContext(options.agentId);
+        tenantOrgId = tenantOrgId || resolved.organizationId;
+        tenantWsId = tenantWsId || resolved.workspaceId;
+    }
+
     const { run, turn, trace } = await prisma.$transaction(async (tx) => {
         // Resolve version
         const resolvedVersionId =
@@ -1300,7 +1359,6 @@ export async function startConversationRun(
         const agentRun = await tx.agentRun.create({
             data: {
                 agentId: options.agentId,
-                tenantId: options.tenantId,
                 runType: options.source === "test" ? "TEST" : "PROD",
                 status: RunStatus.RUNNING,
                 inputText: options.input,
@@ -1333,7 +1391,6 @@ export async function startConversationRun(
             data: {
                 runId: agentRun.id,
                 agentId: options.agentId,
-                tenantId: options.tenantId,
                 status: "RUNNING",
                 inputText: options.input,
                 stepsJson: [],
@@ -1362,7 +1419,8 @@ export async function startConversationRun(
         status: "info",
         source: options.source || "chat",
         runId: run.id,
-        tenantId: options.tenantId
+        organizationId: tenantOrgId,
+        workspaceId: tenantWsId
     });
 
     const turnMethods = buildTurnMethods(
@@ -1374,7 +1432,8 @@ export async function startConversationRun(
         options.agentSlug,
         startTime,
         options.toolOriginMap,
-        options.tenantId
+        tenantOrgId,
+        tenantWsId
     );
 
     return {
@@ -1424,7 +1483,8 @@ export async function startConversationRun(
                 options.agentSlug,
                 turnStartTime,
                 options.toolOriginMap,
-                options.tenantId
+                tenantOrgId,
+                tenantWsId
             );
 
             return {
@@ -1437,7 +1497,10 @@ export async function startConversationRun(
         },
 
         async finalizeRun(): Promise<void> {
-            await finalizeConversationRunInternal(run.id, options.agentId);
+            await finalizeConversationRunInternal(run.id, options.agentId, {
+                organizationId: tenantOrgId,
+                workspaceId: tenantWsId
+            });
             console.log(`[RunRecorder] Finalized conversation run ${run.id}`);
         }
     };
@@ -1519,7 +1582,8 @@ export async function continueTurn(options: ContinueTurnOptions): Promise<TurnHa
         options.agentSlug,
         turnStartTime,
         options.toolOriginMap,
-        options.tenantId
+        options.organizationId,
+        options.workspaceId
     );
 
     return {
@@ -1539,7 +1603,14 @@ export async function continueTurn(options: ContinueTurnOptions): Promise<TurnHa
 export async function finalizeConversationRun(runId: string): Promise<boolean> {
     const run = await prisma.agentRun.findUnique({
         where: { id: runId },
-        select: { status: true, agentId: true, turnCount: true }
+        select: {
+            status: true,
+            agentId: true,
+            turnCount: true,
+            agent: {
+                select: { workspaceId: true, workspace: { select: { organizationId: true } } }
+            }
+        }
     });
 
     if (!run) {
@@ -1552,7 +1623,12 @@ export async function finalizeConversationRun(runId: string): Promise<boolean> {
         return true;
     }
 
-    await finalizeConversationRunInternal(runId, run.agentId);
+    const tenantCtx = {
+        organizationId: run.agent?.workspace?.organizationId ?? undefined,
+        workspaceId: run.agent?.workspaceId ?? undefined
+    };
+
+    await finalizeConversationRunInternal(runId, run.agentId, tenantCtx);
 
     // Record to Activity Feed
     recordActivity({
@@ -1561,7 +1637,9 @@ export async function finalizeConversationRun(runId: string): Promise<boolean> {
         summary: `Conversation run finalized (${run.turnCount || 0} turns)`,
         status: "success",
         source: "chat",
-        runId
+        runId,
+        organizationId: tenantCtx.organizationId,
+        workspaceId: tenantCtx.workspaceId
     });
 
     return true;

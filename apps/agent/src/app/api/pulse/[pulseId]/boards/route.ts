@@ -73,10 +73,19 @@ export async function POST(
 
         let slug = generateSlug(name);
         let suffix = 2;
-        while (await prisma.communityBoard.findUnique({ where: { slug } })) {
+        while (
+            await prisma.communityBoard.findFirst({
+                where: { slug, organizationId }
+            })
+        ) {
             slug = `${generateSlug(name)}-${suffix}`;
             suffix++;
         }
+
+        const defaultWs = await prisma.workspace.findFirst({
+            where: { organizationId, isDefault: true },
+            select: { id: true }
+        });
 
         const board = await prisma.communityBoard.create({
             data: {
@@ -85,6 +94,8 @@ export async function POST(
                 description: description ?? null,
                 scope: "global",
                 culturePrompt: culturePrompt ?? null,
+                organizationId,
+                workspaceId: defaultWs?.id || "",
                 pulseId
             }
         });

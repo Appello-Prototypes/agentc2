@@ -48,13 +48,12 @@ export async function createBudgetReservation(
     runId: string,
     agentId: string,
     estimatedCostUsd: number,
-    options?: { tenantId?: string | null; userId?: string | null }
+    options?: { organizationId?: string | null; userId?: string | null }
 ): Promise<string> {
     const reservation = await prisma.costEvent.create({
         data: {
             runId,
             agentId,
-            tenantId: options?.tenantId,
             userId: options?.userId,
             provider: "reservation",
             modelName: "estimated",
@@ -177,7 +176,7 @@ export class BudgetEnforcementService {
 
             if (policy?.enabled && policy.monthlyLimitUsd != null) {
                 const orgSpend = await sumCostEventsSince(
-                    { tenantId: ctx.organizationId },
+                    { organizationId: ctx.organizationId },
                     monthStart
                 );
                 const pct = (orgSpend / policy.monthlyLimitUsd) * 100;
@@ -215,7 +214,7 @@ export class BudgetEnforcementService {
 
             if (userPolicy?.enabled && userPolicy.monthlyLimitUsd != null) {
                 const userSpend = await sumCostEventsSince(
-                    { userId: ctx.userId, tenantId: ctx.organizationId },
+                    { userId: ctx.userId, organizationId: ctx.organizationId },
                     monthStart
                 );
                 const pct = (userSpend / userPolicy.monthlyLimitUsd) * 100;

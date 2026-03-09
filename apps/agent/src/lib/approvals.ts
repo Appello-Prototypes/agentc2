@@ -143,6 +143,12 @@ export const extractGmailDraftAction = (options: {
 };
 
 export const createApprovalRequest = async (options: CreateApprovalOptions) => {
+    if (!options.workspaceId) {
+        console.warn(
+            `[Approvals] createApprovalRequest called without workspaceId for org ${options.organizationId}, source: ${options.sourceType}`
+        );
+    }
+
     const payloadJson = normalizeJson(options.payload);
     const payloadJsonValue = payloadJson ? (payloadJson as Prisma.InputJsonValue) : undefined;
     const metadata = {
@@ -156,7 +162,7 @@ export const createApprovalRequest = async (options: CreateApprovalOptions) => {
     const approval = await prisma.approvalRequest.create({
         data: {
             organizationId: options.organizationId,
-            workspaceId: options.workspaceId ?? null,
+            workspaceId: options.workspaceId || "",
             agentId: options.agentId ?? null,
             triggerEventId: options.triggerEventId ?? null,
             sourceType: options.sourceType,

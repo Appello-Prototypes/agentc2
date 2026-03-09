@@ -56,9 +56,7 @@ export const platformContextTool = createTool({
         .passthrough(),
     execute: async ({ includeTools, organizationId }) => {
         const orgWhere = organizationId ? { workspace: { organizationId } } : {};
-        const skillOrgWhere = organizationId
-            ? { OR: [{ workspace: { organizationId } }, { type: "SYSTEM" }] }
-            : {};
+        const skillOrgWhere = organizationId ? { workspace: { organizationId } } : {};
 
         const [agents, networks, workflows, skills, mcpToolDefs] = await Promise.all([
             prisma.agent.findMany({

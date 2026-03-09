@@ -37,7 +37,7 @@ export const mockSystemSkill = {
         "## Agent Management\n\nYou can create, read, update, delete, and list AI agents.",
     category: "builder",
     tags: ["agents", "crud", "management"],
-    type: "SYSTEM" as const,
+    type: "USER" as const,
     tools: [
         { toolId: "agent-create" },
         { toolId: "agent-read" },
@@ -92,7 +92,7 @@ export const mockMcpSkill = {
     instructions: "## HubSpot CRM Integration\n\nAccess HubSpot through MCP tools.",
     category: "integration",
     tags: ["crm", "hubspot"],
-    type: "SYSTEM" as const,
+    type: "USER" as const,
     tools: [] // MCP tools resolved dynamically
 };
 

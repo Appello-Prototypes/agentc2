@@ -30,6 +30,8 @@ export const sessionCreateTool = createTool({
         "Create a collaborative multi-agent session with shared memory. All participating agents can read and write to a shared scratchpad and invoke each other as peers. Use this to orchestrate complex tasks that require multiple agents to collaborate.",
     inputSchema: z.object({
         name: z.string().describe("Short name for the session"),
+        workspaceId: z.string().describe("Workspace ID for the session"),
+        organizationId: z.string().describe("Organization ID for tenant scoping (auto-injected)"),
         agentSlugs: z
             .array(z.string())
             .min(2)
@@ -59,6 +61,8 @@ export const sessionCreateTool = createTool({
     }),
     execute: async ({
         name,
+        workspaceId,
+        organizationId,
         agentSlugs,
         task,
         orchestratorSlug,
@@ -77,6 +81,8 @@ export const sessionCreateTool = createTool({
 - **Open Questions**:`;
 
             const session = await createSession({
+                workspaceId,
+                organizationId,
                 initiatorType: "agent",
                 initiatorId: orchestratorSlug || agentSlugs[0],
                 agentSlugs,

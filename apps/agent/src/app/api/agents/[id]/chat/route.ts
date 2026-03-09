@@ -183,7 +183,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             if (orgId || workspaceId) {
                 enrichedRequestContext = {
                     ...requestContext,
-                    ...(orgId ? { tenantId: orgId } : {}),
+                    ...(orgId ? { organizationId: orgId } : {}),
                     ...(workspaceId ? { workspaceId } : {})
                 };
             }
@@ -306,7 +306,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                     agentSlug: id,
                     toolOriginMap:
                         Object.keys(toolOriginMap).length > 0 ? toolOriginMap : undefined,
-                    tenantId: record?.tenantId || undefined
+                    organizationId: record?.workspace?.organizationId || undefined
                 })
                     .then((handle) => {
                         turnHandle = handle;
@@ -358,7 +358,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                         Object.keys(toolOriginMap).length > 0 ? toolOriginMap : undefined,
                     instructionsHash,
                     instructionsSnapshot: mergedInstructions || undefined,
-                    tenantId: record?.tenantId || undefined,
+                    organizationId: record?.workspace?.organizationId || undefined,
                     metadata:
                         toolHealth.missingTools.length > 0
                             ? {
@@ -422,7 +422,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         if (agentId && lastUserMessage) {
             const { enforceInputGuardrails } = await import("@repo/agentc2/guardrails");
             const inputCheck = await enforceInputGuardrails(agentId, lastUserMessage, {
-                tenantId: record?.tenantId || undefined
+                organizationId: record?.workspace?.organizationId || undefined
             });
             if (inputCheck.blocked) {
                 return NextResponse.json(
@@ -1660,7 +1660,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                                         capturedFullOutput,
                                         {
                                             runId: capturedRun?.runId,
-                                            tenantId: record?.tenantId || undefined
+                                            organizationId:
+                                                record?.workspace?.organizationId || undefined
                                         }
                                     );
                                     if (guardrailResult.blocked && capturedRun?.runId) {

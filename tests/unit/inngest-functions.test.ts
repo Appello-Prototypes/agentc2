@@ -61,7 +61,7 @@ describe("Inngest Functions", () => {
                         data: {
                             runId: run.id,
                             agentId: run.agentId,
-                            tenantId: run.tenantId,
+                            organizationId: run.organizationId,
                             modelName: run.modelName || "unknown",
                             promptTokens: run.promptTokens || 0,
                             completionTokens: run.completionTokens || 0,
@@ -147,7 +147,7 @@ describe("Inngest Functions", () => {
                     await prismaMock.agentAlert.create({
                         data: {
                             agentId: runCompletedEventData.agentId,
-                            tenantId: "test-tenant",
+                            organizationId: "test-tenant",
                             severity: percentUsed >= 100 ? "CRITICAL" : "WARNING",
                             source: "BUDGET",
                             title: "Budget threshold reached",
@@ -226,7 +226,7 @@ describe("Inngest Functions", () => {
                     data: {
                         agentId: guardrailEventData.agentId,
                         runId: guardrailEventData.runId,
-                        tenantId: agent.tenantId,
+                        organizationId: agent.organizationId,
                         eventType: guardrailEventData.eventType,
                         ruleName: guardrailEventData.ruleName,
                         inputText: guardrailEventData.inputText,
@@ -247,7 +247,7 @@ describe("Inngest Functions", () => {
                 await prismaMock.agentAlert.create({
                     data: {
                         agentId: guardrailEventData.agentId,
-                        tenantId: "test-tenant",
+                        organizationId: "test-tenant",
                         severity: "WARNING",
                         source: "GUARDRAIL",
                         title: "Content blocked by guardrail",
@@ -509,7 +509,7 @@ describe("Inngest Functions", () => {
                 await prismaMock.agentAlert.create({
                     data: {
                         agentId: policy.agentId,
-                        tenantId: policy.tenantId,
+                        organizationId: policy.organizationId,
                         severity,
                         source: "BUDGET",
                         title: "Budget threshold reached",
@@ -556,7 +556,7 @@ describe("Inngest Functions", () => {
                 await prismaMock.agentAlert.create({
                     data: {
                         agentId: policy.agentId,
-                        tenantId: policy.tenantId,
+                        organizationId: policy.organizationId,
                         severity,
                         source: "BUDGET",
                         title: "Budget exceeded",

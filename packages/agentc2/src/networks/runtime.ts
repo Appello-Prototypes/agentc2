@@ -153,7 +153,7 @@ export async function buildNetworkAgent(networkId: string) {
 
     // Build requestContext for workflow wrappers
     const requestContext: RequestContext | undefined = organizationId
-        ? { resource: { tenantId: organizationId } }
+        ? { resource: { organizationId: organizationId } }
         : undefined;
 
     // Collect resolution errors for diagnostics
@@ -164,7 +164,7 @@ export async function buildNetworkAgent(networkId: string) {
             if (primitive.primitiveType.toLowerCase() === "agent" && primitive.agentId) {
                 const { agent, record } = await agentResolver.resolve({
                     id: primitive.agentId,
-                    fallbackToSystem: true,
+                    fallbackToSystem: false,
                     requestContext
                 });
                 const key = record?.slug || primitive.agentId;
@@ -228,8 +228,8 @@ export async function buildNetworkAgent(networkId: string) {
         try {
             const agentSlugs = Object.keys(agents);
             meshSession = await createSession({
-                workspaceId: network.workspaceId || undefined,
-                organizationId: organizationId || undefined,
+                workspaceId: network.workspaceId,
+                organizationId: organizationId!,
                 initiatorType: "network",
                 initiatorId: network.id,
                 agentSlugs,

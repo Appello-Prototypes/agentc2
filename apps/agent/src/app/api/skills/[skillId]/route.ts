@@ -62,7 +62,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
             createdBy: authCtx.userId
         };
 
-        const skill = await updateSkill(skillId, input);
+        const skill = await updateSkill(skillId, input, authCtx.organizationId);
 
         return NextResponse.json(skill);
     } catch (error) {

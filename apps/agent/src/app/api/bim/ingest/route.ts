@@ -128,7 +128,7 @@ export async function POST(request: NextRequest) {
                 const model = await prisma.bimModel.create({
                     data: {
                         name: modelName,
-                        workspaceId: resolvedWorkspaceId
+                        workspaceId: resolvedWorkspaceId || ""
                     }
                 });
 
@@ -168,7 +168,7 @@ export async function POST(request: NextRequest) {
                     const model = await prisma.bimModel.create({
                         data: {
                             name: modelName,
-                            workspaceId: resolvedWorkspaceId
+                            workspaceId: resolvedWorkspaceId || ""
                         }
                     });
 
@@ -215,7 +215,7 @@ export async function POST(request: NextRequest) {
 
             const result = await ingestBimModel({
                 modelName,
-                workspaceId: resolvedWorkspaceId || undefined,
+                workspaceId: resolvedWorkspaceId || "",
                 ownerId: ownerId || undefined,
                 sourceFormat,
                 sourceKey: uploadResult.key,

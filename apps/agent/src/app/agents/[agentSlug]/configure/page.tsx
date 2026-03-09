@@ -106,7 +106,7 @@ interface Agent {
     publicToken: string | null;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     metadata: Record<string, any> | null;
-    type: "SYSTEM" | "USER" | "DEMO";
+    type: "USER" | "DEMO";
     version: number;
     deploymentMode?: string;
 }
@@ -1535,14 +1535,6 @@ export default function ConfigurePage() {
                                 </div>
                             )}
 
-                            {agent?.type === "SYSTEM" && (
-                                <div className="rounded-lg border border-yellow-500/20 bg-yellow-500/10 p-4">
-                                    <p className="text-sm text-yellow-600">
-                                        This is a system agent. Some configuration options may be
-                                        restricted.
-                                    </p>
-                                </div>
-                            )}
                             {agent?.type === "DEMO" && (
                                 <div className="rounded-lg border border-blue-500/20 bg-blue-500/10 p-4">
                                     <p className="text-sm text-blue-600">

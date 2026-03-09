@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
         // Include events from this workspace AND events with no workspace (system-level)
         const conditions: Prisma.TriggerEventWhereInput[] = [
             {
-                OR: [{ workspaceId: workspaceContext.workspaceId }, { workspaceId: null }]
+                workspaceId: workspaceContext.workspaceId
             }
         ];
 

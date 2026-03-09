@@ -4543,7 +4543,7 @@ export async function analyzeMcpConfigImpact(options: {
     const serverKeys = Array.from(new Set(serversToDisable.map((server) => server.serverKey)));
     const agentScopeFilter = {
         isActive: true,
-        OR: [{ workspace: { organizationId } }, { tenantId: organizationId }]
+        OR: [{ workspace: { organizationId } }, { organizationId: organizationId }]
     };
 
     const toolMatches =

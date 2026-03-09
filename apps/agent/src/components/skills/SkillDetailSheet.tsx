@@ -124,10 +124,7 @@ export function SkillDetailSheet({
                                     <Badge variant="outline" className="text-xs">
                                         v{skill.version}
                                     </Badge>
-                                    <Badge
-                                        variant={skill.type === "SYSTEM" ? "default" : "secondary"}
-                                        className="text-xs"
-                                    >
+                                    <Badge variant={"secondary"} className="text-xs">
                                         {skill.type}
                                     </Badge>
                                 </div>

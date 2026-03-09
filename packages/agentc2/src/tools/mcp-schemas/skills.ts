@@ -16,7 +16,7 @@ export const skillToolDefinitions: McpToolDefinition[] = [
                 tags: { type: "array", items: { type: "string" } },
                 metadata: { type: "object", description: "Additional metadata" },
                 workspaceId: { type: "string" },
-                type: { type: "string", enum: ["USER", "SYSTEM"] },
+                type: { type: "string", enum: ["USER"] },
                 createdBy: { type: "string" }
             },
             required: ["slug", "name", "instructions"]
@@ -76,7 +76,7 @@ export const skillToolDefinitions: McpToolDefinition[] = [
             properties: {
                 category: { type: "string" },
                 tags: { type: "string" },
-                type: { type: "string", enum: ["USER", "SYSTEM"] },
+                type: { type: "string", enum: ["USER"] },
                 workspaceId: { type: "string" },
                 skip: { type: "number", description: "Pagination offset" },
                 take: { type: "number", description: "Page size" }

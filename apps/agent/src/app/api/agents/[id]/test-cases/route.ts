@@ -109,16 +109,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             );
         }
 
-        const agent = await prisma.agent.findUnique({
-            where: { id: agentId },
-            select: { tenantId: true }
-        });
-
         // Create test case
         const testCase = await prisma.agentTestCase.create({
             data: {
                 agentId,
-                tenantId: agent!.tenantId,
                 name,
                 inputText,
                 expectedOutput: expectedOutput || null,

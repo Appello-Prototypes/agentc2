@@ -20,7 +20,6 @@ export interface CreateSkillInput {
     metadata?: Record<string, unknown>;
     workspaceId?: string;
     organizationId?: string;
-    type?: "USER" | "SYSTEM";
     createdBy?: string;
 }
 
@@ -41,7 +40,6 @@ export interface ListSkillsInput {
     organizationId?: string;
     category?: string;
     tags?: string[];
-    type?: "USER" | "SYSTEM";
     skip?: number;
     take?: number;
 }
@@ -60,9 +58,8 @@ export async function createSkill(input: CreateSkillInput) {
             category: input.category,
             tags: input.tags || [],
             metadata: (input.metadata || {}) as Prisma.InputJsonValue,
-            workspaceId: input.workspaceId,
-            organizationId: input.organizationId,
-            type: input.type || "USER",
+            workspaceId: input.workspaceId!,
+            organizationId: input.organizationId!,
             createdBy: input.createdBy
         }
     });
@@ -72,11 +69,10 @@ export async function createSkill(input: CreateSkillInput) {
 
 /**
  * Resolve a skill ID or slug to the internal CUID.
+ * organizationId is required for tenant-scoped resolution.
  */
 async function resolveSkillId(idOrSlug: string, organizationId?: string): Promise<string> {
-    const orgFilter = organizationId
-        ? { OR: [{ workspace: { organizationId } }, { type: "SYSTEM" as const }] }
-        : {};
+    const orgFilter = organizationId ? { organizationId } : {};
     const skill = await prisma.skill.findFirst({
         where: { OR: [{ id: idOrSlug }, { slug: idOrSlug }], ...orgFilter },
         select: { id: true }
@@ -88,8 +84,12 @@ async function resolveSkillId(idOrSlug: string, organizationId?: string): Promis
 /**
  * Update a skill
  */
-export async function updateSkill(idOrSlug: string, input: UpdateSkillInput) {
-    const id = await resolveSkillId(idOrSlug);
+export async function updateSkill(
+    idOrSlug: string,
+    input: UpdateSkillInput,
+    organizationId?: string
+) {
+    const id = await resolveSkillId(idOrSlug, organizationId);
     const existing = await prisma.skill.findUniqueOrThrow({
         where: { id }
     });
@@ -142,16 +142,16 @@ export async function updateSkill(idOrSlug: string, input: UpdateSkillInput) {
 
 /**
  * Delete a skill (cascades to versions, junctions).
- * When organizationId is provided, verifies the skill belongs to the org before deleting.
+ * organizationId scopes the lookup and verifies ownership.
  */
 export async function deleteSkill(idOrSlug: string, organizationId?: string) {
-    const id = await resolveSkillId(idOrSlug);
+    const id = await resolveSkillId(idOrSlug, organizationId);
     if (organizationId) {
         const skill = await prisma.skill.findUnique({
             where: { id },
-            select: { organizationId: true, type: true }
+            select: { organizationId: true }
         });
-        if (skill && skill.organizationId !== organizationId && skill.type !== "SYSTEM") {
+        if (skill && skill.organizationId !== organizationId) {
             throw new Error("Skill does not belong to your organization");
         }
     }
@@ -169,11 +169,7 @@ export async function getSkill(idOrSlug: string, organizationId?: string) {
         OR: [{ id: idOrSlug }, { slug: idOrSlug }]
     };
     if (organizationId) {
-        where.AND = [
-            {
-                OR: [{ organizationId }, { organizationId: null, type: "SYSTEM" }]
-            }
-        ];
+        where.organizationId = organizationId;
     }
 
     const skill = await prisma.skill.findFirst({
@@ -208,15 +204,11 @@ export async function listSkills(input: ListSkillsInput = {}) {
 
     // Organization scoping: show skills from the caller's org + SYSTEM skills (organizationId: null)
     if (input.organizationId) {
-        where.OR = [
-            { organizationId: input.organizationId },
-            { organizationId: null, type: "SYSTEM" }
-        ];
+        where.organizationId = input.organizationId;
     } else if (input.workspaceId) {
-        where.OR = [{ workspaceId: input.workspaceId }, { workspaceId: null }, { type: "SYSTEM" }];
+        where.workspaceId = input.workspaceId;
     }
     if (input.category) where.category = input.category;
-    if (input.type) where.type = input.type;
     if (input.tags && input.tags.length > 0) {
         where.tags = { hasSome: input.tags };
     }
@@ -292,21 +284,29 @@ async function createSkillVersionForCompositionChange(skillId: string, changeSum
 // ===========================
 
 /**
- * Attach a document to a skill (creates skill version)
+ * Attach a document to a skill (creates skill version).
+ * Validates that both entities belong to the same organization.
  */
 export async function attachDocument(skillId: string, documentId: string, role?: string) {
+    const [skill, doc] = await Promise.all([
+        prisma.skill.findUnique({ where: { id: skillId }, select: { organizationId: true } }),
+        prisma.document.findUnique({
+            where: { id: documentId },
+            select: { slug: true, organizationId: true }
+        })
+    ]);
+    if (!skill || !doc) throw new Error("Skill or document not found");
+    if (skill.organizationId !== doc.organizationId) {
+        throw new Error("Cannot attach a document from a different organization");
+    }
+
     const junction = await prisma.skillDocument.create({
         data: { skillId, documentId, role }
     });
 
-    // Look up document slug for change summary
-    const doc = await prisma.document.findUnique({
-        where: { id: documentId },
-        select: { slug: true }
-    });
     await createSkillVersionForCompositionChange(
         skillId,
-        `Attached document: ${doc?.slug || documentId}`
+        `Attached document: ${doc.slug || documentId}`
     );
 
     return junction;
@@ -348,7 +348,8 @@ export async function detachDocument(skillId: string, documentId: string) {
  */
 export async function attachTool(
     skillIdOrSlug: string,
-    toolId: string
+    toolId: string,
+    organizationId?: string
 ): Promise<{ id: string; skillId: string; toolId: string; warning?: string }> {
     // Validate tool existence
     const existsInRegistry = toolId in toolRegistry;
@@ -367,7 +368,7 @@ export async function attachTool(
         console.warn(`[SkillService] ${warning}`);
     }
 
-    const skillId = await resolveSkillId(skillIdOrSlug);
+    const skillId = await resolveSkillId(skillIdOrSlug, organizationId);
     const junction = await prisma.skillTool.create({
         data: { skillId, toolId }
     });
@@ -381,8 +382,8 @@ export async function attachTool(
  * Detach a tool from a skill (creates skill version).
  * skillIdOrSlug accepts a CUID or slug.
  */
-export async function detachTool(skillIdOrSlug: string, toolId: string) {
-    const skillId = await resolveSkillId(skillIdOrSlug);
+export async function detachTool(skillIdOrSlug: string, toolId: string, organizationId?: string) {
+    const skillId = await resolveSkillId(skillIdOrSlug, organizationId);
     await prisma.skillTool.delete({
         where: {
             skillId_toolId: { skillId, toolId }
@@ -398,10 +399,12 @@ export async function detachTool(skillIdOrSlug: string, toolId: string) {
 
 /**
  * Resolve an agent ID or slug to the internal CUID.
+ * organizationId scopes the lookup to prevent cross-tenant resolution.
  */
-async function resolveAgentId(idOrSlug: string): Promise<string> {
+async function resolveAgentId(idOrSlug: string, organizationId?: string): Promise<string> {
+    const orgFilter = organizationId ? { workspace: { organizationId } } : {};
     const agent = await prisma.agent.findFirst({
-        where: { OR: [{ id: idOrSlug }, { slug: idOrSlug }] },
+        where: { OR: [{ id: idOrSlug }, { slug: idOrSlug }], ...orgFilter },
         select: { id: true }
     });
     if (!agent) throw new Error(`Agent not found: ${idOrSlug}`);
@@ -463,7 +466,6 @@ async function createAgentVersionForSkillChange(agentId: string, changeDescripti
         prisma.agentVersion.create({
             data: {
                 agentId,
-                tenantId: agent.tenantId,
                 version: nextVersion,
                 description: changeDescription,
                 instructions: agent.instructions,
@@ -483,28 +485,38 @@ async function createAgentVersionForSkillChange(agentId: string, changeDescripti
 }
 
 /**
- * Attach a skill to an agent (creates agent version)
+ * Attach a skill to an agent (creates agent version).
+ * Validates that both entities belong to the same organization.
  * @param pinned - If true (default), skill tools are injected directly. If false, skill is discoverable via meta-tools.
  */
 export async function attachToAgent(
     agentIdOrSlug: string,
     skillIdOrSlug: string,
-    pinned?: boolean
+    pinned?: boolean,
+    organizationId?: string
 ) {
-    const agentId = await resolveAgentId(agentIdOrSlug);
-    const skillId = await resolveSkillId(skillIdOrSlug);
+    const agentId = await resolveAgentId(agentIdOrSlug, organizationId);
+    const skillId = await resolveSkillId(skillIdOrSlug, organizationId);
 
-    // Get skill name for change description
-    const skill = await prisma.skill.findUniqueOrThrow({
-        where: { id: skillId },
-        select: { slug: true }
-    });
+    const [agent, skill] = await Promise.all([
+        prisma.agent.findUnique({
+            where: { id: agentId },
+            select: { workspace: { select: { organizationId: true } } }
+        }),
+        prisma.skill.findUniqueOrThrow({
+            where: { id: skillId },
+            select: { slug: true, organizationId: true }
+        })
+    ]);
+
+    if (agent?.workspace?.organizationId !== skill.organizationId) {
+        throw new Error("Cannot attach a skill from a different organization");
+    }
 
     const junction = await prisma.agentSkill.create({
         data: { agentId, skillId, pinned: pinned ?? true }
     });
 
-    // Create agent version after the skill is attached
     const newVersion = await createAgentVersionForSkillChange(
         agentId,
         `Attached skill: ${skill.slug}${pinned ? " (pinned)" : ""}`
@@ -516,9 +528,13 @@ export async function attachToAgent(
 /**
  * Detach a skill from an agent (creates agent version)
  */
-export async function detachFromAgent(agentIdOrSlug: string, skillIdOrSlug: string) {
-    const agentId = await resolveAgentId(agentIdOrSlug);
-    const skillId = await resolveSkillId(skillIdOrSlug);
+export async function detachFromAgent(
+    agentIdOrSlug: string,
+    skillIdOrSlug: string,
+    organizationId?: string
+) {
+    const agentId = await resolveAgentId(agentIdOrSlug, organizationId);
+    const skillId = await resolveSkillId(skillIdOrSlug, organizationId);
 
     // Get skill name for change description
     const skill = await prisma.skill.findUniqueOrThrow({
@@ -550,7 +566,7 @@ export async function forkSkill(
     idOrSlug: string,
     options?: { slug?: string; name?: string; createdBy?: string; organizationId?: string }
 ) {
-    const sourceId = await resolveSkillId(idOrSlug);
+    const sourceId = await resolveSkillId(idOrSlug, options?.organizationId);
     const source = await prisma.skill.findUniqueOrThrow({
         where: { id: sourceId },
         include: {
@@ -581,7 +597,6 @@ export async function forkSkill(
             } as unknown as Prisma.InputJsonValue,
             workspaceId: source.workspaceId,
             organizationId: options?.organizationId ?? source.organizationId,
-            type: "USER",
             createdBy: options?.createdBy
         }
     });

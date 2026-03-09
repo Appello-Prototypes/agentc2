@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
         const cursor = searchParams.get("cursor") || undefined;
 
         const result = await queryAuditLogs({
-            tenantId: authContext.organizationId,
+            organizationId: authContext.organizationId,
             entityType,
             entityId,
             action,

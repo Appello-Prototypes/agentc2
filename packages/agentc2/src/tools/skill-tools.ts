@@ -66,7 +66,7 @@ export const skillCreateTool = createTool({
         tags: z.array(z.string()).optional(),
         metadata: z.record(z.unknown()).optional().describe("Additional metadata"),
         workspaceId: z.string().optional(),
-        type: z.enum(["USER", "SYSTEM"]).optional(),
+        type: z.literal("USER").optional(),
         createdBy: z.string().optional()
     }),
     outputSchema: baseOutputSchema,
@@ -158,7 +158,7 @@ export const skillListTool = createTool({
     inputSchema: z.object({
         category: z.string().optional(),
         tags: z.string().optional(),
-        type: z.enum(["USER", "SYSTEM"]).optional(),
+        type: z.literal("USER").optional(),
         workspaceId: z.string().optional(),
         skip: z.number().optional().describe("Pagination offset"),
         take: z.number().optional().describe("Page size")

@@ -19,7 +19,7 @@ interface NetworkDetail {
     isPublished: boolean;
     isActive: boolean;
     isArchived: boolean;
-    type?: "SYSTEM" | "USER";
+    type?: "USER";
     runCount: number;
     primitiveCount: number;
     visibility: string;
@@ -143,7 +143,7 @@ export default function NetworkLayout({ children }: { children: React.ReactNode 
                                     entityName={network.name}
                                     entitySlug={network.slug}
                                     isArchived={network.isArchived}
-                                    isSystem={network.type === "SYSTEM"}
+                                    isSystem={false}
                                     variant="buttons"
                                     redirectTo="/networks"
                                 />

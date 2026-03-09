@@ -183,7 +183,6 @@ export interface EvalContext {
         };
     } | null;
     skillsJson: { skillSlug: string; skillVersion?: number }[] | null;
-    tenantId: string | null;
     organizationId?: string | null;
 }
 

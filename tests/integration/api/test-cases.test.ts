@@ -106,7 +106,7 @@ describe("Test Cases API", () => {
             const testCase = await prismaMock.agentTestCase.create({
                 data: {
                     agentId: "test-agent-uuid",
-                    tenantId: "test-tenant",
+                    organizationId: "test-tenant",
                     ...testCaseData
                 }
             });
@@ -139,7 +139,7 @@ describe("Test Cases API", () => {
             const testCase = await prismaMock.agentTestCase.create({
                 data: {
                     agentId: "test-agent-uuid",
-                    tenantId: "test-tenant",
+                    organizationId: "test-tenant",
                     name: "Test without expected",
                     inputText: "Hello!"
                 }
@@ -158,7 +158,7 @@ describe("Test Cases API", () => {
             const testCase = await prismaMock.agentTestCase.create({
                 data: {
                     agentId: "test-agent-uuid",
-                    tenantId: "test-tenant",
+                    organizationId: "test-tenant",
                     name: "Test with tags",
                     inputText: "Hello!",
                     tags: ["tag1", "tag2", "tag3"]

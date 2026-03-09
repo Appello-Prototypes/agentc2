@@ -26,7 +26,6 @@ export interface CreateDocumentInput {
     metadata?: Record<string, unknown>;
     workspaceId?: string;
     organizationId?: string;
-    type?: "USER" | "SYSTEM";
     createdBy?: string;
     chunkOptions?: ChunkOptions;
     /** Behavior when a document with the same slug already exists. */
@@ -51,7 +50,6 @@ export interface ListDocumentsInput {
     organizationId?: string;
     category?: string;
     tags?: string[];
-    type?: "USER" | "SYSTEM";
     skip?: number;
     take?: number;
 }
@@ -165,9 +163,8 @@ export async function createDocument(input: CreateDocumentInput) {
             category: input.category,
             tags: input.tags || [],
             metadata: (input.metadata || {}) as Prisma.InputJsonValue,
-            workspaceId: input.workspaceId,
-            organizationId: input.organizationId,
-            type: input.type || "USER",
+            workspaceId: input.workspaceId!,
+            organizationId: input.organizationId!,
             createdBy: input.createdBy
         }
     });
@@ -210,10 +207,15 @@ async function resolveDocumentId(idOrSlug: string, organizationId?: string): Pro
 }
 
 /**
- * Update a document with automatic re-embedding
+ * Update a document with automatic re-embedding.
+ * organizationId scopes the lookup to prevent cross-tenant updates.
  */
-export async function updateDocument(idOrSlug: string, input: UpdateDocumentInput) {
-    const id = await resolveDocumentId(idOrSlug);
+export async function updateDocument(
+    idOrSlug: string,
+    input: UpdateDocumentInput,
+    organizationId?: string
+) {
+    const id = await resolveDocumentId(idOrSlug, organizationId);
     const existing = await prisma.document.findUniqueOrThrow({
         where: { id }
     });
@@ -353,7 +355,6 @@ export async function listDocuments(input: ListDocumentsInput = {}) {
     if (input.organizationId) where.organizationId = input.organizationId;
     if (input.workspaceId) where.workspaceId = input.workspaceId;
     if (input.category) where.category = input.category;
-    if (input.type) where.type = input.type;
     if (input.tags && input.tags.length > 0) {
         where.tags = { hasSome: input.tags };
     }
@@ -374,7 +375,6 @@ export async function listDocuments(input: ListDocumentsInput = {}) {
                 embeddedAt: true,
                 category: true,
                 tags: true,
-                type: true,
                 version: true,
                 workspaceId: true,
                 createdAt: true,

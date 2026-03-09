@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
 import { getDemoSession } from "@/lib/standalone-auth";
 import { getNextRunAt } from "@/lib/schedule-utils";
+import { getUserOrganizationId } from "@/lib/organization";
 
 interface RouteParams {
     params: Promise<{ id: string }>;
@@ -37,7 +38,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         const template = await prisma.campaignTemplate.findFirst({
             where: {
                 id: templateId,
-                OR: [{ createdBy: { in: memberIds } }, { isSystem: true }]
+                createdBy: { in: memberIds }
             },
             select: { id: true }
         });
@@ -62,6 +63,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
             return NextResponse.json({ error: "Invalid cron expression" }, { status: 400 });
         }
 
+        const organizationId = await getUserOrganizationId(session.user.id);
+        if (!organizationId) {
+            return NextResponse.json({ error: "No organization found" }, { status: 400 });
+        }
+
         const schedule = await prisma.campaignSchedule.create({
             data: {
                 templateId,
@@ -70,6 +76,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
                 timezone: tz,
                 inputJson: inputJson || null,
                 nextRunAt,
+                organizationId,
                 createdBy: session.user.id
             }
         });

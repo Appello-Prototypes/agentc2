@@ -310,7 +310,7 @@ export async function runTier2Auditor(context: EvalContext): Promise<Tier2Result
         context.agent.scorecard?.criteria ?? DEFAULT_SCORECARD_CRITERIA;
     const auditorModelName = context.agent.scorecard?.auditorModel ?? "gpt-4o-mini";
 
-    const orgId = context.organizationId || context.tenantId || undefined;
+    const orgId = context.organizationId || context.organizationId || undefined;
     const model = await resolveModelForOrg("openai", auditorModelName, orgId);
     if (!model) {
         throw new Error("OpenAI API key not configured. Add it via Settings > Integrations.");

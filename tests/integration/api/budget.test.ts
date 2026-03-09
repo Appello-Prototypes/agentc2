@@ -94,7 +94,7 @@ describe("Budget API", () => {
                 where: { agentId: "test-agent-uuid" },
                 create: {
                     agentId: "test-agent-uuid",
-                    tenantId: "test-tenant",
+                    organizationId: "test-tenant",
                     ...policyData
                 },
                 update: policyData
@@ -130,7 +130,7 @@ describe("Budget API", () => {
         it("should create audit log entry", async () => {
             prismaMock.auditLog.create.mockResolvedValue({
                 id: "audit-uuid",
-                tenantId: "test-tenant",
+                organizationId: "test-tenant",
                 action: "BUDGET_UPDATED",
                 entityType: "BudgetPolicy",
                 entityId: "test-agent-uuid"
@@ -138,7 +138,7 @@ describe("Budget API", () => {
 
             await prismaMock.auditLog.create({
                 data: {
-                    tenantId: "test-tenant",
+                    organizationId: "test-tenant",
                     action: "BUDGET_UPDATED",
                     entityType: "BudgetPolicy",
                     entityId: "test-agent-uuid",

@@ -65,9 +65,24 @@ export async function POST(request: NextRequest) {
 
         let slug = generateSlug(name);
         let suffix = 2;
-        while (await prisma.communityBoard.findUnique({ where: { slug } })) {
+        while (
+            await prisma.communityBoard.findFirst({
+                where: { slug, organizationId }
+            })
+        ) {
             slug = `${generateSlug(name)}-${suffix}`;
             suffix++;
+        }
+
+        const defaultWorkspace = await prisma.workspace.findFirst({
+            where: { organizationId, isDefault: true },
+            select: { id: true }
+        });
+        if (!defaultWorkspace) {
+            return NextResponse.json(
+                { success: false, error: "No default workspace found" },
+                { status: 400 }
+            );
         }
 
         const board = await prisma.communityBoard.create({
@@ -76,7 +91,8 @@ export async function POST(request: NextRequest) {
                 name,
                 description: description || null,
                 scope: boardScope,
-                organizationId: boardScope === "organization" ? organizationId : null,
+                organizationId,
+                workspaceId: defaultWorkspace.id,
                 culturePrompt: culturePrompt || null,
                 isDefault: isDefault || false
             }

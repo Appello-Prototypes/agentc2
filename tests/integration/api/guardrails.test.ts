@@ -67,7 +67,7 @@ describe("Guardrails API", () => {
             const policy = await prismaMock.guardrailPolicy.create({
                 data: {
                     agentId: "test-agent-uuid",
-                    tenantId: "test-tenant",
+                    organizationId: "test-tenant",
                     version: 1,
                     configJson,
                     createdBy: "user-123"
@@ -109,7 +109,7 @@ describe("Guardrails API", () => {
         it("should create audit log on update", async () => {
             prismaMock.auditLog.create.mockResolvedValue({
                 id: "audit-uuid",
-                tenantId: "test-tenant",
+                organizationId: "test-tenant",
                 action: "GUARDRAIL_UPDATED",
                 entityType: "GuardrailPolicy",
                 entityId: "test-agent-uuid"
@@ -117,7 +117,7 @@ describe("Guardrails API", () => {
 
             await prismaMock.auditLog.create({
                 data: {
-                    tenantId: "test-tenant",
+                    organizationId: "test-tenant",
                     action: "GUARDRAIL_UPDATED",
                     entityType: "GuardrailPolicy",
                     entityId: "test-agent-uuid",

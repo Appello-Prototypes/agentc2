@@ -1,5 +1,12 @@
 #!/usr/bin/env bun
 /**
+ * @deprecated QUARANTINED - This script encodes pre-multi-tenant assumptions
+ * (global slugs, _system workspaces, null workspaceId). Do NOT run in production.
+ * Kept for reference only.
+ */
+throw new Error("QUARANTINED: This migration script is deprecated and must not be run.");
+
+/**
  * One-time migration: makes all entity slugs globally unique by appending
  * the owning organization's slug as a suffix.
  *

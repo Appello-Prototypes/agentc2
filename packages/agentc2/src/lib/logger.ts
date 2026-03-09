@@ -113,9 +113,9 @@ export const securityLogger = {
             `Tool ${toolName} ${status}`
         ),
 
-    credentialAccess: (connectionId: string, userId?: string, tenantId?: string) =>
+    credentialAccess: (connectionId: string, userId?: string, organizationId?: string) =>
         logger.info(
-            { event: "credential.access", connectionId, userId, tenantId },
+            { event: "credential.access", connectionId, userId, organizationId },
             "Credential decrypted"
         ),
 

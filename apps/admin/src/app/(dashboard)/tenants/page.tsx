@@ -148,13 +148,15 @@ export default async function TenantsPage({
             : Promise.resolve([]),
         orgIds.length > 0
             ? (prisma.$queryRaw`
-                SELECT "tenantId" AS "orgId",
+                SELECT w."organizationId" AS "orgId",
                        COUNT(*)::int AS "runCount",
-                       MAX("startedAt") AS "lastRun"
-                FROM agent_run
-                WHERE "tenantId" IN (${Prisma.join(orgIds)})
-                  AND "startedAt" >= ${thirtyDaysAgo}
-                GROUP BY "tenantId"
+                       MAX(r."startedAt") AS "lastRun"
+                FROM agent_run r
+                JOIN agent a ON r."agentId" = a.id
+                JOIN workspace w ON a."workspaceId" = w.id
+                WHERE w."organizationId" IN (${Prisma.join(orgIds)})
+                  AND r."startedAt" >= ${thirtyDaysAgo}
+                GROUP BY w."organizationId"
             ` as Promise<{ orgId: string; runCount: number; lastRun: Date }[]>)
             : Promise.resolve([])
     ]);

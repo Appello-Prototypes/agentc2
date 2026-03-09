@@ -354,10 +354,7 @@ export default function DocumentDetailPage() {
                     <Badge variant="secondary">{doc.contentType}</Badge>
                     {doc.category && <Badge variant="outline">{doc.category}</Badge>}
                     <Badge variant="outline">v{doc.version}</Badge>
-                    <Badge
-                        variant={doc.type === "SYSTEM" ? "outline" : "default"}
-                        className="text-xs"
-                    >
+                    <Badge variant="default" className="text-xs">
                         {doc.type}
                     </Badge>
                     {doc.tags.map((tag) => (

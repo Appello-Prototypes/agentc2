@@ -449,7 +449,7 @@ export async function createEngagement(options: CreateEngagementOptions): Promis
     const approval = await prisma.approvalRequest.create({
         data: {
             organizationId: options.organizationId,
-            workspaceId: options.workspaceId ?? null,
+            workspaceId: options.workspaceId!,
             workflowRunId: options.workflowRunId,
             sourceType: "workflow-review",
             sourceId: options.suspendedStep,
@@ -610,7 +610,7 @@ export async function resolveEngagement(
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     resumeData,
-                    requestContext: { tenantId: approval.organizationId }
+                    requestContext: { organizationId: approval.organizationId }
                 })
             }
         );

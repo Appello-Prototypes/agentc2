@@ -178,21 +178,23 @@ async function buildContextFromEnvVars(): Promise<SlackInstallationContext | nul
 }
 
 /**
- * Resolve the organization ID from the default agent slug (legacy path).
+ * Resolve the organization ID for the Slack env fallback.
+ * Uses PLATFORM_ORG_SLUG (or MCP_API_ORGANIZATION_SLUG) to scope to a single org.
  */
 async function resolveOrgFromDefaultAgent(): Promise<string | null> {
-    const slug = process.env.SLACK_DEFAULT_AGENT_SLUG || "assistant";
+    const platformOrgSlug = process.env.PLATFORM_ORG_SLUG || process.env.MCP_API_ORGANIZATION_SLUG;
+    if (!platformOrgSlug) {
+        console.warn(
+            "[SlackTokens] SLACK_BOT_TOKEN env fallback requires PLATFORM_ORG_SLUG to be set"
+        );
+        return null;
+    }
     try {
-        const agent = await prisma.agent.findFirst({
-            where: { slug },
-            select: { workspaceId: true }
+        const org = await prisma.organization.findUnique({
+            where: { slug: platformOrgSlug },
+            select: { id: true }
         });
-        if (!agent?.workspaceId) return null;
-        const workspace = await prisma.workspace.findUnique({
-            where: { id: agent.workspaceId },
-            select: { organizationId: true }
-        });
-        return workspace?.organizationId || null;
+        return org?.id || null;
     } catch {
         return null;
     }

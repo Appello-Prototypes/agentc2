@@ -34,7 +34,7 @@ export interface RecordActivityInput {
     tokenCount?: number;
     metadata?: Record<string, unknown>;
     tags?: string[];
-    tenantId?: string;
+    organizationId?: string;
     workspaceId?: string;
 }
 
@@ -43,6 +43,15 @@ export interface RecordActivityInput {
  */
 export async function recordActivity(input: RecordActivityInput): Promise<void> {
     try {
+        // Merge organizationId into metadata since the table has no dedicated column
+        const mergedMetadata =
+            input.organizationId || input.metadata
+                ? ({
+                      ...(input.metadata || {}),
+                      ...(input.organizationId ? { organizationId: input.organizationId } : {})
+                  } as Prisma.InputJsonValue)
+                : undefined;
+
         await prisma.activityEvent.create({
             data: {
                 type: input.type,
@@ -62,9 +71,8 @@ export async function recordActivity(input: RecordActivityInput): Promise<void> 
                 costUsd: input.costUsd,
                 durationMs: input.durationMs,
                 tokenCount: input.tokenCount,
-                metadata: (input.metadata as Prisma.InputJsonValue) ?? undefined,
+                metadata: mergedMetadata,
                 tags: input.tags ?? [],
-                tenantId: input.tenantId,
                 workspaceId: input.workspaceId
             }
         });

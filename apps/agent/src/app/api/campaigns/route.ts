@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma, Prisma, CampaignStatus } from "@repo/database";
 import { inngest } from "@/lib/inngest";
 import { getDemoSession } from "@/lib/standalone-auth";
+import { getUserOrganizationId, getDefaultWorkspaceIdForUser } from "@/lib/organization";
 
 function generateSlug(name: string): string {
     return (
@@ -100,8 +101,15 @@ export async function POST(request: NextRequest) {
             runNumber = (lastRun?.runNumber || 0) + 1;
         }
 
-        // Build campaign data, only including new fields when they have values
-        // (gracefully handles running Prisma client that may not have schema updates yet)
+        const organizationId = await getUserOrganizationId(session.user.id);
+        const workspaceId = await getDefaultWorkspaceIdForUser(session.user.id);
+        if (!organizationId || !workspaceId) {
+            return NextResponse.json(
+                { error: "No organization or workspace found" },
+                { status: 400 }
+            );
+        }
+
         const campaignData: Record<string, unknown> = {
             slug: generateSlug(name),
             name,
@@ -114,6 +122,8 @@ export async function POST(request: NextRequest) {
             maxCostUsd: maxCostUsd || null,
             timeoutMinutes: timeoutMinutes || null,
             createdBy: session.user.id,
+            organizationId,
+            workspaceId,
             status: CampaignStatus.PLANNING
         };
 
@@ -194,8 +204,9 @@ export async function GET(request: NextRequest) {
         const limit = parseInt(searchParams.get("limit") || "50", 10);
         const offset = parseInt(searchParams.get("offset") || "0", 10);
 
+        const organizationId = await getUserOrganizationId(session.user.id);
         const where: Record<string, unknown> = {
-            createdBy: session.user.id
+            ...(organizationId ? { organizationId } : { createdBy: session.user.id })
         };
 
         if (status) {

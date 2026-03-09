@@ -177,7 +177,7 @@ export default function SkillOverviewPage() {
     }
     if (!skill) return <p className="text-muted-foreground">Skill not found.</p>;
 
-    const isSystem = skill.type === "SYSTEM";
+    const isSystem = false;
 
     return (
         <div className="space-y-6">
@@ -355,10 +355,7 @@ export default function SkillOverviewPage() {
                 <CardContent className="space-y-3">
                     <div className="flex items-center gap-2">
                         <span className="text-muted-foreground text-xs font-medium">Type:</span>
-                        <Badge
-                            variant={skill.type === "SYSTEM" ? "default" : "secondary"}
-                            className="text-xs"
-                        >
+                        <Badge variant={"secondary"} className="text-xs">
                             {skill.type}
                         </Badge>
                     </div>

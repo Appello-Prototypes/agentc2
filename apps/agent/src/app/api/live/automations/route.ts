@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
         }
 
         const wsFilter = {
-            OR: [{ workspaceId: workspaceContext.workspaceId }, { workspaceId: null }]
+            workspaceId: workspaceContext.workspaceId
         } satisfies Prisma.AgentScheduleWhereInput;
 
         const archiveFilter = includeArchived ? {} : { isArchived: false };
@@ -115,7 +115,7 @@ export async function GET(request: NextRequest) {
                       isActive: true,
                       ...(entityId ? { templateId: entityId } : {}),
                       template: {
-                          OR: [{ createdBy: { in: orgMemberIds } }, { isSystem: true }]
+                          createdBy: { in: orgMemberIds }
                       }
                   },
                   include: {
@@ -132,7 +132,7 @@ export async function GET(request: NextRequest) {
                       isActive: true,
                       ...(entityId ? { templateId: entityId } : {}),
                       template: {
-                          OR: [{ createdBy: { in: orgMemberIds } }, { isSystem: true }]
+                          createdBy: { in: orgMemberIds }
                       }
                   },
                   include: {
@@ -150,10 +150,7 @@ export async function GET(request: NextRequest) {
                       evalCronExpr: { not: "" },
                       ...(entityId ? { id: entityId } : {}),
                       ...(entitySlug ? { slug: entitySlug } : {}),
-                      OR: [
-                          { workspaceId: { in: orgWorkspaceIds } },
-                          { tenantId: workspaceContext.organizationId }
-                      ]
+                      workspaceId: { in: orgWorkspaceIds }
                   },
                   select: {
                       id: true,

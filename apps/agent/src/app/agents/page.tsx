@@ -98,7 +98,7 @@ interface Agent {
     modelName: string;
     isActive: boolean;
     isArchived: boolean;
-    type: "SYSTEM" | "USER" | "DEMO";
+    type: "USER" | "DEMO";
     visibility?: "PRIVATE" | "ORGANIZATION" | "PUBLIC";
     toolCount?: number;
     memoryEnabled?: boolean;
@@ -316,11 +316,6 @@ function AgentCardView({
                                     {agent.isActive ? "Active" : "Inactive"}
                                 </Badge>
                             )}
-                            {agent.type === "SYSTEM" && (
-                                <Badge variant="outline" className="text-xs">
-                                    SYSTEM
-                                </Badge>
-                            )}
                             {agent.visibility === "ORGANIZATION" && (
                                 <Badge variant="outline" className="text-xs">
                                     Org
@@ -362,7 +357,7 @@ function AgentCardView({
                             entityName={agent.name}
                             entitySlug={agent.slug}
                             isArchived={agent.isArchived}
-                            isSystem={agent.type === "SYSTEM"}
+                            isSystem={false}
                             isPlaybookSourced={!!agent.playbookInstallationId}
                             onComplete={onArchiveDelete}
                         />
@@ -491,11 +486,6 @@ function AgentListView({
                                 {agent.isActive ? "Active" : "Inactive"}
                             </Badge>
                         )}
-                        {agent.type === "SYSTEM" && (
-                            <Badge variant="outline" className="text-xs">
-                                SYSTEM
-                            </Badge>
-                        )}
                         {agent.visibility === "ORGANIZATION" && (
                             <Badge variant="outline" className="text-xs">
                                 Org
@@ -563,7 +553,7 @@ function AgentListView({
                     entityName={agent.name}
                     entitySlug={agent.slug}
                     isArchived={agent.isArchived}
-                    isSystem={agent.type === "SYSTEM"}
+                    isSystem={false}
                     isPlaybookSourced={!!agent.playbookInstallationId}
                     onComplete={onArchiveDelete}
                 />
@@ -684,7 +674,7 @@ function AgentTableView({
                                     entityName={agent.name}
                                     entitySlug={agent.slug}
                                     isArchived={agent.isArchived}
-                                    isSystem={agent.type === "SYSTEM"}
+                                    isSystem={false}
                                     isPlaybookSourced={!!agent.playbookInstallationId}
                                     onComplete={onArchiveDelete}
                                 />
@@ -879,7 +869,7 @@ export default function AgentsPage() {
     });
 
     // Primary agents (USER + SYSTEM) are shown prominently; DEMO agents are collapsible
-    const primaryAgents = filteredAgents.filter((a) => a.type === "USER" || a.type === "SYSTEM");
+    const primaryAgents = filteredAgents.filter((a) => a.type === "USER");
     const demoAgents = filteredAgents.filter((a) => a.type === "DEMO");
     const [examplesOpen, setExamplesOpen] = useState(false);
 
@@ -1055,7 +1045,7 @@ export default function AgentsPage() {
                                 <SelectContent>
                                     <SelectItem value="all">All Types</SelectItem>
                                     <SelectItem value="USER">User</SelectItem>
-                                    <SelectItem value="SYSTEM">System</SelectItem>
+
                                     <SelectItem value="DEMO">Demo</SelectItem>
                                 </SelectContent>
                             </Select>

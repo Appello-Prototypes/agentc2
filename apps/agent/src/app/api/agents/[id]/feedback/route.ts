@@ -138,11 +138,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             );
         }
 
-        const agent = await prisma.agent.findUnique({
-            where: { id: agentId },
-            select: { tenantId: true }
-        });
-
         // Find existing feedback for this run+turn combination, or create new
         const existingFeedback = await prisma.agentFeedback.findFirst({
             where: {
@@ -167,7 +162,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                     runId,
                     turnId: turnId || null,
                     agentId,
-                    tenantId: agent!.tenantId,
                     thumbs: thumbs ?? null,
                     rating: rating ?? null,
                     comment: comment ?? null

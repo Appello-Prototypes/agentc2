@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
         }
 
         const campaign = await prisma.campaign.findFirst({
-            where: { id: campaignId, tenantId: authContext.organizationId },
+            where: { id: campaignId, organizationId: authContext.organizationId },
             include: {
                 missions: {
                     orderBy: [{ sequence: "asc" }, { priority: "desc" }],

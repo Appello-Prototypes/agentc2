@@ -190,11 +190,11 @@ describe("Skill Service", () => {
             prismaMock.skill.findMany.mockResolvedValue([] as never);
             prismaMock.skill.count.mockResolvedValue(0);
 
-            await listSkills({ type: "SYSTEM" });
+            await listSkills({ type: "USER" });
 
             expect(prismaMock.skill.findMany).toHaveBeenCalledWith(
                 expect.objectContaining({
-                    where: expect.objectContaining({ type: "SYSTEM" })
+                    where: expect.objectContaining({ type: "USER" })
                 })
             );
         });

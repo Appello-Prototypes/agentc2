@@ -344,7 +344,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         const version = await prisma.agentVersion.create({
             data: {
                 agentId,
-                tenantId: agent!.tenantId,
                 version: nextVersion,
                 description: description || `Version ${nextVersion}`,
                 instructions: agent!.instructions,

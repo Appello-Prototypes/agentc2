@@ -39,7 +39,7 @@ const workflowCreateSchema = z
         isActive: z.boolean().optional(),
         workspaceId: z.string().optional().nullable(),
         ownerId: z.string().optional().nullable(),
-        type: z.enum(["USER", "SYSTEM"]).optional(),
+        type: z.literal("USER").optional(),
         versionDescription: z.string().optional(),
         createdBy: z.string().optional().nullable()
     })
@@ -94,7 +94,7 @@ export const workflowCreateTool = createTool({
     execute: async (input) => {
         const slug = input.slug || generateSlug(input.name);
         const existing = await prisma.workflow.findFirst({
-            where: { slug, workspaceId: input.workspaceId ?? null }
+            where: { slug, workspaceId: input.workspaceId! }
         });
         if (existing) {
             throw new Error(`Workflow slug '${slug}' already exists`);
@@ -130,7 +130,7 @@ export const workflowCreateTool = createTool({
                         : Prisma.DbNull,
                 isPublished: input.isPublished ?? false,
                 isActive: input.isActive ?? true,
-                workspaceId: input.workspaceId ?? null,
+                workspaceId: input.workspaceId!,
                 ownerId: input.ownerId ?? null,
                 type: input.type ?? "USER"
             }
@@ -215,10 +215,6 @@ export const workflowUpdateTool = createTool({
 
         if (!existing) {
             throw new Error(`Workflow '${workflowId}' not found`);
-        }
-
-        if (existing.type === "SYSTEM") {
-            throw new Error("SYSTEM workflows cannot be modified");
         }
 
         let restoreDefinition: Prisma.InputJsonValue | null = null;
@@ -334,10 +330,6 @@ export const workflowDeleteTool = createTool({
 
         if (!existing) {
             throw new Error(`Workflow '${workflowId}' not found`);
-        }
-
-        if (existing.type === "SYSTEM") {
-            throw new Error("SYSTEM workflows cannot be deleted");
         }
 
         const action = mode || "delete";

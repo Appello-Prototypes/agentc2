@@ -25,7 +25,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
         const agent = await prisma.agent.findUnique({
             where: { id: agentId },
-            select: { tenantId: true, slug: true }
+            select: { slug: true }
         });
 
         // Upsert the policy with pause state
@@ -33,7 +33,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             where: { agentId },
             create: {
                 agentId,
-                tenantId: agent!.tenantId,
                 paused: paused ?? true,
                 pausedUntil: pausedUntil ? new Date(pausedUntil) : null,
                 updatedBy: actorId
@@ -48,7 +47,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         // Audit log
         await prisma.auditLog.create({
             data: {
-                tenantId: agent!.tenantId,
                 actorId: actorId || "unknown",
                 action: paused ? "LEARNING_PAUSED" : "LEARNING_RESUMED",
                 entityType: "LearningPolicy",

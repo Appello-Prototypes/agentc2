@@ -99,7 +99,7 @@ export async function POST(request: NextRequest) {
                 `# Session Scratchpad\n- **Task**: ${task || "(pending)"}\n- **Status**: active\n- **Findings**:\n- **Decisions**:\n- **Open Questions**:`,
             maxPeerCalls,
             maxDepth,
-            workspaceId: workspace?.id,
+            workspaceId: workspace?.id || "",
             organizationId: authContext.organizationId
         });
 

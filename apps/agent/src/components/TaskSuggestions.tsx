@@ -85,7 +85,7 @@ interface AgentResponse {
     name: string;
     description: string | null;
     isActive: boolean;
-    type: "SYSTEM" | "USER" | "DEMO";
+    type: "USER" | "DEMO";
     toolCount: number;
     updatedAt: string;
 }
@@ -209,7 +209,6 @@ async function buildSuggestionsFromPlatform(apiBase: string): Promise<Suggestion
     const byRecent = (a: AgentResponse, b: AgentResponse) =>
         new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
     const activeUserAgents = activeAgents.filter((a) => a.type === "USER").sort(byRecent);
-    const activeSystemAgents = activeAgents.filter((a) => a.type === "SYSTEM").sort(byRecent);
     const activeDemoAgents = activeAgents.filter((a) => a.type === "DEMO").sort(byRecent);
 
     const toCard = (agent: AgentResponse): SuggestionCard => ({
@@ -220,13 +219,10 @@ async function buildSuggestionsFromPlatform(apiBase: string): Promise<Suggestion
         icon: deriveIcon(agent.name, agent.description, "agent")
     });
 
-    // Prioritize: user agents, then system, then demo to fill remaining slots (max 6)
     const userCards = activeUserAgents.slice(0, 6).map(toCard);
-    const systemSlots = Math.max(0, 6 - userCards.length);
-    const systemCards = activeSystemAgents.slice(0, systemSlots).map(toCard);
-    const demoSlots = Math.max(0, 6 - userCards.length - systemCards.length);
+    const demoSlots = Math.max(0, 6 - userCards.length);
     const demoCards = activeDemoAgents.slice(0, demoSlots).map(toCard);
-    const agentCards: SuggestionCard[] = [...userCards, ...systemCards, ...demoCards];
+    const agentCards: SuggestionCard[] = [...userCards, ...demoCards];
 
     // ── Tier 2: Workflow-derived cards ───────────────────────────────────
     const publishedWorkflows = workflows.filter((w) => w.isActive && w.isPublished);

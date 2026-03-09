@@ -210,8 +210,17 @@ async function upsertSkill(
             instructions: bp.instructions,
             category: bp.category,
             tags: bp.tags,
-            workspaceId,
-            type: "USER",
+            workspace: { connect: { id: workspaceId } },
+            organization: {
+                connect: {
+                    id: (
+                        await prisma.workspace.findUniqueOrThrow({
+                            where: { id: workspaceId },
+                            select: { organizationId: true }
+                        })
+                    ).organizationId
+                }
+            },
             createdBy: userId,
             metadata: {
                 blueprintVersion: blueprint.version,

@@ -102,11 +102,6 @@ export const documentUpdateTool = createTool({
     }),
     outputSchema: baseOutputSchema,
     execute: async ({ documentId, organizationId, ...body }) => {
-        if (organizationId) {
-            const doc = await getDocument(documentId, organizationId);
-            if (!doc) return { success: false, error: "Document not found" };
-        }
-
         const input: UpdateDocumentInput = {};
         if (body.name !== undefined) input.name = body.name;
         if (body.content !== undefined) input.content = body.content;
@@ -115,7 +110,7 @@ export const documentUpdateTool = createTool({
         if (body.tags !== undefined) input.tags = body.tags;
         if (body.changeSummary !== undefined) input.changeSummary = body.changeSummary;
 
-        const document = await updateDocument(documentId, input);
+        const document = await updateDocument(documentId, input, organizationId ?? undefined);
         return document;
     }
 });
@@ -132,11 +127,7 @@ export const documentDeleteTool = createTool({
     }),
     outputSchema: baseOutputSchema,
     execute: async ({ documentId, organizationId }) => {
-        if (organizationId) {
-            const doc = await getDocument(documentId, organizationId);
-            if (!doc) return { success: false, error: "Document not found" };
-        }
-        await deleteDocument(documentId);
+        await deleteDocument(documentId, organizationId ?? undefined);
         return { success: true };
     }
 });
@@ -147,7 +138,7 @@ export const documentListTool = createTool({
     inputSchema: z.object({
         category: z.string().optional(),
         tags: z.string().optional().describe("Comma-separated tags"),
-        type: z.enum(["USER", "SYSTEM"]).optional(),
+        type: z.literal("USER").optional(),
         skip: z.number().optional(),
         take: z.number().optional(),
         organizationId: z
@@ -162,7 +153,6 @@ export const documentListTool = createTool({
             organizationId: organizationId ?? undefined,
             category: category ?? undefined,
             tags: tagArray,
-            type: type ?? undefined,
             skip: skip ?? undefined,
             take: take ?? undefined
         });

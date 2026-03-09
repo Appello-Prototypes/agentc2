@@ -27,7 +27,7 @@ vi.mock("../../../apps/agent/src/lib/output-actions", () => ({
 const mockOutputAction = {
     id: "action-1",
     agentId: "test-agent-uuid",
-    tenantId: "test-tenant",
+    organizationId: "test-tenant",
     name: "Test Webhook",
     type: "WEBHOOK",
     configJson: { url: "https://example.com/hook" },

@@ -81,9 +81,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         // Resolve organization for MCP tool access
         const record = await prisma.agent.findFirst({
             where: { OR: [{ id }, { slug: id }] },
-            select: { tenantId: true }
+            select: { workspace: { select: { organizationId: true } } }
         });
-        const organizationId = authResult.context.organizationId || record?.tenantId || undefined;
+        const organizationId =
+            authResult.context.organizationId || record?.workspace?.organizationId || undefined;
 
         // Look up and execute the tool
         const tools = await getToolsByNamesAsync([toolName], organizationId);
@@ -104,7 +105,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             if (typeof tool.execute === "function") {
                 result = await tool.execute(toolArgs || {}, {
                     resourceId: authResult.context.userId,
-                    tenantId: organizationId
+                    organizationId: organizationId
                 });
             } else {
                 result = `Tool "${toolName}" has no execute function`;

@@ -178,7 +178,7 @@ export async function POST(request: NextRequest) {
                 isActive: true,
                 type: "USER",
                 ownerId: session.user.id,
-                workspaceId: workspace?.id || undefined,
+                workspaceId: workspace?.id || "",
                 metadata: {
                     createdBy: "onboarding",
                     connectedIntegrations,

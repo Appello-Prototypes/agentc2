@@ -115,7 +115,6 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             },
             create: {
                 agentId,
-                tenantId: context.organizationId,
                 enabled: enabled ?? false,
                 monthlyLimitUsd: monthlyLimitUsd ?? null,
                 alertAtPct: alertAtPct ?? 80,
@@ -126,7 +125,6 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         // Create audit log
         await prisma.auditLog.create({
             data: {
-                tenantId: context.organizationId,
                 action: "BUDGET_UPDATE",
                 entityType: "BudgetPolicy",
                 entityId: budgetPolicy.id,

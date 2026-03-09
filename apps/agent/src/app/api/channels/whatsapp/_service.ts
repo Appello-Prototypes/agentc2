@@ -101,7 +101,7 @@ async function listActiveAgents(defaultSlug: string, organizationId?: string): P
     const agents = await prisma.agent.findMany({
         where: {
             isActive: true,
-            type: { in: ["SYSTEM", "USER"] },
+            type: "USER",
             ...(organizationId ? { workspace: { organizationId } } : {})
         },
         select: { slug: true, name: true, description: true },
@@ -150,12 +150,19 @@ const messageHandler: MessageHandler = async (message) => {
     });
 
     if (!session) {
+        const defaultWs = channelOrgId
+            ? await prisma.workspace.findFirst({
+                  where: { organizationId: channelOrgId, isDefault: true },
+                  select: { id: true }
+              })
+            : null;
         session = await prisma.channelSession.create({
             data: {
                 channel: "whatsapp",
                 channelId,
                 agentSlug: config.defaultAgentSlug,
-                organizationId: channelOrgId,
+                organizationId: channelOrgId || "",
+                workspaceId: defaultWs?.id || "",
                 metadata: {
                     isGroup: message.isGroup,
                     groupId: message.groupId
@@ -221,7 +228,11 @@ const messageHandler: MessageHandler = async (message) => {
         const possibleMessage = keywordMatch[2].trim();
         try {
             const agentExists = await prisma.agent.findFirst({
-                where: { slug: possibleAgent, isActive: true },
+                where: {
+                    slug: possibleAgent,
+                    isActive: true,
+                    ...(channelOrgId ? { workspace: { organizationId: channelOrgId } } : {})
+                },
                 select: { id: true }
             });
             if (agentExists) {
@@ -281,7 +292,7 @@ const messageHandler: MessageHandler = async (message) => {
             slug: agentSlug,
             requestContext: {
                 userId: channelId,
-                tenantId: channelOrgId ?? instanceBinding?.organizationId,
+                organizationId: channelOrgId ?? instanceBinding?.organizationId,
                 metadata: requestMetadata
             },
             threadId: memoryThread,

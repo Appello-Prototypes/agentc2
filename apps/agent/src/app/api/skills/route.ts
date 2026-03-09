@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
 
         const { searchParams } = new URL(request.url);
         const category = searchParams.get("category") || undefined;
-        const type = (searchParams.get("type") as "USER" | "SYSTEM") || undefined;
+        const type = searchParams.get("type") === "USER" ? "USER" : undefined;
         const tags = searchParams.get("tags")?.split(",").filter(Boolean) || undefined;
         const skip = parseInt(searchParams.get("skip") || "0", 10);
         const take = parseInt(searchParams.get("take") || "50", 10);
@@ -28,7 +28,6 @@ export async function GET(request: NextRequest) {
             workspaceId,
             organizationId: authCtx.organizationId,
             category,
-            type,
             tags,
             skip,
             take
@@ -79,7 +78,6 @@ export async function POST(request: NextRequest) {
             metadata,
             workspaceId,
             organizationId: authCtx.organizationId,
-            type,
             createdBy: authCtx.userId
         };
 

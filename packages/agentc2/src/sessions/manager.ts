@@ -7,8 +7,8 @@ import { vector } from "../vector";
 // ── Types ──
 
 export interface CreateSessionOptions {
-    workspaceId?: string;
-    organizationId?: string;
+    workspaceId: string;
+    organizationId: string;
     initiatorType: "agent" | "network" | "user";
     initiatorId: string;
     agentSlugs: string[];
@@ -38,14 +38,12 @@ export interface SessionInfo {
 
 // ── Helpers ──
 
-function buildSessionResourceId(organizationId: string | undefined, sessionId: string): string {
-    const base = `session-${sessionId}`;
-    return organizationId ? `${organizationId}:${base}` : base;
+function buildSessionResourceId(organizationId: string, sessionId: string): string {
+    return `${organizationId}:session-${sessionId}`;
 }
 
-function buildSessionThreadId(organizationId: string | undefined, sessionId: string): string {
-    const base = `session-${sessionId}-main`;
-    return organizationId ? `${organizationId}:${base}` : base;
+function buildSessionThreadId(organizationId: string, sessionId: string): string {
+    return `${organizationId}:session-${sessionId}-main`;
 }
 
 function getSessionMemory(): Memory {
@@ -85,7 +83,7 @@ export async function createSession(options: CreateSessionOptions): Promise<Sess
     const session = await prisma.agentSession.create({
         data: {
             id: sessionId,
-            workspaceId: options.workspaceId || null,
+            workspaceId: options.workspaceId,
             name: options.name || null,
             description: options.description || null,
             initiatorType: options.initiatorType,

@@ -108,10 +108,7 @@ export default function SkillLayout({ children }: { children: React.ReactNode })
                                         {skill.description || "No description"}
                                     </div>
                                 </div>
-                                <Badge
-                                    variant={skill.type === "SYSTEM" ? "default" : "secondary"}
-                                    className="h-5 text-[10px]"
-                                >
+                                <Badge variant={"secondary"} className="h-5 text-[10px]">
                                     {skill.type}
                                 </Badge>
                             </div>

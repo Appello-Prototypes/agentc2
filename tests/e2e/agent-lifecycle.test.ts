@@ -62,7 +62,7 @@ describe("E2E: Agent Lifecycle", () => {
             const createdRun = await prismaMock.agentRun.create({
                 data: {
                     agentId,
-                    tenantId: "test-tenant",
+                    organizationId: "test-tenant",
                     status: "RUNNING",
                     runType: "INTERACTIVE",
                     inputText: "Hello, agent!"
@@ -121,7 +121,7 @@ describe("E2E: Agent Lifecycle", () => {
                 data: {
                     runId,
                     agentId,
-                    tenantId: "test-tenant",
+                    organizationId: "test-tenant",
                     thumbs: true,
                     rating: 5,
                     comment: "Great response!"
@@ -157,7 +157,7 @@ describe("E2E: Agent Lifecycle", () => {
             const version1 = await prismaMock.agentVersion.create({
                 data: {
                     agentId,
-                    tenantId: "test-tenant",
+                    organizationId: "test-tenant",
                     version: 1,
                     description: "Initial version",
                     snapshot: {
@@ -239,7 +239,7 @@ describe("E2E: Agent Lifecycle", () => {
                 where: { agentId },
                 create: {
                     agentId,
-                    tenantId: "test-tenant",
+                    organizationId: "test-tenant",
                     enabled: true,
                     monthlyLimitUsd: 10.0,
                     alertAtPct: 80
@@ -266,7 +266,7 @@ describe("E2E: Agent Lifecycle", () => {
                     data: {
                         runId: `run-${Date.now()}`,
                         agentId,
-                        tenantId: "test-tenant",
+                        organizationId: "test-tenant",
                         modelName: "claude-sonnet",
                         costUsd: cost.costUsd,
                         totalTokens: 1000
@@ -301,7 +301,7 @@ describe("E2E: Agent Lifecycle", () => {
             const alert = await prismaMock.agentAlert.create({
                 data: {
                     agentId,
-                    tenantId: "test-tenant",
+                    organizationId: "test-tenant",
                     severity: "WARNING",
                     source: "BUDGET",
                     title: "Budget threshold reached",
@@ -332,7 +332,7 @@ describe("E2E: Agent Lifecycle", () => {
                 where: { agentId },
                 create: {
                     agentId,
-                    tenantId: "test-tenant",
+                    organizationId: "test-tenant",
                     version: 1,
                     configJson: {
                         blockedTopics: ["violence", "illegal"]
@@ -360,7 +360,7 @@ describe("E2E: Agent Lifecycle", () => {
                 data: {
                     agentId,
                     runId: "blocked-run-uuid",
-                    tenantId: "test-tenant",
+                    organizationId: "test-tenant",
                     eventType: "BLOCKED",
                     ruleName: matchedRule,
                     inputText: blockedInput,
@@ -382,7 +382,7 @@ describe("E2E: Agent Lifecycle", () => {
             const alert = await prismaMock.agentAlert.create({
                 data: {
                     agentId,
-                    tenantId: "test-tenant",
+                    organizationId: "test-tenant",
                     severity: "WARNING",
                     source: "GUARDRAIL",
                     title: "Content blocked by guardrail",
@@ -443,7 +443,7 @@ describe("E2E: Agent Lifecycle", () => {
                 await prismaMock.agentRun.create({
                     data: {
                         agentId,
-                        tenantId: "test-tenant",
+                        organizationId: "test-tenant",
                         status: "COMPLETED",
                         inputText: `Test input ${i}`
                     } as never
@@ -461,7 +461,7 @@ describe("E2E: Agent Lifecycle", () => {
             await prismaMock.agentVersion.create({
                 data: {
                     agentId,
-                    tenantId: "test-tenant",
+                    organizationId: "test-tenant",
                     version: 2,
                     description: "After 3 runs"
                 } as never

@@ -100,6 +100,14 @@ export async function POST(request: NextRequest) {
 
         const deployment = await prisma.deployment.create({
             data: {
+                organizationId: authContext.organizationId,
+                workspaceId:
+                    (
+                        await prisma.workspace.findFirst({
+                            where: { organizationId: authContext.organizationId, isDefault: true },
+                            select: { id: true }
+                        })
+                    )?.id || "",
                 entityType,
                 entityId,
                 versionId,

@@ -18,7 +18,7 @@ export { coreProcess as processNetworkStream };
 export interface AgentSubRunOptions {
     networkRunId: string;
     networkSlug: string;
-    tenantId?: string;
+    organizationId?: string;
     inputMessage: string;
 }
 
@@ -51,7 +51,7 @@ export async function processNetworkStreamWithSubRuns(
                         agentSlug: agentRecord.slug,
                         input: inputStr,
                         source: "network",
-                        tenantId: subRunOptions.tenantId,
+                        organizationId: subRunOptions.organizationId,
                         metadata: {
                             networkRunId: subRunOptions.networkRunId,
                             networkSlug: subRunOptions.networkSlug

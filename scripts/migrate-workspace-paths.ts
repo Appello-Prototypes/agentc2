@@ -1,5 +1,12 @@
 #!/usr/bin/env bun
 /**
+ * @deprecated QUARANTINED - This script encodes pre-multi-tenant assumptions
+ * (global slugs, _system workspaces, null workspaceId). Do NOT run in production.
+ * Kept for reference only.
+ */
+throw new Error("QUARANTINED: This migration script is deprecated and must not be run.");
+
+/**
  * One-time migration: moves agent workspace files from the legacy flat layout
  *   {WORKSPACE_ROOT}/{agentSlug}/
  * to the org-prefixed layout
@@ -53,14 +60,13 @@ async function main() {
         select: {
             id: true,
             slug: true,
-            tenantId: true,
             workspace: { select: { organizationId: true } }
         }
     });
 
     const agentOrgMap = new Map<string, string>();
     for (const agent of agents) {
-        const orgId = agent.workspace?.organizationId || agent.tenantId || SYSTEM_NAMESPACE;
+        const orgId = agent.workspace?.organizationId || SYSTEM_NAMESPACE;
         agentOrgMap.set(agent.slug, orgId);
     }
 
@@ -75,9 +81,7 @@ async function main() {
         const legacyPath = join(WORKSPACE_ROOT, dirName);
 
         // Skip if this directory is already an org-prefix directory
-        const isOrgDir = agents.some(
-            (a) => a.workspace?.organizationId === dirName || a.tenantId === dirName
-        );
+        const isOrgDir = agents.some((a) => a.workspace?.organizationId === dirName);
         if (isOrgDir || dirName === SYSTEM_NAMESPACE) {
             console.log(`  SKIP (org dir): ${dirName}/`);
             skipped++;

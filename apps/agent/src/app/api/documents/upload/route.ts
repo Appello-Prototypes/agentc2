@@ -166,7 +166,6 @@ export async function POST(request: NextRequest) {
             tags: tags.length > 0 ? tags : undefined,
             workspaceId,
             organizationId: organizationId || undefined,
-            type: "USER",
             createdBy: userId
         };
 

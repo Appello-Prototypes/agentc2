@@ -245,13 +245,6 @@ export async function PATCH(
             );
         }
 
-        if (existing.type === "SYSTEM") {
-            return NextResponse.json(
-                { success: false, error: "SYSTEM workflows cannot be archived" },
-                { status: 403 }
-            );
-        }
-
         const updateData =
             action === "archive"
                 ? {
@@ -300,13 +293,6 @@ export async function DELETE(
             return NextResponse.json(
                 { success: false, error: `Workflow '${slug}' not found` },
                 { status: 404 }
-            );
-        }
-
-        if (existing.type === "SYSTEM") {
-            return NextResponse.json(
-                { success: false, error: "SYSTEM workflows cannot be deleted" },
-                { status: 403 }
             );
         }
 

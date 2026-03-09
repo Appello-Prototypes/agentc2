@@ -514,19 +514,32 @@ Agents are stored in PostgreSQL and resolved at runtime:
 ```typescript
 import { agentResolver, AgentResolver } from "@repo/agentc2";
 
-// Resolve agent from database
+// Resolve agent from database (workspaceId is required)
 const agent = await agentResolver.resolve("trip-planner", {
-    userId: "user-123"
+    userId: "user-123",
+    workspaceId: "ws-456",
+    organizationId: "org-789"
 });
 ```
+
+### Multi-Tenant Isolation
+
+All entities are scoped by `organizationId` and/or `workspaceId`. Key rules:
+
+- **Slugs are workspace-scoped** (e.g., `@@unique([workspaceId, slug])`), not globally unique. Two different workspaces can have agents with the same slug.
+- **No SYSTEM agents** -- the `SYSTEM` value has been removed from `AgentType`, `WorkflowType`, and `NetworkType` enums. New instances start blank and are seeded via playbooks.
+- **No `tenantId`** -- all legacy `tenantId` fields have been removed. Use `organizationId` or `workspaceId` for scoping.
+- **No `isSystem` flags** -- removed from all models. All entities are user-owned.
+- **All queries must be scoped** -- every database query must include `workspaceId` or `organizationId` to prevent cross-tenant data leakage.
 
 ### Agent Configuration (Prisma Schema)
 
 ```prisma
 model Agent {
     id                   String      @id
-    slug                 String      @unique
+    slug                 String
     name                 String
+    workspaceId          String // non-nullable, required
     instructions         String      @db.Text
     instructionsTemplate String?     @db.Text
     modelProvider        String // "openai", "anthropic"
@@ -536,7 +549,10 @@ model Agent {
     memoryConfig         Json?
     tools                AgentTool[]
     scorers              String[]
+    type                 AgentType   @default(USER) // USER or DEMO only
     // ...
+
+    @@unique([workspaceId, slug])
 }
 ```
 

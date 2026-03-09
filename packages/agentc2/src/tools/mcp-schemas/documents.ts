@@ -94,7 +94,7 @@ export const documentToolDefinitions: McpToolDefinition[] = [
             properties: {
                 category: { type: "string", description: "Filter by category" },
                 tags: { type: "string", description: "Comma-separated tags to filter by" },
-                type: { type: "string", enum: ["USER", "SYSTEM"], description: "Filter by type" },
+                type: { type: "string", enum: ["USER"], description: "Filter by type" },
                 skip: { type: "number", description: "Pagination offset" },
                 take: { type: "number", description: "Page size" }
             }

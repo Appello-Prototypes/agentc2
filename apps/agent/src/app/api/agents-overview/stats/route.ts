@@ -262,7 +262,7 @@ export async function GET(request: NextRequest) {
             summary: {
                 totalAgents: productionAgents.length,
                 activeAgents: productionAgents.filter((a) => a.isActive).length,
-                systemAgents: productionAgents.filter((a) => a.type === "SYSTEM").length,
+                systemAgents: 0,
                 userAgents: productionAgents.filter((a) => a.type === "USER").length,
                 demoAgents: agents.filter((a) => a.type === "DEMO").length,
                 totalRuns,

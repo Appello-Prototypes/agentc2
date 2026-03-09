@@ -70,7 +70,7 @@ interface StoredAgent {
     } | null;
     maxSteps?: number | null;
     scorers?: string[];
-    type?: "SYSTEM" | "USER" | "DEMO";
+    type?: "USER" | "DEMO";
     ownerId?: string | null;
     visibility?: "PRIVATE" | "ORGANIZATION" | "PUBLIC";
     metadata: Record<string, unknown> | null;
@@ -123,8 +123,8 @@ function getToolCount(agent: StoredAgent): number {
 }
 
 // Helper to check if agent is deletable (SYSTEM agents cannot be deleted)
-function isAgentDeletable(agent: StoredAgent): boolean {
-    return agent.type !== "SYSTEM";
+function isAgentDeletable(_agent: StoredAgent): boolean {
+    return true;
 }
 
 type ViewMode = "list" | "create" | "edit";
@@ -1072,14 +1072,6 @@ function AgentManagePageContent() {
                                                         </p>
                                                     </div>
                                                     <div className="flex gap-1">
-                                                        {agent.type === "SYSTEM" && (
-                                                            <Badge
-                                                                variant="default"
-                                                                className="text-xs"
-                                                            >
-                                                                SYSTEM
-                                                            </Badge>
-                                                        )}
                                                         {(agent.memoryEnabled || agent.memory) && (
                                                             <Badge
                                                                 variant="outline"
@@ -1191,13 +1183,7 @@ function AgentManagePageContent() {
                                             {/* Type Badge */}
                                             {selectedAgent.type && (
                                                 <div className="flex gap-2">
-                                                    <Badge
-                                                        variant={
-                                                            selectedAgent.type === "SYSTEM"
-                                                                ? "default"
-                                                                : "outline"
-                                                        }
-                                                    >
+                                                    <Badge variant="outline">
                                                         {selectedAgent.type}
                                                     </Badge>
                                                     {selectedAgent.slug && (
