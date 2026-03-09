@@ -39,7 +39,12 @@ export default function () {
     healthLatency.add(healthRes.timings.duration);
     check(healthRes, {
         "health returns 200": (r) => r.status === 200,
-        "health returns ok": (r) => JSON.parse(r.body).status === "ok"
+        "health returns ok": (r) => JSON.parse(r.body).status === "ok",
+        "health includes uptime": (r) => {
+            const body = JSON.parse(r.body);
+            return body.uptime !== undefined && typeof body.uptime === "number";
+        },
+        "health includes timestamp": (r) => JSON.parse(r.body).timestamp !== undefined
     });
     errorRate.add(healthRes.status !== 200);
 
