@@ -3,8 +3,6 @@ import { prisma } from "@repo/database";
 import { authenticateRequest } from "@/lib/api-auth";
 import { NextRequest } from "next/server";
 
-const startTime = Date.now();
-
 /**
  * GET /api/health/detailed
  * Admin-only detailed health check — requires authentication.
@@ -38,7 +36,7 @@ export async function GET(request: NextRequest) {
             status: allHealthy ? "healthy" : "degraded",
             checks,
             system: {
-                uptime: Math.floor((Date.now() - startTime) / 1000),
+                uptime: Math.floor(process.uptime()),
                 memory: {
                     rss: Math.round(memUsage.rss / 1024 / 1024),
                     heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024),
