@@ -31,10 +31,7 @@ function executeWorkflowInBackground(
                 workflowMeta: { runId: run.id, workflowSlug: workflow.slug }
             });
 
-            const durationMs = result.steps.reduce(
-                (sum, step) => sum + (step.durationMs || 0),
-                0
-            );
+            const durationMs = result.steps.reduce((sum, step) => sum + (step.durationMs || 0), 0);
 
             if (result.steps.length > 0) {
                 await prisma.workflowRunStep.createMany({
@@ -56,9 +53,7 @@ function executeWorkflowInBackground(
             }
 
             if (result.status === "suspended") {
-                const suspStep = result.steps.find(
-                    (s) => s.status === "suspended"
-                );
+                const suspStep = result.steps.find((s) => s.status === "suspended");
                 await prisma.workflowRun.update({
                     where: { id: run.id },
                     data: {
@@ -71,8 +66,7 @@ function executeWorkflowInBackground(
                     }
                 });
             } else {
-                const finalStatus =
-                    result.status === "failed" ? "FAILED" : "COMPLETED";
+                const finalStatus = result.status === "failed" ? "FAILED" : "COMPLETED";
                 await prisma.workflowRun.update({
                     where: { id: run.id },
                     data: {
@@ -220,9 +214,7 @@ export async function POST(
                         });
                     }
                     if (bgResult.status === "suspended") {
-                        const suspStep = bgResult.steps.find(
-                            (s) => s.status === "suspended"
-                        );
+                        const suspStep = bgResult.steps.find((s) => s.status === "suspended");
                         await prisma.workflowRun.update({
                             where: { id: run.id },
                             data: {
@@ -230,14 +222,12 @@ export async function POST(
                                 outputJson: bgResult.output as Prisma.InputJsonValue,
                                 suspendedAt: new Date(),
                                 suspendedStep: suspStep?.stepId || null,
-                                suspendDataJson:
-                                    suspStep?.output as Prisma.InputJsonValue,
+                                suspendDataJson: suspStep?.output as Prisma.InputJsonValue,
                                 durationMs: bgDuration
                             }
                         });
                     } else {
-                        const finalStatus =
-                            bgResult.status === "failed" ? "FAILED" : "COMPLETED";
+                        const finalStatus = bgResult.status === "failed" ? "FAILED" : "COMPLETED";
                         await prisma.workflowRun.update({
                             where: { id: run.id },
                             data: {
@@ -269,8 +259,7 @@ export async function POST(
                 success: true,
                 status: "running",
                 runId: run.id,
-                message:
-                    "Workflow still running after 55s. Poll workflow_get_run for status."
+                message: "Workflow still running after 55s. Poll workflow_get_run for status."
             });
         }
 

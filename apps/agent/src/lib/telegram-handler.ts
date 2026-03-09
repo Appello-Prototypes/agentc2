@@ -479,9 +479,7 @@ export async function handleTelegramMessage(
             completionTokens = managedResult.totalCompletionTokens;
 
             if (managedResult.abortReason) {
-                console.warn(
-                    `[Telegram] managedGenerate aborted: ${managedResult.abortReason}`
-                );
+                console.warn(`[Telegram] managedGenerate aborted: ${managedResult.abortReason}`);
             }
         } else {
             const generateOptions = {
