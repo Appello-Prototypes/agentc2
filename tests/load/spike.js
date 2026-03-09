@@ -31,7 +31,13 @@ export const options = {
 
 export default function () {
     const healthRes = http.get(`${BASE_URL}/api/health`);
-    check(healthRes, { "health ok": (r) => r.status === 200 });
+    check(healthRes, {
+        "health ok": (r) => r.status === 200,
+        "has timestamp": (r) => {
+            const body = JSON.parse(r.body);
+            return body.timestamp && !isNaN(Date.parse(body.timestamp));
+        }
+    });
     errorRate.add(healthRes.status !== 200);
 
     sleep(0.5);

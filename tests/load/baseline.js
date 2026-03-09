@@ -39,7 +39,11 @@ export default function () {
     healthLatency.add(healthRes.timings.duration);
     check(healthRes, {
         "health returns 200": (r) => r.status === 200,
-        "health returns ok": (r) => JSON.parse(r.body).status === "ok"
+        "health returns ok": (r) => JSON.parse(r.body).status === "ok",
+        "health returns timestamp": (r) => {
+            const body = JSON.parse(r.body);
+            return body.timestamp && !isNaN(Date.parse(body.timestamp));
+        }
     });
     errorRate.add(healthRes.status !== 200);
 

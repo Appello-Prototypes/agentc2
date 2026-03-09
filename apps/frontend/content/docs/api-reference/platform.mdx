@@ -285,26 +285,13 @@ curl https://agentc2.ai/agent/api/health \
 
 ```json
 {
-    "success": true,
-    "status": "healthy",
-    "timestamp": "2026-02-18T12:00:00.000Z",
-    "services": {
-        "database": {
-            "status": "healthy",
-            "latencyMs": 12
-        },
-        "vectorStore": {
-            "status": "healthy",
-            "latencyMs": 45
-        },
-        "mcp": {
-            "status": "healthy",
-            "serversConnected": 8
-        }
-    },
-    "version": "1.0.0"
+    "status": "ok",
+    "uptime": 3600,
+    "timestamp": "2026-03-09T14:30:00.000Z"
 }
 ```
+
+**Note:** For detailed health checks including database, vector store, and MCP server status, use `/api/health/detailed` (requires authentication).
 
 ### Response `503 Service Unavailable`
 

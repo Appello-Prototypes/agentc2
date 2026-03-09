@@ -38,7 +38,11 @@ export default function () {
     requestCount.add(1);
     check(healthRes, {
         "health ok": (r) => r.status === 200,
-        "response < 500ms": (r) => r.timings.duration < 500
+        "response < 500ms": (r) => r.timings.duration < 500,
+        "has timestamp": (r) => {
+            const body = JSON.parse(r.body);
+            return body.timestamp && !isNaN(Date.parse(body.timestamp));
+        }
     });
     errorRate.add(healthRes.status !== 200);
 

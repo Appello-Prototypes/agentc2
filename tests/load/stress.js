@@ -33,7 +33,13 @@ export const options = {
 export default function () {
     const res = http.get(`${BASE_URL}/api/health`);
     responseTime.add(res.timings.duration);
-    check(res, { "status ok": (r) => r.status === 200 });
+    check(res, {
+        "status ok": (r) => r.status === 200,
+        "has timestamp": (r) => {
+            const body = JSON.parse(r.body);
+            return body.timestamp && !isNaN(Date.parse(body.timestamp));
+        }
+    });
     errorRate.add(res.status !== 200);
 
     if (Math.random() < 0.3) {
