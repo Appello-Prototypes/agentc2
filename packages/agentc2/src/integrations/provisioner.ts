@@ -10,7 +10,6 @@
  * Key design decisions:
  * - Idempotent: reconnecting the same provider reactivates, not duplicates
  * - Org-scoped: slugs are unique within a workspace, every org gets clean slugs
- * - Background fallback: if MCP tool discovery times out, an Inngest job retries
  */
 
 import { prisma, Prisma } from "@repo/database";
@@ -662,10 +661,17 @@ export async function rediscoverToolsForConnection(
     const blueprint = getBlueprint(providerKey);
     if (!blueprint) return null;
 
-    // Find the provisioned skill
+    const workspace = await prisma.workspace.findFirst({
+        where: { organizationId: connection.organizationId, isDefault: true },
+        select: { id: true }
+    });
+    if (!workspace) return null;
+
+    // Find the provisioned skill scoped to this org's workspace
     const skill = await prisma.skill.findFirst({
         where: {
             slug: blueprint.skill.slug,
+            workspaceId: workspace.id,
             metadata: { path: ["provisionedBy"], equals: "auto-provisioner" }
         },
         include: { tools: true }

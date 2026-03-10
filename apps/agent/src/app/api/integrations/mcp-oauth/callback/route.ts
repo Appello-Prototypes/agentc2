@@ -14,7 +14,11 @@ import { prisma } from "@repo/database";
 import { resetMcpClients, invalidateMcpCacheForOrg } from "@repo/agentc2/mcp";
 import { invalidateMcpToolsCacheForOrg } from "@repo/agentc2/tools";
 import { exchangeMcpCodeForTokens } from "@repo/agentc2/integrations/mcp-oauth";
-import { validateOAuthState, getOAuthStateCookieName, consumeReturnUrlCookie } from "@/lib/oauth-security";
+import {
+    validateOAuthState,
+    getOAuthStateCookieName,
+    consumeReturnUrlCookie
+} from "@/lib/oauth-security";
 import { encryptCredentials } from "@/lib/credential-crypto";
 
 function getMcpOAuthRedirectUri(): string {

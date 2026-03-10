@@ -149,7 +149,7 @@ const KNOWN_TOOLS = [
     "ask-questions"
 ];
 
-// Skill definitions mirroring seed-skills.ts
+// Skill definitions (originally from the now-removed seed-skills.ts)
 const SKILL_DEFINITIONS = [
     // Platform Skills
     {

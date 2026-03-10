@@ -13,7 +13,11 @@ import { auth } from "@repo/auth";
 import { prisma } from "@repo/database";
 import { headers } from "next/headers";
 import { discoverAuthServer, buildMcpAuthorizationUrl } from "@repo/agentc2/integrations/mcp-oauth";
-import { generateOAuthState, getOAuthStateCookieName, setReturnUrlCookie } from "@/lib/oauth-security";
+import {
+    generateOAuthState,
+    getOAuthStateCookieName,
+    setReturnUrlCookie
+} from "@/lib/oauth-security";
 import { getUserOrganizationId } from "@/lib/organization";
 
 function getMcpOAuthRedirectUri(): string {

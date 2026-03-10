@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { prisma } from "@repo/database";
 import { getIntegrationProviders } from "@repo/agentc2/mcp";
-import { validateOAuthState, getOAuthStateCookieName, consumeReturnUrlCookie } from "@/lib/oauth-security";
+import {
+    validateOAuthState,
+    getOAuthStateCookieName,
+    consumeReturnUrlCookie
+} from "@/lib/oauth-security";
 import { encryptCredentials } from "@/lib/credential-crypto";
 
 /**

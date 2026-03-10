@@ -18,8 +18,8 @@ import { StarIcon } from "lucide-react";
 const DEFAULT_AGENT_KEY = "mastra-default-agent";
 
 export function getDefaultAgentSlug(): string {
-    if (typeof window === "undefined") return "bigjim2-appello";
-    return localStorage.getItem(DEFAULT_AGENT_KEY) || "bigjim2-appello";
+    if (typeof window === "undefined") return "";
+    return localStorage.getItem(DEFAULT_AGENT_KEY) || "";
 }
 
 export function setDefaultAgentSlug(slug: string): void {
@@ -85,6 +85,12 @@ export function AgentSelector({ value, onChange, disabled }: AgentSelectorProps)
         const matched = agents.find((a) => a.slug === value);
         if (matched) {
             onChangeRef.current(matched.slug, matched);
+        } else {
+            const fallback = agents[0];
+            if (fallback) {
+                setDefaultAgentSlug(fallback.slug);
+                onChangeRef.current(fallback.slug, fallback);
+            }
         }
     }, [value, agents]);
 

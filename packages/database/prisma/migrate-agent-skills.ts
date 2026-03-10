@@ -5,7 +5,7 @@
  * pinned/discoverable progressive disclosure pattern.
  *
  * Run: bun run prisma/migrate-agent-skills.ts
- * Prerequisites: seed-skills.ts must have been run first
+ * Prerequisites: skills must already exist in the database
  */
 
 import { PrismaClient } from "@prisma/client";

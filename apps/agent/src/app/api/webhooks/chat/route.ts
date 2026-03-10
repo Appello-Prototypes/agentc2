@@ -21,7 +21,7 @@ import { createTriggerEventRecord } from "@/lib/trigger-events";
 
 /**
  * The slug of the database-driven webhook wizard agent.
- * Must match the slug in seed-agents.ts.
+ * Must match the slug of the webhook-wizard agent in the database.
  */
 const WEBHOOK_WIZARD_SLUG = "webhook-wizard";
 

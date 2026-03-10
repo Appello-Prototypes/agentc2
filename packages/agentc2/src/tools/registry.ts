@@ -63,6 +63,7 @@ import { golfnowSearchTool } from "./golfnow-search";
 import { golfnowBookTool } from "./golfnow-book";
 import { golfnorthSearchTool } from "./golfnorth-search";
 import { golfCourseDiscoverTool } from "./golf-course-discover";
+import { teeonScanCoursesTool } from "./teeon-scan-courses";
 import {
     exaSearchTool,
     exaFindSimilarTool,
@@ -443,6 +444,7 @@ export const toolCategoryMap: Record<string, string> = {
     "golfnow-book": "Integrations",
     "golfnorth-search": "Integrations",
     "golf-course-discover": "Integrations",
+    "teeon-scan-courses": "Integrations",
     "memory-recall": "Utilities",
 
     // Search
@@ -1320,6 +1322,7 @@ export const toolRegistry: Record<string, any> = {
     "golfnow-book": golfnowBookTool,
     "golfnorth-search": golfnorthSearchTool,
     "golf-course-discover": golfCourseDiscoverTool,
+    "teeon-scan-courses": teeonScanCoursesTool,
     "memory-recall": memoryRecallTool,
 
     // Search tools

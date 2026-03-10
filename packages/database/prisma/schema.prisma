@@ -1405,8 +1405,8 @@ model MastraWorkflowSnapshot {
 
 // Mastra memory vector store — managed by @mastra/memory, NOT by Prisma.
 model MemoryMessages {
-    id        Int     @id @default(autoincrement())
-    vectorId  String  @unique @map("vector_id")
+    id        Int                    @id @default(autoincrement())
+    vectorId  String                 @unique @map("vector_id")
     embedding Unsupported("vector")?
     metadata  Json?
 

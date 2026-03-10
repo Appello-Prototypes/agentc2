@@ -200,11 +200,20 @@ export async function POST(request: NextRequest) {
                     );
                 }
             } catch (provisionError) {
-                // Don't fail the connection creation if provisioning fails
                 console.error(
                     `[Integrations] Auto-provisioning failed for ${provider.key}:`,
                     provisionError
                 );
+                provisionResult = {
+                    success: false,
+                    toolsDiscovered: [] as string[],
+                    skillCreated: false,
+                    agentCreated: false,
+                    error:
+                        provisionError instanceof Error
+                            ? provisionError.message
+                            : "Unknown provisioning error"
+                };
             }
         }
 
@@ -213,9 +222,11 @@ export async function POST(request: NextRequest) {
             connection,
             provisioned: provisionResult
                 ? {
+                      success: provisionResult.success,
                       skillId: provisionResult.skillId,
                       agentId: provisionResult.agentId,
-                      toolsDiscovered: provisionResult.toolsDiscovered.length
+                      toolsDiscovered: provisionResult.toolsDiscovered.length,
+                      error: provisionResult.error
                   }
                 : null
         });

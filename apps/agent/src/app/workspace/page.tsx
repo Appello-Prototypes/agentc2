@@ -1049,7 +1049,10 @@ export default function UnifiedChatPage() {
         stop: rawStop
     } = useChat({
         transport,
-        id: threadId
+        id: threadId,
+        onError: (error) => {
+            console.error("[Chat] Stream error:", error);
+        }
     });
     const isStreaming = status === "streaming";
     const isSubmitted = status === "submitted";
