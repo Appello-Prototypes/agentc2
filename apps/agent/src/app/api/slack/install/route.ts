@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { generateOAuthState } from "@/lib/oauth-security";
+import { generateOAuthState, setReturnUrlCookie } from "@/lib/oauth-security";
 
 /**
  * GET /api/slack/install
@@ -24,6 +24,8 @@ export async function GET(request: NextRequest) {
             { status: 400 }
         );
     }
+
+    const returnUrl = searchParams.get("returnUrl");
 
     const clientId = process.env.SLACK_CLIENT_ID;
     if (!clientId) {
@@ -69,6 +71,10 @@ export async function GET(request: NextRequest) {
         maxAge: 600, // 10 minutes
         path: "/"
     });
+
+    if (returnUrl) {
+        setReturnUrlCookie(cookieStore, returnUrl);
+    }
 
     // Set popup mode flag so the callback knows to render postMessage instead of redirect
     if (mode === "popup") {

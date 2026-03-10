@@ -13,7 +13,7 @@ import { auth } from "@repo/auth";
 import { prisma } from "@repo/database";
 import { headers } from "next/headers";
 import { discoverAuthServer, buildMcpAuthorizationUrl } from "@repo/agentc2/integrations/mcp-oauth";
-import { generateOAuthState, getOAuthStateCookieName } from "@/lib/oauth-security";
+import { generateOAuthState, getOAuthStateCookieName, setReturnUrlCookie } from "@/lib/oauth-security";
 import { getUserOrganizationId } from "@/lib/organization";
 
 function getMcpOAuthRedirectUri(): string {
@@ -36,9 +36,10 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ error: "No organization found" }, { status: 400 });
         }
 
-        // 2. Get provider key from query params
+        // 2. Get provider key and optional returnUrl from query params
         const { searchParams } = new URL(request.url);
         const providerKey = searchParams.get("provider");
+        const returnUrl = searchParams.get("returnUrl");
         if (!providerKey) {
             return NextResponse.json(
                 { error: "provider query param is required" },
@@ -125,7 +126,8 @@ export async function GET(request: NextRequest) {
                 tokenEndpoint: metadata.token_endpoint,
                 hostedMcpUrl,
                 providerKey,
-                oauthClientId
+                oauthClientId,
+                returnUrl: returnUrl || null
             }),
             {
                 httpOnly: true,
@@ -135,6 +137,10 @@ export async function GET(request: NextRequest) {
                 path: "/"
             }
         );
+
+        if (returnUrl) {
+            setReturnUrlCookie(cookieStore, returnUrl);
+        }
 
         // 10. Redirect to the authorization server
         return NextResponse.redirect(authUrl.toString());

@@ -1,8 +1,8 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { headers, cookies } from "next/headers";
 import { auth } from "@repo/auth";
 import { getUserOrganizationId } from "@/lib/organization";
-import { generateOAuthState } from "@/lib/oauth-security";
+import { generateOAuthState, setReturnUrlCookie } from "@/lib/oauth-security";
 import {
     getDropboxClientCredentials,
     buildDropboxAuthorizationUrl,
@@ -13,8 +13,9 @@ import {
  * GET /api/integrations/dropbox/start
  *
  * Initiates Dropbox OAuth flow with PKCE + signed state.
+ * Accepts optional ?returnUrl= to redirect back after auth.
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
     try {
         const session = await auth.api.getSession({ headers: await headers() });
         if (!session?.user) {
@@ -53,6 +54,12 @@ export async function GET() {
             maxAge: 600,
             path: "/"
         });
+
+        const { searchParams } = new URL(request.url);
+        const returnUrl = searchParams.get("returnUrl");
+        if (returnUrl) {
+            setReturnUrlCookie(cookieStore, returnUrl);
+        }
 
         return NextResponse.redirect(authUrl);
     } catch (error) {

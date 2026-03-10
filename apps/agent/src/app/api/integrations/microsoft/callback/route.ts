@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { prisma } from "@repo/database";
 import { getIntegrationProviders } from "@repo/agentc2/mcp";
-import { validateOAuthState, getOAuthStateCookieName } from "@/lib/oauth-security";
+import { validateOAuthState, getOAuthStateCookieName, consumeReturnUrlCookie } from "@/lib/oauth-security";
 import { encryptCredentials } from "@/lib/credential-crypto";
 import {
     getMicrosoftClientCredentials,
@@ -26,8 +26,12 @@ export async function GET(request: NextRequest) {
     const errorParam = searchParams.get("error");
     const errorDescription = searchParams.get("error_description");
 
+    // Access cookies once for the entire handler
+    const cookieStore = await cookies();
+
     // Determine redirect target for success/error
-    const setupUrl = new URL("/mcp/microsoft", request.url);
+    const customReturn = consumeReturnUrlCookie(cookieStore);
+    const setupUrl = new URL(customReturn || "/mcp/microsoft", request.url);
 
     if (errorParam) {
         const msg =
@@ -45,7 +49,6 @@ export async function GET(request: NextRequest) {
 
     try {
         // Validate CSRF state
-        const cookieStore = await cookies();
         const cookieName = getOAuthStateCookieName();
         const cookieValue = cookieStore.get(cookieName)?.value;
 

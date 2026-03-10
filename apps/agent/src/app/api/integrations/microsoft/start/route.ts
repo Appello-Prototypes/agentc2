@@ -1,8 +1,8 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { headers, cookies } from "next/headers";
 import { auth } from "@repo/auth";
 import { getUserOrganizationId } from "@/lib/organization";
-import { generateOAuthState } from "@/lib/oauth-security";
+import { generateOAuthState, setReturnUrlCookie } from "@/lib/oauth-security";
 import {
     getMicrosoftClientCredentials,
     buildAuthorizationUrl,
@@ -14,8 +14,9 @@ import {
  *
  * Initiates Microsoft OAuth flow with PKCE + signed state.
  * Redirects the user to the Microsoft consent screen.
+ * Accepts optional ?returnUrl= to redirect back after auth.
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
     try {
         const session = await auth.api.getSession({ headers: await headers() });
         if (!session?.user) {
@@ -55,6 +56,12 @@ export async function GET() {
             maxAge: 600, // 10 minutes
             path: "/"
         });
+
+        const { searchParams } = new URL(request.url);
+        const returnUrl = searchParams.get("returnUrl");
+        if (returnUrl) {
+            setReturnUrlCookie(cookieStore, returnUrl);
+        }
 
         return NextResponse.redirect(authUrl);
     } catch (error) {

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { prisma } from "@repo/database";
 import { getIntegrationProviders } from "@repo/agentc2/mcp";
-import { validateOAuthState, getOAuthStateCookieName } from "@/lib/oauth-security";
+import { validateOAuthState, getOAuthStateCookieName, consumeReturnUrlCookie } from "@/lib/oauth-security";
 import { encryptCredentials } from "@/lib/credential-crypto";
 
 /**
@@ -18,8 +18,12 @@ export async function GET(request: NextRequest) {
     const stateParam = searchParams.get("state");
     const errorParam = searchParams.get("error");
 
-    // Redirect destination after completion
-    const setupUrl = new URL("/mcp/providers/slack", request.url);
+    // Access cookies before try/catch so they're available in the catch block
+    const cookieStore = await cookies();
+
+    // Redirect destination after completion (respect returnUrl cookie if present)
+    const customReturn = consumeReturnUrlCookie(cookieStore);
+    const setupUrl = new URL(customReturn || "/mcp/providers/slack", request.url);
 
     if (errorParam) {
         setupUrl.searchParams.set("error", `Slack OAuth error: ${errorParam}`);
@@ -30,9 +34,6 @@ export async function GET(request: NextRequest) {
         setupUrl.searchParams.set("error", "Missing authorization code from Slack.");
         return NextResponse.redirect(setupUrl);
     }
-
-    // Access cookies before try/catch so they're available in the catch block
-    const cookieStore = await cookies();
 
     try {
         // Validate CSRF state

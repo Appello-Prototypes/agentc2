@@ -14,7 +14,7 @@ import { prisma } from "@repo/database";
 import { resetMcpClients, invalidateMcpCacheForOrg } from "@repo/agentc2/mcp";
 import { invalidateMcpToolsCacheForOrg } from "@repo/agentc2/tools";
 import { exchangeMcpCodeForTokens } from "@repo/agentc2/integrations/mcp-oauth";
-import { validateOAuthState, getOAuthStateCookieName } from "@/lib/oauth-security";
+import { validateOAuthState, getOAuthStateCookieName, consumeReturnUrlCookie } from "@/lib/oauth-security";
 import { encryptCredentials } from "@/lib/credential-crypto";
 
 function getMcpOAuthRedirectUri(): string {
@@ -32,7 +32,17 @@ function getSetupPageUrl(): string {
 }
 
 export async function GET(request: NextRequest) {
-    const setupUrl = getSetupPageUrl();
+    const cookieStore = await cookies();
+    const customReturn = consumeReturnUrlCookie(cookieStore);
+
+    const buildRedirectUrl = () => {
+        if (customReturn) {
+            return new URL(customReturn, request.url);
+        }
+        return new URL(getSetupPageUrl());
+    };
+
+    const setupUrl = buildRedirectUrl();
 
     try {
         const { searchParams } = new URL(request.url);
@@ -46,17 +56,16 @@ export async function GET(request: NextRequest) {
             console.error(
                 `[MCP OAuth Callback] Error from provider: ${errorParam} - ${errorDescription}`
             );
-            return NextResponse.redirect(
-                `${setupUrl}?error=${encodeURIComponent(errorDescription || errorParam)}`
-            );
+            setupUrl.searchParams.set("error", errorDescription || errorParam);
+            return NextResponse.redirect(setupUrl);
         }
 
         if (!code) {
-            return NextResponse.redirect(`${setupUrl}?error=No authorization code received`);
+            setupUrl.searchParams.set("error", "No authorization code received");
+            return NextResponse.redirect(setupUrl);
         }
 
         // 2. Validate state (CSRF protection + PKCE verifier extraction)
-        const cookieStore = await cookies();
         const cookieValue = cookieStore.get(getOAuthStateCookieName())?.value;
 
         let validatedState;
@@ -64,11 +73,11 @@ export async function GET(request: NextRequest) {
             validatedState = validateOAuthState(cookieValue, stateParam);
         } catch (stateError) {
             console.error("[MCP OAuth Callback] State validation failed:", stateError);
-            return NextResponse.redirect(
-                `${setupUrl}?error=${encodeURIComponent(
-                    stateError instanceof Error ? stateError.message : "State validation failed"
-                )}`
+            setupUrl.searchParams.set(
+                "error",
+                stateError instanceof Error ? stateError.message : "State validation failed"
             );
+            return NextResponse.redirect(setupUrl);
         }
 
         const { organizationId, userId, providerKey, codeVerifier } = validatedState;
@@ -76,7 +85,8 @@ export async function GET(request: NextRequest) {
         // 3. Get token endpoint from metadata cookie
         const metaCookieValue = cookieStore.get("__mcp_oauth_meta")?.value;
         if (!metaCookieValue) {
-            return NextResponse.redirect(`${setupUrl}?error=MCP OAuth metadata cookie missing`);
+            setupUrl.searchParams.set("error", "MCP OAuth metadata cookie missing");
+            return NextResponse.redirect(setupUrl);
         }
 
         let meta: {
@@ -88,7 +98,8 @@ export async function GET(request: NextRequest) {
         try {
             meta = JSON.parse(metaCookieValue);
         } catch {
-            return NextResponse.redirect(`${setupUrl}?error=Invalid MCP OAuth metadata`);
+            setupUrl.searchParams.set("error", "Invalid MCP OAuth metadata");
+            return NextResponse.redirect(setupUrl);
         }
 
         // 4. Clear state cookies
@@ -100,9 +111,8 @@ export async function GET(request: NextRequest) {
             where: { key: providerKey }
         });
         if (!provider) {
-            return NextResponse.redirect(
-                `${setupUrl}?error=${encodeURIComponent(`Provider not found: ${providerKey}`)}`
-            );
+            setupUrl.searchParams.set("error", `Provider not found: ${providerKey}`);
+            return NextResponse.redirect(setupUrl);
         }
 
         // 6. Extract client secret if configured
@@ -205,15 +215,15 @@ export async function GET(request: NextRequest) {
         }
 
         // 12. Redirect to setup page with success
-        return NextResponse.redirect(
-            `${setupUrl}?success=true&provider=${encodeURIComponent(providerKey)}`
-        );
+        setupUrl.searchParams.set("success", "true");
+        setupUrl.searchParams.set("provider", providerKey);
+        return NextResponse.redirect(setupUrl);
     } catch (error) {
         console.error("[MCP OAuth Callback]", error);
-        return NextResponse.redirect(
-            `${setupUrl}?error=${encodeURIComponent(
-                error instanceof Error ? error.message : "OAuth callback failed"
-            )}`
+        setupUrl.searchParams.set(
+            "error",
+            error instanceof Error ? error.message : "OAuth callback failed"
         );
+        return NextResponse.redirect(setupUrl);
     }
 }

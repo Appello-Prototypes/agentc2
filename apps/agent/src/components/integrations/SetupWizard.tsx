@@ -146,6 +146,12 @@ function hasHostedMcpUrl(provider: IntegrationProvider): boolean {
     return typeof config?.hostedMcpUrl === "string";
 }
 
+function getOAuthStartEndpoint(provider: IntegrationProvider): string | null {
+    const config = provider.config as Record<string, unknown> | null;
+    const oauthCfg = config?.oauthConfig as Record<string, unknown> | null;
+    return typeof oauthCfg?.startEndpoint === "string" ? oauthCfg.startEndpoint : null;
+}
+
 function translateError(error: string, providerName: string): { message: string; action: string } {
     const lower = error.toLowerCase();
 
@@ -555,10 +561,12 @@ function NoAuthConnectStep({
 
 function SuccessStep({
     provider,
-    toolCount
+    toolCount,
+    onComplete
 }: {
     provider: IntegrationProvider;
     toolCount?: number;
+    onComplete?: () => void;
 }) {
     const capabilities = getCapabilities(provider);
 
@@ -588,21 +596,33 @@ function SuccessStep({
                 </div>
             )}
 
-            <div className="flex flex-col gap-3 pt-2">
-                <Link href="/mcp" className={buttonVariants({ size: "lg", className: "w-full" })}>
-                    Back to Integrations
-                </Link>
-                <Link
-                    href={`/mcp/providers/${provider.key}`}
-                    className={buttonVariants({
-                        variant: "outline",
-                        size: "lg",
-                        className: "w-full"
-                    })}
-                >
-                    Manage Connection
-                </Link>
-            </div>
+            {onComplete ? (
+                <div className="pt-2">
+                    <Button onClick={onComplete} className="w-full" size="lg">
+                        <CheckCircle2Icon className="mr-2 h-4 w-4" />
+                        Done
+                    </Button>
+                </div>
+            ) : (
+                <div className="flex flex-col gap-3 pt-2">
+                    <Link
+                        href="/mcp"
+                        className={buttonVariants({ size: "lg", className: "w-full" })}
+                    >
+                        Back to Integrations
+                    </Link>
+                    <Link
+                        href={`/mcp/providers/${provider.key}`}
+                        className={buttonVariants({
+                            variant: "outline",
+                            size: "lg",
+                            className: "w-full"
+                        })}
+                    >
+                        Manage Connection
+                    </Link>
+                </div>
+            )}
         </div>
     );
 }
@@ -849,7 +869,17 @@ function AlreadyConnectedView({
 /*  Main SetupWizard                                                           */
 /* -------------------------------------------------------------------------- */
 
-export function SetupWizard({ providerKey }: { providerKey: string }) {
+export function SetupWizard({
+    providerKey,
+    embedded,
+    onComplete,
+    returnUrl
+}: {
+    providerKey: string;
+    embedded?: boolean;
+    onComplete?: () => void;
+    returnUrl?: string;
+}) {
     const [provider, setProvider] = useState<IntegrationProvider | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -938,42 +968,24 @@ export function SetupWizard({ providerKey }: { providerKey: string }) {
             await linkSocial({
                 provider: oauthConfig.socialProvider,
                 scopes: oauthConfig.scopes,
-                callbackURL: `/mcp/providers/${provider.key}`
+                callbackURL: returnUrl || `/mcp/providers/${provider.key}`
             });
         } catch (err) {
             setConnectError(err instanceof Error ? err.message : "Failed to start OAuth flow");
             setConnecting(false);
             setStep("error");
         }
-    }, [provider, oauthConfig]);
+    }, [provider, oauthConfig, returnUrl]);
 
-    // Handle MCP OAuth
-    const handleMcpOAuth = useCallback(async () => {
+    // Handle MCP OAuth (GET redirect to the start route)
+    const handleMcpOAuth = useCallback(() => {
         if (!provider) return;
         setConnecting(true);
         setConnectError(null);
-        try {
-            const response = await fetch(`${apiBase}/api/integrations/mcp-oauth/start`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    providerKey: provider.key,
-                    callbackUrl: `${window.location.origin}/agent/api/integrations/mcp-oauth/callback`,
-                    returnUrl: `/mcp/providers/${provider.key}`
-                })
-            });
-            const data = await response.json();
-            if (data.authorizationUrl) {
-                window.location.href = data.authorizationUrl;
-            } else {
-                throw new Error(data.error || "Failed to start OAuth");
-            }
-        } catch (err) {
-            setConnectError(err instanceof Error ? err.message : "Failed to start OAuth flow");
-            setConnecting(false);
-            setStep("error");
-        }
-    }, [provider, apiBase]);
+        const params = new URLSearchParams({ provider: provider.key });
+        if (returnUrl) params.set("returnUrl", returnUrl);
+        window.location.href = `${apiBase}/api/integrations/mcp-oauth/start?${params}`;
+    }, [provider, apiBase, returnUrl]);
 
     // Handle API Key connection
     const handleApiKeyConnect = useCallback(
@@ -1105,6 +1117,16 @@ export function SetupWizard({ providerKey }: { providerKey: string }) {
         }
     }, [provider, apiBase]);
 
+    // Handle standalone OAuth (Microsoft, Dropbox) via their start endpoint
+    const handleStandaloneOAuth = useCallback(() => {
+        if (!provider) return;
+        const startEndpoint = getOAuthStartEndpoint(provider);
+        if (!startEndpoint) return;
+        setConnecting(true);
+        const params = returnUrl ? `?returnUrl=${encodeURIComponent(returnUrl)}` : "";
+        window.location.href = `${apiBase}${startEndpoint}${params}`;
+    }, [provider, apiBase, returnUrl]);
+
     // Navigate wizard
     const handleNextFromOverview = useCallback(() => {
         if (isApiKey) {
@@ -1115,6 +1137,17 @@ export function SetupWizard({ providerKey }: { providerKey: string }) {
         } else if (isMcpOAuth) {
             setStep("connecting");
             handleMcpOAuth();
+        } else if (embedded && hasSetupUrl && provider) {
+            // In embedded mode, bypass setupUrl navigation and trigger OAuth directly
+            const startEndpoint = getOAuthStartEndpoint(provider);
+            if (startEndpoint) {
+                handleStandaloneOAuth();
+            } else if (oauthConfig) {
+                setStep("connecting");
+                handleNativeOAuth();
+            } else {
+                setStep("connecting");
+            }
         } else if (hasSetupUrl) {
             setStep("connecting");
         } else if (isNoAuth) {
@@ -1129,9 +1162,13 @@ export function SetupWizard({ providerKey }: { providerKey: string }) {
         isMcpOAuth,
         hasSetupUrl,
         isNoAuth,
+        embedded,
+        provider,
+        oauthConfig,
         handleNativeOAuth,
         handleMcpOAuth,
-        handleNoAuthConnect
+        handleNoAuthConnect,
+        handleStandaloneOAuth
     ]);
 
     /* ---------------------------------------------------------------------- */
@@ -1149,10 +1186,15 @@ export function SetupWizard({ providerKey }: { providerKey: string }) {
     if (error || !provider) {
         return (
             <div className="container mx-auto max-w-2xl space-y-4 py-6">
-                <Link href="/mcp" className={buttonVariants({ variant: "outline", size: "sm" })}>
-                    <ArrowLeftIcon className="mr-2 h-4 w-4" />
-                    Back to Integrations
-                </Link>
+                {!embedded && (
+                    <Link
+                        href="/mcp"
+                        className={buttonVariants({ variant: "outline", size: "sm" })}
+                    >
+                        <ArrowLeftIcon className="mr-2 h-4 w-4" />
+                        Back to Integrations
+                    </Link>
+                )}
                 <Card>
                     <CardContent className="py-6 text-sm text-red-500">
                         {error || "Provider not found"}
@@ -1166,12 +1208,17 @@ export function SetupWizard({ providerKey }: { providerKey: string }) {
         <div className="h-full overflow-y-auto">
             <div className="container mx-auto max-w-2xl space-y-6 py-6">
                 {/* Header */}
-                <div className="flex items-center justify-between">
-                    <Link href="/mcp" className={buttonVariants({ variant: "ghost", size: "sm" })}>
-                        <ArrowLeftIcon className="mr-2 h-4 w-4" />
-                        Integrations
-                    </Link>
-                </div>
+                {!embedded && (
+                    <div className="flex items-center justify-between">
+                        <Link
+                            href="/mcp"
+                            className={buttonVariants({ variant: "ghost", size: "sm" })}
+                        >
+                            <ArrowLeftIcon className="mr-2 h-4 w-4" />
+                            Integrations
+                        </Link>
+                    </div>
+                )}
 
                 {/* If already connected, show management view */}
                 {isConnected && step !== "success" ? (
@@ -1276,22 +1323,28 @@ export function SetupWizard({ providerKey }: { providerKey: string }) {
                                                 <RefreshCwIcon className="mr-2 h-4 w-4" />
                                                 Try Again
                                             </Button>
-                                            <Link
-                                                href="/mcp"
-                                                className={buttonVariants({
-                                                    variant: "outline",
-                                                    size: "lg",
-                                                    className: "w-full"
-                                                })}
-                                            >
-                                                Back to Integrations
-                                            </Link>
+                                            {!embedded && (
+                                                <Link
+                                                    href="/mcp"
+                                                    className={buttonVariants({
+                                                        variant: "outline",
+                                                        size: "lg",
+                                                        className: "w-full"
+                                                    })}
+                                                >
+                                                    Back to Integrations
+                                                </Link>
+                                            )}
                                         </div>
                                     </div>
                                 )}
 
                                 {step === "success" && (
-                                    <SuccessStep provider={provider} toolCount={toolCount} />
+                                    <SuccessStep
+                                        provider={provider}
+                                        toolCount={toolCount}
+                                        onComplete={embedded ? onComplete : undefined}
+                                    />
                                 )}
                             </CardContent>
                         </Card>

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { prisma } from "@repo/database";
 import { getIntegrationProviders } from "@repo/agentc2/mcp";
-import { validateOAuthState, getOAuthStateCookieName } from "@/lib/oauth-security";
+import { validateOAuthState, getOAuthStateCookieName, consumeReturnUrlCookie } from "@/lib/oauth-security";
 import { encryptCredentials } from "@/lib/credential-crypto";
 import {
     getDropboxClientCredentials,
@@ -25,7 +25,9 @@ export async function GET(request: NextRequest) {
     const errorParam = searchParams.get("error");
     const errorDescription = searchParams.get("error_description");
 
-    const setupUrl = new URL("/mcp/dropbox", request.url);
+    const cookieStore = await cookies();
+    const customReturn = consumeReturnUrlCookie(cookieStore);
+    const setupUrl = new URL(customReturn || "/mcp/dropbox", request.url);
 
     if (errorParam) {
         const msg = errorDescription || `Dropbox OAuth error: ${errorParam}`;
@@ -39,7 +41,6 @@ export async function GET(request: NextRequest) {
     }
 
     try {
-        const cookieStore = await cookies();
         const cookieName = getOAuthStateCookieName();
         const cookieValue = cookieStore.get(cookieName)?.value;
 

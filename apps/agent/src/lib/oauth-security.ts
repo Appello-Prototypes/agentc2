@@ -224,3 +224,39 @@ export function validateOAuthState(
 export function getOAuthStateCookieName(): string {
     return COOKIE_NAME;
 }
+
+// ── Return URL Cookie ──────────────────────────────────────────────
+// Universal mechanism for OAuth flows to redirect back to an
+// originating page (e.g. playbook setup) after auth completes.
+
+const RETURN_URL_COOKIE = "__oauth_return_url";
+
+/**
+ * Store a post-auth return URL in an HTTP-only cookie.
+ * Only relative paths are accepted to prevent open-redirect attacks.
+ */
+export function setReturnUrlCookie(
+    cookieStore: { set: (name: string, value: string, opts: Record<string, unknown>) => void },
+    returnUrl: string
+) {
+    if (!returnUrl.startsWith("/")) return;
+    cookieStore.set(RETURN_URL_COOKIE, returnUrl, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: 600,
+        path: "/"
+    });
+}
+
+/**
+ * Read and delete the return URL cookie. Returns null when absent.
+ */
+export function consumeReturnUrlCookie(cookieStore: {
+    get: (name: string) => { value: string } | undefined;
+    delete: (name: string) => void;
+}): string | null {
+    const value = cookieStore.get(RETURN_URL_COOKIE)?.value ?? null;
+    if (value) cookieStore.delete(RETURN_URL_COOKIE);
+    return value;
+}

@@ -473,7 +473,21 @@ export function PlaybookSetupWizard({
                         </SheetTitle>
                     </SheetHeader>
                     <div className="mt-4">
-                        {connectingProvider && <SetupWizard providerKey={connectingProvider} />}
+                        {connectingProvider && (
+                            <SetupWizard
+                                providerKey={connectingProvider}
+                                embedded={true}
+                                onComplete={() => {
+                                    setConnectingProvider(null);
+                                    fetchSetupState();
+                                }}
+                                returnUrl={
+                                    typeof window !== "undefined"
+                                        ? window.location.pathname + window.location.search
+                                        : undefined
+                                }
+                            />
+                        )}
                     </div>
                 </SheetContent>
             </Sheet>
@@ -533,6 +547,20 @@ function IntegrationChecklistItem({
         return null;
     };
 
+    const getAuthHint = () => {
+        if (integration.connected) return null;
+        switch (integration.authType) {
+            case "apiKey":
+                return "Requires API key";
+            case "oauth":
+                return "Requires authorization";
+            case "none":
+                return "No credentials needed";
+            default:
+                return null;
+        }
+    };
+
     return (
         <div
             className={`flex items-center gap-3 rounded-md border p-3 ${
@@ -553,6 +581,9 @@ function IntegrationChecklistItem({
                     </Badge>
                     {getStatusLabel()}
                 </div>
+                {!integration.connected && getAuthHint() && (
+                    <p className="text-muted-foreground mt-0.5 text-xs">{getAuthHint()}</p>
+                )}
                 {hasVerifyError && (
                     <p className="mt-0.5 text-xs text-red-400">{verifyResult.error}</p>
                 )}
@@ -574,7 +605,7 @@ function IntegrationChecklistItem({
             </div>
 
             {!integration.connected && (
-                <Button size="sm" variant="outline" onClick={onConnect}>
+                <Button size="sm" onClick={onConnect}>
                     Connect
                     <ArrowRightIcon className="ml-1.5 h-3 w-3" />
                 </Button>
