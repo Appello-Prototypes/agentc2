@@ -312,7 +312,7 @@ export class AgentResolver {
             requestContext?.organizationId || requestContext?.resource?.organizationId || undefined;
 
         // Build where clause with workspace isolation
-        // Also allow access to agents owned by the calling user (cross-org)
+        // Also allow access to agents owned by the calling user within the same org
         // and public agents, matching listForUser() access logic.
         const userId = requestContext?.userId || requestContext?.resource?.userId;
         const slugWhere = slug
@@ -325,7 +325,9 @@ export class AgentResolver {
                         ? {
                               OR: [
                                   { workspace: { organizationId } },
-                                  ...(userId ? [{ ownerId: userId }] : []),
+                                  ...(userId
+                                      ? [{ ownerId: userId, workspace: { organizationId } }]
+                                      : []),
                                   { visibility: "PUBLIC" as const }
                               ]
                           }
@@ -341,7 +343,9 @@ export class AgentResolver {
                       ? {
                             OR: [
                                 { workspace: { organizationId } },
-                                ...(userId ? [{ ownerId: userId }] : []),
+                                ...(userId
+                                    ? [{ ownerId: userId, workspace: { organizationId } }]
+                                    : []),
                                 { visibility: "PUBLIC" as const }
                             ]
                         }
@@ -1990,9 +1994,9 @@ export class AgentResolver {
                 where: {
                     isActive: true,
                     OR: [
-                        // User's own agents
-                        { ownerId: userId },
-                        // Org-shared agents
+                        ...(organizationId
+                            ? [{ ownerId: userId, workspace: { organizationId } }]
+                            : [{ ownerId: userId }]),
                         ...(organizationId
                             ? [
                                   {
@@ -2001,7 +2005,6 @@ export class AgentResolver {
                                   }
                               ]
                             : []),
-                        // Public agents
                         { visibility: "PUBLIC" }
                     ]
                 },

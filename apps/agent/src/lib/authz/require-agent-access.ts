@@ -6,7 +6,7 @@ import { prisma } from "@repo/database";
  *
  * Access is granted when ANY of these conditions are met:
  *   1. The agent belongs to a workspace in the user's active organization
- *   2. The agent is owned by the user (ownerId matches)
+ *   2. The agent is owned by the user within the same organization
  *   3. The agent has PUBLIC visibility
  *
  * This aligns with AgentResolver.listForUser() so that agents shown in the
@@ -26,11 +26,8 @@ export async function requireAgentAccess(
                 { isActive: true },
                 {
                     OR: [
-                        // Agent in the user's active org
                         { workspace: { organizationId } },
-                        // Agent owned by the user (cross-org)
-                        ...(userId ? [{ ownerId: userId }] : []),
-                        // Public agents
+                        ...(userId ? [{ ownerId: userId, workspace: { organizationId } }] : []),
                         { visibility: "PUBLIC" }
                     ]
                 }

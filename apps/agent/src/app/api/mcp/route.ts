@@ -68,27 +68,27 @@ async function authenticateRequest(
                 return null;
             }
 
-            const membership = await prisma.membership.findFirst({
-                where: { organizationId: org.id },
+            const ownerMembership = await prisma.membership.findFirst({
+                where: { organizationId: org.id, role: "owner" },
                 select: { userId: true }
             });
-            if (!membership) {
+            if (!ownerMembership) {
                 return null;
             }
 
-            return { userId: membership.userId, organizationId: org.id };
+            return { userId: ownerMembership.userId, organizationId: org.id };
         };
 
         const validApiKey = process.env.MCP_API_KEY;
         if (validApiKey && apiKey === validApiKey) {
-            const configuredOrgSlug = process.env.MCP_API_ORGANIZATION_SLUG;
-            if (!configuredOrgSlug) {
+            const effectiveOrgSlug = orgSlugHeader || process.env.MCP_API_ORGANIZATION_SLUG;
+            if (!effectiveOrgSlug) {
                 console.error(
-                    "[MCP] MCP_API_KEY present but MCP_API_ORGANIZATION_SLUG not set. Rejected."
+                    "[MCP] MCP_API_KEY present but no org slug (header or env). Rejected."
                 );
                 return null;
             }
-            const context = await resolveOrgContext(configuredOrgSlug);
+            const context = await resolveOrgContext(effectiveOrgSlug);
             if (context) {
                 return context;
             }

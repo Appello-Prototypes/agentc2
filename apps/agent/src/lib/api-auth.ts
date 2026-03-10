@@ -76,22 +76,22 @@ export async function authenticateRequest(
             return { userId: ownerMembership.userId, organizationId: org.id };
         };
 
-        // Check against MCP_API_KEY env var (locked to its configured org only)
+        // Check against MCP_API_KEY env var (honors X-Organization-Slug header, falls back to env)
         const validApiKey = process.env.MCP_API_KEY;
         if (validApiKey && apiKey === validApiKey) {
             console.warn(
                 "[api-auth] DEPRECATED: Global MCP_API_KEY used for authentication. " +
                     "Migrate to per-org API keys via /api/organizations/[orgId]/mcp-api-key"
             );
-            const configuredOrgSlug = process.env.MCP_API_ORGANIZATION_SLUG;
-            if (!configuredOrgSlug) {
+            const effectiveOrgSlug = orgSlugHeader || process.env.MCP_API_ORGANIZATION_SLUG;
+            if (!effectiveOrgSlug) {
                 console.error(
-                    "[api-auth] MCP_API_KEY present but MCP_API_ORGANIZATION_SLUG not set. " +
+                    "[api-auth] MCP_API_KEY present but no org slug (header or env). " +
                         "Global API key rejected."
                 );
                 return null;
             }
-            const context = await resolveOrgContext(configuredOrgSlug);
+            const context = await resolveOrgContext(effectiveOrgSlug);
             if (context) return context;
         }
 

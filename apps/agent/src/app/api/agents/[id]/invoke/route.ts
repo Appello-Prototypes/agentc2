@@ -83,7 +83,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         if (authResult.response) {
             return authResult.response;
         }
-        const accessResult = await requireAgentAccess(authResult.context.organizationId, id, authResult.context.userId);
+        const accessResult = await requireAgentAccess(
+            authResult.context.organizationId,
+            id,
+            authResult.context.userId
+        );
         if (accessResult.response) {
             return accessResult.response;
         }
@@ -146,14 +150,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         };
 
         // Model routing (pre-resolve)
-        const { modelOverride: routedModelOverride } = await resolveModelOverride(
-            id,
-            input,
-            {
-                userId: authResult.context.userId,
-                organizationId: authResult.context.organizationId
-            }
-        );
+        const { modelOverride: routedModelOverride } = await resolveModelOverride(id, input, {
+            userId: authResult.context.userId,
+            organizationId: authResult.context.organizationId
+        });
 
         // Resolve agent from database
         let agent, record, source;
