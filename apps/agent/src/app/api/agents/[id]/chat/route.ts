@@ -183,6 +183,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             if (orgId || workspaceId) {
                 enrichedRequestContext = {
                     ...requestContext,
+                    userId: rawUserId,
                     ...(orgId ? { organizationId: orgId } : {}),
                     ...(workspaceId ? { workspaceId } : {})
                 };
