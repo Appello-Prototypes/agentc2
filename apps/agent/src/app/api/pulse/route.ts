@@ -77,7 +77,12 @@ export async function POST(request: NextRequest) {
             evalTimezone,
             evalWindowDays,
             reportConfig,
-            visibility
+            visibility,
+            scoreFunction,
+            scoreFunctionType,
+            scoreDirection,
+            targetScore,
+            settings
         } = body;
 
         if (!name || !goal) {
@@ -117,6 +122,11 @@ export async function POST(request: NextRequest) {
                 evalTimezone: evalTimezone ?? "America/Toronto",
                 evalWindowDays: evalWindowDays ?? 7,
                 reportConfig: reportConfig ?? null,
+                scoreFunction: scoreFunction ?? null,
+                scoreFunctionType: scoreFunctionType ?? "manual",
+                scoreDirection: scoreDirection ?? "higher",
+                targetScore: targetScore ?? null,
+                settings: settings ?? null,
                 createdBy: userId
             }
         });

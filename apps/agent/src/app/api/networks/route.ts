@@ -131,7 +131,10 @@ export async function POST(request: NextRequest) {
             }
         } else {
             const { getDefaultWorkspaceIdForUser } = await import("@/lib/organization");
-            workspaceId = await getDefaultWorkspaceIdForUser(authContext.userId, authContext.organizationId);
+            workspaceId = await getDefaultWorkspaceIdForUser(
+                authContext.userId,
+                authContext.organizationId
+            );
         }
 
         const network = await prisma.network.create({

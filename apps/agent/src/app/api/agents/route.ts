@@ -246,7 +246,8 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
         }
 
-        const workspaceId = body.workspaceId || (await getDefaultWorkspaceIdForUser(userId, organizationId));
+        const workspaceId =
+            body.workspaceId || (await getDefaultWorkspaceIdForUser(userId, organizationId));
         let orgIdForRbac = organizationId ?? null;
         if (!orgIdForRbac && workspaceId) {
             const workspace = await prisma.workspace.findUnique({

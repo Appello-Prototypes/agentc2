@@ -104,7 +104,10 @@ export async function POST(request: NextRequest) {
             }
 
             if (!resolvedWorkspaceId) {
-                resolvedWorkspaceId = await getDefaultWorkspaceIdForUser(session.user.id, userOrgId);
+                resolvedWorkspaceId = await getDefaultWorkspaceIdForUser(
+                    session.user.id,
+                    userOrgId
+                );
             }
 
             const buffer = Buffer.from(await file.arrayBuffer());

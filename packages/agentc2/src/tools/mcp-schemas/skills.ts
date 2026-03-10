@@ -198,17 +198,17 @@ export const skillToolDefinitions: McpToolDefinition[] = [
 ];
 
 export const skillToolRoutes: McpToolRoute[] = [
-    { kind: "registry", name: "skill-create" },
-    { kind: "registry", name: "skill-read" },
-    { kind: "registry", name: "skill-update" },
-    { kind: "registry", name: "skill-delete" },
-    { kind: "registry", name: "skill-list" },
-    { kind: "registry", name: "skill-attach-document" },
-    { kind: "registry", name: "skill-detach-document" },
-    { kind: "registry", name: "skill-attach-tool" },
-    { kind: "registry", name: "skill-detach-tool" },
-    { kind: "registry", name: "agent-attach-skill" },
-    { kind: "registry", name: "agent-skill-update" },
-    { kind: "registry", name: "agent-detach-skill" },
-    { kind: "registry", name: "skill-get-versions" }
+    { kind: "registry", name: "skill-create", enforceOrg: true, applyDefaults: true },
+    { kind: "registry", name: "skill-read", enforceOrg: true },
+    { kind: "registry", name: "skill-update", enforceOrg: true },
+    { kind: "registry", name: "skill-delete", enforceOrg: true },
+    { kind: "registry", name: "skill-list", enforceOrg: true },
+    { kind: "registry", name: "skill-attach-document", enforceOrg: true },
+    { kind: "registry", name: "skill-detach-document", enforceOrg: true },
+    { kind: "registry", name: "skill-attach-tool", enforceOrg: true },
+    { kind: "registry", name: "skill-detach-tool", enforceOrg: true },
+    { kind: "registry", name: "agent-attach-skill", enforceOrg: true },
+    { kind: "registry", name: "agent-skill-update", enforceOrg: true },
+    { kind: "registry", name: "agent-detach-skill", enforceOrg: true },
+    { kind: "registry", name: "skill-get-versions", enforceOrg: true }
 ];

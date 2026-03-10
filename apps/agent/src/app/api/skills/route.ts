@@ -65,7 +65,9 @@ export async function POST(request: NextRequest) {
         }
 
         const workspaceId =
-            body.workspaceId || (await getDefaultWorkspaceIdForUser(authCtx.userId, authCtx.organizationId)) || undefined;
+            body.workspaceId ||
+            (await getDefaultWorkspaceIdForUser(authCtx.userId, authCtx.organizationId)) ||
+            undefined;
 
         const input: CreateSkillInput = {
             slug,

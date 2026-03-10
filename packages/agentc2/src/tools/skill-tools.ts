@@ -1,12 +1,29 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
+import { prisma } from "@repo/database";
 
 const baseOutputSchema = z.object({ success: z.boolean().optional() }).passthrough();
 
 const getInternalBaseUrl = () =>
     process.env.MASTRA_API_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
 
-const buildHeaders = () => {
+const orgSlugCache = new Map<string, string>();
+
+const resolveOrgSlug = async (organizationId: string): Promise<string | undefined> => {
+    const cached = orgSlugCache.get(organizationId);
+    if (cached) return cached;
+    const org = await prisma.organization.findUnique({
+        where: { id: organizationId },
+        select: { slug: true }
+    });
+    if (org?.slug) {
+        orgSlugCache.set(organizationId, org.slug);
+        return org.slug;
+    }
+    return undefined;
+};
+
+const buildHeaders = (orgSlugOverride?: string) => {
     const headers: Record<string, string> = {
         "Content-Type": "application/json"
     };
@@ -14,7 +31,10 @@ const buildHeaders = () => {
     if (apiKey) {
         headers["X-API-Key"] = apiKey;
     }
-    const orgSlug = process.env.MASTRA_ORGANIZATION_SLUG || process.env.MCP_API_ORGANIZATION_SLUG;
+    const orgSlug =
+        orgSlugOverride ||
+        process.env.MASTRA_ORGANIZATION_SLUG ||
+        process.env.MCP_API_ORGANIZATION_SLUG;
     if (orgSlug) {
         headers["X-Organization-Slug"] = orgSlug;
     }
@@ -27,6 +47,7 @@ const callInternalApi = async (
         method?: string;
         query?: Record<string, unknown>;
         body?: Record<string, unknown>;
+        organizationId?: string;
     }
 ) => {
     const url = new URL(path, getInternalBaseUrl());
@@ -38,9 +59,13 @@ const callInternalApi = async (
         });
     }
 
+    const orgSlug = options?.organizationId
+        ? await resolveOrgSlug(options.organizationId)
+        : undefined;
+
     const response = await fetch(url.toString(), {
         method: options?.method ?? "GET",
-        headers: buildHeaders(),
+        headers: buildHeaders(orgSlug),
         body: options?.body ? JSON.stringify(options.body) : undefined
     });
     const data = await response.json();
@@ -65,6 +90,7 @@ export const skillCreateTool = createTool({
         category: z.string().optional(),
         tags: z.array(z.string()).optional(),
         metadata: z.record(z.unknown()).optional().describe("Additional metadata"),
+        organizationId: z.string().optional(),
         workspaceId: z.string().optional(),
         type: z.literal("USER").optional(),
         createdBy: z.string().optional()
@@ -79,6 +105,7 @@ export const skillCreateTool = createTool({
         category,
         tags,
         metadata,
+        organizationId,
         workspaceId,
         type,
         createdBy
@@ -97,7 +124,8 @@ export const skillCreateTool = createTool({
                 workspaceId,
                 type,
                 createdBy
-            }
+            },
+            organizationId
         });
     }
 });
@@ -106,11 +134,12 @@ export const skillReadTool = createTool({
     id: "skill-read",
     description: "Read a skill by ID or slug with its documents and tools.",
     inputSchema: z.object({
-        skillId: z.string()
+        skillId: z.string(),
+        organizationId: z.string().optional()
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ skillId }) => {
-        return callInternalApi(`/api/skills/${encodeURIComponent(skillId)}`);
+    execute: async ({ skillId, organizationId }) => {
+        return callInternalApi(`/api/skills/${encodeURIComponent(skillId)}`, { organizationId });
     }
 });
 
@@ -127,13 +156,15 @@ export const skillUpdateTool = createTool({
         tags: z.array(z.string()).optional(),
         changeSummary: z.string().optional(),
         metadata: z.record(z.unknown()).optional().describe("Additional metadata"),
+        organizationId: z.string().optional(),
         createdBy: z.string().optional()
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ skillId, ...body }) => {
+    execute: async ({ skillId, organizationId, ...body }) => {
         return callInternalApi(`/api/skills/${encodeURIComponent(skillId)}`, {
             method: "PUT",
-            body
+            body,
+            organizationId
         });
     }
 });
@@ -142,12 +173,14 @@ export const skillDeleteTool = createTool({
     id: "skill-delete",
     description: "Delete a skill.",
     inputSchema: z.object({
-        skillId: z.string()
+        skillId: z.string(),
+        organizationId: z.string().optional()
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ skillId }) => {
+    execute: async ({ skillId, organizationId }) => {
         return callInternalApi(`/api/skills/${encodeURIComponent(skillId)}`, {
-            method: "DELETE"
+            method: "DELETE",
+            organizationId
         });
     }
 });
@@ -159,14 +192,16 @@ export const skillListTool = createTool({
         category: z.string().optional(),
         tags: z.string().optional(),
         type: z.literal("USER").optional(),
+        organizationId: z.string().optional(),
         workspaceId: z.string().optional(),
         skip: z.number().optional().describe("Pagination offset"),
         take: z.number().optional().describe("Page size")
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ category, tags, type, workspaceId, skip, take }) => {
+    execute: async ({ category, tags, type, organizationId, workspaceId, skip, take }) => {
         return callInternalApi("/api/skills", {
-            query: { category, tags, type, workspaceId, skip, take }
+            query: { category, tags, type, workspaceId, skip, take },
+            organizationId
         });
     }
 });
@@ -177,13 +212,15 @@ export const skillAttachDocumentTool = createTool({
     inputSchema: z.object({
         skillId: z.string(),
         documentId: z.string(),
-        role: z.string().optional().describe("reference, procedure, example, or context")
+        role: z.string().optional().describe("reference, procedure, example, or context"),
+        organizationId: z.string().optional()
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ skillId, documentId, role }) => {
+    execute: async ({ skillId, documentId, role, organizationId }) => {
         return callInternalApi(`/api/skills/${encodeURIComponent(skillId)}/documents`, {
             method: "POST",
-            body: { documentId, role }
+            body: { documentId, role },
+            organizationId
         });
     }
 });
@@ -193,13 +230,15 @@ export const skillDetachDocumentTool = createTool({
     description: "Detach a document from a skill.",
     inputSchema: z.object({
         skillId: z.string(),
-        documentId: z.string()
+        documentId: z.string(),
+        organizationId: z.string().optional()
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ skillId, documentId }) => {
+    execute: async ({ skillId, documentId, organizationId }) => {
         return callInternalApi(`/api/skills/${encodeURIComponent(skillId)}/documents`, {
             method: "DELETE",
-            body: { documentId }
+            body: { documentId },
+            organizationId
         });
     }
 });
@@ -209,13 +248,15 @@ export const skillAttachToolTool = createTool({
     description: "Attach a tool to a skill.",
     inputSchema: z.object({
         skillId: z.string(),
-        toolId: z.string()
+        toolId: z.string(),
+        organizationId: z.string().optional()
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ skillId, toolId }) => {
+    execute: async ({ skillId, toolId, organizationId }) => {
         return callInternalApi(`/api/skills/${encodeURIComponent(skillId)}/tools`, {
             method: "POST",
-            body: { toolId }
+            body: { toolId },
+            organizationId
         });
     }
 });
@@ -225,13 +266,15 @@ export const skillDetachToolTool = createTool({
     description: "Detach a tool from a skill.",
     inputSchema: z.object({
         skillId: z.string(),
-        toolId: z.string()
+        toolId: z.string(),
+        organizationId: z.string().optional()
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ skillId, toolId }) => {
+    execute: async ({ skillId, toolId, organizationId }) => {
         return callInternalApi(`/api/skills/${encodeURIComponent(skillId)}/tools`, {
             method: "DELETE",
-            body: { toolId }
+            body: { toolId },
+            organizationId
         });
     }
 });
@@ -248,13 +291,15 @@ export const agentAttachSkillTool = createTool({
             .optional()
             .describe(
                 "Pin the skill (tools injected directly) vs discoverable (via meta-tools). Default: true."
-            )
+            ),
+        organizationId: z.string().optional()
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ agentId, skillId, pinned }) => {
+    execute: async ({ agentId, skillId, pinned, organizationId }) => {
         return callInternalApi(`/api/agents/${encodeURIComponent(agentId)}/skills`, {
             method: "POST",
-            body: { skillId, ...(pinned !== undefined ? { pinned } : {}) }
+            body: { skillId, ...(pinned !== undefined ? { pinned } : {}) },
+            organizationId
         });
     }
 });
@@ -268,13 +313,15 @@ export const agentSkillUpdateTool = createTool({
         skillId: z.string(),
         pinned: z
             .boolean()
-            .describe("Pin the skill (tools injected directly) vs discoverable (via meta-tools).")
+            .describe("Pin the skill (tools injected directly) vs discoverable (via meta-tools)."),
+        organizationId: z.string().optional()
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ agentId, skillId, pinned }) => {
+    execute: async ({ agentId, skillId, pinned, organizationId }) => {
         return callInternalApi(`/api/agents/${encodeURIComponent(agentId)}/skills`, {
             method: "PATCH",
-            body: { skillId, pinned }
+            body: { skillId, pinned },
+            organizationId
         });
     }
 });
@@ -284,13 +331,15 @@ export const agentDetachSkillTool = createTool({
     description: "Detach a skill from an agent.",
     inputSchema: z.object({
         agentId: z.string(),
-        skillId: z.string()
+        skillId: z.string(),
+        organizationId: z.string().optional()
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ agentId, skillId }) => {
+    execute: async ({ agentId, skillId, organizationId }) => {
         return callInternalApi(`/api/agents/${encodeURIComponent(agentId)}/skills`, {
             method: "DELETE",
-            body: { skillId }
+            body: { skillId },
+            organizationId
         });
     }
 });
@@ -299,10 +348,13 @@ export const skillGetVersionsTool = createTool({
     id: "skill-get-versions",
     description: "Get version history for a skill.",
     inputSchema: z.object({
-        skillId: z.string()
+        skillId: z.string(),
+        organizationId: z.string().optional()
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ skillId }) => {
-        return callInternalApi(`/api/skills/${encodeURIComponent(skillId)}/versions`);
+    execute: async ({ skillId, organizationId }) => {
+        return callInternalApi(`/api/skills/${encodeURIComponent(skillId)}/versions`, {
+            organizationId
+        });
     }
 });

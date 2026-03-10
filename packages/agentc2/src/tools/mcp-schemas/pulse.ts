@@ -97,6 +97,35 @@ export const pulseToolDefinitions: McpToolDefinition[] = [
                         authorMemberRole: { type: "string" },
                         category: { type: "string" }
                     }
+                },
+                scoreFunction: {
+                    type: "string",
+                    description:
+                        "Description of the single number that measures goal progress (e.g., 'Number of page-1 keywords')"
+                },
+                scoreFunctionType: {
+                    type: "string",
+                    enum: [
+                        "manual",
+                        "milestone_completion",
+                        "task_completion",
+                        "community_activity"
+                    ],
+                    description:
+                        "How the score is computed. manual = God Agent measures it; others are auto-computed"
+                },
+                scoreDirection: {
+                    type: "string",
+                    enum: ["higher", "lower"],
+                    description: "Whether higher or lower score values are better"
+                },
+                targetScore: {
+                    type: "number",
+                    description: "Target score value to reach"
+                },
+                settings: {
+                    type: "object",
+                    description: "General Pulse settings including reviewConfig and godAgentConfig"
                 }
             },
             required: ["name", "goal"]
@@ -134,7 +163,20 @@ export const pulseToolDefinitions: McpToolDefinition[] = [
                 evalCronExpr: { type: "string" },
                 evalTimezone: { type: "string" },
                 evalWindowDays: { type: "number" },
-                reportConfig: { type: "object" }
+                reportConfig: { type: "object" },
+                scoreFunction: { type: "string" },
+                scoreFunctionType: {
+                    type: "string",
+                    enum: [
+                        "manual",
+                        "milestone_completion",
+                        "task_completion",
+                        "community_activity"
+                    ]
+                },
+                scoreDirection: { type: "string", enum: ["higher", "lower"] },
+                targetScore: { type: "number" },
+                settings: { type: "object" }
             },
             required: ["pulseId"]
         },
@@ -248,6 +290,189 @@ export const pulseToolDefinitions: McpToolDefinition[] = [
         },
         invoke_url: "/api/mcp",
         category: "pulse"
+    },
+    {
+        name: "pulse-create-milestone",
+        description:
+            "Create a milestone for a Pulse with a target metric, target value, and optional due date.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                pulseId: { type: "string", description: "Pulse ID" },
+                title: { type: "string", description: "Milestone title" },
+                description: { type: "string", description: "Milestone description" },
+                targetMetric: {
+                    type: "string",
+                    description: "What metric this milestone tracks"
+                },
+                targetValue: { type: "number", description: "Target value for completion" },
+                dueDate: {
+                    type: "string",
+                    description: "Due date in ISO 8601 format"
+                },
+                sortOrder: { type: "number", description: "Display order (default: 0)" }
+            },
+            required: ["pulseId", "title"]
+        },
+        invoke_url: "/api/mcp",
+        category: "pulse"
+    },
+    {
+        name: "pulse-update-milestone",
+        description: "Update a milestone's status, current value, or other fields.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                pulseId: { type: "string", description: "Pulse ID" },
+                milestoneId: { type: "string", description: "Milestone ID" },
+                title: { type: "string" },
+                description: { type: "string" },
+                status: {
+                    type: "string",
+                    enum: ["pending", "in_progress", "completed", "blocked"],
+                    description: "Milestone status"
+                },
+                currentValue: { type: "number", description: "Current progress value" },
+                targetValue: { type: "number" },
+                targetMetric: { type: "string" },
+                dueDate: { type: "string" }
+            },
+            required: ["pulseId", "milestoneId"]
+        },
+        invoke_url: "/api/mcp",
+        category: "pulse"
+    },
+    {
+        name: "pulse-list-milestones",
+        description: "List all milestones for a Pulse with their progress status.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                pulseId: { type: "string", description: "Pulse ID" },
+                status: {
+                    type: "string",
+                    enum: ["pending", "in_progress", "completed", "blocked"],
+                    description: "Filter by status"
+                }
+            },
+            required: ["pulseId"]
+        },
+        invoke_url: "/api/mcp",
+        category: "pulse"
+    },
+    {
+        name: "pulse-assign-task",
+        description:
+            "Assign a community post as a task to an agent with a status, optional deadline, and optional milestone link.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                postId: { type: "string", description: "Community post ID to assign as task" },
+                assignedAgentId: { type: "string", description: "Agent ID to assign to" },
+                taskStatus: {
+                    type: "string",
+                    enum: ["open", "in_progress", "done", "blocked"],
+                    description: "Task status (default: open)"
+                },
+                dueDate: { type: "string", description: "Due date in ISO 8601 format" },
+                milestoneId: {
+                    type: "string",
+                    description: "Link task to a milestone"
+                }
+            },
+            required: ["postId", "assignedAgentId"]
+        },
+        invoke_url: "/api/mcp",
+        category: "pulse"
+    },
+    {
+        name: "pulse-update-task-status",
+        description: "Update the status of a task (community post with task fields).",
+        inputSchema: {
+            type: "object",
+            properties: {
+                postId: { type: "string", description: "Community post ID" },
+                taskStatus: {
+                    type: "string",
+                    enum: ["open", "in_progress", "done", "blocked"],
+                    description: "New task status"
+                }
+            },
+            required: ["postId", "taskStatus"]
+        },
+        invoke_url: "/api/mcp",
+        category: "pulse"
+    },
+    {
+        name: "pulse-update-score",
+        description:
+            "Update the current score for a Pulse and append to score history. Used by the God Agent to record score measurements.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                pulseId: { type: "string", description: "Pulse ID" },
+                score: { type: "number", description: "New score value" },
+                notes: {
+                    type: "string",
+                    description: "Notes about this score measurement"
+                },
+                source: {
+                    type: "string",
+                    description: "Source of the measurement (e.g. 'manual', 'auto', 'god-agent')"
+                }
+            },
+            required: ["pulseId", "score"]
+        },
+        invoke_url: "/api/mcp",
+        category: "pulse"
+    },
+    {
+        name: "pulse-log-experiment",
+        description:
+            "Log a structured experiment result to the experiment-log board. Creates a community post with structured metadata for querying. Every experiment (keep, discard, or crash) must be logged.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                pulseId: { type: "string", description: "Pulse ID" },
+                boardId: {
+                    type: "string",
+                    description: "Experiment-log board ID"
+                },
+                agentSlug: {
+                    type: "string",
+                    description: "Slug of the agent that ran the experiment"
+                },
+                agentId: {
+                    type: "string",
+                    description: "ID of the agent that ran the experiment"
+                },
+                scoreDelta: {
+                    type: "number",
+                    description: "Score change from this experiment (positive = improvement)"
+                },
+                status: {
+                    type: "string",
+                    enum: ["keep", "discard", "crash"],
+                    description: "Experiment outcome"
+                },
+                hypothesis: {
+                    type: "string",
+                    description: "What was being tested"
+                },
+                result: {
+                    type: "string",
+                    description: "What happened"
+                },
+                constraintSuggestion: {
+                    type: "string",
+                    description:
+                        "For discard/crash: suggested constraint to prevent this failure pattern"
+                }
+            },
+            required: ["pulseId", "boardId", "agentSlug", "status", "hypothesis", "result"]
+        },
+        invoke_url: "/api/mcp",
+        category: "pulse"
     }
 ];
 
@@ -273,7 +498,12 @@ export const pulseToolRoutes: McpToolRoute[] = [
             "evalCronExpr",
             "evalTimezone",
             "evalWindowDays",
-            "reportConfig"
+            "reportConfig",
+            "scoreFunction",
+            "scoreFunctionType",
+            "scoreDirection",
+            "targetScore",
+            "settings"
         ]
     },
     {
@@ -299,7 +529,12 @@ export const pulseToolRoutes: McpToolRoute[] = [
             "evalCronExpr",
             "evalTimezone",
             "evalWindowDays",
-            "reportConfig"
+            "reportConfig",
+            "scoreFunction",
+            "scoreFunctionType",
+            "scoreDirection",
+            "targetScore",
+            "settings"
         ]
     },
     {
@@ -353,5 +588,78 @@ export const pulseToolRoutes: McpToolRoute[] = [
         path: "/api/pulse/{pulseId}/evaluations",
         pathParams: ["pulseId"],
         queryParams: ["limit", "offset"]
+    },
+    {
+        kind: "internal",
+        name: "pulse-create-milestone",
+        method: "POST",
+        path: "/api/pulse/{pulseId}/milestones",
+        pathParams: ["pulseId"],
+        bodyParams: ["title", "description", "targetMetric", "targetValue", "dueDate", "sortOrder"]
+    },
+    {
+        kind: "internal",
+        name: "pulse-update-milestone",
+        method: "PUT",
+        path: "/api/pulse/{pulseId}/milestones/{milestoneId}",
+        pathParams: ["pulseId", "milestoneId"],
+        bodyParams: [
+            "title",
+            "description",
+            "status",
+            "currentValue",
+            "targetValue",
+            "targetMetric",
+            "dueDate"
+        ]
+    },
+    {
+        kind: "internal",
+        name: "pulse-list-milestones",
+        method: "GET",
+        path: "/api/pulse/{pulseId}/milestones",
+        pathParams: ["pulseId"],
+        queryParams: ["status"]
+    },
+    {
+        kind: "internal",
+        name: "pulse-assign-task",
+        method: "POST",
+        path: "/api/pulse/{pulseId}/tasks/assign",
+        pathParams: ["pulseId"],
+        bodyParams: ["postId", "assignedAgentId", "taskStatus", "dueDate", "milestoneId"]
+    },
+    {
+        kind: "internal",
+        name: "pulse-update-task-status",
+        method: "PUT",
+        path: "/api/pulse/{pulseId}/tasks/status",
+        pathParams: ["pulseId"],
+        bodyParams: ["postId", "taskStatus"]
+    },
+    {
+        kind: "internal",
+        name: "pulse-update-score",
+        method: "POST",
+        path: "/api/pulse/{pulseId}/score",
+        pathParams: ["pulseId"],
+        bodyParams: ["score", "notes", "source"]
+    },
+    {
+        kind: "internal",
+        name: "pulse-log-experiment",
+        method: "POST",
+        path: "/api/pulse/{pulseId}/experiment-log",
+        pathParams: ["pulseId"],
+        bodyParams: [
+            "boardId",
+            "agentSlug",
+            "agentId",
+            "scoreDelta",
+            "status",
+            "hypothesis",
+            "result",
+            "constraintSuggestion"
+        ]
     }
 ];

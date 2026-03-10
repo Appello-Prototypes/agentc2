@@ -14,7 +14,23 @@ const baseOutputSchema = z.object({}).passthrough();
 const getInternalBaseUrl = () =>
     process.env.MASTRA_API_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
 
-const buildHeaders = () => {
+const orgSlugCache = new Map<string, string>();
+
+const resolveOrgSlug = async (organizationId: string): Promise<string | undefined> => {
+    const cached = orgSlugCache.get(organizationId);
+    if (cached) return cached;
+    const org = await prisma.organization.findUnique({
+        where: { id: organizationId },
+        select: { slug: true }
+    });
+    if (org?.slug) {
+        orgSlugCache.set(organizationId, org.slug);
+        return org.slug;
+    }
+    return undefined;
+};
+
+const buildHeaders = (orgSlugOverride?: string) => {
     const headers: Record<string, string> = {
         "Content-Type": "application/json"
     };
@@ -22,7 +38,10 @@ const buildHeaders = () => {
     if (apiKey) {
         headers["X-API-Key"] = apiKey;
     }
-    const orgSlug = process.env.MASTRA_ORGANIZATION_SLUG || process.env.MCP_API_ORGANIZATION_SLUG;
+    const orgSlug =
+        orgSlugOverride ||
+        process.env.MASTRA_ORGANIZATION_SLUG ||
+        process.env.MCP_API_ORGANIZATION_SLUG;
     if (orgSlug) {
         headers["X-Organization-Slug"] = orgSlug;
     }
@@ -35,6 +54,7 @@ const callInternalApi = async (
         method?: string;
         query?: Record<string, unknown>;
         body?: Record<string, unknown>;
+        organizationId?: string;
     }
 ) => {
     const url = new URL(path, getInternalBaseUrl());
@@ -46,9 +66,13 @@ const callInternalApi = async (
         });
     }
 
+    const orgSlug = options?.organizationId
+        ? await resolveOrgSlug(options.organizationId)
+        : undefined;
+
     const response = await fetch(url.toString(), {
         method: options?.method ?? "GET",
-        headers: buildHeaders(),
+        headers: buildHeaders(orgSlug),
         body: options?.body ? JSON.stringify(options.body) : undefined
     });
     const data = await response.json();
@@ -99,7 +123,8 @@ export const campaignCreateTool = createTool({
         parentCampaignId: z
             .string()
             .optional()
-            .describe("Parent campaign ID for sub-campaign hierarchy (max depth 3)")
+            .describe("Parent campaign ID for sub-campaign hierarchy (max depth 3)"),
+        organizationId: z.string().optional()
     }),
     outputSchema: baseOutputSchema,
     execute: async ({
@@ -114,7 +139,8 @@ export const campaignCreateTool = createTool({
         timeoutMinutes,
         templateId,
         parameterValues,
-        parentCampaignId
+        parentCampaignId,
+        organizationId
     }) => {
         return callInternalApi("/api/campaigns", {
             method: "POST",
@@ -131,7 +157,8 @@ export const campaignCreateTool = createTool({
                 templateId,
                 parameterValues,
                 parentCampaignId
-            }
+            },
+            organizationId
         });
     }
 });
@@ -155,12 +182,14 @@ export const campaignListTool = createTool({
             .optional()
             .describe("Filter by campaign status"),
         limit: z.number().optional().describe("Max results per page (default: 50)"),
-        offset: z.number().optional().describe("Pagination offset (default: 0)")
+        offset: z.number().optional().describe("Pagination offset (default: 0)"),
+        organizationId: z.string().optional()
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ status, limit, offset }) => {
+    execute: async ({ status, limit, offset, organizationId }) => {
         return callInternalApi("/api/campaigns", {
-            query: { status, limit, offset }
+            query: { status, limit, offset },
+            organizationId
         });
     }
 });
@@ -170,11 +199,12 @@ export const campaignGetTool = createTool({
     description:
         "Get full campaign details including missions, tasks, evaluations, After Action Reviews, and activity logs.",
     inputSchema: z.object({
-        campaignId: z.string().describe("Campaign ID")
+        campaignId: z.string().describe("Campaign ID"),
+        organizationId: z.string().optional()
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ campaignId }) => {
-        return callInternalApi(`/api/campaigns/${campaignId}`);
+    execute: async ({ campaignId, organizationId }) => {
+        return callInternalApi(`/api/campaigns/${campaignId}`, { organizationId });
     }
 });
 
@@ -196,7 +226,8 @@ export const campaignUpdateTool = createTool({
         restraints: z.array(z.string()).optional().describe("Update restraints"),
         requireApproval: z.boolean().optional().describe("Update approval requirement"),
         maxCostUsd: z.number().optional().describe("Update cost budget"),
-        timeoutMinutes: z.number().optional().describe("Update timeout")
+        timeoutMinutes: z.number().optional().describe("Update timeout"),
+        organizationId: z.string().optional()
     }),
     outputSchema: baseOutputSchema,
     execute: async ({
@@ -210,7 +241,8 @@ export const campaignUpdateTool = createTool({
         restraints,
         requireApproval,
         maxCostUsd,
-        timeoutMinutes
+        timeoutMinutes,
+        organizationId
     }) => {
         const body: Record<string, unknown> = {};
         if (action) body.action = action;
@@ -226,7 +258,8 @@ export const campaignUpdateTool = createTool({
 
         return callInternalApi(`/api/campaigns/${campaignId}`, {
             method: "PATCH",
-            body
+            body,
+            organizationId
         });
     }
 });
@@ -236,12 +269,14 @@ export const campaignDeleteTool = createTool({
     description:
         "Delete a campaign and all related data (missions, tasks, logs). Cannot delete campaigns in EXECUTING status — cancel first.",
     inputSchema: z.object({
-        campaignId: z.string().describe("Campaign ID")
+        campaignId: z.string().describe("Campaign ID"),
+        organizationId: z.string().optional()
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ campaignId }) => {
+    execute: async ({ campaignId, organizationId }) => {
         return callInternalApi(`/api/campaigns/${campaignId}`, {
-            method: "DELETE"
+            method: "DELETE",
+            organizationId
         });
     }
 });

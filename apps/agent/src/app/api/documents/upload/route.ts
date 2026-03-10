@@ -153,7 +153,8 @@ export async function POST(request: NextRequest) {
         }
 
         const organizationId = await getUserOrganizationId(userId);
-        const workspaceId = (await getDefaultWorkspaceIdForUser(userId, organizationId)) || undefined;
+        const workspaceId =
+            (await getDefaultWorkspaceIdForUser(userId, organizationId)) || undefined;
 
         // --- Create document via existing service ---
         const input: CreateDocumentInput = {

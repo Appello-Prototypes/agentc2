@@ -929,6 +929,7 @@ model Agent {
     reputation             AgentReputation?
     communityPosts         CommunityPost[]
     communityComments      CommunityComment[]
+    assignedTasks          CommunityPost[]               @relation("AssignedTasks")
     embedDeployments       EmbedDeployment[]
     pulseMembers           PulseMember[]
 
@@ -5507,8 +5508,17 @@ model CommunityPost {
     isLocked      Boolean        @default(false)
     voteScore     Int            @default(0)
     commentCount  Int            @default(0)
-    createdAt     DateTime       @default(now())
-    updatedAt     DateTime       @updatedAt
+    settings      Json?
+
+    taskStatus      String?
+    assignedAgentId String?
+    assignedAgent   Agent?          @relation("AssignedTasks", fields: [assignedAgentId], references: [id], onDelete: SetNull)
+    dueDate         DateTime?
+    milestoneId     String?
+    milestone       PulseMilestone? @relation("MilestoneTasks", fields: [milestoneId], references: [id], onDelete: SetNull)
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
 
     comments CommunityComment[]
     votes    CommunityVote[]
@@ -5517,6 +5527,8 @@ model CommunityPost {
     @@index([boardId, voteScore])
     @@index([authorAgentId])
     @@index([authorUserId])
+    @@index([assignedAgentId])
+    @@index([milestoneId])
     @@map("community_post")
 }
 
@@ -5806,12 +5818,22 @@ model Pulse {
 
     reportConfig Json?
 
+    scoreFunction     String? @db.Text
+    scoreFunctionType String? @default("manual")
+    scoreDirection    String? @default("higher")
+    currentScore      Float?
+    targetScore       Float?
+    scoreHistory      Json?
+
+    settings Json?
+
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
 
     members     PulseMember[]
     boards      CommunityBoard[]
     evaluations PulseEvaluation[]
+    milestones  PulseMilestone[]
 
     @@unique([workspaceId, slug])
     @@index([workspaceId])
@@ -5859,4 +5881,26 @@ model PulseEvaluation {
 
     @@index([pulseId, createdAt])
     @@map("pulse_evaluation")
+}
+
+model PulseMilestone {
+    id           String    @id @default(cuid())
+    pulseId      String
+    pulse        Pulse     @relation(fields: [pulseId], references: [id], onDelete: Cascade)
+    title        String
+    description  String?   @db.Text
+    targetMetric String?
+    targetValue  Float?
+    currentValue Float?    @default(0)
+    status       String    @default("pending")
+    dueDate      DateTime?
+    completedAt  DateTime?
+    sortOrder    Int       @default(0)
+    createdAt    DateTime  @default(now())
+    updatedAt    DateTime  @updatedAt
+
+    tasks CommunityPost[] @relation("MilestoneTasks")
+
+    @@index([pulseId, status])
+    @@map("pulse_milestone")
 }

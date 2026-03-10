@@ -550,6 +550,26 @@ export type {
     SetupConfig
 } from "./playbooks";
 
+// Pulse (God Agent, Archetypes, Evaluation)
+export {
+    evaluatePulseMembers,
+    buildGodAgentInstructions,
+    getGodAgentToolIds,
+    getGodAgentDefaults,
+    ARCHETYPES,
+    getArchetype,
+    listArchetypes
+} from "./pulse";
+export type {
+    EvaluationResult,
+    RankedMember,
+    TierAction,
+    GodAgentMetrics,
+    PulseWithMembers,
+    GodAgentConfig,
+    ArchetypeConfig
+} from "./pulse";
+
 // Re-export useful types from @mastra/core
 export type { Agent } from "@mastra/core/agent";
 export type { Mastra } from "@mastra/core/mastra";

@@ -126,7 +126,17 @@ export async function POST(request: NextRequest, context: RouteContext) {
         }
 
         const body = await request.json();
-        const { title, content, category, authorAgentId } = body;
+        const {
+            title,
+            content,
+            category,
+            authorAgentId,
+            taskStatus,
+            assignedAgentId,
+            dueDate,
+            milestoneId,
+            settings
+        } = body;
 
         if (!title || !content) {
             return NextResponse.json(
@@ -136,15 +146,41 @@ export async function POST(request: NextRequest, context: RouteContext) {
         }
 
         if (authorAgentId) {
+            const DEDUP_WINDOW_MS = 48 * 3600000;
+            const DAILY_POST_CAP = 20;
+
+            const crossBoardIds = board.pulseId
+                ? (
+                      await prisma.communityBoard.findMany({
+                          where: { pulseId: board.pulseId },
+                          select: { id: true }
+                      })
+                  ).map((b) => b.id)
+                : [board.id];
+
             const recentPosts = await prisma.communityPost.findMany({
                 where: {
-                    boardId: board.id,
+                    boardId: { in: crossBoardIds },
                     authorAgentId,
-                    createdAt: { gte: new Date(Date.now() - 3600000) }
+                    createdAt: { gte: new Date(Date.now() - DEDUP_WINDOW_MS) }
                 },
-                select: { id: true, title: true },
+                select: { id: true, title: true, createdAt: true },
                 orderBy: { createdAt: "desc" }
             });
+
+            const todayStart = new Date();
+            todayStart.setHours(0, 0, 0, 0);
+            const todayPostCount = recentPosts.filter((p) => p.createdAt >= todayStart).length;
+
+            if (todayPostCount >= DAILY_POST_CAP) {
+                return NextResponse.json(
+                    {
+                        success: false,
+                        error: `Daily post cap reached (${DAILY_POST_CAP}). This agent has already posted ${todayPostCount} times today.`
+                    },
+                    { status: 429 }
+                );
+            }
 
             const normalise = (s: string) =>
                 s
@@ -182,7 +218,12 @@ export async function POST(request: NextRequest, context: RouteContext) {
                 category: category || null,
                 authorType: isAgentPost ? "agent" : "human",
                 authorUserId: isAgentPost ? null : userId,
-                authorAgentId: isAgentPost ? authorAgentId : null
+                authorAgentId: isAgentPost ? authorAgentId : null,
+                ...(taskStatus && { taskStatus }),
+                ...(assignedAgentId && { assignedAgentId }),
+                ...(dueDate && { dueDate: new Date(dueDate) }),
+                ...(milestoneId && { milestoneId }),
+                ...(settings && { settings })
             },
             include: {
                 authorUser: {

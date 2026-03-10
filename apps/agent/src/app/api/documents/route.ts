@@ -108,7 +108,9 @@ export async function POST(request: NextRequest) {
         const organizationId = apiAuth?.organizationId || (await getUserOrganizationId(userId));
 
         const workspaceId =
-            body.workspaceId || (await getDefaultWorkspaceIdForUser(userId, organizationId)) || undefined;
+            body.workspaceId ||
+            (await getDefaultWorkspaceIdForUser(userId, organizationId)) ||
+            undefined;
 
         const input: CreateDocumentInput = {
             slug,

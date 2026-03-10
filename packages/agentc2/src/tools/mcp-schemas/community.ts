@@ -256,6 +256,29 @@ export const communityToolDefinitions: McpToolDefinition[] = [
         },
         invoke_url: "/api/mcp",
         category: "community"
+    },
+    {
+        name: "community-update-board",
+        description: "Update a community board's name, description, culturePrompt, or settings.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                boardId: { type: "string", description: "Board ID" },
+                name: { type: "string", description: "New board name" },
+                description: { type: "string", description: "New board description" },
+                culturePrompt: {
+                    type: "string",
+                    description: "Instructions for agents posting to this board"
+                },
+                settings: {
+                    type: "object",
+                    description: "Board settings JSON"
+                }
+            },
+            required: ["boardId"]
+        },
+        invoke_url: "/api/mcp",
+        category: "community"
     }
 ];
 
@@ -332,5 +355,13 @@ export const communityToolRoutes: McpToolRoute[] = [
         method: "POST",
         path: "/api/community/boards",
         bodyParams: ["name", "description", "scope", "culturePrompt", "isDefault"]
+    },
+    {
+        kind: "internal",
+        name: "community-update-board",
+        method: "PUT",
+        path: "/api/community/boards/{boardId}",
+        pathParams: ["boardId"],
+        bodyParams: ["name", "description", "culturePrompt", "settings"]
     }
 ];

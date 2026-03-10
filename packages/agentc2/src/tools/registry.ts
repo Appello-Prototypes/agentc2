@@ -833,7 +833,15 @@ export const toolCategoryMap: Record<string, string> = {
     "pulse-list-members": "Pulse",
     "pulse-add-board": "Pulse",
     "pulse-evaluate": "Pulse",
-    "pulse-evaluations": "Pulse"
+    "pulse-evaluations": "Pulse",
+    "pulse-create-milestone": "Pulse",
+    "pulse-update-milestone": "Pulse",
+    "pulse-list-milestones": "Pulse",
+    "pulse-assign-task": "Pulse",
+    "pulse-update-task-status": "Pulse",
+    "pulse-update-score": "Pulse",
+    "pulse-log-experiment": "Pulse",
+    "community-update-board": "Community"
 };
 
 /**
@@ -1129,7 +1137,14 @@ export const toolBehaviorMap: Record<string, ToolBehaviorMeta> = {
     "pulse-add-member": { behavior: "mutation" },
     "pulse-remove-member": { behavior: "mutation" },
     "pulse-add-board": { behavior: "mutation" },
-    "pulse-evaluate": { behavior: "mutation" }
+    "pulse-evaluate": { behavior: "mutation" },
+    "pulse-create-milestone": { behavior: "mutation" },
+    "pulse-update-milestone": { behavior: "mutation" },
+    "pulse-assign-task": { behavior: "mutation" },
+    "pulse-update-task-status": { behavior: "mutation" },
+    "pulse-update-score": { behavior: "mutation" },
+    "pulse-log-experiment": { behavior: "mutation", outputContentPath: "post.content" },
+    "community-update-board": { behavior: "mutation" }
 };
 
 /**

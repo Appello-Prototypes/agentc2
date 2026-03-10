@@ -82,7 +82,12 @@ export async function PUT(
             evalTimezone,
             evalWindowDays,
             reportConfig,
-            visibility
+            visibility,
+            scoreFunction,
+            scoreFunctionType,
+            scoreDirection,
+            targetScore,
+            settings
         } = body;
 
         const pulse = await prisma.pulse.update({
@@ -98,7 +103,12 @@ export async function PUT(
                 ...(evalTimezone !== undefined && { evalTimezone }),
                 ...(evalWindowDays !== undefined && { evalWindowDays }),
                 ...(reportConfig !== undefined && { reportConfig }),
-                ...(visibility !== undefined && { visibility })
+                ...(visibility !== undefined && { visibility }),
+                ...(scoreFunction !== undefined && { scoreFunction }),
+                ...(scoreFunctionType !== undefined && { scoreFunctionType }),
+                ...(scoreDirection !== undefined && { scoreDirection }),
+                ...(targetScore !== undefined && { targetScore }),
+                ...(settings !== undefined && { settings })
             }
         });
 

@@ -85,7 +85,10 @@ export async function POST(request: NextRequest) {
                 );
             }
         } else {
-            workspaceId = await getDefaultWorkspaceIdForUser(authContext.userId, authContext.organizationId);
+            workspaceId = await getDefaultWorkspaceIdForUser(
+                authContext.userId,
+                authContext.organizationId
+            );
         }
 
         const workflowSlug = slug || generateSlug(name);

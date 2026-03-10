@@ -41,6 +41,12 @@ interface PulseConfig {
     evalTimezone: string;
     evalWindowDays: number;
     reportConfig: { boardSlug?: string; authorMemberRole?: string; category?: string } | null;
+    scoreFunction?: string | null;
+    scoreFunctionType?: string | null;
+    scoreDirection?: string | null;
+    currentScore?: number | null;
+    targetScore?: number | null;
+    settings?: Record<string, unknown> | null;
 }
 
 export default function PulseConfigurePage() {
@@ -80,6 +86,22 @@ export default function PulseConfigurePage() {
 
     const [reportBoard, setReportBoard] = useState("");
     const [reportRole, setReportRole] = useState("monitor");
+
+    const [scoreFunction, setScoreFunction] = useState("");
+    const [scoreFunctionType, setScoreFunctionType] = useState("manual");
+    const [scoreDirection, setScoreDirection] = useState("higher");
+    const [targetScore, setTargetScore] = useState<number | "">("");
+
+    const [enableGodAgent, setEnableGodAgent] = useState(false);
+    const [godAgentModel, setGodAgentModel] = useState("gpt-4o");
+    const [godAgentCron, setGodAgentCron] = useState("0 */2 * * *");
+    const [godAgentMaxSteps, setGodAgentMaxSteps] = useState(50);
+
+    const [constraintReviewInterval, setConstraintReviewInterval] = useState(10);
+    const [timeReviewDays, setTimeReviewDays] = useState(7);
+
+    const [awaitingHumanReview, setAwaitingHumanReview] = useState(false);
+    const [pulseStalled, setPulseStalled] = useState(false);
 
     const fetchPulse = useCallback(async () => {
         try {
@@ -130,6 +152,27 @@ export default function PulseConfigurePage() {
 
             setReportBoard(p.reportConfig?.boardSlug ?? "");
             setReportRole(p.reportConfig?.authorMemberRole ?? "monitor");
+
+            setScoreFunction(p.scoreFunction ?? "");
+            setScoreFunctionType(p.scoreFunctionType ?? "manual");
+            setScoreDirection(p.scoreDirection ?? "higher");
+            setTargetScore(p.targetScore ?? "");
+
+            const s = p.settings as Record<string, unknown> | null;
+            if (s?.godAgentConfig) {
+                const gac = s.godAgentConfig as Record<string, unknown>;
+                setEnableGodAgent(!!gac.enabled);
+                setGodAgentModel((gac.model as string) ?? "gpt-4o");
+                setGodAgentCron((gac.cronExpr as string) ?? "0 */2 * * *");
+                setGodAgentMaxSteps((gac.maxSteps as number) ?? 50);
+            }
+            if (s?.reviewConfig) {
+                const rc = s.reviewConfig as Record<string, unknown>;
+                setConstraintReviewInterval((rc.constraintReviewInterval as number) ?? 10);
+                setTimeReviewDays((rc.timeReviewDays as number) ?? 7);
+            }
+            if (s?.awaitingHumanReview) setAwaitingHumanReview(true);
+            if (s?.stalled) setPulseStalled(true);
         } catch (err) {
             console.error("Failed to load pulse:", err);
         } finally {
@@ -190,7 +233,26 @@ export default function PulseConfigurePage() {
                               authorMemberRole: reportRole,
                               category: "performance-report"
                           }
-                        : null
+                        : null,
+                    scoreFunction: scoreFunction || undefined,
+                    scoreFunctionType,
+                    scoreDirection,
+                    targetScore: targetScore !== "" ? targetScore : undefined,
+                    settings: {
+                        godAgentConfig: enableGodAgent
+                            ? {
+                                  enabled: true,
+                                  model: godAgentModel,
+                                  cronExpr: godAgentCron,
+                                  maxSteps: godAgentMaxSteps
+                              }
+                            : undefined,
+                        reviewConfig: {
+                            constraintReviewInterval,
+                            timeReviewDays,
+                            scoreCheckpoints: []
+                        }
+                    }
                 })
             });
 
@@ -268,6 +330,84 @@ export default function PulseConfigurePage() {
                             <option value="PAUSED">PAUSED</option>
                             <option value="ARCHIVED">ARCHIVED</option>
                         </select>
+                    </div>
+                </CardContent>
+            </Card>
+
+            {awaitingHumanReview && (
+                <Card className="border-yellow-500 bg-yellow-500/10">
+                    <CardContent className="pt-6">
+                        <p className="text-sm font-medium text-yellow-700 dark:text-yellow-400">
+                            This Pulse is paused for human review. The God Agent has accumulated
+                            enough constraints or structural changes that require your approval
+                            before continuing.
+                        </p>
+                    </CardContent>
+                </Card>
+            )}
+
+            {pulseStalled && (
+                <Card className="border-red-500 bg-red-500/10">
+                    <CardContent className="pt-6">
+                        <p className="text-sm font-medium text-red-700 dark:text-red-400">
+                            This Pulse appears stalled. No evaluation improvement has been detected
+                            in recent cycles. Consider reviewing the goal, score function, or agent
+                            assignments.
+                        </p>
+                    </CardContent>
+                </Card>
+            )}
+
+            <Card>
+                <CardHeader>
+                    <CardTitle className="text-base">Score Function</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                        <Label>What single number measures success?</Label>
+                        <Textarea
+                            value={scoreFunction}
+                            onChange={(e) => setScoreFunction(e.target.value)}
+                            placeholder="e.g., Number of page-1 keywords, Deal close rate %, Churn rate %"
+                            rows={2}
+                        />
+                    </div>
+                    <div className="grid grid-cols-3 gap-4">
+                        <div className="space-y-2">
+                            <Label>Score Type</Label>
+                            <select
+                                className="border-input bg-background text-foreground flex h-9 w-full rounded-md border px-3 py-1 text-sm"
+                                value={scoreFunctionType}
+                                onChange={(e) => setScoreFunctionType(e.target.value)}
+                            >
+                                <option value="manual">Manual (God Agent measures)</option>
+                                <option value="milestone_completion">Milestone Completion %</option>
+                                <option value="task_completion">Task Completion %</option>
+                                <option value="community_activity">Community Activity Count</option>
+                            </select>
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Direction</Label>
+                            <select
+                                className="border-input bg-background text-foreground flex h-9 w-full rounded-md border px-3 py-1 text-sm"
+                                value={scoreDirection}
+                                onChange={(e) => setScoreDirection(e.target.value)}
+                            >
+                                <option value="higher">Higher is better</option>
+                                <option value="lower">Lower is better</option>
+                            </select>
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Target Score</Label>
+                            <Input
+                                type="number"
+                                value={targetScore}
+                                onChange={(e) =>
+                                    setTargetScore(e.target.value ? Number(e.target.value) : "")
+                                }
+                                placeholder="100"
+                            />
+                        </div>
                     </div>
                 </CardContent>
             </Card>
@@ -460,6 +600,78 @@ export default function PulseConfigurePage() {
                             value={reportRole}
                             onChange={(e) => setReportRole(e.target.value)}
                             placeholder="monitor"
+                        />
+                    </div>
+                </CardContent>
+            </Card>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle className="text-base">God Agent</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <div className="flex items-center gap-3">
+                        <input
+                            type="checkbox"
+                            checked={enableGodAgent}
+                            onChange={(e) => setEnableGodAgent(e.target.checked)}
+                            className="h-4 w-4"
+                        />
+                        <Label>Enable autonomous God Agent orchestrator</Label>
+                    </div>
+                    {enableGodAgent && (
+                        <div className="grid grid-cols-3 gap-4">
+                            <div className="space-y-2">
+                                <Label>Model</Label>
+                                <select
+                                    className="border-input bg-background text-foreground flex h-9 w-full rounded-md border px-3 py-1 text-sm"
+                                    value={godAgentModel}
+                                    onChange={(e) => setGodAgentModel(e.target.value)}
+                                >
+                                    <option value="gpt-4o">GPT-4o</option>
+                                    <option value="claude-sonnet-4-20250514">Claude Sonnet</option>
+                                </select>
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Run Schedule (cron)</Label>
+                                <Input
+                                    value={godAgentCron}
+                                    onChange={(e) => setGodAgentCron(e.target.value)}
+                                    placeholder="0 */2 * * *"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Max Steps per Run</Label>
+                                <Input
+                                    type="number"
+                                    value={godAgentMaxSteps}
+                                    onChange={(e) => setGodAgentMaxSteps(Number(e.target.value))}
+                                />
+                            </div>
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle className="text-base">Human Review Points</CardTitle>
+                </CardHeader>
+                <CardContent className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                        <Label>Constraint Review Every N Constraints</Label>
+                        <Input
+                            type="number"
+                            value={constraintReviewInterval}
+                            onChange={(e) => setConstraintReviewInterval(Number(e.target.value))}
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <Label>Time Review Every N Days</Label>
+                        <Input
+                            type="number"
+                            value={timeReviewDays}
+                            onChange={(e) => setTimeReviewDays(Number(e.target.value))}
                         />
                     </div>
                 </CardContent>

@@ -157,9 +157,9 @@ export const campaignToolDefinitions: McpToolDefinition[] = [
 ];
 
 export const campaignToolRoutes: McpToolRoute[] = [
-    { kind: "registry", name: "campaign-create" },
-    { kind: "registry", name: "campaign-list" },
-    { kind: "registry", name: "campaign-get" },
-    { kind: "registry", name: "campaign-update" },
-    { kind: "registry", name: "campaign-delete" }
+    { kind: "registry", name: "campaign-create", enforceOrg: true },
+    { kind: "registry", name: "campaign-list", enforceOrg: true },
+    { kind: "registry", name: "campaign-get", enforceOrg: true },
+    { kind: "registry", name: "campaign-update", enforceOrg: true },
+    { kind: "registry", name: "campaign-delete", enforceOrg: true }
 ];
