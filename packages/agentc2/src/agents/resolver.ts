@@ -27,6 +27,11 @@ import {
     createInputGuardrailProcessor,
     createOutputGuardrailProcessor
 } from "../processors/guardrail-processors";
+import { createContextWindowProcessor } from "../processors/context-window-processor";
+import { createToolCallGuardProcessor } from "../processors/tool-call-guard-processor";
+import { createToolResultCompressorProcessor } from "../processors/tool-result-compressor";
+import { createStepAnchorProcessor } from "../processors/step-anchor";
+import type { ContextConfig } from "../processors/context-utils";
 
 import { getThreadSkillState } from "../skills/thread-state";
 import {
@@ -998,86 +1003,64 @@ export class AgentResolver {
         }
 
         // --- Tool Result Compression ---
-        const agentContextConfig = (record as Record<string, unknown>).contextConfig as
-            | Record<string, unknown>
-            | null
-            | undefined;
-        const compressionConfig = agentContextConfig?.toolResultCompression as
-            | { enabled?: boolean; threshold?: number }
-            | undefined;
-        if (compressionConfig?.enabled) {
-            const threshold = compressionConfig.threshold ?? 3000;
-            for (const toolKey of Object.keys(tools)) {
-                const original = tools[toolKey]!;
-                const originalExecute = original.execute;
-                tools[toolKey] = {
-                    ...original,
-                    execute: async (
-                        input: Record<string, unknown>,
-                        execCtx: Record<string, unknown>
-                    ) => {
-                        const result = await originalExecute(input, execCtx);
-                        if (result === undefined || result === null) return result;
-                        const str = typeof result === "string" ? result : JSON.stringify(result);
-                        if (str.length <= threshold) return result;
-                        if (typeof result === "object") {
-                            try {
-                                const truncated = JSON.stringify(result, (_, v) => {
-                                    if (typeof v === "string" && v.length > 500) {
-                                        return v.slice(0, 500) + "…[truncated]";
-                                    }
-                                    return v;
-                                });
-                                if (truncated.length <= threshold) return JSON.parse(truncated);
-                            } catch {}
-                            // Trim arrays to fit within threshold
-                            try {
-                                const shallow = { ...(result as Record<string, unknown>) };
-                                for (const [k, v] of Object.entries(shallow)) {
-                                    if (Array.isArray(v) && v.length > 3) {
-                                        shallow[k] = [
-                                            ...v.slice(0, 3),
-                                            `…[${v.length - 3} more items]`
-                                        ];
-                                    }
-                                }
-                                const trimmed = JSON.stringify(shallow);
-                                if (trimmed.length <= threshold * 1.5) return JSON.parse(trimmed);
-                            } catch {}
-                        }
-                        return {
-                            _truncated: true,
-                            _originalChars: str.length,
-                            content: str.slice(0, threshold)
-                        };
-                    }
-                };
-            }
-        }
+        // Legacy tool-execute wrapper removed. Tool result compression is now handled
+        // by the ToolResultCompressorProcessor output processor (see below).
 
         const defaultOptions = this.buildDefaultOptions(record);
 
         const workflows = this.loadWorkflows(record.workflows);
 
-        // --- Mastra Processors ---
-        // Wire guardrail processors + memory processors at the Agent level
-        // Model-aware TokenLimiter: use contextConfig.maxContextTokens from agent,
-        // or fall back to hardcoded 12K for agents without contextConfig
+        // --- Mastra Processors (Unified Context Management) ---
+        // All context management (windowing, compaction, tool guards, result compression,
+        // step anchoring) is handled by processors that run uniformly across both
+        // agent.stream() and agent.generate() paths.
         const contextConfig = (record as Record<string, unknown>).contextConfig as
-            | { maxContextTokens?: number }
+            | ContextConfig
             | null
             | undefined;
         const tokenLimit = contextConfig?.maxContextTokens
             ? Math.min(contextConfig.maxContextTokens, 50_000) // cap at 50K for safety
             : 12_000;
+
+        // Resolve compression model for tool result compression + context compaction
+        let compressionModelInstance: import("ai").LanguageModel | undefined;
+        try {
+            const { getFastCompressionModel } = await import("./model-provider");
+            compressionModelInstance = (await getFastCompressionModel(organizationId)) ?? undefined;
+        } catch {
+            // Non-fatal: compression will fall back to truncation
+        }
+
+        const compressionThreshold = contextConfig?.toolResultCompression?.threshold ?? 3000;
+
         const inputProcessors = [
             createInputGuardrailProcessor(record.id, organizationId),
-            new TokenLimiter(tokenLimit)
+            createContextWindowProcessor({
+                windowSize: contextConfig?.windowSize ?? 5,
+                maxContextTokens: contextConfig?.maxContextTokens ?? 50_000,
+                enableCompaction: true,
+                compactionModel: compressionModelInstance,
+                organizationId
+            }),
+            createStepAnchorProcessor({
+                anchorInterval: contextConfig?.anchorInterval ?? 10,
+                anchorInstructions: contextConfig?.anchorInstructions ?? true,
+                maxSteps: record.maxSteps ?? 25
+            }),
+            new TokenLimiter(tokenLimit) // final safety net
         ];
         const outputProcessors = [
             createOutputGuardrailProcessor(record.id, organizationId),
+            createToolResultCompressorProcessor({
+                threshold: compressionThreshold,
+                compressionModel: compressionModelInstance
+            }),
+            createToolCallGuardProcessor({
+                maxCallsPerTool: 8,
+                maxTotalToolCalls: (record.maxSteps ?? 5) * 2
+            }),
             new ToolCallFilter(),
-            new TokenLimiter(tokenLimit)
+            new TokenLimiter(tokenLimit) // final safety net
         ];
 
         // Create agent - using any to bypass strict typing issues with Mastra's Agent constructor

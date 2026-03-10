@@ -7,7 +7,7 @@
  */
 
 import { agentResolver, resolveModelOverride } from "@repo/agentc2/agents";
-import { managedGenerate, getFastCompressionModel } from "@repo/agentc2";
+// managedGenerate removed — context management handled by Mastra processors
 import { recordActivity, inputPreview } from "@repo/agentc2/activity/service";
 import { prisma } from "@repo/database";
 import { startRun, extractTokenUsage, extractToolCalls } from "@/lib/run-recorder";
@@ -358,7 +358,7 @@ export async function handleTelegramMessage(
     await sendChatAction(chatId, ctx.botToken);
 
     // Model routing (pre-resolve)
-    const { modelOverride: routedModelOverride, isReasoningModel } = await resolveModelOverride(
+    const { modelOverride: routedModelOverride } = await resolveModelOverride(
         agentSlug,
         messageText,
         {
@@ -446,65 +446,28 @@ export async function handleTelegramMessage(
             ? { thread: memoryThread, resource: memoryResource }
             : undefined;
 
-        const contextCfg = (record as { contextConfig?: Record<string, unknown> } | null)
-            ?.contextConfig;
-
-        const useManagedGenerate = effectiveMaxSteps > 5;
+        // Context management (windowing, anchoring, tool guards, result compression)
+        // is handled by Mastra processors wired into the agent by the resolver.
 
         let responseText: string | undefined;
         let promptTokens = 0;
         let completionTokens = 0;
 
-        if (useManagedGenerate) {
-            const compressionModel = await getFastCompressionModel(ctx.organizationId);
-            const managedResult = await managedGenerate(agent, messageText, {
-                maxSteps: effectiveMaxSteps,
-                maxContextTokens: (contextCfg?.maxContextTokens as number) ?? 50_000,
-                windowSize: (contextCfg?.windowSize as number) ?? 5,
-                anchorInstructions: (contextCfg?.anchorInstructions as boolean) ?? true,
-                anchorInterval: (contextCfg?.anchorInterval as number) ?? 10,
-                maxTokens: record?.maxTokens ?? undefined,
-                memory: memoryOpts,
-                modelProvider: record?.modelProvider,
-                modelName: record?.modelName,
-                compressionModel: compressionModel ?? undefined,
-                isReasoningModel: isReasoningModel ?? false,
-                onStep: async (_stepNum, summary) => {
-                    if (summary.hasToolCall && summary.toolName) {
-                        await run.addToolCall({
-                            toolKey: summary.toolName,
-                            input: {},
-                            output: summary.outputPreview,
-                            success: true
-                        });
-                    }
-                }
-            });
+        const generateOptions = {
+            maxSteps: effectiveMaxSteps,
+            ...(memoryOpts ? { memory: memoryOpts } : {})
+        } as unknown as Parameters<typeof agent.generate>[1];
 
-            responseText = managedResult.text;
-            promptTokens = managedResult.totalPromptTokens;
-            completionTokens = managedResult.totalCompletionTokens;
+        const response = await agent.generate(messageText, generateOptions);
+        responseText = response.text;
 
-            if (managedResult.abortReason) {
-                console.warn(`[Telegram] managedGenerate aborted: ${managedResult.abortReason}`);
-            }
-        } else {
-            const generateOptions = {
-                maxSteps: effectiveMaxSteps,
-                ...(memoryOpts ? { memory: memoryOpts } : {})
-            } as unknown as Parameters<typeof agent.generate>[1];
+        const tokens = extractTokenUsage(response);
+        const toolCalls = extractToolCalls(response);
+        promptTokens = tokens?.promptTokens || 0;
+        completionTokens = tokens?.completionTokens || 0;
 
-            const response = await agent.generate(messageText, generateOptions);
-            responseText = response.text;
-
-            const tokens = extractTokenUsage(response);
-            const toolCalls = extractToolCalls(response);
-            promptTokens = tokens?.promptTokens || 0;
-            completionTokens = tokens?.completionTokens || 0;
-
-            for (const tc of toolCalls) {
-                await run.addToolCall(tc);
-            }
+        for (const tc of toolCalls) {
+            await run.addToolCall(tc);
         }
 
         responseText = responseText || "I'm sorry, I couldn't process that.";

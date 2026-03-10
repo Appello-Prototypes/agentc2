@@ -449,12 +449,31 @@ export type {
     MarkupResult
 } from "./budget";
 
+// Unified Context Management Processors
+export { createContextWindowProcessor } from "./processors/context-window-processor";
+export type { ContextWindowConfig } from "./processors/context-window-processor";
+export { compactMessages } from "./processors/conversation-compactor";
+export type { CompactionResult } from "./processors/conversation-compactor";
+export { createToolCallGuardProcessor } from "./processors/tool-call-guard-processor";
+export type { ToolCallGuardConfig } from "./processors/tool-call-guard-processor";
+export { createToolResultCompressorProcessor } from "./processors/tool-result-compressor";
+export type { ToolResultCompressorConfig } from "./processors/tool-result-compressor";
+export { createStepAnchorProcessor } from "./processors/step-anchor";
+export type { StepAnchorConfig } from "./processors/step-anchor";
+export {
+    countTokens,
+    preview,
+    buildToolCallSummary,
+    compressToolResult
+} from "./processors/context-utils";
+export type { ContextConfig, ToolCallRecord } from "./processors/context-utils";
+
 // Managed multi-step generation with context windowing
+/** @deprecated Use agent.generate() with Mastra processors instead */
 export { managedGenerate } from "./lib/managed-generate";
 export type {
     ManagedGenerateOptions,
     ManagedGenerateResult,
-    ContextConfig,
     StepSummary
 } from "./lib/managed-generate";
 

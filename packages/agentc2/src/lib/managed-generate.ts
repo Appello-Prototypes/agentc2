@@ -233,6 +233,17 @@ async function compressToolResult(
 
 // ── Main Function ────────────────────────────────────────────────────────────
 
+/**
+ * @deprecated Use `agent.generate()` with Mastra processors instead.
+ * Context management (windowing, anchoring, tool guards, result compression) is now
+ * handled by processors wired into the agent by the resolver:
+ *   - ContextWindowProcessor (input) — sliding window + compaction
+ *   - StepAnchorProcessor (input) — instruction anchoring at intervals
+ *   - ToolCallGuardProcessor (output) — duplicate detection, budget enforcement
+ *   - ToolResultCompressorProcessor (output) — large result compression
+ *
+ * This function is kept for backward compatibility and will be removed in a future release.
+ */
 export async function managedGenerate(
     agent: Agent,
     input: string,

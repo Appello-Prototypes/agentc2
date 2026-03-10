@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma, TriggerEventStatus } from "@repo/database";
 import { agentResolver, resolveModelOverride } from "@repo/agentc2/agents";
-import { managedGenerate, getFastCompressionModel } from "@repo/agentc2";
+// managedGenerate removed — context management handled by Mastra processors
 import {
     startRun,
     startConversationRun,
@@ -146,7 +146,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         };
 
         // Model routing (pre-resolve)
-        const { modelOverride: routedModelOverride, isReasoningModel } = await resolveModelOverride(
+        const { modelOverride: routedModelOverride } = await resolveModelOverride(
             id,
             input,
             {
@@ -450,12 +450,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             const threadId = context?.threadId || context?.thread?.id;
             const resourceId = context?.userId || context?.resource?.userId || "default";
 
-            // Read contextConfig from agent record if available
-            const contextCfg = (record as { contextConfig?: Record<string, unknown> })
-                .contextConfig;
-
-            // Use managed generate for multi-step runs (>5 steps) to control context growth
-            const USE_MANAGED_GENERATE = effectiveMaxSteps > 5;
+            // Context management (windowing, anchoring, tool guards, result compression)
+            // is handled by Mastra processors wired into the agent by the resolver.
 
             let responseText: string | undefined;
             let usage: {
@@ -471,245 +467,136 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             }
             const executionSteps: ExecutionStep[] = [];
 
-            if (USE_MANAGED_GENERATE) {
-                const compressionModel = await getFastCompressionModel(
-                    authResult.context.organizationId
+            const generateOptions = {
+                maxSteps: effectiveMaxSteps,
+                ...(record.maxTokens ? { maxTokens: record.maxTokens } : {}),
+                ...(threadId && record.memoryEnabled
+                    ? {
+                          memory: {
+                              thread: threadId,
+                              resource: resourceId
+                          }
+                      }
+                    : {})
+            } as unknown as Parameters<typeof agent.generate>[1];
+
+            let currentAgent = agent;
+            const response = await currentAgent.generate(input, generateOptions);
+            responseText = response.text;
+            usage = extractTokenUsage(response);
+
+            let toolCalls = extractToolCalls(response);
+
+            // Orphaned-tool-call recovery for invoke route:
+            // If activate-skill was called and some tool calls have no output,
+            // re-resolve the agent and retry with the newly activated skill tools.
+            const skillActivated = toolCalls.some(
+                (tc) => tc.toolKey === "activate-skill" && tc.success
+            );
+            const orphanedTools = toolCalls.filter(
+                (tc) =>
+                    tc.toolKey !== "activate-skill" &&
+                    tc.toolKey !== "search-skills" &&
+                    tc.toolKey !== "list-active-skills" &&
+                    tc.toolKey !== "updateWorkingMemory" &&
+                    tc.output === undefined &&
+                    !tc.error
+            );
+
+            if (skillActivated && orphanedTools.length > 0) {
+                const orphanedNames = orphanedTools.map((t) => t.toolKey).join(", ");
+                console.warn(
+                    `[Agent Invoke] ${orphanedTools.length} orphaned tool call(s) after skill activation (${orphanedNames}). Re-resolving agent…`
                 );
-                const managedResult = await managedGenerate(agent, input, {
-                    maxSteps: effectiveMaxSteps,
-                    maxContextTokens: (contextCfg?.maxContextTokens as number) ?? 50_000,
-                    windowSize: (contextCfg?.windowSize as number) ?? 5,
-                    anchorInstructions: (contextCfg?.anchorInstructions as boolean) ?? true,
-                    anchorInterval: (contextCfg?.anchorInterval as number) ?? 10,
-                    maxTokens: record.maxTokens ?? undefined,
-                    memory:
-                        threadId && record.memoryEnabled
-                            ? { thread: threadId, resource: resourceId }
-                            : undefined,
-                    modelProvider: record.modelProvider,
-                    modelName: record.modelName,
-                    compressionModel: compressionModel ?? undefined,
-                    isReasoningModel,
-                    onStep: async (stepNum, summary) => {
-                        if (summary.hasToolCall && summary.toolName) {
-                            await runHandle.addToolCall({
-                                toolKey: summary.toolName,
-                                input: {},
-                                output: summary.outputPreview,
-                                success: true
-                            });
-                        }
-                    }
-                });
 
-                // Detect managed generate failures: if abortReason is set and
-                // no text was produced, the LLM call itself failed (e.g. bad API key,
-                // retired model, network error). Surface the error properly.
-                if (
-                    managedResult.abortReason &&
-                    !managedResult.text &&
-                    managedResult.totalPromptTokens === 0
-                ) {
-                    const errorMsg = `Agent generate failed: ${managedResult.abortReason}`;
+                try {
+                    const reResolved = await agentResolver.resolve({
+                        slug: id,
+                        requestContext: context,
+                        threadId: context?.threadId || context?.thread?.id,
+                        modelOverride: routedModelOverride
+                    });
+                    currentAgent = reResolved.agent;
+
+                    const retryPrompt =
+                        `[System: Your previous tool calls for ${orphanedNames} did not execute. ` +
+                        `The tools are now available. Please retry those calls to complete the user's request. ` +
+                        `Do NOT repeat information you already told the user.]`;
+
+                    const retryResponse = await currentAgent.generate(retryPrompt, generateOptions);
+                    const retryText = retryResponse.text;
+                    if (retryText) {
+                        responseText = (responseText || "") + "\n" + retryText;
+                    }
+                    const retryUsage = extractTokenUsage(retryResponse);
+                    if (retryUsage && usage) {
+                        usage = {
+                            promptTokens: usage.promptTokens + retryUsage.promptTokens,
+                            completionTokens: usage.completionTokens + retryUsage.completionTokens,
+                            totalTokens: usage.totalTokens + retryUsage.totalTokens
+                        };
+                    }
+                    const retryToolCalls = extractToolCalls(retryResponse);
+                    toolCalls = [...toolCalls, ...retryToolCalls];
+                } catch (retryErr) {
                     console.error(
-                        `[Agent Invoke] MANAGED-GENERATE FAILURE for ${record.slug}:`,
-                        JSON.stringify({
-                            abortReason: managedResult.abortReason,
-                            model: `${record.modelProvider}/${record.modelName}`,
-                            totalSteps: managedResult.totalSteps,
-                            finishReason: managedResult.finishReason
-                        })
-                    );
-                    await runHandle.fail(new Error(errorMsg));
-                    clearTimeout(timeoutId);
-                    const durationMs = Date.now() - startTime;
-                    return NextResponse.json(
-                        {
-                            success: false,
-                            run_id: runHandle.runId,
-                            status: "failed",
-                            error: errorMsg,
-                            model: `${record.modelProvider}/${record.modelName}`,
-                            duration_ms: durationMs
-                        },
-                        { status: 500 }
+                        `[Agent Invoke] Re-resolve/retry failed:`,
+                        retryErr instanceof Error ? retryErr.message : retryErr
                     );
                 }
+            }
 
-                responseText = managedResult.text;
-                usage = {
-                    promptTokens: managedResult.totalPromptTokens,
-                    completionTokens: managedResult.totalCompletionTokens,
-                    totalTokens:
-                        managedResult.totalPromptTokens + managedResult.totalCompletionTokens
-                };
+            let stepCounter = 0;
+            for (const tc of toolCalls) {
+                const toolName = tc.toolKey || "unknown";
+                const args = tc.input || {};
 
-                // Build execution steps from managed result
-                let stepCounter = 0;
-                for (const step of managedResult.steps) {
-                    if (step.hasToolCall) {
-                        stepCounter++;
-                        executionSteps.push({
-                            step: stepCounter,
-                            type: "tool_call",
-                            content: `Calling tool: ${step.toolName || "unknown"}\nArgs: ${step.inputPreview}`,
-                            timestamp: new Date().toISOString()
-                        });
-                        stepCounter++;
-                        executionSteps.push({
-                            step: stepCounter,
-                            type: "tool_result",
-                            content: `Tool ${step.toolName || "unknown"} result:\n${step.outputPreview}`,
-                            timestamp: new Date().toISOString()
-                        });
-                    }
-                }
                 stepCounter++;
                 executionSteps.push({
                     step: stepCounter,
-                    type: "response",
-                    content:
-                        (responseText || "").slice(0, 2000) +
-                        (responseText && responseText.length > 2000 ? "..." : ""),
+                    type: "tool_call",
+                    content: `Calling tool: ${toolName}\nArgs: ${JSON.stringify(args, null, 2)}`,
                     timestamp: new Date().toISOString()
                 });
-            } else {
-                // Standard single-pass generate for simple agents
-                const generateOptions = {
-                    maxSteps: effectiveMaxSteps,
-                    ...(record.maxTokens ? { maxTokens: record.maxTokens } : {}),
-                    ...(threadId && record.memoryEnabled
-                        ? {
-                              memory: {
-                                  thread: threadId,
-                                  resource: resourceId
-                              }
-                          }
-                        : {})
-                } as unknown as Parameters<typeof agent.generate>[1];
 
-                let currentAgent = agent;
-                const response = await currentAgent.generate(input, generateOptions);
-                responseText = response.text;
-                usage = extractTokenUsage(response);
-
-                let toolCalls = extractToolCalls(response);
-
-                // Orphaned-tool-call recovery for invoke route:
-                // If activate-skill was called and some tool calls have no output,
-                // re-resolve the agent and retry with the newly activated skill tools.
-                const skillActivated = toolCalls.some(
-                    (tc) => tc.toolKey === "activate-skill" && tc.success
-                );
-                const orphanedTools = toolCalls.filter(
-                    (tc) =>
-                        tc.toolKey !== "activate-skill" &&
-                        tc.toolKey !== "search-skills" &&
-                        tc.toolKey !== "list-active-skills" &&
-                        tc.toolKey !== "updateWorkingMemory" &&
-                        tc.output === undefined &&
-                        !tc.error
-                );
-
-                if (skillActivated && orphanedTools.length > 0) {
-                    const orphanedNames = orphanedTools.map((t) => t.toolKey).join(", ");
-                    console.warn(
-                        `[Agent Invoke] ${orphanedTools.length} orphaned tool call(s) after skill activation (${orphanedNames}). Re-resolving agent…`
-                    );
-
-                    try {
-                        const reResolved = await agentResolver.resolve({
-                            slug: id,
-                            requestContext: context,
-                            threadId: context?.threadId || context?.thread?.id,
-                            modelOverride: routedModelOverride
-                        });
-                        currentAgent = reResolved.agent;
-
-                        const retryPrompt =
-                            `[System: Your previous tool calls for ${orphanedNames} did not execute. ` +
-                            `The tools are now available. Please retry those calls to complete the user's request. ` +
-                            `Do NOT repeat information you already told the user.]`;
-
-                        const retryResponse = await currentAgent.generate(
-                            retryPrompt,
-                            generateOptions
-                        );
-                        const retryText = retryResponse.text;
-                        if (retryText) {
-                            responseText = (responseText || "") + "\n" + retryText;
-                        }
-                        const retryUsage = extractTokenUsage(retryResponse);
-                        if (retryUsage && usage) {
-                            usage = {
-                                promptTokens: usage.promptTokens + retryUsage.promptTokens,
-                                completionTokens:
-                                    usage.completionTokens + retryUsage.completionTokens,
-                                totalTokens: usage.totalTokens + retryUsage.totalTokens
-                            };
-                        }
-                        const retryToolCalls = extractToolCalls(retryResponse);
-                        toolCalls = [...toolCalls, ...retryToolCalls];
-                    } catch (retryErr) {
-                        console.error(
-                            `[Agent Invoke] Re-resolve/retry failed:`,
-                            retryErr instanceof Error ? retryErr.message : retryErr
-                        );
-                    }
-                }
-
-                let stepCounter = 0;
-                for (const tc of toolCalls) {
-                    const toolName = tc.toolKey || "unknown";
-                    const args = tc.input || {};
-
-                    stepCounter++;
+                stepCounter++;
+                if (tc.output !== undefined || tc.error) {
+                    const resultPreview = formatToolResultPreview(tc.output, 500);
                     executionSteps.push({
                         step: stepCounter,
-                        type: "tool_call",
-                        content: `Calling tool: ${toolName}\nArgs: ${JSON.stringify(args, null, 2)}`,
+                        type: "tool_result",
+                        content: tc.error
+                            ? `Tool ${toolName} failed: ${tc.error}`
+                            : `Tool ${toolName} result:\n${resultPreview}`,
                         timestamp: new Date().toISOString()
                     });
-
-                    stepCounter++;
-                    if (tc.output !== undefined || tc.error) {
-                        const resultPreview = formatToolResultPreview(tc.output, 500);
-                        executionSteps.push({
-                            step: stepCounter,
-                            type: "tool_result",
-                            content: tc.error
-                                ? `Tool ${toolName} failed: ${tc.error}`
-                                : `Tool ${toolName} result:\n${resultPreview}`,
-                            timestamp: new Date().toISOString()
-                        });
-                    } else {
-                        executionSteps.push({
-                            step: stepCounter,
-                            type: "tool_result",
-                            content: `Tool ${toolName} completed with no output captured`,
-                            timestamp: new Date().toISOString()
-                        });
-                    }
-
-                    await runHandle.addToolCall({
-                        toolKey: toolName,
-                        input: args,
-                        output: tc.output,
-                        success: tc.success,
-                        error: tc.error,
-                        durationMs: tc.durationMs
+                } else {
+                    executionSteps.push({
+                        step: stepCounter,
+                        type: "tool_result",
+                        content: `Tool ${toolName} completed with no output captured`,
+                        timestamp: new Date().toISOString()
                     });
                 }
-                stepCounter++;
-                executionSteps.push({
-                    step: stepCounter,
-                    type: "response",
-                    content:
-                        (responseText || "").slice(0, 2000) +
-                        (responseText && responseText.length > 2000 ? "..." : ""),
-                    timestamp: new Date().toISOString()
+
+                await runHandle.addToolCall({
+                    toolKey: toolName,
+                    input: args,
+                    output: tc.output,
+                    success: tc.success,
+                    error: tc.error,
+                    durationMs: tc.durationMs
                 });
             }
+            stepCounter++;
+            executionSteps.push({
+                step: stepCounter,
+                type: "response",
+                content:
+                    (responseText || "").slice(0, 2000) +
+                    (responseText && responseText.length > 2000 ? "..." : ""),
+                timestamp: new Date().toISOString()
+            });
 
             clearTimeout(timeoutId);
             const durationMs = Date.now() - startTime;

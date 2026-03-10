@@ -24,11 +24,6 @@
  */
 
 import type { Agent } from "@mastra/core/agent";
-import {
-    managedGenerate,
-    type ManagedGenerateOptions,
-    type ManagedGenerateResult
-} from "./managed-generate";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -70,7 +65,8 @@ export interface PhaseRunnerOptions {
     };
     maxTokens?: number;
     memory?: { thread: string; resource: string };
-    managedGenerateOverrides?: Partial<ManagedGenerateOptions>;
+    /** @deprecated managedGenerate is deprecated; processors handle context management */
+    managedGenerateOverrides?: Record<string, unknown>;
     onPhaseStart?: (phase: Phase, index: number) => void;
     onPhaseComplete?: (phase: Phase, result: PhaseResult, index: number) => void;
 }
@@ -160,32 +156,39 @@ async function executePhase(
         completedPhases
     );
 
-    const generateOptions: ManagedGenerateOptions = {
+    // Context management (windowing, anchoring, tool guards, compression) is now
+    // handled by Mastra processors wired into the agent by the resolver.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const generateOptions: any = {
         maxSteps: phase.maxSteps,
-        maxContextTokens: options.contextConfig?.maxContextTokens ?? 50_000,
-        windowSize: options.contextConfig?.windowSize ?? 5,
-        anchorInstructions: options.contextConfig?.anchorInstructions ?? true,
-        anchorInterval: options.contextConfig?.anchorInterval ?? 10,
-        maxTokens: options.maxTokens,
-        memory: options.memory,
-        ...options.managedGenerateOverrides
+        ...(options.maxTokens ? { modelSettings: { maxTokens: options.maxTokens } } : {}),
+        ...(options.memory ? { memory: options.memory } : {})
     };
 
-    let managedResult: ManagedGenerateResult;
+    let responseText = "";
+    let totalPromptTokens = 0;
+    let totalCompletionTokens = 0;
+    let totalSteps = 0;
+    let finishReason = "unknown";
+    let abortReason: string | undefined;
+
     try {
-        managedResult = await managedGenerate(agent, phaseInput, generateOptions);
+        const response = await agent.generate(phaseInput, generateOptions);
+        responseText = response.text || "";
+        finishReason = response.finishReason || "complete";
+        totalSteps = response.steps?.length ?? 1;
+
+        // Extract usage (handle both AI SDK v4 and v5 property names)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const usage = (response as any).totalUsage || (response as any).usage || {};
+        totalPromptTokens = usage.inputTokens ?? usage.promptTokens ?? 0;
+        totalCompletionTokens = usage.outputTokens ?? usage.completionTokens ?? 0;
     } catch (error) {
         const errMsg = error instanceof Error ? error.message : String(error);
         console.error(`[PhaseRunner] Phase "${phase.name}" failed: ${errMsg}`);
-        managedResult = {
-            text: `Phase failed: ${errMsg}`,
-            steps: [],
-            totalSteps: 0,
-            totalPromptTokens: 0,
-            totalCompletionTokens: 0,
-            finishReason: "error",
-            abortReason: errMsg
-        };
+        responseText = `Phase failed: ${errMsg}`;
+        finishReason = "error";
+        abortReason = errMsg;
     }
 
     const phaseEnd = Date.now();
@@ -193,12 +196,12 @@ async function executePhase(
     const phaseResult: PhaseResult = {
         phaseName: phase.name,
         phaseId: phase.id,
-        text: managedResult.text,
-        totalSteps: managedResult.totalSteps,
-        totalPromptTokens: managedResult.totalPromptTokens,
-        totalCompletionTokens: managedResult.totalCompletionTokens,
-        finishReason: managedResult.finishReason,
-        abortReason: managedResult.abortReason,
+        text: responseText,
+        totalSteps,
+        totalPromptTokens,
+        totalCompletionTokens,
+        finishReason,
+        abortReason,
         durationMs: phaseEnd - phaseStart,
         startedAt: phaseStart,
         completedAt: phaseEnd,
@@ -210,8 +213,8 @@ async function executePhase(
     }
 
     console.log(
-        `[PhaseRunner] Phase "${phase.name}" completed: ${managedResult.totalSteps} steps, ` +
-            `${managedResult.totalPromptTokens + managedResult.totalCompletionTokens} tokens, ${phaseResult.durationMs}ms`
+        `[PhaseRunner] Phase "${phase.name}" completed: ${totalSteps} steps, ` +
+            `${totalPromptTokens + totalCompletionTokens} tokens, ${phaseResult.durationMs}ms`
     );
 
     return phaseResult;
