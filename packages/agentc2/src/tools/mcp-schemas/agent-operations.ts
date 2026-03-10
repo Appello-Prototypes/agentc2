@@ -193,6 +193,12 @@ export const agentOperationsToolRoutes: McpToolRoute[] = [
         pathParams: ["agentId"],
         bodyParams: ["enabled", "monthlyLimitUsd", "alertAtPct", "hardLimit"]
     },
-    { kind: "registry", name: "agent-discover" },
+    {
+        kind: "internal",
+        name: "agent-discover",
+        method: "GET",
+        path: "/api/agents?detail=discover",
+        queryParams: ["keyword", "exclude"]
+    },
     { kind: "custom", name: "agent-invoke-dynamic", handler: "agentInvokeDynamic" }
 ];
