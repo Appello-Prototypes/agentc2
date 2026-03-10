@@ -83,7 +83,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         if (authResult.response) {
             return authResult.response;
         }
-        const accessResult = await requireAgentAccess(authResult.context.organizationId, id);
+        const accessResult = await requireAgentAccess(authResult.context.organizationId, id, authResult.context.userId);
         if (accessResult.response) {
             return accessResult.response;
         }
@@ -744,7 +744,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     if (authResponse) return authResponse;
     const { agentId, response: accessResponse } = await requireAgentAccess(
         context.organizationId,
-        id
+        id,
+        context.userId
     );
     if (accessResponse) return accessResponse;
 

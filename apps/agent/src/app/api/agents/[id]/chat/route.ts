@@ -133,7 +133,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         // so skip the DB-level access check for them.
         const SYSTEM_AGENT_SLUGS = new Set(["sidekick"]);
         if (!SYSTEM_AGENT_SLUGS.has(id)) {
-            const accessResult = await requireAgentAccess(authResult.context.organizationId, id);
+            const accessResult = await requireAgentAccess(authResult.context.organizationId, id, authResult.context.userId);
             if (accessResult.response) {
                 return accessResult.response;
             }

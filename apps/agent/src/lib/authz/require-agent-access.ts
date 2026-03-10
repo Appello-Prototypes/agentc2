@@ -1,9 +1,21 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@repo/database";
 
+/**
+ * Check that the authenticated user can access an agent.
+ *
+ * Access is granted when ANY of these conditions are met:
+ *   1. The agent belongs to a workspace in the user's active organization
+ *   2. The agent is owned by the user (ownerId matches)
+ *   3. The agent has PUBLIC visibility
+ *
+ * This aligns with AgentResolver.listForUser() so that agents shown in the
+ * selector are also accessible via chat/invoke/etc.
+ */
 export async function requireAgentAccess(
     organizationId: string,
-    agentRef: string
+    agentRef: string,
+    userId?: string
 ): Promise<
     { agentId: string; response?: undefined } | { agentId?: undefined; response: NextResponse }
 > {
@@ -12,7 +24,16 @@ export async function requireAgentAccess(
             AND: [
                 { OR: [{ id: agentRef }, { slug: agentRef }] },
                 { isActive: true },
-                { workspace: { organizationId } }
+                {
+                    OR: [
+                        // Agent in the user's active org
+                        { workspace: { organizationId } },
+                        // Agent owned by the user (cross-org)
+                        ...(userId ? [{ ownerId: userId }] : []),
+                        // Public agents
+                        { visibility: "PUBLIC" }
+                    ]
+                }
             ]
         },
         select: { id: true }

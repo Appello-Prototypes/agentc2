@@ -28,7 +28,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         if (authResult.response) {
             return authResult.response;
         }
-        const accessResult = await requireAgentAccess(authResult.context.organizationId, id);
+        const accessResult = await requireAgentAccess(authResult.context.organizationId, id, authResult.context.userId);
         if (accessResult.response) {
             return accessResult.response;
         }
@@ -109,7 +109,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             "update"
         );
         if (!updateAccess.allowed) return updateAccess.response;
-        const accessResult = await requireAgentAccess(authResult.context.organizationId, id);
+        const accessResult = await requireAgentAccess(authResult.context.organizationId, id, authResult.context.userId);
         if (accessResult.response) {
             return accessResult.response;
         }
@@ -647,7 +647,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
             "update"
         );
         if (!updateAccess.allowed) return updateAccess.response;
-        const accessResult = await requireAgentAccess(authResult.context.organizationId, id);
+        const accessResult = await requireAgentAccess(authResult.context.organizationId, id, authResult.context.userId);
         if (accessResult.response) {
             return accessResult.response;
         }
@@ -732,7 +732,7 @@ export async function DELETE(
             "delete"
         );
         if (!deleteAccess.allowed) return deleteAccess.response;
-        const accessResult = await requireAgentAccess(authResult.context.organizationId, id);
+        const accessResult = await requireAgentAccess(authResult.context.organizationId, id, authResult.context.userId);
         if (accessResult.response) {
             return accessResult.response;
         }
