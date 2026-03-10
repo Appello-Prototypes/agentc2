@@ -1403,6 +1403,37 @@ model MastraWorkflowSnapshot {
     @@ignore
 }
 
+// Mastra memory vector store — managed by @mastra/memory, NOT by Prisma.
+model MemoryMessages {
+    id        Int     @id @default(autoincrement())
+    vectorId  String  @unique @map("vector_id")
+    embedding Unsupported("vector")?
+    metadata  Json?
+
+    @@map("memory_messages")
+    @@ignore
+}
+
+// Mastra stored agent — managed by @mastra/pg, NOT by Prisma.
+model StoredAgent {
+    id            String   @id
+    name          String
+    description   String?
+    instructions  String
+    modelProvider String
+    modelName     String
+    temperature   Float?
+    tools         String[]
+    memory        Boolean
+    metadata      Json?
+    isActive      Boolean
+    createdAt     DateTime
+    updatedAt     DateTime
+
+    @@map("stored_agent")
+    @@ignore
+}
+
 // ==============================
 // Channel System Models
 // ==============================
