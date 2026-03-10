@@ -95,7 +95,7 @@ export async function POST(request: NextRequest) {
             Date.now().toString(36);
 
         const organizationId = await getUserOrganizationId(session.user.id);
-        const workspaceId = await getDefaultWorkspaceIdForUser(session.user.id);
+        const workspaceId = await getDefaultWorkspaceIdForUser(session.user.id, organizationId);
         if (!organizationId || !workspaceId) {
             return NextResponse.json(
                 { error: "No organization or workspace found" },

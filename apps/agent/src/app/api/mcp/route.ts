@@ -862,7 +862,7 @@ export async function POST(request: NextRequest) {
                 }
 
                 if (route.applyDefaults) {
-                    const workspaceId = await getDefaultWorkspaceIdForUser(userId);
+                    const workspaceId = await getDefaultWorkspaceIdForUser(userId, organizationId);
                     if (route.name.startsWith("agent-")) {
                         if (organizationId && scopedParams.organizationId === undefined) {
                             scopedParams.organizationId = organizationId;

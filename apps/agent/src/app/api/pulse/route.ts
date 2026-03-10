@@ -56,9 +56,9 @@ export async function POST(request: NextRequest) {
     try {
         const auth = await requireAuth(request);
         if (auth.response) return auth.response;
-        const { userId } = auth.context;
+        const { userId, organizationId } = auth.context;
 
-        const workspaceId = await getDefaultWorkspaceIdForUser(userId);
+        const workspaceId = await getDefaultWorkspaceIdForUser(userId, organizationId);
         if (!workspaceId) {
             return NextResponse.json(
                 { success: false, error: "No workspace found for user" },

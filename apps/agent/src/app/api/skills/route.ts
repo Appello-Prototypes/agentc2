@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
         const take = parseInt(searchParams.get("take") || "50", 10);
         const workspaceId =
             searchParams.get("workspaceId") ||
-            (await getDefaultWorkspaceIdForUser(authCtx.userId)) ||
+            (await getDefaultWorkspaceIdForUser(authCtx.userId, authCtx.organizationId)) ||
             undefined;
 
         const result = await listSkills({
@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
         }
 
         const workspaceId =
-            body.workspaceId || (await getDefaultWorkspaceIdForUser(authCtx.userId)) || undefined;
+            body.workspaceId || (await getDefaultWorkspaceIdForUser(authCtx.userId, authCtx.organizationId)) || undefined;
 
         const input: CreateSkillInput = {
             slug,

@@ -37,12 +37,12 @@ export async function GET(request: NextRequest) {
         const skip = parseInt(searchParams.get("skip") || "0", 10);
         const take = parseInt(searchParams.get("take") || "50", 10);
 
+        const organizationId = apiAuth?.organizationId || (await getUserOrganizationId(userId));
+
         const workspaceId =
             searchParams.get("workspaceId") ||
-            (await getDefaultWorkspaceIdForUser(userId)) ||
+            (await getDefaultWorkspaceIdForUser(userId, organizationId)) ||
             undefined;
-
-        const organizationId = await getUserOrganizationId(userId);
 
         const result = await listDocumentRecords({
             organizationId: organizationId || undefined,
@@ -105,10 +105,10 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const workspaceId =
-            body.workspaceId || (await getDefaultWorkspaceIdForUser(userId)) || undefined;
+        const organizationId = apiAuth?.organizationId || (await getUserOrganizationId(userId));
 
-        const organizationId = await getUserOrganizationId(userId);
+        const workspaceId =
+            body.workspaceId || (await getDefaultWorkspaceIdForUser(userId, organizationId)) || undefined;
 
         const input: CreateDocumentInput = {
             slug,

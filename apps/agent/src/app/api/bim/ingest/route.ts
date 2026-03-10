@@ -104,7 +104,7 @@ export async function POST(request: NextRequest) {
             }
 
             if (!resolvedWorkspaceId) {
-                resolvedWorkspaceId = await getDefaultWorkspaceIdForUser(session.user.id);
+                resolvedWorkspaceId = await getDefaultWorkspaceIdForUser(session.user.id, userOrgId);
             }
 
             const buffer = Buffer.from(await file.arrayBuffer());
@@ -241,7 +241,8 @@ export async function POST(request: NextRequest) {
         }
         let resolvedWorkspaceId = body.workspaceId || null;
         if (!resolvedWorkspaceId) {
-            resolvedWorkspaceId = await getDefaultWorkspaceIdForUser(session.user.id);
+            const bodyOrgId = await getUserOrganizationId(session.user.id);
+            resolvedWorkspaceId = await getDefaultWorkspaceIdForUser(session.user.id, bodyOrgId);
         }
         const result = await ingestBimModel({
             modelId: body.modelId,

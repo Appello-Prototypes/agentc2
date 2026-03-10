@@ -179,10 +179,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         let enrichedRequestContext = requestContext;
         const tOrg = performance.now();
         if (rawUserId && !rawUserId.startsWith("anon-")) {
-            const [orgId, workspaceId] = await Promise.all([
-                getUserOrganizationId(rawUserId),
-                getDefaultWorkspaceIdForUser(rawUserId)
-            ]);
+            const orgId = await getUserOrganizationId(rawUserId);
+            const workspaceId = await getDefaultWorkspaceIdForUser(rawUserId, orgId);
             resolvedOrgId = orgId;
             if (orgId || workspaceId) {
                 enrichedRequestContext = {

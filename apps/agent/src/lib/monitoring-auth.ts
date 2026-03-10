@@ -54,7 +54,7 @@ export async function requireMonitoringWorkspace(
             return { ok: false, status: 403, error: "Workspace not accessible" } as const;
         }
     } else {
-        resolvedWorkspaceId = await getDefaultWorkspaceIdForUser(userId);
+        resolvedWorkspaceId = await getDefaultWorkspaceIdForUser(userId, membership.organizationId);
         if (!resolvedWorkspaceId) {
             const workspace = await prisma.workspace.findFirst({
                 where: { organizationId: membership.organizationId },
