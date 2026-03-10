@@ -1,4 +1,4 @@
-import { PrismaClient } from "../packages/database/node_modules/.prisma/client";
+import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 const dryRun = !process.argv.includes("--apply");
