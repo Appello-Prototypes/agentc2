@@ -9,6 +9,7 @@ interface UnifiedRun {
     kind: RunKind;
     name: string;
     slug: string;
+    agentSlug?: string;
     status: string;
     inputText: string;
     outputText?: string | null;
@@ -200,6 +201,7 @@ export async function GET(request: NextRequest) {
                     kind: "agent",
                     name: run.agent.name,
                     slug: run.agent.slug,
+                    agentSlug: run.agent.slug,
                     status: run.status,
                     inputText: run.inputText,
                     outputText: run.outputText,

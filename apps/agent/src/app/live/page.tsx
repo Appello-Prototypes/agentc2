@@ -1632,7 +1632,7 @@ export function LiveRunsContent() {
                                                     size="sm"
                                                     onClick={() =>
                                                         router.push(
-                                                            `/agents/${selectedRun.agentSlug}/runs?runId=${selectedRun.id}`
+                                                            `/agents/${selectedRun.agentSlug || selectedRun.slug}/runs?runId=${selectedRun.id}`
                                                         )
                                                     }
                                                 >
