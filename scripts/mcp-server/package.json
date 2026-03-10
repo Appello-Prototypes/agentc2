@@ -1,13 +1,14 @@
 {
   "name": "agentc2-mcp-server",
-  "version": "1.0.0",
-  "description": "MCP server that exposes AgentC2 agents as callable tools",
+  "version": "2.0.0",
+  "description": "MCP server that exposes AgentC2 platform capabilities as callable tools",
   "type": "module",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.0"
+    "@modelcontextprotocol/sdk": "^1.25.0",
+    "zod": "^3.24.0"
   }
 }

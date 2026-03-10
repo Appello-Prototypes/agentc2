@@ -2,7 +2,7 @@ import { McpToolDefinition, McpToolRoute } from "./types";
 
 export const scheduleToolDefinitions: McpToolDefinition[] = [
     {
-        name: "agent_schedule_create",
+        name: "agent-schedule-create",
         description: "Create a schedule for an agent.",
         inputSchema: {
             type: "object",
@@ -23,7 +23,7 @@ export const scheduleToolDefinitions: McpToolDefinition[] = [
         category: "schedules"
     },
     {
-        name: "agent_schedule_list",
+        name: "agent-schedule-list",
         description: "List schedules for an agent.",
         inputSchema: {
             type: "object",
@@ -36,7 +36,7 @@ export const scheduleToolDefinitions: McpToolDefinition[] = [
         category: "schedules"
     },
     {
-        name: "agent_schedule_update",
+        name: "agent-schedule-update",
         description: "Update a schedule for an agent.",
         inputSchema: {
             type: "object",
@@ -58,7 +58,7 @@ export const scheduleToolDefinitions: McpToolDefinition[] = [
         category: "schedules"
     },
     {
-        name: "agent_schedule_delete",
+        name: "agent-schedule-delete",
         description: "Delete a schedule for an agent.",
         inputSchema: {
             type: "object",
@@ -76,7 +76,7 @@ export const scheduleToolDefinitions: McpToolDefinition[] = [
 export const scheduleToolRoutes: McpToolRoute[] = [
     {
         kind: "internal",
-        name: "agent_schedule_create",
+        name: "agent-schedule-create",
         method: "POST",
         path: "/api/agents/{agentId}/schedules",
         pathParams: ["agentId"],
@@ -93,14 +93,14 @@ export const scheduleToolRoutes: McpToolRoute[] = [
     },
     {
         kind: "internal",
-        name: "agent_schedule_list",
+        name: "agent-schedule-list",
         method: "GET",
         path: "/api/agents/{agentId}/schedules",
         pathParams: ["agentId"]
     },
     {
         kind: "internal",
-        name: "agent_schedule_update",
+        name: "agent-schedule-update",
         method: "PATCH",
         path: "/api/agents/{agentId}/schedules/{scheduleId}",
         pathParams: ["agentId", "scheduleId"],
@@ -117,7 +117,7 @@ export const scheduleToolRoutes: McpToolRoute[] = [
     },
     {
         kind: "internal",
-        name: "agent_schedule_delete",
+        name: "agent-schedule-delete",
         method: "DELETE",
         path: "/api/agents/{agentId}/schedules/{scheduleId}",
         pathParams: ["agentId", "scheduleId"]

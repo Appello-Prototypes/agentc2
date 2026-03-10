@@ -2,7 +2,7 @@ import { McpToolDefinition, McpToolRoute } from "./types";
 
 export const outputActionToolDefinitions: McpToolDefinition[] = [
     {
-        name: "agent_output_actions_list",
+        name: "agent-output-actions-list",
         description: "List output actions for an agent.",
         inputSchema: {
             type: "object",
@@ -15,7 +15,7 @@ export const outputActionToolDefinitions: McpToolDefinition[] = [
         category: "output-actions"
     },
     {
-        name: "agent_output_action_create",
+        name: "agent-output-action-create",
         description:
             "Create an output action for an agent. Output actions handle plumbing (WEBHOOK, CHAIN_AGENT). Agents handle their own communication via MCP tools.",
         inputSchema: {
@@ -40,7 +40,7 @@ export const outputActionToolDefinitions: McpToolDefinition[] = [
         category: "output-actions"
     },
     {
-        name: "agent_output_action_update",
+        name: "agent-output-action-update",
         description: "Update an output action for an agent.",
         inputSchema: {
             type: "object",
@@ -58,7 +58,7 @@ export const outputActionToolDefinitions: McpToolDefinition[] = [
         category: "output-actions"
     },
     {
-        name: "agent_output_action_delete",
+        name: "agent-output-action-delete",
         description: "Delete an output action for an agent.",
         inputSchema: {
             type: "object",
@@ -72,7 +72,7 @@ export const outputActionToolDefinitions: McpToolDefinition[] = [
         category: "output-actions"
     },
     {
-        name: "agent_output_action_test",
+        name: "agent-output-action-test",
         description:
             "Test an output action by executing it against the agent's most recent completed run.",
         inputSchema: {
@@ -91,14 +91,14 @@ export const outputActionToolDefinitions: McpToolDefinition[] = [
 export const outputActionToolRoutes: McpToolRoute[] = [
     {
         kind: "internal",
-        name: "agent_output_actions_list",
+        name: "agent-output-actions-list",
         method: "GET",
         path: "/api/agents/{agentId}/output-actions",
         pathParams: ["agentId"]
     },
     {
         kind: "internal",
-        name: "agent_output_action_create",
+        name: "agent-output-action-create",
         method: "POST",
         path: "/api/agents/{agentId}/output-actions",
         pathParams: ["agentId"],
@@ -106,7 +106,7 @@ export const outputActionToolRoutes: McpToolRoute[] = [
     },
     {
         kind: "internal",
-        name: "agent_output_action_update",
+        name: "agent-output-action-update",
         method: "PATCH",
         path: "/api/agents/{agentId}/output-actions/{actionId}",
         pathParams: ["agentId", "actionId"],
@@ -114,14 +114,14 @@ export const outputActionToolRoutes: McpToolRoute[] = [
     },
     {
         kind: "internal",
-        name: "agent_output_action_delete",
+        name: "agent-output-action-delete",
         method: "DELETE",
         path: "/api/agents/{agentId}/output-actions/{actionId}",
         pathParams: ["agentId", "actionId"]
     },
     {
         kind: "internal",
-        name: "agent_output_action_test",
+        name: "agent-output-action-test",
         method: "POST",
         path: "/api/agents/{agentId}/output-actions/{actionId}/test",
         pathParams: ["agentId", "actionId"]

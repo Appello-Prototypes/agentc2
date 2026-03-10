@@ -199,6 +199,7 @@ export async function GET(request: NextRequest) {
 
         const { searchParams } = new URL(request.url);
         const includeInactive = searchParams.get("includeInactive") === "true";
+        const legacyMode = searchParams.get("legacy") === "true";
         const normalizeSchema = (
             schema: unknown,
             fallback: Record<string, unknown>
@@ -542,21 +543,19 @@ export async function GET(request: NextRequest) {
             invoke_url: `/api/agents/${inst.agent.slug}/invoke`
         }));
 
-        const allTools = [
-            ...tools,
-            ...instanceTools,
-            ...workflowTools,
-            ...networkTools,
-            ...staticTools
-        ];
+        // In legacy mode, include per-entity invoke tools (agent.{slug}, workflow-{slug}, network-{slug}).
+        // In default mode, these are excluded — use agent-invoke-dynamic, workflow-execute, network-execute instead.
+        const allTools = legacyMode
+            ? [...tools, ...instanceTools, ...workflowTools, ...networkTools, ...staticTools]
+            : [...instanceTools, ...staticTools];
 
         return NextResponse.json({
             success: true,
-            protocol: "mcp-agent-gateway/1.0",
+            protocol: "mcp-agent-gateway/2.0",
             server_info: {
-                name: "mastra-agent-gateway",
-                version: "1.0.0",
-                capabilities: ["tools", "invoke"]
+                name: "agentc2-gateway",
+                version: "2.0.0",
+                capabilities: ["tools", "invoke", "resources"]
             },
             tools: allTools,
             total: allTools.length

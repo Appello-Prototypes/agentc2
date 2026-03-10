@@ -1,5 +1,12 @@
 export type JsonSchema = Record<string, unknown>;
 
+export type McpToolAnnotations = {
+    readOnlyHint?: boolean;
+    destructiveHint?: boolean;
+    idempotentHint?: boolean;
+    openWorldHint?: boolean;
+};
+
 export type McpToolDefinition = {
     name: string;
     description: string;
@@ -7,6 +14,7 @@ export type McpToolDefinition = {
     outputSchema?: JsonSchema;
     invoke_url?: string;
     category: string;
+    annotations?: McpToolAnnotations;
 };
 
 export type InternalToolRoute = {

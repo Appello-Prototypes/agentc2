@@ -2,7 +2,7 @@ import { McpToolDefinition, McpToolRoute } from "./types";
 
 export const executionTriggerToolDefinitions: McpToolDefinition[] = [
     {
-        name: "agent_trigger_unified_list",
+        name: "agent-trigger-unified-list",
         description: "List all execution triggers for an agent.",
         inputSchema: {
             type: "object",
@@ -15,7 +15,7 @@ export const executionTriggerToolDefinitions: McpToolDefinition[] = [
         category: "execution-triggers"
     },
     {
-        name: "agent_trigger_unified_get",
+        name: "agent-trigger-unified-get",
         description: "Get a unified execution trigger.",
         inputSchema: {
             type: "object",
@@ -29,7 +29,7 @@ export const executionTriggerToolDefinitions: McpToolDefinition[] = [
         category: "execution-triggers"
     },
     {
-        name: "agent_trigger_unified_create",
+        name: "agent-trigger-unified-create",
         description: "Create a unified execution trigger.",
         inputSchema: {
             type: "object",
@@ -53,7 +53,7 @@ export const executionTriggerToolDefinitions: McpToolDefinition[] = [
         category: "execution-triggers"
     },
     {
-        name: "agent_trigger_unified_update",
+        name: "agent-trigger-unified-update",
         description: "Update a unified execution trigger.",
         inputSchema: {
             type: "object",
@@ -77,7 +77,7 @@ export const executionTriggerToolDefinitions: McpToolDefinition[] = [
         category: "execution-triggers"
     },
     {
-        name: "agent_trigger_unified_delete",
+        name: "agent-trigger-unified-delete",
         description: "Delete a unified execution trigger.",
         inputSchema: {
             type: "object",
@@ -91,7 +91,7 @@ export const executionTriggerToolDefinitions: McpToolDefinition[] = [
         category: "execution-triggers"
     },
     {
-        name: "agent_trigger_unified_enable",
+        name: "agent-trigger-unified-enable",
         description: "Enable a unified execution trigger.",
         inputSchema: {
             type: "object",
@@ -105,7 +105,7 @@ export const executionTriggerToolDefinitions: McpToolDefinition[] = [
         category: "execution-triggers"
     },
     {
-        name: "agent_trigger_unified_disable",
+        name: "agent-trigger-unified-disable",
         description: "Disable a unified execution trigger.",
         inputSchema: {
             type: "object",
@@ -119,7 +119,7 @@ export const executionTriggerToolDefinitions: McpToolDefinition[] = [
         category: "execution-triggers"
     },
     {
-        name: "agent_trigger_test",
+        name: "agent-trigger-test",
         description: "Dry-run a unified trigger.",
         inputSchema: {
             type: "object",
@@ -138,7 +138,7 @@ export const executionTriggerToolDefinitions: McpToolDefinition[] = [
         category: "execution-triggers"
     },
     {
-        name: "agent_trigger_execute",
+        name: "agent-trigger-execute",
         description: "Execute a unified trigger.",
         inputSchema: {
             type: "object",
@@ -161,21 +161,21 @@ export const executionTriggerToolDefinitions: McpToolDefinition[] = [
 export const executionTriggerToolRoutes: McpToolRoute[] = [
     {
         kind: "internal",
-        name: "agent_trigger_unified_list",
+        name: "agent-trigger-unified-list",
         method: "GET",
         path: "/api/agents/{agentId}/execution-triggers",
         pathParams: ["agentId"]
     },
     {
         kind: "internal",
-        name: "agent_trigger_unified_get",
+        name: "agent-trigger-unified-get",
         method: "GET",
         path: "/api/agents/{agentId}/execution-triggers/{triggerId}",
         pathParams: ["agentId", "triggerId"]
     },
     {
         kind: "internal",
-        name: "agent_trigger_unified_create",
+        name: "agent-trigger-unified-create",
         method: "POST",
         path: "/api/agents/{agentId}/execution-triggers",
         pathParams: ["agentId"],
@@ -195,7 +195,7 @@ export const executionTriggerToolRoutes: McpToolRoute[] = [
     },
     {
         kind: "internal",
-        name: "agent_trigger_unified_update",
+        name: "agent-trigger-unified-update",
         method: "PATCH",
         path: "/api/agents/{agentId}/execution-triggers/{triggerId}",
         pathParams: ["agentId", "triggerId"],
@@ -214,14 +214,14 @@ export const executionTriggerToolRoutes: McpToolRoute[] = [
     },
     {
         kind: "internal",
-        name: "agent_trigger_unified_delete",
+        name: "agent-trigger-unified-delete",
         method: "DELETE",
         path: "/api/agents/{agentId}/execution-triggers/{triggerId}",
         pathParams: ["agentId", "triggerId"]
     },
     {
         kind: "internal",
-        name: "agent_trigger_unified_enable",
+        name: "agent-trigger-unified-enable",
         method: "PATCH",
         path: "/api/agents/{agentId}/execution-triggers/{triggerId}",
         pathParams: ["agentId", "triggerId"],
@@ -229,7 +229,7 @@ export const executionTriggerToolRoutes: McpToolRoute[] = [
     },
     {
         kind: "internal",
-        name: "agent_trigger_unified_disable",
+        name: "agent-trigger-unified-disable",
         method: "PATCH",
         path: "/api/agents/{agentId}/execution-triggers/{triggerId}",
         pathParams: ["agentId", "triggerId"],
@@ -237,7 +237,7 @@ export const executionTriggerToolRoutes: McpToolRoute[] = [
     },
     {
         kind: "internal",
-        name: "agent_trigger_test",
+        name: "agent-trigger-test",
         method: "POST",
         path: "/api/agents/{agentId}/execution-triggers/{triggerId}/test",
         pathParams: ["agentId", "triggerId"],
@@ -245,7 +245,7 @@ export const executionTriggerToolRoutes: McpToolRoute[] = [
     },
     {
         kind: "internal",
-        name: "agent_trigger_execute",
+        name: "agent-trigger-execute",
         method: "POST",
         path: "/api/agents/{agentId}/execution-triggers/{triggerId}/execute",
         pathParams: ["agentId", "triggerId"],

@@ -140,6 +140,7 @@ export { golfnowSearchTool } from "./golfnow-search";
 export { golfnowBookTool } from "./golfnow-book";
 export { golfnorthSearchTool } from "./golfnorth-search";
 export { golfCourseDiscoverTool } from "./golf-course-discover";
+export { teeonScanCoursesTool } from "./teeon-scan-courses";
 export { resolveChronoGolfCredentials, resolveGolfNowCredentials } from "./golf-credentials";
 export {
     integrationImportMcpJsonTool,

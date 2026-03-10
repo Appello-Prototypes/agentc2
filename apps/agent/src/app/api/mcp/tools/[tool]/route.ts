@@ -47,87 +47,87 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                 outputSchema: Record<string, unknown>;
             }
         > = {
-            agent_schedule_create: {
+            "agent-schedule-create": {
                 description: "Create a schedule for an agent.",
                 inputSchema: { type: "object", additionalProperties: true },
                 outputSchema: { type: "object", additionalProperties: true }
             },
-            agent_schedule_list: {
+            "agent-schedule-list": {
                 description: "List schedules for an agent.",
                 inputSchema: { type: "object", additionalProperties: true },
                 outputSchema: { type: "object", additionalProperties: true }
             },
-            agent_schedule_update: {
+            "agent-schedule-update": {
                 description: "Update a schedule for an agent.",
                 inputSchema: { type: "object", additionalProperties: true },
                 outputSchema: { type: "object", additionalProperties: true }
             },
-            agent_schedule_delete: {
+            "agent-schedule-delete": {
                 description: "Delete a schedule for an agent.",
                 inputSchema: { type: "object", additionalProperties: true },
                 outputSchema: { type: "object", additionalProperties: true }
             },
-            agent_trigger_create: {
+            "agent-trigger-create": {
                 description: "Create a trigger for an agent.",
                 inputSchema: { type: "object", additionalProperties: true },
                 outputSchema: { type: "object", additionalProperties: true }
             },
-            agent_trigger_list: {
+            "agent-trigger-list": {
                 description: "List triggers for an agent.",
                 inputSchema: { type: "object", additionalProperties: true },
                 outputSchema: { type: "object", additionalProperties: true }
             },
-            agent_trigger_update: {
+            "agent-trigger-update": {
                 description: "Update a trigger for an agent.",
                 inputSchema: { type: "object", additionalProperties: true },
                 outputSchema: { type: "object", additionalProperties: true }
             },
-            agent_trigger_delete: {
+            "agent-trigger-delete": {
                 description: "Delete a trigger for an agent.",
                 inputSchema: { type: "object", additionalProperties: true },
                 outputSchema: { type: "object", additionalProperties: true }
             },
-            agent_trigger_unified_list: {
+            "agent-trigger-unified-list": {
                 description: "List unified execution triggers for an agent.",
                 inputSchema: { type: "object", additionalProperties: true },
                 outputSchema: { type: "object", additionalProperties: true }
             },
-            agent_trigger_unified_get: {
+            "agent-trigger-unified-get": {
                 description: "Get a unified execution trigger.",
                 inputSchema: { type: "object", additionalProperties: true },
                 outputSchema: { type: "object", additionalProperties: true }
             },
-            agent_trigger_unified_create: {
+            "agent-trigger-unified-create": {
                 description: "Create a unified execution trigger.",
                 inputSchema: { type: "object", additionalProperties: true },
                 outputSchema: { type: "object", additionalProperties: true }
             },
-            agent_trigger_unified_update: {
+            "agent-trigger-unified-update": {
                 description: "Update a unified execution trigger.",
                 inputSchema: { type: "object", additionalProperties: true },
                 outputSchema: { type: "object", additionalProperties: true }
             },
-            agent_trigger_unified_delete: {
+            "agent-trigger-unified-delete": {
                 description: "Delete a unified execution trigger.",
                 inputSchema: { type: "object", additionalProperties: true },
                 outputSchema: { type: "object", additionalProperties: true }
             },
-            agent_trigger_unified_enable: {
+            "agent-trigger-unified-enable": {
                 description: "Enable a unified execution trigger.",
                 inputSchema: { type: "object", additionalProperties: true },
                 outputSchema: { type: "object", additionalProperties: true }
             },
-            agent_trigger_unified_disable: {
+            "agent-trigger-unified-disable": {
                 description: "Disable a unified execution trigger.",
                 inputSchema: { type: "object", additionalProperties: true },
                 outputSchema: { type: "object", additionalProperties: true }
             },
-            agent_trigger_test: {
+            "agent-trigger-test": {
                 description: "Dry-run a unified trigger.",
                 inputSchema: { type: "object", additionalProperties: true },
                 outputSchema: { type: "object", additionalProperties: true }
             },
-            agent_trigger_execute: {
+            "agent-trigger-execute": {
                 description: "Execute a unified trigger.",
                 inputSchema: { type: "object", additionalProperties: true },
                 outputSchema: { type: "object", additionalProperties: true }

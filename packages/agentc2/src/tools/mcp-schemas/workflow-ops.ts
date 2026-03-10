@@ -2,7 +2,7 @@ import { McpToolDefinition, McpToolRoute } from "./types";
 
 export const workflowOpsToolDefinitions: McpToolDefinition[] = [
     {
-        name: "workflow.execute",
+        name: "workflow-execute",
         description: "Execute a workflow by slug or ID.",
         inputSchema: {
             type: "object",
@@ -29,7 +29,7 @@ export const workflowOpsToolDefinitions: McpToolDefinition[] = [
         category: "workflow-ops"
     },
     {
-        name: "workflow.list-runs",
+        name: "workflow-list-runs",
         description: "List workflow runs with filters and time range.",
         inputSchema: {
             type: "object",
@@ -49,7 +49,7 @@ export const workflowOpsToolDefinitions: McpToolDefinition[] = [
         category: "workflow-ops"
     },
     {
-        name: "workflow.get-run",
+        name: "workflow-get-run",
         description: "Fetch workflow run details including steps.",
         inputSchema: {
             type: "object",
@@ -123,12 +123,12 @@ export const workflowOpsToolDefinitions: McpToolDefinition[] = [
 export const workflowOpsToolRoutes: McpToolRoute[] = [
     {
         kind: "custom",
-        name: "workflow.execute",
+        name: "workflow-execute",
         handler: "workflowExecute"
     },
     {
         kind: "internal",
-        name: "workflow.list-runs",
+        name: "workflow-list-runs",
         method: "GET",
         path: "/api/workflows/{workflowSlug}/runs",
         pathParams: ["workflowSlug"],
@@ -137,7 +137,7 @@ export const workflowOpsToolRoutes: McpToolRoute[] = [
     },
     {
         kind: "internal",
-        name: "workflow.get-run",
+        name: "workflow-get-run",
         method: "GET",
         path: "/api/workflows/{workflowSlug}/runs/{runId}",
         pathParams: ["workflowSlug", "runId"],

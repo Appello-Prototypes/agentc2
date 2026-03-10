@@ -2,7 +2,7 @@ import { McpToolDefinition, McpToolRoute } from "./types";
 
 export const triggerToolDefinitions: McpToolDefinition[] = [
     {
-        name: "agent_trigger_create",
+        name: "agent-trigger-create",
         description: "Create a trigger for an agent.",
         inputSchema: {
             type: "object",
@@ -22,7 +22,7 @@ export const triggerToolDefinitions: McpToolDefinition[] = [
         category: "triggers"
     },
     {
-        name: "agent_trigger_list",
+        name: "agent-trigger-list",
         description: "List triggers for an agent.",
         inputSchema: {
             type: "object",
@@ -35,7 +35,7 @@ export const triggerToolDefinitions: McpToolDefinition[] = [
         category: "triggers"
     },
     {
-        name: "agent_trigger_update",
+        name: "agent-trigger-update",
         description: "Update a trigger for an agent.",
         inputSchema: {
             type: "object",
@@ -55,7 +55,7 @@ export const triggerToolDefinitions: McpToolDefinition[] = [
         category: "triggers"
     },
     {
-        name: "agent_trigger_delete",
+        name: "agent-trigger-delete",
         description: "Delete a trigger for an agent.",
         inputSchema: {
             type: "object",
@@ -73,7 +73,7 @@ export const triggerToolDefinitions: McpToolDefinition[] = [
 export const triggerToolRoutes: McpToolRoute[] = [
     {
         kind: "internal",
-        name: "agent_trigger_create",
+        name: "agent-trigger-create",
         method: "POST",
         path: "/api/agents/{agentId}/triggers",
         pathParams: ["agentId"],
@@ -89,14 +89,14 @@ export const triggerToolRoutes: McpToolRoute[] = [
     },
     {
         kind: "internal",
-        name: "agent_trigger_list",
+        name: "agent-trigger-list",
         method: "GET",
         path: "/api/agents/{agentId}/triggers",
         pathParams: ["agentId"]
     },
     {
         kind: "internal",
-        name: "agent_trigger_update",
+        name: "agent-trigger-update",
         method: "PATCH",
         path: "/api/agents/{agentId}/triggers/{triggerId}",
         pathParams: ["agentId", "triggerId"],
@@ -104,7 +104,7 @@ export const triggerToolRoutes: McpToolRoute[] = [
     },
     {
         kind: "internal",
-        name: "agent_trigger_delete",
+        name: "agent-trigger-delete",
         method: "DELETE",
         path: "/api/agents/{agentId}/triggers/{triggerId}",
         pathParams: ["agentId", "triggerId"]

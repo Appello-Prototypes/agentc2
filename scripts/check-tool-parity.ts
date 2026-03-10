@@ -33,45 +33,33 @@ const checkConcierges = args.has("--check-concierges");
  * Normalise MCP schema names to registry-style hyphenated IDs.
  *
  * Known naming discrepancies between MCP schema and registry:
- *   - Schedules: MCP "agent_schedule_create" -> registry "schedule-create"
- *   - Execution triggers: MCP "agent_trigger_unified_list" -> registry "trigger-unified-list"
- *   - Legacy triggers: MCP "agent_trigger_create" -> registry (no equivalent, skip)
- *   - Workflow ops: MCP "workflow.execute" -> registry "workflow-execute"
- *   - Network ops: MCP "network.execute" -> registry "network-execute"
+ *   - Schedules: MCP "agent-schedule-create" -> registry "schedule-create"
+ *   - Execution triggers: MCP "agent-trigger-unified-list" -> registry "trigger-unified-list"
+ *   - Legacy triggers: MCP "agent-trigger-create" -> registry (no equivalent, skip)
  */
 const mcpToRegistryOverrides: Record<string, string> = {
-    // Schedule tools (MCP uses agent_ prefix, registry does not)
-    agent_schedule_create: "schedule-create",
-    agent_schedule_list: "schedule-list",
-    agent_schedule_update: "schedule-update",
-    agent_schedule_delete: "schedule-delete",
+    // Schedule tools (MCP uses agent- prefix, registry does not)
+    "agent-schedule-create": "schedule-create",
+    "agent-schedule-list": "schedule-list",
+    "agent-schedule-update": "schedule-update",
+    "agent-schedule-delete": "schedule-delete",
 
-    // Execution trigger tools (MCP uses agent_trigger_ prefix, registry uses trigger-)
-    agent_trigger_unified_list: "trigger-unified-list",
-    agent_trigger_unified_get: "trigger-unified-get",
-    agent_trigger_unified_create: "trigger-unified-create",
-    agent_trigger_unified_update: "trigger-unified-update",
-    agent_trigger_unified_delete: "trigger-unified-delete",
-    agent_trigger_unified_enable: "trigger-unified-enable",
-    agent_trigger_unified_disable: "trigger-unified-disable",
-    agent_trigger_test: "trigger-test",
-    agent_trigger_execute: "trigger-execute",
+    // Execution trigger tools (MCP uses agent-trigger- prefix, registry uses trigger-)
+    "agent-trigger-unified-list": "trigger-unified-list",
+    "agent-trigger-unified-get": "trigger-unified-get",
+    "agent-trigger-unified-create": "trigger-unified-create",
+    "agent-trigger-unified-update": "trigger-unified-update",
+    "agent-trigger-unified-delete": "trigger-unified-delete",
+    "agent-trigger-unified-enable": "trigger-unified-enable",
+    "agent-trigger-unified-disable": "trigger-unified-disable",
+    "agent-trigger-test": "trigger-test",
+    "agent-trigger-execute": "trigger-execute",
 
-    // Legacy triggers (MCP uses agent_trigger_ prefix; these are superseded)
-    agent_trigger_create: "__legacy_trigger_create",
-    agent_trigger_list: "__legacy_trigger_list",
-    agent_trigger_update: "__legacy_trigger_update",
-    agent_trigger_delete: "__legacy_trigger_delete",
-
-    // Workflow ops with dot notation
-    "workflow.execute": "workflow-execute",
-    "workflow.list-runs": "workflow-list-runs",
-    "workflow.get-run": "workflow-get-run",
-
-    // Network ops with dot notation
-    "network.execute": "network-execute",
-    "network.list-runs": "network-list-runs",
-    "network.get-run": "network-get-run"
+    // Legacy triggers (superseded by unified triggers)
+    "agent-trigger-create": "__legacy_trigger_create",
+    "agent-trigger-list": "__legacy_trigger_list",
+    "agent-trigger-update": "__legacy_trigger_update",
+    "agent-trigger-delete": "__legacy_trigger_delete"
 };
 
 /** Legacy MCP tools that are intentionally NOT in the registry */

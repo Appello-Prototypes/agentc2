@@ -2,7 +2,7 @@ import { McpToolDefinition, McpToolRoute } from "./types";
 
 export const networkOpsToolDefinitions: McpToolDefinition[] = [
     {
-        name: "network.execute",
+        name: "network-execute",
         description: "Execute a network by slug or ID.",
         inputSchema: {
             type: "object",
@@ -30,7 +30,7 @@ export const networkOpsToolDefinitions: McpToolDefinition[] = [
         category: "network-ops"
     },
     {
-        name: "network.list-runs",
+        name: "network-list-runs",
         description: "List network runs with filters and time range.",
         inputSchema: {
             type: "object",
@@ -50,7 +50,7 @@ export const networkOpsToolDefinitions: McpToolDefinition[] = [
         category: "network-ops"
     },
     {
-        name: "network.get-run",
+        name: "network-get-run",
         description: "Fetch network run details including steps.",
         inputSchema: {
             type: "object",
@@ -108,12 +108,12 @@ export const networkOpsToolDefinitions: McpToolDefinition[] = [
 export const networkOpsToolRoutes: McpToolRoute[] = [
     {
         kind: "custom",
-        name: "network.execute",
+        name: "network-execute",
         handler: "networkExecute"
     },
     {
         kind: "internal",
-        name: "network.list-runs",
+        name: "network-list-runs",
         method: "GET",
         path: "/api/networks/{networkSlug}/runs",
         pathParams: ["networkSlug"],
@@ -122,7 +122,7 @@ export const networkOpsToolRoutes: McpToolRoute[] = [
     },
     {
         kind: "internal",
-        name: "network.get-run",
+        name: "network-get-run",
         method: "GET",
         path: "/api/networks/{networkSlug}/runs/{runId}",
         pathParams: ["networkSlug", "runId"],

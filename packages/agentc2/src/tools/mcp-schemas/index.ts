@@ -42,11 +42,12 @@ import { egressPolicyToolDefinitions, egressPolicyToolRoutes } from "./egress-po
 import { auditIntegrityToolDefinitions, auditIntegrityToolRoutes } from "./audit-integrity";
 import { aiModelToolDefinitions, aiModelToolRoutes } from "./ai-models";
 import type { McpToolDefinition, McpToolRoute } from "./types";
+import { deriveAnnotations } from "./shared";
 
-export type { McpToolDefinition, McpToolRoute } from "./types";
+export type { McpToolDefinition, McpToolRoute, McpToolAnnotations } from "./types";
 export * from "./shared";
 
-export const mcpToolDefinitions: McpToolDefinition[] = [
+const rawToolDefinitions: McpToolDefinition[] = [
     ...agentOperationsToolDefinitions,
     ...agentQualityToolDefinitions,
     ...agentLearningToolDefinitions,
@@ -91,6 +92,14 @@ export const mcpToolDefinitions: McpToolDefinition[] = [
     ...auditIntegrityToolDefinitions,
     ...aiModelToolDefinitions
 ];
+
+// Apply derived annotations to all tools that don't already have them
+export const mcpToolDefinitions: McpToolDefinition[] = rawToolDefinitions.map((tool) => {
+    if (tool.annotations) return tool;
+    const annotations = deriveAnnotations(tool.name, tool.category);
+    if (Object.keys(annotations).length === 0) return tool;
+    return { ...tool, annotations };
+});
 
 export const mcpToolRoutes: McpToolRoute[] = [
     ...agentOperationsToolRoutes,

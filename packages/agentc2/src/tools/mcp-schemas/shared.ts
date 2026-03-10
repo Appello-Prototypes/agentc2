@@ -1,4 +1,47 @@
-import { JsonSchema } from "./types";
+import { JsonSchema, McpToolAnnotations } from "./types";
+
+/**
+ * Derive MCP tool annotations from tool name and category.
+ * Annotations tell AI clients about tool behavior (read-only, destructive, etc.).
+ */
+export function deriveAnnotations(name: string, category: string): McpToolAnnotations {
+    const annotations: McpToolAnnotations = {};
+
+    // Read-only patterns: list, get, read, search, discover, analytics, overview, docs, metrics, stats, verify, versions
+    const readOnlyPatterns =
+        /-(list|get|read|search|discover|analytics|overview|docs|stats|metrics|verify|versions|scorers-list|evaluations-list|feedback-list|test-cases-list|connections-list|providers-list|tools-list|events|policy|sessions|experiments|context|browse|vote)$/;
+    const readOnlyPrefixes = /^(live-|platform-|list-|lookup-|read-)/;
+
+    if (readOnlyPatterns.test(name) || readOnlyPrefixes.test(name)) {
+        annotations.readOnlyHint = true;
+    }
+
+    // Destructive patterns: delete, destroy, teardown, remove, detach, cancel
+    const destructivePatterns = /-(delete|destroy|teardown|remove|detach|cancel)$/;
+    if (destructivePatterns.test(name)) {
+        annotations.destructiveHint = true;
+    }
+
+    // Idempotent patterns: update, set, enable, disable, toggle, bind, unbind
+    const idempotentPatterns = /-(update|set|enable|disable|toggle|bind|unbind|approve|reject)$/;
+    if (idempotentPatterns.test(name)) {
+        annotations.idempotentHint = true;
+    }
+
+    // Open-world patterns: invoke, execute (call external APIs)
+    const openWorldPatterns = /-(invoke-dynamic|execute|invoke-peer)$/;
+    const openWorldExact = /^(execute-code|remote-execute|dispatch-coding-pipeline)$/;
+    if (
+        openWorldPatterns.test(name) ||
+        openWorldExact.test(name) ||
+        category === "network-ops" ||
+        category === "workflow-ops"
+    ) {
+        annotations.openWorldHint = true;
+    }
+
+    return annotations;
+}
 
 export const crudBaseResponseSchema: JsonSchema = {
     type: "object",
