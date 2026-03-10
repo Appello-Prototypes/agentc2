@@ -312,6 +312,9 @@ export class AgentResolver {
             requestContext?.organizationId || requestContext?.resource?.organizationId || undefined;
 
         // Build where clause with workspace isolation
+        // Also allow access to agents owned by the calling user (cross-org)
+        // and public agents, matching listForUser() access logic.
+        const userId = requestContext?.userId || requestContext?.resource?.userId;
         const slugWhere = slug
             ? {
                   slug,
@@ -319,7 +322,13 @@ export class AgentResolver {
                   ...(workspaceId
                       ? { workspaceId }
                       : organizationId
-                        ? { workspace: { organizationId } }
+                        ? {
+                              OR: [
+                                  { workspace: { organizationId } },
+                                  ...(userId ? [{ ownerId: userId }] : []),
+                                  { visibility: "PUBLIC" as const }
+                              ]
+                          }
                         : {})
               }
             : undefined;
@@ -328,7 +337,15 @@ export class AgentResolver {
             ? {
                   id,
                   isActive: true,
-                  ...(organizationId ? { workspace: { organizationId } } : {})
+                  ...(organizationId
+                      ? {
+                            OR: [
+                                { workspace: { organizationId } },
+                                ...(userId ? [{ ownerId: userId }] : []),
+                                { visibility: "PUBLIC" as const }
+                            ]
+                        }
+                      : {})
               }
             : undefined;
 
