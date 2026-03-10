@@ -16,10 +16,17 @@ async function ensureDefaultWorkspace(orgId: string, orgSlug: string) {
             console.log(`  [DRY RUN] Would create default workspace for org "${orgSlug}"`);
             return null;
         }
-        ws = await prisma.workspace.create({
-            data: { organizationId: orgId, name: "Default", slug: "default", isDefault: true }
-        });
-        console.log(`  Created default workspace: ${ws.id}`);
+        const slug = `default-${orgSlug}`.slice(0, 60);
+        try {
+            ws = await prisma.workspace.create({
+                data: { organizationId: orgId, name: "Default", slug, isDefault: true }
+            });
+        } catch {
+            ws = await prisma.workspace.findFirst({
+                where: { organizationId: orgId }
+            });
+        }
+        console.log(`  Created/found default workspace: ${ws?.id}`);
     }
     return ws;
 }
