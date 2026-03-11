@@ -1,5 +1,19 @@
 import { z } from "zod";
 
+export const modelProviderEnum = z.enum([
+    "openai",
+    "anthropic",
+    "google",
+    "groq",
+    "mistral",
+    "xai",
+    "deepseek",
+    "togetherai",
+    "fireworks",
+    "openrouter",
+    "kimi"
+]);
+
 export const modelConfigSchema = z
     .object({
         apiKey: z.string().optional(),
@@ -77,19 +91,7 @@ export const agentCreateSchema = z.object({
     description: z.string().max(2000).optional(),
     instructions: z.string().min(1).max(100000),
     instructionsTemplate: z.string().max(100000).nullable().optional(),
-    modelProvider: z.enum([
-        "openai",
-        "anthropic",
-        "google",
-        "groq",
-        "mistral",
-        "xai",
-        "deepseek",
-        "togetherai",
-        "fireworks",
-        "openrouter",
-        "kimi"
-    ]),
+    modelProvider: modelProviderEnum,
     modelName: z.string().min(1).max(255),
     temperature: z.number().min(0).max(2).optional(),
     maxTokens: z.number().int().positive().optional().nullable(),

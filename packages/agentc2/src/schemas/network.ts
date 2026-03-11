@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { modelProviderEnum } from "./agent";
 
 const networkNodeSchema = z.object({
     id: z.string(),
@@ -40,19 +41,7 @@ export const networkCreateSchema = z.object({
         .optional(),
     description: z.string().max(2000).optional(),
     instructions: z.string().min(1).max(100000),
-    modelProvider: z.enum([
-        "openai",
-        "anthropic",
-        "google",
-        "groq",
-        "mistral",
-        "xai",
-        "deepseek",
-        "togetherai",
-        "fireworks",
-        "openrouter",
-        "kimi"
-    ]),
+    modelProvider: modelProviderEnum,
     modelName: z.string().min(1).max(255),
     temperature: z.number().min(0).max(2).optional(),
     topologyJson: networkTopologySchema,
