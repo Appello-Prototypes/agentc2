@@ -5,6 +5,8 @@ import { createMockRequest, parseResponse } from "../../utils/api-helpers";
 
 const prismaMock = mockDeep<PrismaClient>();
 const authenticateRequestMock = vi.fn();
+const getSessionMock = vi.fn();
+const getUserOrganizationIdMock = vi.fn();
 const getIntegrationProvidersMock = vi.fn();
 const getMcpToolsMock = vi.fn();
 const invalidateMcpCacheForOrgMock = vi.fn();
@@ -21,6 +23,18 @@ vi.mock("@repo/database", () => ({
 
 vi.mock("@/lib/api-auth", () => ({
     authenticateRequest: (...args: unknown[]) => authenticateRequestMock(...args)
+}));
+
+vi.mock("@repo/auth", () => ({
+    auth: {
+        api: {
+            getSession: getSessionMock
+        }
+    }
+}));
+
+vi.mock("@/lib/organization", () => ({
+    getUserOrganizationId: getUserOrganizationIdMock
 }));
 
 vi.mock("@repo/agentc2/mcp", () => ({
@@ -48,6 +62,8 @@ describe("Integrations Hub API", () => {
         mockReset(prismaMock);
         vi.clearAllMocks();
         authenticateRequestMock.mockResolvedValue({ userId: "user-1", organizationId: "org-1" });
+        getSessionMock.mockResolvedValue({ user: { id: "user-1" } });
+        getUserOrganizationIdMock.mockResolvedValue("org-1");
         prismaMock.membership.findFirst.mockResolvedValue({ role: "admin" } as never);
         getMcpToolsMock.mockResolvedValue({});
     });
