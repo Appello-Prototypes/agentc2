@@ -80,10 +80,19 @@ describe("End-to-End Journey: Free Playbook (US-085)", () => {
         });
 
         it("should publish playbook via admin approval", async () => {
-            await setAuthContext("admin-user", "org-publisher-uuid");
+            await setAuthContext("admin-user", "platform-org-uuid");
             const { PATCH } =
                 await import("../../../apps/agent/src/app/api/admin/playbooks/[id]/status/route");
 
+            prismaMock.organization.findUnique.mockResolvedValue({
+                id: "platform-org-uuid",
+                slug: "agentc2"
+            } as never);
+            prismaMock.membership.findUnique.mockResolvedValue({
+                userId: "admin-user",
+                organizationId: "platform-org-uuid",
+                role: "admin"
+            } as never);
             prismaMock.playbook.findUnique.mockResolvedValue({
                 ...mockPlaybook,
                 status: "PENDING_REVIEW"
