@@ -1,9 +1,10 @@
 import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@repo/database";
+import { prisma, Prisma } from "@repo/database";
 import { validateModelSelection } from "@repo/agentc2/agents";
 import type { ModelProvider } from "@repo/agentc2/agents";
 import { recordActivity } from "@repo/agentc2/activity/service";
+import { agentUpdateSchema } from "@repo/agentc2/schemas/agent";
 import {
     createChangeLog,
     detectScalarChange,
@@ -122,6 +123,24 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             return accessResult.response;
         }
         const body = await request.json();
+
+        // Validate request body with Zod schema
+        const validation = agentUpdateSchema.safeParse(body);
+        if (!validation.success) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    error: "Validation failed",
+                    details: validation.error.issues.map(
+                        (issue: { path: (string | number)[]; message: string }) => ({
+                            field: issue.path.join("."),
+                            message: issue.message
+                        })
+                    )
+                },
+                { status: 400 }
+            );
+        }
 
         const existing = await prisma.agent.findUnique({
             where: { id: accessResult.agentId },
@@ -627,11 +646,26 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         });
     } catch (error) {
         console.error("[Agent Update] Error:", error);
+
+        // Handle Prisma-specific errors
+        if (error instanceof Prisma.PrismaClientKnownRequestError) {
+            if (error.code === "P2011") {
+                return NextResponse.json(
+                    { success: false, error: "Required field is null or missing" },
+                    { status: 400 }
+                );
+            }
+            if (error.code === "P2002") {
+                return NextResponse.json(
+                    { success: false, error: "A record with this identifier already exists" },
+                    { status: 409 }
+                );
+            }
+        }
+
+        // Generic error (no sensitive details)
         return NextResponse.json(
-            {
-                success: false,
-                error: error instanceof Error ? error.message : "Failed to update agent"
-            },
+            { success: false, error: "Failed to update agent" },
             { status: 500 }
         );
     }
