@@ -43,18 +43,20 @@ describe("Skill Service", () => {
             expect(result).toEqual(mockSkill);
         });
 
-        it("should default type to USER", async () => {
+        it("should default tags to empty array if not provided", async () => {
             prismaMock.skill.create.mockResolvedValue(mockSkill as never);
 
             await createSkill({
                 slug: "new-skill",
                 name: "New",
-                instructions: "Instructions"
+                instructions: "Instructions",
+                workspaceId: "ws-1",
+                organizationId: "org-1"
             });
 
             expect(prismaMock.skill.create).toHaveBeenCalledWith({
                 data: expect.objectContaining({
-                    type: "USER"
+                    tags: []
                 })
             });
         });
@@ -186,22 +188,22 @@ describe("Skill Service", () => {
             );
         });
 
-        it("should filter by type", async () => {
+        it("should filter by tags", async () => {
             prismaMock.skill.findMany.mockResolvedValue([] as never);
             prismaMock.skill.count.mockResolvedValue(0);
 
-            await listSkills({ type: "USER" });
+            await listSkills({ tags: ["test", "utility"] });
 
             expect(prismaMock.skill.findMany).toHaveBeenCalledWith(
                 expect.objectContaining({
-                    where: expect.objectContaining({ type: "USER" })
+                    where: expect.objectContaining({ tags: { hasSome: ["test", "utility"] } })
                 })
             );
         });
     });
 
     describe("forkSkill", () => {
-        it("should create a USER copy of a SYSTEM skill", async () => {
+        it("should create a copy of an existing skill", async () => {
             const sourceWithRelations = {
                 ...mockSystemSkill,
                 tools: [{ toolId: "agent-create" }, { toolId: "agent-read" }],
@@ -214,8 +216,7 @@ describe("Skill Service", () => {
                 ...mockSkill,
                 id: "forked-uuid",
                 slug: "platform-agent-management-custom",
-                name: "Agent Management (Custom)",
-                type: "USER"
+                name: "Agent Management (Custom)"
             };
             prismaMock.skill.create.mockResolvedValue(forkedSkill as never);
             prismaMock.skillTool.createMany.mockResolvedValue({ count: 2 } as never);
@@ -225,8 +226,7 @@ describe("Skill Service", () => {
             expect(prismaMock.skill.create).toHaveBeenCalledWith({
                 data: expect.objectContaining({
                     slug: "platform-agent-management-custom",
-                    name: "Agent Management (Custom)",
-                    type: "USER"
+                    name: "Agent Management (Custom)"
                 })
             });
             expect(prismaMock.skillTool.createMany).toHaveBeenCalled();

@@ -7,6 +7,7 @@ const prismaMock = mockDeep<PrismaClient>();
 const getSessionMock = vi.fn();
 const getUserOrganizationIdMock = vi.fn();
 const getMcpToolsMock = vi.fn();
+const authenticateRequestMock = vi.fn();
 
 vi.mock("@repo/database", () => ({
     prisma: prismaMock
@@ -28,18 +29,23 @@ vi.mock("@repo/agentc2/mcp", () => ({
     getMcpTools: getMcpToolsMock
 }));
 
+vi.mock("@/lib/api-auth", () => ({
+    authenticateRequest: (...args: unknown[]) => authenticateRequestMock(...args)
+}));
+
 describe("Integration connection actions API", () => {
     beforeEach(() => {
         mockReset(prismaMock);
         vi.clearAllMocks();
         getSessionMock.mockResolvedValue({ user: { id: "user-1" } });
         getUserOrganizationIdMock.mockResolvedValue("org-1");
+        authenticateRequestMock.mockResolvedValue({ userId: "user-1", organizationId: "org-1" });
     });
 
     it("returns 401 when unauthorized", async () => {
         const { GET } =
             await import("../../../apps/agent/src/app/api/integrations/connections/[connectionId]/actions/route");
-        getSessionMock.mockResolvedValue(null);
+        authenticateRequestMock.mockResolvedValue(null);
         const response = await GET(
             createMockRequest("http://localhost/api/integrations/connections/conn-1/actions"),
             {

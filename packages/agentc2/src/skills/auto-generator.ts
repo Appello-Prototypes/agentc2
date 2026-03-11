@@ -144,8 +144,8 @@ export async function generateSkillForMcpServer(
                   instructions,
                   category,
                   tags,
-                  workspaceId: context!.workspaceId!,
-                  organizationId: context!.organizationId!
+                  workspaceId: context?.workspaceId || null,
+                  organizationId: context?.organizationId || null
               }
           });
 

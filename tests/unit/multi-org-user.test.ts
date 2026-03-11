@@ -241,6 +241,7 @@ describe("Multi-Org User Resolution", () => {
                 session: { id: "sess-1" }
             });
 
+            prismaMock.membership.findUnique.mockResolvedValue(null);
             prismaMock.membership.findFirst.mockResolvedValue({
                 id: "m1",
                 userId: USER_1,
