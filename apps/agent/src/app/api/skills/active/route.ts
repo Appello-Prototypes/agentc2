@@ -37,7 +37,10 @@ export async function GET(request: NextRequest) {
 
         // Get full skill details with tools
         const skills = await prisma.skill.findMany({
-            where: { slug: { in: activatedSlugs } },
+            where: {
+                slug: { in: activatedSlugs },
+                organizationId: authContext.organizationId
+            },
             select: {
                 slug: true,
                 name: true,

@@ -23,7 +23,8 @@ function getCredentialValue(
 }
 
 async function resolveIntegrationCredentials(
-    providerKey: string
+    providerKey: string,
+    organizationId?: string
 ): Promise<Record<string, unknown> | null> {
     try {
         const { prisma } = await import("@repo/database");
@@ -31,7 +32,8 @@ async function resolveIntegrationCredentials(
         const connection = await prisma.integrationConnection.findFirst({
             where: {
                 provider: { key: providerKey },
-                isActive: true
+                isActive: true,
+                ...(organizationId ? { organizationId } : {})
             },
             orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }],
             select: { credentials: true }
@@ -45,14 +47,16 @@ async function resolveIntegrationCredentials(
     }
 }
 
-export async function resolveChronoGolfCredentials(): Promise<ChronoGolfCredentials | null> {
+export async function resolveChronoGolfCredentials(
+    organizationId?: string
+): Promise<ChronoGolfCredentials | null> {
     // 1. Check env var first (simple dev setup)
     if (process.env.CHRONOGOLF_API_KEY) {
         return { apiKey: process.env.CHRONOGOLF_API_KEY };
     }
 
     // 2. Check IntegrationConnection
-    const creds = await resolveIntegrationCredentials("chronogolf");
+    const creds = await resolveIntegrationCredentials("chronogolf", organizationId);
     if (!creds) return null;
 
     const apiKey = getCredentialValue(creds, ["CHRONOGOLF_API_KEY", "apiKey", "api_key"]);
@@ -61,7 +65,9 @@ export async function resolveChronoGolfCredentials(): Promise<ChronoGolfCredenti
     return { apiKey };
 }
 
-export async function resolveGolfNowCredentials(): Promise<GolfNowCredentials | null> {
+export async function resolveGolfNowCredentials(
+    organizationId?: string
+): Promise<GolfNowCredentials | null> {
     // 1. Check env vars first
     if (process.env.GOLFNOW_USERNAME && process.env.GOLFNOW_PASSWORD) {
         return {
@@ -73,7 +79,7 @@ export async function resolveGolfNowCredentials(): Promise<GolfNowCredentials | 
     }
 
     // 2. Check IntegrationConnection
-    const creds = await resolveIntegrationCredentials("golfnow");
+    const creds = await resolveIntegrationCredentials("golfnow", organizationId);
     if (!creds) return null;
 
     const username = getCredentialValue(creds, ["GOLFNOW_USERNAME", "username", "UserName"]);

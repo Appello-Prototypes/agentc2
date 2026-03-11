@@ -145,7 +145,11 @@ export async function POST(request: NextRequest) {
             variant === "internal" ? "coding-pipeline-internal" : "coding-pipeline";
 
         const workflow = await prisma.workflow.findFirst({
-            where: { slug: workflowSlug, isActive: true }
+            where: {
+                slug: workflowSlug,
+                isActive: true,
+                workspace: { organizationId: orgId }
+            }
         });
 
         if (!workflow) {

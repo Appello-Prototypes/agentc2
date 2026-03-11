@@ -1,54 +1,9 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 
+import { callInternalApi } from "./internal-api";
+
 const baseOutputSchema = z.object({ success: z.boolean().optional() }).passthrough();
-
-const getInternalBaseUrl = () =>
-    process.env.MASTRA_API_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
-
-const buildHeaders = () => {
-    const headers: Record<string, string> = {
-        "Content-Type": "application/json"
-    };
-    const apiKey = process.env.MASTRA_API_KEY || process.env.MCP_API_KEY;
-    if (apiKey) {
-        headers["X-API-Key"] = apiKey;
-    }
-    const orgSlug = process.env.MASTRA_ORGANIZATION_SLUG || process.env.MCP_API_ORGANIZATION_SLUG;
-    if (orgSlug) {
-        headers["X-Organization-Slug"] = orgSlug;
-    }
-    return headers;
-};
-
-const callInternalApi = async (
-    path: string,
-    options?: {
-        method?: string;
-        query?: Record<string, unknown>;
-        body?: Record<string, unknown>;
-    }
-) => {
-    const url = new URL(path, getInternalBaseUrl());
-    if (options?.query) {
-        Object.entries(options.query).forEach(([key, value]) => {
-            if (value !== undefined && value !== null) {
-                url.searchParams.set(key, String(value));
-            }
-        });
-    }
-
-    const response = await fetch(url.toString(), {
-        method: options?.method ?? "GET",
-        headers: buildHeaders(),
-        body: options?.body ? JSON.stringify(options.body) : undefined
-    });
-    const data = await response.json();
-    if (!response.ok || data?.success === false) {
-        throw new Error(data?.error || `Request failed (${response.status})`);
-    }
-    return data;
-};
 
 // ─── Cron builder ────────────────────────────────────────────────────────────
 
@@ -154,8 +109,10 @@ export const sidekickListAgentsTool = createTool({
             })
         )
     }),
-    execute: async () => {
-        const data = await callInternalApi("/api/agents");
+    execute: async ({ ...rest }) => {
+        const data = await callInternalApi("/api/agents", {
+            organizationId: (rest as Record<string, unknown>).organizationId as string | undefined
+        });
         return {
             agents: (data.agents || []).map((a: { id: string; slug: string; name: string }) => ({
                 id: a.id,
@@ -177,9 +134,10 @@ export const sidekickListAutomationsTool = createTool({
             .describe("Include archived automations. Defaults to false.")
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ includeArchived }) => {
+    execute: async ({ includeArchived, ...rest }) => {
         const data = await callInternalApi("/api/live/automations", {
-            query: includeArchived ? { includeArchived: "true" } : {}
+            query: includeArchived ? { includeArchived: "true" } : {},
+            organizationId: (rest as Record<string, unknown>).organizationId as string | undefined
         });
         const automations = (data.automations || []).map(
             (a: {
@@ -272,7 +230,8 @@ export const sidekickCreateScheduleTool = createTool({
         description,
         task,
         color,
-        isActive
+        isActive,
+        ...rest
     }) => {
         const cronExpr = buildCronFromHumanParams({
             frequency,
@@ -291,7 +250,8 @@ export const sidekickCreateScheduleTool = createTool({
                 timezone: timezone || "UTC",
                 color,
                 isActive: isActive !== false
-            }
+            },
+            organizationId: (rest as Record<string, unknown>).organizationId as string | undefined
         });
 
         const humanDesc = describeSchedule(cronExpr);
@@ -346,7 +306,8 @@ export const sidekickEditScheduleTool = createTool({
         description,
         task,
         color,
-        isActive
+        isActive,
+        ...rest
     }) => {
         const body: Record<string, unknown> = {};
         if (name !== undefined) body.name = name;
@@ -367,7 +328,8 @@ export const sidekickEditScheduleTool = createTool({
 
         return callInternalApi(`/api/agents/${agentSlug}/schedules/${scheduleId}`, {
             method: "PATCH",
-            body
+            body,
+            organizationId: (rest as Record<string, unknown>).organizationId as string | undefined
         });
     }
 });
@@ -383,10 +345,11 @@ export const sidekickToggleScheduleTool = createTool({
         isActive: z.boolean().describe("true to activate, false to deactivate")
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ automationId, isActive }) => {
+    execute: async ({ automationId, isActive, ...rest }) => {
         return callInternalApi(`/api/live/automations/${encodeURIComponent(automationId)}`, {
             method: "PATCH",
-            body: { isActive }
+            body: { isActive },
+            organizationId: (rest as Record<string, unknown>).organizationId as string | undefined
         });
     }
 });
@@ -402,9 +365,10 @@ export const sidekickDeleteScheduleTool = createTool({
         agentSlug: z.string().describe("The agent's slug that owns this schedule")
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ scheduleId, agentSlug }) => {
+    execute: async ({ scheduleId, agentSlug, ...rest }) => {
         return callInternalApi(`/api/agents/${agentSlug}/schedules/${scheduleId}`, {
-            method: "DELETE"
+            method: "DELETE",
+            organizationId: (rest as Record<string, unknown>).organizationId as string | undefined
         });
     }
 });
@@ -419,7 +383,7 @@ export const sidekickDescribeScheduleTool = createTool({
     outputSchema: z.object({
         description: z.string().describe("Human-readable schedule description")
     }),
-    execute: async ({ cronExpr }) => {
+    execute: async ({ cronExpr, ...rest }) => {
         return { description: describeSchedule(cronExpr) };
     }
 });

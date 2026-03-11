@@ -427,7 +427,7 @@ export async function POST(request: NextRequest) {
         // Auto-join default community boards
         try {
             const defaultBoards = await prisma.communityBoard.findMany({
-                where: { isDefault: true },
+                where: { isDefault: true, organizationId: orgIdForRbac },
                 select: { id: true }
             });
             if (defaultBoards.length > 0) {
@@ -451,7 +451,10 @@ export async function POST(request: NextRequest) {
         // Auto-assign Community Participation skill
         try {
             const communitySkill = await prisma.skill.findFirst({
-                where: { slug: "community-participation" },
+                where: {
+                    slug: "community-participation",
+                    organizationId: orgIdForRbac
+                },
                 select: { id: true }
             });
             if (communitySkill) {

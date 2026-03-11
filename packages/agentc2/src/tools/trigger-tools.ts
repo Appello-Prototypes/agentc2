@@ -151,9 +151,12 @@ function buildTriggerTrigger(
     };
 }
 
-async function resolveAgent(agentId: string) {
+async function resolveAgent(agentId: string, organizationId?: string) {
     return prisma.agent.findFirst({
-        where: { OR: [{ slug: agentId }, { id: agentId }] },
+        where: {
+            OR: [{ slug: agentId }, { id: agentId }],
+            ...(organizationId ? { workspace: { organizationId } } : {})
+        },
         select: { id: true, slug: true, workspaceId: true }
     });
 }
@@ -200,8 +203,12 @@ export const triggerUnifiedListTool = createTool({
         triggers: z.array(z.any()),
         total: z.number()
     }),
-    execute: async ({ agentId }) => {
-        const agent = await resolveAgent(agentId);
+    execute: async (input) => {
+        const agentId = (input as { agentId: string }).agentId;
+        const organizationId = (input as Record<string, unknown>).organizationId as
+            | string
+            | undefined;
+        const agent = await resolveAgent(agentId, organizationId);
         if (!agent) {
             throw new Error(`Agent '${agentId}' not found`);
         }
@@ -273,13 +280,17 @@ export const triggerUnifiedGetTool = createTool({
         success: z.boolean().optional(),
         trigger: z.any()
     }),
-    execute: async ({ agentId, triggerId }) => {
+    execute: async (input) => {
+        const { agentId, triggerId } = input as { agentId: string; triggerId: string };
+        const organizationId = (input as Record<string, unknown>).organizationId as
+            | string
+            | undefined;
         const parsed = parseUnifiedTriggerId(triggerId);
         if (!parsed) {
             throw new Error("Invalid triggerId format");
         }
 
-        const agent = await resolveAgent(agentId);
+        const agent = await resolveAgent(agentId, organizationId);
         if (!agent) {
             throw new Error(`Agent '${agentId}' not found`);
         }
@@ -364,14 +375,18 @@ export const triggerUnifiedCreateTool = createTool({
             environment,
             filter,
             inputMapping,
-            isActive
+            isActive,
+            ...rest
         } = input;
 
         if (!UNIFIED_TRIGGER_TYPES.includes(type as UnifiedTrigger["type"])) {
             throw new Error(`Invalid type. Must be one of: ${UNIFIED_TRIGGER_TYPES.join(", ")}`);
         }
 
-        const agent = await resolveAgent(agentId);
+        const organizationId = (rest as Record<string, unknown>).organizationId as
+            | string
+            | undefined;
+        const agent = await resolveAgent(agentId, organizationId);
         if (!agent) {
             throw new Error(`Agent '${agentId}' not found`);
         }
@@ -530,7 +545,8 @@ export const triggerUnifiedUpdateTool = createTool({
             environment,
             filter,
             inputMapping,
-            isActive
+            isActive,
+            ...rest
         } = input;
 
         if (!triggerId) {
@@ -542,7 +558,10 @@ export const triggerUnifiedUpdateTool = createTool({
             throw new Error("Invalid triggerId format");
         }
 
-        const agent = await resolveAgent(agentId);
+        const organizationId = (rest as Record<string, unknown>).organizationId as
+            | string
+            | undefined;
+        const agent = await resolveAgent(agentId, organizationId);
         if (!agent) {
             throw new Error(`Agent '${agentId}' not found`);
         }
@@ -689,13 +708,17 @@ export const triggerUnifiedDeleteTool = createTool({
         success: z.boolean().optional(),
         message: z.string()
     }),
-    execute: async ({ agentId, triggerId }) => {
+    execute: async (input) => {
+        const { agentId, triggerId } = input as { agentId: string; triggerId: string };
+        const organizationId = (input as Record<string, unknown>).organizationId as
+            | string
+            | undefined;
         const parsed = parseUnifiedTriggerId(triggerId);
         if (!parsed) {
             throw new Error("Invalid triggerId format");
         }
 
-        const agent = await resolveAgent(agentId);
+        const agent = await resolveAgent(agentId, organizationId);
         if (!agent) {
             throw new Error(`Agent '${agentId}' not found`);
         }
@@ -727,12 +750,17 @@ export const triggerUnifiedEnableTool = createTool({
     description: "Enable a unified execution trigger.",
     inputSchema: z.object({ agentId: z.string(), triggerId: z.string() }),
     outputSchema: z.object({ success: z.boolean().optional(), trigger: z.any() }),
-    execute: async ({ agentId, triggerId }) => {
+    execute: async (input) => {
         if (!triggerUnifiedUpdateTool.execute) {
             throw new Error("triggerUnifiedUpdateTool.execute is not available");
         }
+        const organizationId = (input as Record<string, unknown>).organizationId as
+            | string
+            | undefined;
         return triggerUnifiedUpdateTool.execute(
-            { agentId, triggerId, isActive: true },
+            { ...input, isActive: true, organizationId } as Parameters<
+                NonNullable<typeof triggerUnifiedUpdateTool.execute>
+            >[0],
             {} as never
         );
     }
@@ -743,12 +771,17 @@ export const triggerUnifiedDisableTool = createTool({
     description: "Disable a unified execution trigger.",
     inputSchema: z.object({ agentId: z.string(), triggerId: z.string() }),
     outputSchema: z.object({ success: z.boolean().optional(), trigger: z.any() }),
-    execute: async ({ agentId, triggerId }) => {
+    execute: async (input) => {
         if (!triggerUnifiedUpdateTool.execute) {
             throw new Error("triggerUnifiedUpdateTool.execute is not available");
         }
+        const organizationId = (input as Record<string, unknown>).organizationId as
+            | string
+            | undefined;
         return triggerUnifiedUpdateTool.execute(
-            { agentId, triggerId, isActive: false },
+            { ...input, isActive: false, organizationId } as Parameters<
+                NonNullable<typeof triggerUnifiedUpdateTool.execute>
+            >[0],
             {} as never
         );
     }

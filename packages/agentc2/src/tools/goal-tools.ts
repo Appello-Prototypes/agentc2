@@ -1,57 +1,8 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
+import { callInternalApi } from "./internal-api";
 
 const baseOutputSchema = z.object({}).passthrough();
-
-const getInternalBaseUrl = () =>
-    process.env.MASTRA_API_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
-
-const buildHeaders = () => {
-    const headers: Record<string, string> = {
-        "Content-Type": "application/json"
-    };
-    const apiKey = process.env.MASTRA_API_KEY || process.env.MCP_API_KEY;
-    if (apiKey) {
-        headers["X-API-Key"] = apiKey;
-    }
-    const orgSlug = process.env.MASTRA_ORGANIZATION_SLUG || process.env.MCP_API_ORGANIZATION_SLUG;
-    if (orgSlug) {
-        headers["X-Organization-Slug"] = orgSlug;
-    }
-    return headers;
-};
-
-const callInternalApi = async (
-    path: string,
-    options?: {
-        method?: string;
-        query?: Record<string, unknown>;
-        body?: Record<string, unknown>;
-    }
-) => {
-    const url = new URL(path, getInternalBaseUrl());
-    if (options?.query) {
-        Object.entries(options.query).forEach(([key, value]) => {
-            if (value !== undefined && value !== null) {
-                url.searchParams.set(key, String(value));
-            }
-        });
-    }
-
-    const response = await fetch(url.toString(), {
-        method: options?.method ?? "GET",
-        headers: buildHeaders(),
-        body: options?.body ? JSON.stringify(options.body) : undefined
-    });
-    const data = await response.json();
-    if (!response.ok) {
-        const errorMessage =
-            (data && typeof data === "object" && "error" in data ? data.error : undefined) ||
-            `Request failed (${response.status})`;
-        throw new Error(String(errorMessage));
-    }
-    return data;
-};
 
 export const goalCreateTool = createTool({
     id: "goal-create",
@@ -62,10 +13,11 @@ export const goalCreateTool = createTool({
         priority: z.number().optional()
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ title, description, priority }) => {
+    execute: async ({ title, description, priority, ...rest }) => {
         return callInternalApi("/api/goals", {
             method: "POST",
-            body: { title, description, priority }
+            body: { title, description, priority },
+            organizationId: (rest as Record<string, unknown>).organizationId as string | undefined
         });
     }
 });
@@ -75,8 +27,10 @@ export const goalListTool = createTool({
     description: "List all goals for the current user.",
     inputSchema: z.object({}),
     outputSchema: baseOutputSchema,
-    execute: async () => {
-        return callInternalApi("/api/goals");
+    execute: async ({ ...rest }) => {
+        return callInternalApi("/api/goals", {
+            organizationId: (rest as Record<string, unknown>).organizationId as string | undefined
+        });
     }
 });
 
@@ -87,8 +41,10 @@ export const goalGetTool = createTool({
         goalId: z.string()
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ goalId }) => {
-        return callInternalApi(`/api/goals/${goalId}`);
+    execute: async ({ goalId, ...rest }) => {
+        return callInternalApi(`/api/goals/${goalId}`, {
+            organizationId: (rest as Record<string, unknown>).organizationId as string | undefined
+        });
     }
 });
 
@@ -100,10 +56,11 @@ export const goalUpdateTool = createTool({
         action: z.enum(["retry", "cancel"]).describe("Action to perform")
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ goalId, action }) => {
+    execute: async ({ goalId, action, ...rest }) => {
         return callInternalApi(`/api/goals/${goalId}`, {
             method: "PATCH",
-            body: { action }
+            body: { action },
+            organizationId: (rest as Record<string, unknown>).organizationId as string | undefined
         });
     }
 });
@@ -115,9 +72,10 @@ export const goalDeleteTool = createTool({
         goalId: z.string()
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ goalId }) => {
+    execute: async ({ goalId, ...rest }) => {
         return callInternalApi(`/api/goals/${goalId}`, {
-            method: "DELETE"
+            method: "DELETE",
+            organizationId: (rest as Record<string, unknown>).organizationId as string | undefined
         });
     }
 });

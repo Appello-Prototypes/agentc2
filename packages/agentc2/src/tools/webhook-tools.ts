@@ -34,9 +34,15 @@ export const webhookListAgentsTool = createTool({
             )
             .describe("List of available agents")
     }),
-    execute: async () => {
+    execute: async (input) => {
+        const organizationId = (input as Record<string, unknown>).organizationId as
+            | string
+            | undefined;
         const agents = await prisma.agent.findMany({
-            where: { isActive: true },
+            where: {
+                isActive: true,
+                ...(organizationId ? { workspace: { organizationId } } : {})
+            },
             select: {
                 id: true,
                 slug: true,
@@ -145,7 +151,8 @@ export const webhookCreateTool = createTool({
             const agent = await prisma.agent.findFirst({
                 where: {
                     OR: [{ slug: agentSlug }, { id: agentSlug }],
-                    isActive: true
+                    isActive: true,
+                    ...(organizationId ? { workspace: { organizationId } } : {})
                 },
                 select: {
                     id: true,

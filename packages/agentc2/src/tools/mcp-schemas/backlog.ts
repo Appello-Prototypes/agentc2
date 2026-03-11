@@ -118,9 +118,9 @@ export const backlogToolDefinitions: McpToolDefinition[] = [
 ];
 
 export const backlogToolRoutes: McpToolRoute[] = [
-    { kind: "registry", name: "backlog-get" },
-    { kind: "registry", name: "backlog-add-task" },
-    { kind: "registry", name: "backlog-list-tasks" },
-    { kind: "registry", name: "backlog-update-task" },
-    { kind: "registry", name: "backlog-complete-task" }
+    { kind: "registry", name: "backlog-get", enforceOrg: true },
+    { kind: "registry", name: "backlog-add-task", enforceOrg: true },
+    { kind: "registry", name: "backlog-list-tasks", enforceOrg: true },
+    { kind: "registry", name: "backlog-update-task", enforceOrg: true },
+    { kind: "registry", name: "backlog-complete-task", enforceOrg: true }
 ];

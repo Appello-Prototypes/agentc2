@@ -86,6 +86,7 @@ export interface PulseWithMembers {
     id: string;
     slug: string;
     name: string;
+    workspaceId?: string;
     goal: string;
     metricsConfig: unknown;
     rewardConfig: unknown;
@@ -386,8 +387,19 @@ export async function evaluatePulseMembers(
     const report = reportLines.join("\n");
 
     if (reportCfg?.boardSlug) {
+        const organizationId = pulse.workspaceId
+            ? (
+                  await prisma.workspace.findUnique({
+                      where: { id: pulse.workspaceId },
+                      select: { organizationId: true }
+                  })
+              )?.organizationId
+            : undefined;
         const board = await prisma.communityBoard.findFirst({
-            where: { slug: reportCfg.boardSlug },
+            where: {
+                slug: reportCfg.boardSlug,
+                ...(organizationId ? { organizationId } : {})
+            },
             select: { id: true }
         });
 

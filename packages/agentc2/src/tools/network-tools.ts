@@ -174,7 +174,10 @@ export const networkExecuteTool = createTool({
             if (step.stepType === "agent" && step.primitiveId) {
                 try {
                     const agentRecord = await prisma.agent.findFirst({
-                        where: { OR: [{ id: step.primitiveId }, { slug: step.primitiveId }] },
+                        where: {
+                            OR: [{ id: step.primitiveId }, { slug: step.primitiveId }],
+                            ...(organizationId ? { workspace: { organizationId } } : {})
+                        },
                         select: { id: true, slug: true }
                     });
                     if (agentRecord) {

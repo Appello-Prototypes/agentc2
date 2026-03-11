@@ -2,64 +2,9 @@ import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { createDocument, type CreateDocumentInput } from "../documents/service";
 import { queryRag } from "../rag/pipeline";
+import { callInternalApi } from "./internal-api";
 
 const baseOutputSchema = z.object({ success: z.boolean().optional() }).passthrough();
-
-const getInternalBaseUrl = () =>
-    process.env.MASTRA_API_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
-
-const buildHeaders = (organizationId?: string) => {
-    const headers: Record<string, string> = {
-        "Content-Type": "application/json"
-    };
-    const apiKey = process.env.MASTRA_API_KEY || process.env.MCP_API_KEY;
-    if (apiKey) {
-        headers["X-API-Key"] = apiKey;
-    }
-    if (organizationId) {
-        headers["X-Organization-Id"] = organizationId;
-    } else {
-        const orgSlug =
-            process.env.MASTRA_ORGANIZATION_SLUG || process.env.MCP_API_ORGANIZATION_SLUG;
-        if (orgSlug) {
-            headers["X-Organization-Slug"] = orgSlug;
-        }
-    }
-    return headers;
-};
-
-const callInternalApi = async (
-    path: string,
-    options?: {
-        method?: string;
-        query?: Record<string, unknown>;
-        body?: Record<string, unknown>;
-        organizationId?: string;
-    }
-) => {
-    const url = new URL(path, getInternalBaseUrl());
-    if (options?.query) {
-        Object.entries(options.query).forEach(([key, value]) => {
-            if (value !== undefined && value !== null) {
-                url.searchParams.set(key, String(value));
-            }
-        });
-    }
-
-    const response = await fetch(url.toString(), {
-        method: options?.method ?? "GET",
-        headers: buildHeaders(options?.organizationId),
-        body: options?.body ? JSON.stringify(options.body) : undefined
-    });
-    const data = await response.json();
-    if (!response.ok) {
-        const errorMessage =
-            (data && typeof data === "object" && "error" in data ? data.error : undefined) ||
-            `Request failed (${response.status})`;
-        throw new Error(String(errorMessage));
-    }
-    return data;
-};
 
 export const ragQueryTool = createTool({
     id: "rag-query",

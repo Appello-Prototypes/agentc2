@@ -15,16 +15,24 @@ async function callGraph(params: {
     path: string;
     method?: string;
     body?: unknown;
+    organizationId?: string;
 }) {
     const { prisma } = await import("@repo/database");
     const { createDecipheriv } = await import("crypto");
 
-    const connection = await prisma.integrationConnection.findUnique({
-        where: { id: params.connectionId }
+    const connection = await prisma.integrationConnection.findFirst({
+        where: {
+            id: params.connectionId,
+            ...(params.organizationId ? { organizationId: params.organizationId } : {})
+        }
     });
 
     if (!connection || !connection.isActive) {
         throw new Error("Microsoft connection not found or inactive");
+    }
+
+    if (params.organizationId && connection.organizationId !== params.organizationId) {
+        throw new Error("Microsoft connection does not belong to your organization");
     }
 
     let creds: Record<string, unknown> = {};
@@ -87,17 +95,19 @@ export const teamsListTeamsTool = createTool({
     id: "teams-list-teams",
     description: "List the Microsoft Teams the authenticated user is a member of.",
     inputSchema: z.object({
-        connectionId: z.string().describe("Microsoft IntegrationConnection ID")
+        connectionId: z.string().describe("Microsoft IntegrationConnection ID"),
+        organizationId: z.string().optional().describe("Organization ID for tenant scoping")
     }),
     outputSchema: z.object({
         success: z.boolean(),
         teams: z.array(z.record(z.unknown())),
         error: z.string().optional()
     }),
-    execute: async ({ connectionId }) => {
+    execute: async ({ connectionId, organizationId }) => {
         try {
             const result = (await callGraph({
                 connectionId,
+                organizationId,
                 path: "/me/joinedTeams?$select=id,displayName,description"
             })) as { value?: unknown[] };
 
@@ -120,6 +130,7 @@ export const teamsListChannelsTool = createTool({
     description: "List channels in a specific Microsoft Teams team.",
     inputSchema: z.object({
         connectionId: z.string().describe("Microsoft IntegrationConnection ID"),
+        organizationId: z.string().optional().describe("Organization ID for tenant scoping"),
         teamId: z.string().describe("The Teams team ID")
     }),
     outputSchema: z.object({
@@ -127,10 +138,11 @@ export const teamsListChannelsTool = createTool({
         channels: z.array(z.record(z.unknown())),
         error: z.string().optional()
     }),
-    execute: async ({ connectionId, teamId }) => {
+    execute: async ({ connectionId, organizationId, teamId }) => {
         try {
             const result = (await callGraph({
                 connectionId,
+                organizationId,
                 path: `/teams/${teamId}/channels?$select=id,displayName,description,membershipType`
             })) as { value?: unknown[] };
 
@@ -153,6 +165,7 @@ export const teamsSendChannelMessageTool = createTool({
     description: "Send a message to a Microsoft Teams channel.",
     inputSchema: z.object({
         connectionId: z.string().describe("Microsoft IntegrationConnection ID"),
+        organizationId: z.string().optional().describe("Organization ID for tenant scoping"),
         teamId: z.string().describe("The Teams team ID"),
         channelId: z.string().describe("The channel ID"),
         message: z.string().describe("The message content (plain text or HTML)"),
@@ -167,10 +180,11 @@ export const teamsSendChannelMessageTool = createTool({
         messageId: z.string().optional(),
         error: z.string().optional()
     }),
-    execute: async ({ connectionId, teamId, channelId, message, contentType }) => {
+    execute: async ({ connectionId, organizationId, teamId, channelId, message, contentType }) => {
         try {
             const result = (await callGraph({
                 connectionId,
+                organizationId,
                 path: `/teams/${teamId}/channels/${channelId}/messages`,
                 method: "POST",
                 body: {
@@ -196,6 +210,7 @@ export const teamsListChatsTool = createTool({
     description: "List recent 1:1 and group chats in Microsoft Teams.",
     inputSchema: z.object({
         connectionId: z.string().describe("Microsoft IntegrationConnection ID"),
+        organizationId: z.string().optional().describe("Organization ID for tenant scoping"),
         top: z.number().optional().default(20).describe("Number of chats to return (max 50)")
     }),
     outputSchema: z.object({
@@ -203,10 +218,11 @@ export const teamsListChatsTool = createTool({
         chats: z.array(z.record(z.unknown())),
         error: z.string().optional()
     }),
-    execute: async ({ connectionId, top }) => {
+    execute: async ({ connectionId, organizationId, top }) => {
         try {
             const result = (await callGraph({
                 connectionId,
+                organizationId,
                 path: `/me/chats?$top=${Math.min(top || 20, 50)}&$orderby=lastMessagePreview/createdDateTime desc&$select=id,topic,chatType,lastMessagePreview,createdDateTime`
             })) as { value?: unknown[] };
 
@@ -229,6 +245,7 @@ export const teamsSendChatMessageTool = createTool({
     description: "Send a message in an existing Microsoft Teams chat.",
     inputSchema: z.object({
         connectionId: z.string().describe("Microsoft IntegrationConnection ID"),
+        organizationId: z.string().optional().describe("Organization ID for tenant scoping"),
         chatId: z.string().describe("The Teams chat ID"),
         message: z.string().describe("The message content (plain text or HTML)"),
         contentType: z
@@ -242,10 +259,11 @@ export const teamsSendChatMessageTool = createTool({
         messageId: z.string().optional(),
         error: z.string().optional()
     }),
-    execute: async ({ connectionId, chatId, message, contentType }) => {
+    execute: async ({ connectionId, organizationId, chatId, message, contentType }) => {
         try {
             const result = (await callGraph({
                 connectionId,
+                organizationId,
                 path: `/me/chats/${chatId}/messages`,
                 method: "POST",
                 body: {

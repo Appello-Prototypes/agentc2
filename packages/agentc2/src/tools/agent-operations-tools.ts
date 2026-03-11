@@ -1,60 +1,9 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 
+import { callInternalApi } from "./internal-api";
+
 const baseOutputSchema = z.object({ success: z.boolean().optional() }).passthrough();
-
-const getInternalBaseUrl = () =>
-    process.env.MASTRA_API_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
-
-const buildHeaders = (organizationId?: string) => {
-    const headers: Record<string, string> = {
-        "Content-Type": "application/json"
-    };
-    const apiKey = process.env.MASTRA_API_KEY || process.env.MCP_API_KEY;
-    if (apiKey) {
-        headers["X-API-Key"] = apiKey;
-    }
-    if (organizationId) {
-        headers["X-Organization-Id"] = organizationId;
-    }
-    const orgSlug =
-        process.env.MASTRA_ORGANIZATION_SLUG ||
-        process.env.MCP_API_ORGANIZATION_SLUG ||
-        process.env.PLATFORM_ORG_SLUG ||
-        "agentc2";
-    headers["X-Organization-Slug"] = orgSlug;
-    return headers;
-};
-
-const callInternalApi = async (
-    path: string,
-    options?: {
-        method?: string;
-        query?: Record<string, unknown>;
-        body?: Record<string, unknown>;
-        organizationId?: string;
-    }
-) => {
-    const url = new URL(path, getInternalBaseUrl());
-    if (options?.query) {
-        Object.entries(options.query).forEach(([key, value]) => {
-            if (value !== undefined && value !== null) {
-                url.searchParams.set(key, String(value));
-            }
-        });
-    }
-
-    const response = await fetch(url.toString(), {
-        method: options?.method ?? "GET",
-        headers: buildHeaders(options?.organizationId),
-        body: options?.body ? JSON.stringify(options.body) : undefined
-    });
-    const data = await response.json();
-    if (!response.ok || data?.success === false) {
-        throw new Error(data?.error || `Request failed (${response.status})`);
-    }
-    return data;
-};
 
 export const agentListTool = createTool({
     id: "agent-list",
@@ -71,9 +20,10 @@ export const agentListTool = createTool({
             )
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ active, system, detail }) => {
+    execute: async ({ active, system, detail, ...rest }) => {
         return callInternalApi("/api/agents", {
-            query: { active, system, detail }
+            query: { active, system, detail },
+            organizationId: (rest as Record<string, unknown>).organizationId as string | undefined
         });
     }
 });
@@ -196,14 +146,15 @@ export const agentDiscoverTool = createTool({
             .describe("Agent slug to exclude from results (e.g. the calling agent's own slug)")
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ keyword, activeOnly, exclude }) => {
+    execute: async ({ keyword, activeOnly, exclude, ...rest }) => {
         return callInternalApi("/api/agents", {
             query: {
                 detail: "discover",
                 active: activeOnly !== false ? true : undefined,
                 keyword,
                 exclude
-            }
+            },
+            organizationId: (rest as Record<string, unknown>).organizationId as string | undefined
         });
     }
 });
@@ -251,7 +202,15 @@ export const agentInvokeDynamicTool = createTool({
             .optional(),
         error: z.string().optional()
     }),
-    execute: async ({ agentSlug, message, context, maxSteps, sessionId, _invocationDepth }) => {
+    execute: async ({
+        agentSlug,
+        message,
+        context,
+        maxSteps,
+        sessionId,
+        _invocationDepth,
+        ...rest
+    }) => {
         const depth = _invocationDepth ?? 0;
 
         if (depth >= MAX_INVOCATION_DEPTH) {
@@ -329,8 +288,10 @@ export const agentInvokeDynamicTool = createTool({
         }
 
         try {
+            const orgId = (rest as Record<string, unknown>).organizationId as string | undefined;
             const agentInfo = await callInternalApi(`/api/agents/${agentSlug}`, {
-                query: { detail: "minimal" }
+                query: { detail: "minimal" },
+                organizationId: orgId
             });
             if (!agentInfo?.isActive) {
                 return {
@@ -343,6 +304,7 @@ export const agentInvokeDynamicTool = createTool({
             const startMs = Date.now();
             const result = await callInternalApi(`/api/agents/${agentSlug}/invoke`, {
                 method: "POST",
+                organizationId: orgId,
                 body: {
                     input: message,
                     context: {

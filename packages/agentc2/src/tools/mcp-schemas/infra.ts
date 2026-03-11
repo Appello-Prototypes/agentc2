@@ -100,5 +100,5 @@ export const infraToolDefinitions: McpToolDefinition[] = [
 export const infraToolRoutes: McpToolRoute[] = [
     { kind: "registry", name: "track-resource", enforceOrg: true },
     { kind: "registry", name: "list-resources", enforceOrg: true },
-    { kind: "registry", name: "destroy-resource" }
+    { kind: "registry", name: "destroy-resource", enforceOrg: true }
 ];

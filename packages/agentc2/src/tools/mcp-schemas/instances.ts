@@ -240,8 +240,8 @@ export const instanceToolRoutes: McpToolRoute[] = [
     { kind: "registry", name: "instance-list", enforceOrg: true },
     { kind: "registry", name: "instance-get", enforceOrg: true },
     { kind: "registry", name: "instance-create", enforceOrg: true },
-    { kind: "registry", name: "instance-update" },
-    { kind: "registry", name: "instance-delete" },
-    { kind: "registry", name: "instance-bind-channel" },
-    { kind: "registry", name: "instance-unbind-channel" }
+    { kind: "registry", name: "instance-update", enforceOrg: true },
+    { kind: "registry", name: "instance-delete", enforceOrg: true },
+    { kind: "registry", name: "instance-bind-channel", enforceOrg: true },
+    { kind: "registry", name: "instance-unbind-channel", enforceOrg: true }
 ];

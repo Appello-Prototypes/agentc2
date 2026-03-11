@@ -36,7 +36,10 @@ export async function POST(request: NextRequest) {
 
         // Validate that the requested skills exist
         const skills = await prisma.skill.findMany({
-            where: { slug: { in: skillSlugs } },
+            where: {
+                slug: { in: skillSlugs },
+                organizationId: authContext.organizationId
+            },
             select: {
                 slug: true,
                 name: true,

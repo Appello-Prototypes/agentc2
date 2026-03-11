@@ -126,5 +126,5 @@ export const documentToolRoutes: McpToolRoute[] = [
     { kind: "registry", name: "document-update", enforceOrg: true },
     { kind: "registry", name: "document-delete", enforceOrg: true },
     { kind: "registry", name: "document-list", enforceOrg: true },
-    { kind: "registry", name: "document-search" }
+    { kind: "registry", name: "document-search", enforceOrg: true }
 ];

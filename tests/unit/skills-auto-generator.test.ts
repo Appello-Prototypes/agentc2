@@ -84,11 +84,10 @@ describe("Skill Auto-Generator", () => {
             prismaMock.skill.create.mockResolvedValue(mockCreated as never);
             prismaMock.skillTool.deleteMany.mockResolvedValue({ count: 0 } as never);
 
-            const result = await generateSkillForMcpServer(
-                "hubspot",
-                [],
-                { workspaceId: "ws-1", organizationId: "org-1" }
-            );
+            const result = await generateSkillForMcpServer("hubspot", [], {
+                workspaceId: "ws-1",
+                organizationId: "org-1"
+            });
 
             expect(result.toolCount).toBe(0);
             expect(prismaMock.skillTool.createMany).not.toHaveBeenCalled();

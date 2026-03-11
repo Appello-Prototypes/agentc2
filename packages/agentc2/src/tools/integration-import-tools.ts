@@ -8,6 +8,7 @@ import {
     getMcpTools,
     importMcpConfig
 } from "../mcp/client";
+import { callInternalApi } from "./internal-api";
 
 type McpServerConfig = {
     command?: string;
@@ -60,53 +61,6 @@ type ImportItem = {
 };
 
 const baseOutputSchema = z.object({ success: z.boolean().optional() }).passthrough();
-
-const getInternalBaseUrl = () =>
-    process.env.MASTRA_API_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
-
-const buildHeaders = () => {
-    const headers: Record<string, string> = {
-        "Content-Type": "application/json"
-    };
-    const apiKey = process.env.MASTRA_API_KEY || process.env.MCP_API_KEY;
-    if (apiKey) {
-        headers["X-API-Key"] = apiKey;
-    }
-    const orgSlug = process.env.MASTRA_ORGANIZATION_SLUG || process.env.MCP_API_ORGANIZATION_SLUG;
-    if (orgSlug) {
-        headers["X-Organization-Slug"] = orgSlug;
-    }
-    return headers;
-};
-
-const callInternalApi = async (
-    path: string,
-    options?: {
-        method?: string;
-        query?: Record<string, unknown>;
-        body?: Record<string, unknown>;
-    }
-) => {
-    const url = new URL(path, getInternalBaseUrl());
-    if (options?.query) {
-        Object.entries(options.query).forEach(([key, value]) => {
-            if (value !== undefined && value !== null) {
-                url.searchParams.set(key, String(value));
-            }
-        });
-    }
-
-    const response = await fetch(url.toString(), {
-        method: options?.method ?? "GET",
-        headers: buildHeaders(),
-        body: options?.body ? JSON.stringify(options.body) : undefined
-    });
-    const data = await response.json();
-    if (!response.ok || data?.success === false) {
-        throw new Error(data?.error || `Request failed (${response.status})`);
-    }
-    return data;
-};
 
 function normalizeValue(value: string) {
     return value.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -393,10 +347,13 @@ function buildCustomProviderPayload(
 }
 
 async function resolveOrganizationId(input: { organizationId?: string; userId?: string }) {
-    if (input.organizationId) return input.organizationId;
+    if (input.organizationId && !input.userId) return input.organizationId;
     if (!input.userId) return null;
     const membership = await prisma.membership.findFirst({
-        where: { userId: input.userId },
+        where: {
+            userId: input.userId,
+            ...(input.organizationId ? { organizationId: input.organizationId } : {})
+        },
         orderBy: { createdAt: "asc" },
         select: { organizationId: true }
     });
@@ -713,8 +670,11 @@ export const integrationImportMcpJsonTool = createTool({
         if (!dryRun) {
             for (const item of items) {
                 if (!item.connectionId) continue;
-                const connection = await prisma.integrationConnection.findUnique({
-                    where: { id: item.connectionId },
+                const connection = await prisma.integrationConnection.findFirst({
+                    where: {
+                        id: item.connectionId,
+                        ...(orgId ? { organizationId: orgId } : {})
+                    },
                     include: { provider: true }
                 });
                 if (!connection) continue;
@@ -995,8 +955,10 @@ export const integrationProvidersListTool = createTool({
     description: "List available integration providers with connection status.",
     inputSchema: z.object({}),
     outputSchema: baseOutputSchema,
-    execute: async () => {
-        return callInternalApi("/api/integrations/providers");
+    execute: async ({ ...rest }) => {
+        return callInternalApi("/api/integrations/providers", {
+            organizationId: (rest as Record<string, unknown>).organizationId as string | undefined
+        });
     }
 });
 
@@ -1008,9 +970,10 @@ export const integrationConnectionsListTool = createTool({
         scope: z.string().optional()
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ providerKey, scope }) => {
+    execute: async ({ providerKey, scope, ...rest }) => {
         return callInternalApi("/api/integrations/connections", {
-            query: { providerKey, scope }
+            query: { providerKey, scope },
+            organizationId: (rest as Record<string, unknown>).organizationId as string | undefined
         });
     }
 });
@@ -1027,10 +990,11 @@ export const integrationConnectionCreateTool = createTool({
         isDefault: z.boolean().optional()
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ providerKey, name, scope, credentials, metadata, isDefault }) => {
+    execute: async ({ providerKey, name, scope, credentials, metadata, isDefault, ...rest }) => {
         return callInternalApi("/api/integrations/connections", {
             method: "POST",
-            body: { providerKey, name, scope, credentials, metadata, isDefault }
+            body: { providerKey, name, scope, credentials, metadata, isDefault },
+            organizationId: (rest as Record<string, unknown>).organizationId as string | undefined
         });
     }
 });
@@ -1046,10 +1010,11 @@ export const integrationConnectionUpdateTool = createTool({
         isDefault: z.boolean().optional()
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ connectionId, name, credentials, metadata, isDefault }) => {
+    execute: async ({ connectionId, name, credentials, metadata, isDefault, ...rest }) => {
         return callInternalApi(`/api/integrations/connections/${connectionId}`, {
             method: "PATCH",
-            body: { name, credentials, metadata, isDefault }
+            body: { name, credentials, metadata, isDefault },
+            organizationId: (rest as Record<string, unknown>).organizationId as string | undefined
         });
     }
 });
@@ -1061,9 +1026,10 @@ export const integrationConnectionDeleteTool = createTool({
         connectionId: z.string().describe("Connection ID to delete")
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ connectionId }) => {
+    execute: async ({ connectionId, ...rest }) => {
         return callInternalApi(`/api/integrations/connections/${connectionId}`, {
-            method: "DELETE"
+            method: "DELETE",
+            organizationId: (rest as Record<string, unknown>).organizationId as string | undefined
         });
     }
 });

@@ -15,57 +15,9 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 
+import { callInternalApi } from "./internal-api";
+
 const baseOutputSchema = z.object({ success: z.boolean().optional() }).passthrough();
-
-const getInternalBaseUrl = () =>
-    process.env.MASTRA_API_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
-
-const buildHeaders = () => {
-    const headers: Record<string, string> = {
-        "Content-Type": "application/json"
-    };
-    const apiKey = process.env.MASTRA_API_KEY || process.env.MCP_API_KEY;
-    if (apiKey) {
-        headers["X-API-Key"] = apiKey;
-    }
-    const orgSlug = process.env.MASTRA_ORGANIZATION_SLUG || process.env.MCP_API_ORGANIZATION_SLUG;
-    if (orgSlug) {
-        headers["X-Organization-Slug"] = orgSlug;
-    }
-    return headers;
-};
-
-const callInternalApi = async (
-    path: string,
-    options?: {
-        method?: string;
-        query?: Record<string, unknown>;
-        body?: Record<string, unknown>;
-    }
-) => {
-    const url = new URL(path, getInternalBaseUrl());
-    if (options?.query) {
-        Object.entries(options.query).forEach(([key, value]) => {
-            if (value !== undefined && value !== null) {
-                url.searchParams.set(key, String(value));
-            }
-        });
-    }
-
-    const response = await fetch(url.toString(), {
-        method: options?.method ?? "GET",
-        headers: buildHeaders(),
-        body: options?.body ? JSON.stringify(options.body) : undefined
-    });
-    const data = await response.json();
-    if (!response.ok) {
-        const errorMessage =
-            (data && typeof data === "object" && "error" in data ? data.error : undefined) ||
-            `Request failed (${response.status})`;
-        throw new Error(String(errorMessage));
-    }
-    return data;
-};
 
 /**
  * search_skills: Search available skills by natural language queries.
@@ -87,11 +39,12 @@ export const searchSkillsTool = createTool({
             )
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ queries }) => {
+    execute: async ({ queries, ...rest }) => {
         // Call the skills search API endpoint
         const result = await callInternalApi("/api/skills/search", {
             method: "POST",
-            body: { queries }
+            body: { queries },
+            organizationId: (rest as Record<string, unknown>).organizationId as string | undefined
         });
         return {
             success: true,
@@ -126,7 +79,7 @@ export const activateSkillTool = createTool({
         agentId: z.string().optional().describe("Agent ID for tracking.")
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ skillSlugs, threadId, agentId }, execContext) => {
+    execute: async ({ skillSlugs, threadId, agentId, ...rest }, execContext) => {
         const effectiveThreadId = threadId || (execContext as Record<string, unknown>)?.threadId;
         if (!effectiveThreadId) {
             console.warn(
@@ -135,7 +88,8 @@ export const activateSkillTool = createTool({
         }
         const result = await callInternalApi("/api/skills/activate", {
             method: "POST",
-            body: { skillSlugs, threadId: effectiveThreadId, agentId }
+            body: { skillSlugs, threadId: effectiveThreadId, agentId },
+            organizationId: (rest as Record<string, unknown>).organizationId as string | undefined
         });
         return {
             success: true,
@@ -158,7 +112,7 @@ export const listActiveSkillsTool = createTool({
         threadId: z.string().optional().describe("Thread ID to check activated skills for.")
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ threadId }, execContext) => {
+    execute: async ({ threadId, ...rest }, execContext) => {
         const effectiveThreadId = threadId || (execContext as Record<string, unknown>)?.threadId;
         if (!effectiveThreadId) {
             return {
@@ -170,7 +124,8 @@ export const listActiveSkillsTool = createTool({
 
         const result = await callInternalApi("/api/skills/active", {
             method: "GET",
-            query: { threadId: effectiveThreadId }
+            query: { threadId: effectiveThreadId },
+            organizationId: (rest as Record<string, unknown>).organizationId as string | undefined
         });
         return {
             success: true,

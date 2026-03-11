@@ -5,8 +5,8 @@ import { prisma, Prisma } from "@repo/database";
 const baseOutputSchema = z.object({ success: z.boolean().optional() }).passthrough();
 
 async function requirePlaybookOwner(slug: string, organizationId: string) {
-    const playbook = await prisma.playbook.findUnique({
-        where: { slug },
+    const playbook = await prisma.playbook.findFirst({
+        where: { slug, publisherOrgId: organizationId },
         select: { id: true, publisherOrgId: true }
     });
     if (!playbook) throw new Error(`Playbook not found: ${slug}`);
@@ -73,9 +73,12 @@ export const playbookGetFullTool = createTool({
         slug: z.string().describe("Playbook slug")
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ slug }) => {
-        const playbook = await prisma.playbook.findUnique({
-            where: { slug },
+    execute: async ({ slug, ...rest }) => {
+        const organizationId = (rest as Record<string, unknown>).organizationId as
+            | string
+            | undefined;
+        const playbook = await prisma.playbook.findFirst({
+            where: { slug, ...(organizationId ? { publisherOrgId: organizationId } : {}) },
             include: {
                 publisherOrg: { select: { id: true, name: true, slug: true } },
                 components: {
@@ -232,9 +235,12 @@ export const playbookGetBootDocumentTool = createTool({
         slug: z.string().describe("Playbook slug")
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ slug }) => {
-        const playbook = await prisma.playbook.findUnique({
-            where: { slug },
+    execute: async ({ slug, ...rest }) => {
+        const organizationId = (rest as Record<string, unknown>).organizationId as
+            | string
+            | undefined;
+        const playbook = await prisma.playbook.findFirst({
+            where: { slug, ...(organizationId ? { publisherOrgId: organizationId } : {}) },
             select: { bootDocument: true, autoBootEnabled: true }
         });
         if (!playbook) {
@@ -326,9 +332,12 @@ export const playbookListBootTasksTool = createTool({
         slug: z.string().describe("Playbook slug")
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ slug }) => {
-        const playbook = await prisma.playbook.findUnique({
-            where: { slug },
+    execute: async ({ slug, ...rest }) => {
+        const organizationId = (rest as Record<string, unknown>).organizationId as
+            | string
+            | undefined;
+        const playbook = await prisma.playbook.findFirst({
+            where: { slug, ...(organizationId ? { publisherOrgId: organizationId } : {}) },
             select: { id: true }
         });
         if (!playbook) {
@@ -511,8 +520,8 @@ export const playbookSubmitReviewTool = createTool({
     execute: async ({ slug, organizationId }) => {
         await requirePlaybookOwner(slug, organizationId);
 
-        const playbook = await prisma.playbook.findUnique({
-            where: { slug },
+        const playbook = await prisma.playbook.findFirst({
+            where: { slug, publisherOrgId: organizationId },
             include: {
                 components: { take: 1 },
                 versions: { take: 1, orderBy: { version: "desc" } }

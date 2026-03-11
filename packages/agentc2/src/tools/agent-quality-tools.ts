@@ -1,54 +1,8 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
+import { callInternalApi } from "./internal-api";
 
 const baseOutputSchema = z.object({ success: z.boolean().optional() }).passthrough();
-
-const getInternalBaseUrl = () =>
-    process.env.MASTRA_API_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
-
-const buildHeaders = () => {
-    const headers: Record<string, string> = {
-        "Content-Type": "application/json"
-    };
-    const apiKey = process.env.MASTRA_API_KEY || process.env.MCP_API_KEY;
-    if (apiKey) {
-        headers["X-API-Key"] = apiKey;
-    }
-    const orgSlug = process.env.MASTRA_ORGANIZATION_SLUG || process.env.MCP_API_ORGANIZATION_SLUG;
-    if (orgSlug) {
-        headers["X-Organization-Slug"] = orgSlug;
-    }
-    return headers;
-};
-
-const callInternalApi = async (
-    path: string,
-    options?: {
-        method?: string;
-        query?: Record<string, unknown>;
-        body?: Record<string, unknown>;
-    }
-) => {
-    const url = new URL(path, getInternalBaseUrl());
-    if (options?.query) {
-        Object.entries(options.query).forEach(([key, value]) => {
-            if (value !== undefined && value !== null) {
-                url.searchParams.set(key, String(value));
-            }
-        });
-    }
-
-    const response = await fetch(url.toString(), {
-        method: options?.method ?? "GET",
-        headers: buildHeaders(),
-        body: options?.body ? JSON.stringify(options.body) : undefined
-    });
-    const data = await response.json();
-    if (!response.ok || data?.success === false) {
-        throw new Error(data?.error || `Request failed (${response.status})`);
-    }
-    return data;
-};
 
 export const agentFeedbackSubmitTool = createTool({
     id: "agent-feedback-submit",
@@ -61,10 +15,11 @@ export const agentFeedbackSubmitTool = createTool({
         comment: z.string().optional()
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ agentId, runId, thumbs, rating, comment }) => {
+    execute: async ({ agentId, runId, thumbs, rating, comment, ...rest }) => {
         return callInternalApi(`/api/agents/${agentId}/feedback`, {
             method: "POST",
-            body: { runId, thumbs, rating, comment }
+            body: { runId, thumbs, rating, comment },
+            organizationId: (rest as Record<string, unknown>).organizationId as string | undefined
         });
     }
 });
@@ -78,9 +33,10 @@ export const agentFeedbackListTool = createTool({
         to: z.string().optional()
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ agentId, from, to }) => {
+    execute: async ({ agentId, from, to, ...rest }) => {
         return callInternalApi(`/api/agents/${agentId}/feedback`, {
-            query: { from, to }
+            query: { from, to },
+            organizationId: (rest as Record<string, unknown>).organizationId as string | undefined
         });
     }
 });
@@ -92,8 +48,10 @@ export const agentGuardrailsGetTool = createTool({
         agentId: z.string()
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ agentId }) => {
-        return callInternalApi(`/api/agents/${agentId}/guardrails`);
+    execute: async ({ agentId, ...rest }) => {
+        return callInternalApi(`/api/agents/${agentId}/guardrails`, {
+            organizationId: (rest as Record<string, unknown>).organizationId as string | undefined
+        });
     }
 });
 
@@ -106,10 +64,11 @@ export const agentGuardrailsUpdateTool = createTool({
         createdBy: z.string().optional()
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ agentId, configJson, createdBy }) => {
+    execute: async ({ agentId, configJson, createdBy, ...rest }) => {
         return callInternalApi(`/api/agents/${agentId}/guardrails`, {
             method: "PUT",
-            body: { configJson, createdBy }
+            body: { configJson, createdBy },
+            organizationId: (rest as Record<string, unknown>).organizationId as string | undefined
         });
     }
 });
@@ -125,9 +84,10 @@ export const agentGuardrailsEventsTool = createTool({
         cursor: z.string().optional()
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ agentId, from, to, limit, cursor }) => {
+    execute: async ({ agentId, from, to, limit, cursor, ...rest }) => {
         return callInternalApi(`/api/agents/${agentId}/guardrails/events`, {
-            query: { from, to, limit, cursor }
+            query: { from, to, limit, cursor },
+            organizationId: (rest as Record<string, unknown>).organizationId as string | undefined
         });
     }
 });
@@ -141,9 +101,10 @@ export const agentTestCasesListTool = createTool({
         limit: z.number().optional()
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ agentId, cursor, limit }) => {
+    execute: async ({ agentId, cursor, limit, ...rest }) => {
         return callInternalApi(`/api/agents/${agentId}/test-cases`, {
-            query: { cursor, limit }
+            query: { cursor, limit },
+            organizationId: (rest as Record<string, unknown>).organizationId as string | undefined
         });
     }
 });
@@ -160,10 +121,11 @@ export const agentTestCasesCreateTool = createTool({
         createdBy: z.string().optional()
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ agentId, name, inputText, expectedOutput, tags, createdBy }) => {
+    execute: async ({ agentId, name, inputText, expectedOutput, tags, createdBy, ...rest }) => {
         return callInternalApi(`/api/agents/${agentId}/test-cases`, {
             method: "POST",
-            body: { name, inputText, expectedOutput, tags, createdBy }
+            body: { name, inputText, expectedOutput, tags, createdBy },
+            organizationId: (rest as Record<string, unknown>).organizationId as string | undefined
         });
     }
 });

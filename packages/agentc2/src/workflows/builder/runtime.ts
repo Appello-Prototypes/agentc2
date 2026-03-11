@@ -464,6 +464,9 @@ async function executeWorkflowStep(
         throw new Error(`Workflow step "${step.id}" missing workflowId`);
     }
 
+    const organizationId =
+        requestContext?.resource?.organizationId || requestContext?.organizationId;
+
     const hasWfInputMapping = step.inputMapping && Object.keys(step.inputMapping).length > 0;
     const input = resolveInputMapping(
         hasWfInputMapping ? step.inputMapping : config.input,
@@ -471,7 +474,8 @@ async function executeWorkflowStep(
     );
     const dbWorkflow = await prisma.workflow.findFirst({
         where: {
-            OR: [{ id: config.workflowId }, { slug: config.workflowId }]
+            OR: [{ id: config.workflowId }, { slug: config.workflowId }],
+            ...(organizationId ? { workspace: { organizationId } } : {})
         }
     });
 

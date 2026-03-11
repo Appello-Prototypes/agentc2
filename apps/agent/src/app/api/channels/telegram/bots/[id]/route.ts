@@ -88,7 +88,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         agent = await prisma.agent.findFirst({
             where: {
                 slug: metadata.agentSlug as string,
-                isActive: true
+                isActive: true,
+                workspace: { organizationId: authContext.organizationId }
             },
             select: { id: true, slug: true, name: true }
         });

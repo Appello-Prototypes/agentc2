@@ -1,6 +1,7 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { prisma, Prisma } from "@repo/database";
+import { callInternalApi } from "./internal-api";
 
 function percentile(sorted: number[], p: number) {
     if (sorted.length === 0) return 0;
@@ -18,53 +19,6 @@ async function resolveAgent(agentId: string, organizationId?: string) {
 }
 
 const baseOutputSchema = z.object({ success: z.boolean().optional() }).passthrough();
-
-const getInternalBaseUrl = () =>
-    process.env.MASTRA_API_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
-
-const buildHeaders = () => {
-    const headers: Record<string, string> = {
-        "Content-Type": "application/json"
-    };
-    const apiKey = process.env.MASTRA_API_KEY || process.env.MCP_API_KEY;
-    if (apiKey) {
-        headers["X-API-Key"] = apiKey;
-    }
-    const orgSlug = process.env.MASTRA_ORGANIZATION_SLUG || process.env.MCP_API_ORGANIZATION_SLUG;
-    if (orgSlug) {
-        headers["X-Organization-Slug"] = orgSlug;
-    }
-    return headers;
-};
-
-const callInternalApi = async (
-    path: string,
-    options?: {
-        method?: string;
-        query?: Record<string, unknown>;
-        body?: Record<string, unknown>;
-    }
-) => {
-    const url = new URL(path, getInternalBaseUrl());
-    if (options?.query) {
-        Object.entries(options.query).forEach(([key, value]) => {
-            if (value !== undefined && value !== null) {
-                url.searchParams.set(key, String(value));
-            }
-        });
-    }
-
-    const response = await fetch(url.toString(), {
-        method: options?.method ?? "GET",
-        headers: buildHeaders(),
-        body: options?.body ? JSON.stringify(options.body) : undefined
-    });
-    const data = await response.json();
-    if (!response.ok || data?.success === false) {
-        throw new Error(data?.error || `Request failed (${response.status})`);
-    }
-    return data;
-};
 
 export const metricsLiveSummaryTool = createTool({
     id: "metrics-live-summary",
@@ -781,7 +735,8 @@ export const liveRunsTool = createTool({
         from,
         to,
         limit,
-        offset
+        offset,
+        ...rest
     }) => {
         return callInternalApi("/api/live/runs", {
             query: {
@@ -797,7 +752,8 @@ export const liveRunsTool = createTool({
                 to,
                 limit,
                 offset
-            }
+            },
+            organizationId: (rest as Record<string, unknown>).organizationId as string | undefined
         });
     }
 });
@@ -811,9 +767,10 @@ export const liveMetricsTool = createTool({
         to: z.string().optional()
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ runType, from, to }) => {
+    execute: async ({ runType, from, to, ...rest }) => {
         return callInternalApi("/api/live/metrics", {
-            query: { runType, from, to }
+            query: { runType, from, to },
+            organizationId: (rest as Record<string, unknown>).organizationId as string | undefined
         });
     }
 });
@@ -823,8 +780,10 @@ export const liveStatsTool = createTool({
     description: "Get live production stats for active agents.",
     inputSchema: z.object({}),
     outputSchema: baseOutputSchema,
-    execute: async () => {
-        return callInternalApi("/api/live/stats");
+    execute: async (input) => {
+        return callInternalApi("/api/live/stats", {
+            organizationId: (input as Record<string, unknown>).organizationId as string | undefined
+        });
     }
 });
 
@@ -841,9 +800,10 @@ export const auditLogsListTool = createTool({
         cursor: z.string().optional()
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ entityType, entityId, action, from, to, limit, cursor }) => {
+    execute: async ({ entityType, entityId, action, from, to, limit, cursor, ...rest }) => {
         return callInternalApi("/api/audit-logs", {
-            query: { entityType, entityId, action, from, to, limit, cursor }
+            query: { entityType, entityId, action, from, to, limit, cursor },
+            organizationId: (rest as Record<string, unknown>).organizationId as string | undefined
         });
     }
 });
@@ -863,9 +823,10 @@ export const conversationListTool = createTool({
         offset: z.number().optional().describe("Pagination offset")
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ agentId, agentSlug, source, from, to, search, limit, offset }) => {
+    execute: async ({ agentId, agentSlug, source, from, to, search, limit, offset, ...rest }) => {
         return callInternalApi("/api/threads", {
-            query: { agentId, agentSlug, source, from, to, search, limit, offset }
+            query: { agentId, agentSlug, source, from, to, search, limit, offset },
+            organizationId: (rest as Record<string, unknown>).organizationId as string | undefined
         });
     }
 });
@@ -878,7 +839,9 @@ export const conversationGetTool = createTool({
         threadId: z.string().describe("The thread ID to retrieve")
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ threadId }) => {
-        return callInternalApi(`/api/threads/${encodeURIComponent(threadId)}`);
+    execute: async ({ threadId, ...rest }) => {
+        return callInternalApi(`/api/threads/${encodeURIComponent(threadId)}`, {
+            organizationId: (rest as Record<string, unknown>).organizationId as string | undefined
+        });
     }
 });

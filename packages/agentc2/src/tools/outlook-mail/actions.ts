@@ -24,8 +24,11 @@ async function callGraph(params: {
     const { prisma } = await import("@repo/database");
     const { createDecipheriv } = await import("crypto");
 
-    const connection = await prisma.integrationConnection.findUnique({
-        where: { id: params.connectionId }
+    const connection = await prisma.integrationConnection.findFirst({
+        where: {
+            id: params.connectionId,
+            ...(params.organizationId ? { organizationId: params.organizationId } : {})
+        }
     });
 
     if (!connection || !connection.isActive) {
@@ -99,6 +102,7 @@ export const outlookMailListEmailsTool = createTool({
         "List recent emails from Outlook inbox. Returns subject, sender, date, and preview for each message.",
     inputSchema: z.object({
         connectionId: z.string().describe("Microsoft IntegrationConnection ID"),
+        organizationId: z.string().optional().describe("Organization ID for tenant scoping"),
         top: z.number().optional().default(10).describe("Number of emails to return (max 50)"),
         filter: z.string().optional().describe("OData filter expression (e.g., 'isRead eq false')")
     }),
@@ -107,11 +111,12 @@ export const outlookMailListEmailsTool = createTool({
         messages: z.array(z.record(z.unknown())),
         error: z.string().optional()
     }),
-    execute: async ({ connectionId, top, filter }) => {
+    execute: async ({ connectionId, organizationId, top, filter }) => {
         try {
             const filterParam = filter ? `&$filter=${encodeURIComponent(filter)}` : "";
             const result = (await callGraph({
                 connectionId,
+                organizationId,
                 path: `/me/mailFolders/Inbox/messages?$top=${Math.min(top || 10, 50)}&$orderby=receivedDateTime desc&$select=id,subject,bodyPreview,from,toRecipients,receivedDateTime,isRead,hasAttachments,webLink${filterParam}`
             })) as { value?: unknown[] };
 
@@ -131,6 +136,7 @@ export const outlookMailGetEmailTool = createTool({
     description: "Get a specific Outlook email by ID, including full body content.",
     inputSchema: z.object({
         connectionId: z.string().describe("Microsoft IntegrationConnection ID"),
+        organizationId: z.string().optional().describe("Organization ID for tenant scoping"),
         messageId: z.string().describe("The Outlook message ID")
     }),
     outputSchema: z.object({
@@ -138,10 +144,11 @@ export const outlookMailGetEmailTool = createTool({
         message: z.record(z.unknown()).optional(),
         error: z.string().optional()
     }),
-    execute: async ({ connectionId, messageId }) => {
+    execute: async ({ connectionId, organizationId, messageId }) => {
         try {
             const result = await callGraph({
                 connectionId,
+                organizationId,
                 path: `/me/messages/${messageId}?$select=id,subject,body,bodyPreview,from,toRecipients,ccRecipients,receivedDateTime,sentDateTime,isRead,hasAttachments,conversationId,webLink`
             });
             return { success: true, message: result as Record<string, unknown> };
@@ -159,6 +166,7 @@ export const outlookMailSendEmailTool = createTool({
     description: "Send an email via Outlook. Supports To, CC, subject, and body.",
     inputSchema: z.object({
         connectionId: z.string().describe("Microsoft IntegrationConnection ID"),
+        organizationId: z.string().optional().describe("Organization ID for tenant scoping"),
         to: z.array(z.string().email()).describe("Recipient email addresses"),
         cc: z.array(z.string().email()).optional().describe("CC email addresses"),
         subject: z.string().describe("Email subject"),
@@ -173,10 +181,11 @@ export const outlookMailSendEmailTool = createTool({
         success: z.boolean(),
         error: z.string().optional()
     }),
-    execute: async ({ connectionId, to, cc, subject, body, contentType }) => {
+    execute: async ({ connectionId, organizationId, to, cc, subject, body, contentType }) => {
         try {
             await callGraph({
                 connectionId,
+                organizationId,
                 path: "/me/sendMail",
                 method: "POST",
                 body: {
@@ -211,16 +220,18 @@ export const outlookMailArchiveEmailTool = createTool({
     description: "Archive an Outlook email by moving it to the Archive folder.",
     inputSchema: z.object({
         connectionId: z.string().describe("Microsoft IntegrationConnection ID"),
+        organizationId: z.string().optional().describe("Organization ID for tenant scoping"),
         messageId: z.string().describe("The Outlook message ID to archive")
     }),
     outputSchema: z.object({
         success: z.boolean(),
         error: z.string().optional()
     }),
-    execute: async ({ connectionId, messageId }) => {
+    execute: async ({ connectionId, organizationId, messageId }) => {
         try {
             await callGraph({
                 connectionId,
+                organizationId,
                 path: `/me/messages/${messageId}/move`,
                 method: "POST",
                 body: { destinationId: "archive" }

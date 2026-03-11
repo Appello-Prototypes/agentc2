@@ -69,6 +69,10 @@ const agentReadSchema = z.object({
         .string()
         .optional()
         .describe("Workspace ID for tenant-scoped lookup (auto-injected)"),
+    organizationId: z
+        .string()
+        .optional()
+        .describe("Organization ID for tenant-scoped lookup (auto-injected)"),
     include: z
         .object({
             tools: z.boolean().optional(),
@@ -87,6 +91,10 @@ const agentUpdateSchema = z
             .string()
             .optional()
             .describe("Workspace ID for tenant-scoped lookup (auto-injected)"),
+        organizationId: z
+            .string()
+            .optional()
+            .describe("Organization ID for tenant-scoped lookup (auto-injected)"),
         restoreVersionId: z.string().optional(),
         restoreVersion: z.number().optional(),
         versionDescription: z.string().optional(),
@@ -101,6 +109,10 @@ const agentDeleteSchema = z.object({
         .string()
         .optional()
         .describe("Workspace ID for tenant-scoped lookup (auto-injected)"),
+    organizationId: z
+        .string()
+        .optional()
+        .describe("Organization ID for tenant-scoped lookup (auto-injected)"),
     mode: z.enum(["delete", "archive"]).optional()
 });
 
@@ -401,7 +413,7 @@ export const agentReadTool = createTool({
         schedules: z.array(z.any()).optional(),
         triggers: z.array(z.any()).optional()
     }),
-    execute: async ({ agentId, workspaceId, include }) => {
+    execute: async ({ agentId, workspaceId, organizationId, include }) => {
         const includeConfig: Record<string, boolean> = {};
         const includeTools = include?.tools ?? true;
 
@@ -411,7 +423,11 @@ export const agentReadTool = createTool({
         if (include?.schedules) includeConfig.schedules = true;
         if (include?.triggers) includeConfig.triggers = true;
 
-        const scopeFilter = workspaceId ? { workspaceId } : {};
+        const scopeFilter = workspaceId
+            ? { workspaceId }
+            : organizationId
+              ? { workspace: { organizationId } }
+              : {};
         const agent = await prisma.agent.findFirst({
             where: { OR: [{ slug: agentId }, { id: agentId }], ...scopeFilter },
             include: includeConfig
@@ -442,6 +458,7 @@ export const agentUpdateTool = createTool({
     execute: async ({
         agentId,
         workspaceId,
+        organizationId,
         restoreVersionId,
         restoreVersion,
         versionDescription,
@@ -452,7 +469,11 @@ export const agentUpdateTool = createTool({
             throw new Error("Update requires data or a restoreVersion value");
         }
 
-        const scopeFilter = workspaceId ? { workspaceId } : {};
+        const scopeFilter = workspaceId
+            ? { workspaceId }
+            : organizationId
+              ? { workspace: { organizationId } }
+              : {};
         const existing = await prisma.agent.findFirst({
             where: { OR: [{ slug: agentId }, { id: agentId }], ...scopeFilter },
             include: { tools: true }
@@ -619,8 +640,12 @@ export const agentDeleteTool = createTool({
         success: z.boolean(),
         message: z.string().optional()
     }),
-    execute: async ({ agentId, workspaceId, mode }) => {
-        const scopeFilter = workspaceId ? { workspaceId } : {};
+    execute: async ({ agentId, workspaceId, organizationId, mode }) => {
+        const scopeFilter = workspaceId
+            ? { workspaceId }
+            : organizationId
+              ? { workspace: { organizationId } }
+              : {};
         const existing = await prisma.agent.findFirst({
             where: { OR: [{ slug: agentId }, { id: agentId }], ...scopeFilter }
         });

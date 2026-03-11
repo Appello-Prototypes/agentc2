@@ -307,7 +307,13 @@ export async function handleTelegramMessage(
             const possibleMessage = keywordMatch[2].trim();
             try {
                 const agentExists = await prisma.agent.findFirst({
-                    where: { slug: possibleAgent, isActive: true },
+                    where: {
+                        slug: possibleAgent,
+                        isActive: true,
+                        ...(ctx.organizationId
+                            ? { workspace: { organizationId: ctx.organizationId } }
+                            : {})
+                    },
                     select: { id: true }
                 });
                 if (agentExists) {

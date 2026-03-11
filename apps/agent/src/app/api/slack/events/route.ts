@@ -117,13 +117,26 @@ async function detectFeedbackReply(threadTs: string): Promise<{
  * First checks ChatMessage metadata (fast path), then falls back to AgentToolCall query.
  * Returns the agent slug if found, or null if the thread wasn't started by an agent.
  */
-async function resolveThreadOriginAgent(threadTs: string): Promise<string | null> {
+async function resolveThreadOriginAgent(
+    threadTs: string,
+    integrationConnectionId?: string
+): Promise<string | null> {
     try {
         // Fast path: ChatMessage metadata stores agentSlug when bot posts a message
-        const chatMsg = await prisma.chatMessage.findFirst({
-            where: { messageTs: threadTs },
-            select: { metadata: true }
-        });
+        const chatMsg = integrationConnectionId
+            ? await prisma.chatMessage.findUnique({
+                  where: {
+                      integrationConnectionId_messageTs: {
+                          integrationConnectionId,
+                          messageTs: threadTs
+                      }
+                  },
+                  select: { metadata: true }
+              })
+            : await prisma.chatMessage.findFirst({
+                  where: { messageTs: threadTs },
+                  select: { metadata: true }
+              });
         if (chatMsg?.metadata) {
             const meta =
                 typeof chatMsg.metadata === "object"
@@ -1473,7 +1486,10 @@ export async function POST(request: NextRequest) {
                     ? directive.slug || undefined
                     : undefined;
                 if (!resolvedSlug && mentionEvent.thread_ts) {
-                    const originSlug = await resolveThreadOriginAgent(mentionEvent.thread_ts);
+                    const originSlug = await resolveThreadOriginAgent(
+                        mentionEvent.thread_ts,
+                        installation.connectionId ?? undefined
+                    );
                     if (originSlug) {
                         console.log(`[Slack] Thread-origin routing: ${originSlug}`);
                         resolvedSlug = originSlug;
@@ -1764,7 +1780,10 @@ export async function POST(request: NextRequest) {
             const isAgentOriginThread =
                 messageEvent.thread_ts &&
                 !isActiveThreadReply &&
-                (await resolveThreadOriginAgent(messageEvent.thread_ts)) !== null;
+                (await resolveThreadOriginAgent(
+                    messageEvent.thread_ts,
+                    installation.connectionId ?? undefined
+                )) !== null;
 
             // Check channel binding for trigger rules (triggerOnAllMessages, keywords, etc.)
             let channelBindingCtx: InstanceContext | null = null;
@@ -1823,7 +1842,10 @@ export async function POST(request: NextRequest) {
                         ? directive.slug || undefined
                         : undefined;
                     if (!resolvedSlug && messageEvent.thread_ts) {
-                        const originSlug = await resolveThreadOriginAgent(messageEvent.thread_ts);
+                        const originSlug = await resolveThreadOriginAgent(
+                            messageEvent.thread_ts,
+                            installation.connectionId ?? undefined
+                        );
                         if (originSlug) {
                             console.log(`[Slack] Thread-origin routing: ${originSlug}`);
                             resolvedSlug = originSlug;

@@ -17,8 +17,8 @@ async function getAccessToken(connectionId: string, organizationId?: string): Pr
     const { prisma } = await import("@repo/database");
     const { createDecipheriv } = await import("crypto");
 
-    const connection = await prisma.integrationConnection.findUnique({
-        where: { id: connectionId }
+    const connection = await prisma.integrationConnection.findFirst({
+        where: { id: connectionId, ...(organizationId ? { organizationId } : {}) }
     });
 
     if (!connection || !connection.isActive) {
@@ -69,9 +69,10 @@ async function getAccessToken(connectionId: string, organizationId?: string): Pr
 async function callDropbox(
     connectionId: string,
     endpoint: string,
-    body: unknown
+    body: unknown,
+    organizationId?: string
 ): Promise<unknown> {
-    const token = await getAccessToken(connectionId);
+    const token = await getAccessToken(connectionId, organizationId);
     const response = await fetch(`${API_BASE}${endpoint}`, {
         method: "POST",
         headers: {
@@ -96,6 +97,7 @@ export const dropboxListFilesTool = createTool({
     description: "List files and folders in a Dropbox path. Use empty string for root.",
     inputSchema: z.object({
         connectionId: z.string().describe("Dropbox IntegrationConnection ID"),
+        organizationId: z.string().optional().describe("Organization ID for tenant scoping"),
         path: z
             .string()
             .optional()
@@ -108,15 +110,20 @@ export const dropboxListFilesTool = createTool({
         entries: z.array(z.record(z.unknown())),
         error: z.string().optional()
     }),
-    execute: async ({ connectionId, path, limit }) => {
+    execute: async ({ connectionId, organizationId, path, limit }) => {
         try {
-            const result = (await callDropbox(connectionId, "/files/list_folder", {
-                path: path || "",
-                recursive: false,
-                include_media_info: false,
-                include_deleted: false,
-                limit: Math.min(limit || 25, 100)
-            })) as { entries: unknown[] };
+            const result = (await callDropbox(
+                connectionId,
+                "/files/list_folder",
+                {
+                    path: path || "",
+                    recursive: false,
+                    include_media_info: false,
+                    include_deleted: false,
+                    limit: Math.min(limit || 25, 100)
+                },
+                organizationId
+            )) as { entries: unknown[] };
 
             return {
                 success: true,
@@ -138,6 +145,7 @@ export const dropboxGetFileTool = createTool({
         "Download and read a text file from Dropbox. Returns the file content as text. Works best with text files (code, documents, CSVs).",
     inputSchema: z.object({
         connectionId: z.string().describe("Dropbox IntegrationConnection ID"),
+        organizationId: z.string().optional().describe("Organization ID for tenant scoping"),
         path: z.string().describe("Full Dropbox path to the file (e.g., '/Documents/notes.txt')")
     }),
     outputSchema: z.object({
@@ -146,9 +154,9 @@ export const dropboxGetFileTool = createTool({
         metadata: z.record(z.unknown()).optional(),
         error: z.string().optional()
     }),
-    execute: async ({ connectionId, path }) => {
+    execute: async ({ connectionId, organizationId, path }) => {
         try {
-            const token = await getAccessToken(connectionId);
+            const token = await getAccessToken(connectionId, organizationId);
             const response = await fetch(`${CONTENT_BASE}/files/download`, {
                 method: "POST",
                 headers: {
@@ -185,6 +193,7 @@ export const dropboxUploadFileTool = createTool({
     description: "Upload a text file to Dropbox.",
     inputSchema: z.object({
         connectionId: z.string().describe("Dropbox IntegrationConnection ID"),
+        organizationId: z.string().optional().describe("Organization ID for tenant scoping"),
         path: z.string().describe("Destination path in Dropbox (e.g., '/Documents/report.txt')"),
         content: z.string().describe("File content to upload"),
         mode: z
@@ -198,9 +207,9 @@ export const dropboxUploadFileTool = createTool({
         metadata: z.record(z.unknown()).optional(),
         error: z.string().optional()
     }),
-    execute: async ({ connectionId, path, content, mode }) => {
+    execute: async ({ connectionId, organizationId, path, content, mode }) => {
         try {
-            const token = await getAccessToken(connectionId);
+            const token = await getAccessToken(connectionId, organizationId);
             const response = await fetch(`${CONTENT_BASE}/files/upload`, {
                 method: "POST",
                 headers: {
@@ -237,6 +246,7 @@ export const dropboxSearchFilesTool = createTool({
     description: "Search for files in Dropbox by name or content.",
     inputSchema: z.object({
         connectionId: z.string().describe("Dropbox IntegrationConnection ID"),
+        organizationId: z.string().optional().describe("Organization ID for tenant scoping"),
         query: z.string().describe("Search query"),
         path: z
             .string()
@@ -250,16 +260,21 @@ export const dropboxSearchFilesTool = createTool({
         results: z.array(z.record(z.unknown())),
         error: z.string().optional()
     }),
-    execute: async ({ connectionId, query, path, maxResults }) => {
+    execute: async ({ connectionId, organizationId, query, path, maxResults }) => {
         try {
-            const result = (await callDropbox(connectionId, "/files/search_v2", {
-                query,
-                options: {
-                    path: path || "",
-                    max_results: Math.min(maxResults || 25, 100),
-                    file_status: "active"
-                }
-            })) as {
+            const result = (await callDropbox(
+                connectionId,
+                "/files/search_v2",
+                {
+                    query,
+                    options: {
+                        path: path || "",
+                        max_results: Math.min(maxResults || 25, 100),
+                        file_status: "active"
+                    }
+                },
+                organizationId
+            )) as {
                 matches: Array<{ metadata: { metadata: Record<string, unknown> } }>;
             };
 
@@ -280,6 +295,7 @@ export const dropboxGetSharingLinksTool = createTool({
     description: "Get sharing links for a Dropbox file or create one if none exist.",
     inputSchema: z.object({
         connectionId: z.string().describe("Dropbox IntegrationConnection ID"),
+        organizationId: z.string().optional().describe("Organization ID for tenant scoping"),
         path: z.string().describe("Full Dropbox path to the file")
     }),
     outputSchema: z.object({
@@ -287,12 +303,17 @@ export const dropboxGetSharingLinksTool = createTool({
         links: z.array(z.object({ url: z.string(), name: z.string() })),
         error: z.string().optional()
     }),
-    execute: async ({ connectionId, path }) => {
+    execute: async ({ connectionId, organizationId, path }) => {
         try {
-            const result = (await callDropbox(connectionId, "/sharing/list_shared_links", {
-                path,
-                direct_only: true
-            })) as {
+            const result = (await callDropbox(
+                connectionId,
+                "/sharing/list_shared_links",
+                {
+                    path,
+                    direct_only: true
+                },
+                organizationId
+            )) as {
                 links: Array<{ url: string; name: string }>;
             };
 
@@ -310,7 +331,8 @@ export const dropboxGetSharingLinksTool = createTool({
                         {
                             path,
                             settings: { requested_visibility: "public" }
-                        }
+                        },
+                        organizationId
                     )) as { url: string; name: string };
                     links.push({ url: created.url, name: created.name });
                 } catch {

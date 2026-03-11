@@ -44,7 +44,10 @@ export const ingestTicketTool = createTool({
             case "support_ticket": {
                 const { prisma } = await import("@repo/database");
                 const ticket = await prisma.supportTicket.findUnique({
-                    where: { id: sourceId }
+                    where: {
+                        id: sourceId,
+                        ...(organizationId ? { organizationId } : {})
+                    }
                 });
                 if (!ticket) {
                     throw new Error(`SupportTicket not found: ${sourceId}`);
@@ -64,7 +67,10 @@ export const ingestTicketTool = createTool({
             case "backlog_task": {
                 const { prisma } = await import("@repo/database");
                 const task = await prisma.backlogTask.findUnique({
-                    where: { id: sourceId }
+                    where: {
+                        id: sourceId,
+                        ...(organizationId ? { backlog: { workspace: { organizationId } } } : {})
+                    }
                 });
                 if (!task) {
                     throw new Error(`BacklogTask not found: ${sourceId}`);
@@ -163,7 +169,8 @@ export const dispatchCodingPipelineTool = createTool({
             const workflow = await prisma.workflow.findFirst({
                 where: {
                     slug: workflowSlug,
-                    isActive: true
+                    isActive: true,
+                    ...(organizationId ? { workspace: { organizationId } } : {})
                 }
             });
 

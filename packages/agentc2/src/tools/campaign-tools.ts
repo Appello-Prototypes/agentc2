@@ -9,81 +9,9 @@ import {
     CampaignStatus
 } from "@repo/database";
 
+import { callInternalApi } from "./internal-api";
+
 const baseOutputSchema = z.object({}).passthrough();
-
-const getInternalBaseUrl = () =>
-    process.env.MASTRA_API_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
-
-const orgSlugCache = new Map<string, string>();
-
-const resolveOrgSlug = async (organizationId: string): Promise<string | undefined> => {
-    const cached = orgSlugCache.get(organizationId);
-    if (cached) return cached;
-    const org = await prisma.organization.findUnique({
-        where: { id: organizationId },
-        select: { slug: true }
-    });
-    if (org?.slug) {
-        orgSlugCache.set(organizationId, org.slug);
-        return org.slug;
-    }
-    return undefined;
-};
-
-const buildHeaders = (orgSlugOverride?: string) => {
-    const headers: Record<string, string> = {
-        "Content-Type": "application/json"
-    };
-    const apiKey = process.env.MASTRA_API_KEY || process.env.MCP_API_KEY;
-    if (apiKey) {
-        headers["X-API-Key"] = apiKey;
-    }
-    const orgSlug =
-        orgSlugOverride ||
-        process.env.MASTRA_ORGANIZATION_SLUG ||
-        process.env.MCP_API_ORGANIZATION_SLUG;
-    if (orgSlug) {
-        headers["X-Organization-Slug"] = orgSlug;
-    }
-    return headers;
-};
-
-const callInternalApi = async (
-    path: string,
-    options?: {
-        method?: string;
-        query?: Record<string, unknown>;
-        body?: Record<string, unknown>;
-        organizationId?: string;
-    }
-) => {
-    const url = new URL(path, getInternalBaseUrl());
-    if (options?.query) {
-        Object.entries(options.query).forEach(([key, value]) => {
-            if (value !== undefined && value !== null) {
-                url.searchParams.set(key, String(value));
-            }
-        });
-    }
-
-    const orgSlug = options?.organizationId
-        ? await resolveOrgSlug(options.organizationId)
-        : undefined;
-
-    const response = await fetch(url.toString(), {
-        method: options?.method ?? "GET",
-        headers: buildHeaders(orgSlug),
-        body: options?.body ? JSON.stringify(options.body) : undefined
-    });
-    const data = await response.json();
-    if (!response.ok) {
-        const errorMessage =
-            (data && typeof data === "object" && "error" in data ? data.error : undefined) ||
-            `Request failed (${response.status})`;
-        throw new Error(String(errorMessage));
-    }
-    return data;
-};
 
 export const campaignCreateTool = createTool({
     id: "campaign-create",
@@ -442,8 +370,12 @@ export const campaignWritePlanTool = createTool({
         executionStrategy,
         estimatedTotalCostUsd,
         estimatedDurationMinutes,
-        gapsDetected
+        gapsDetected,
+        ...rest
     }) => {
+        const organizationId = (rest as Record<string, unknown>).organizationId as
+            | string
+            | undefined;
         // Load campaign with missions and tasks
         const campaign = await prisma.campaign.findUniqueOrThrow({
             where: { id: campaignId },
@@ -454,9 +386,12 @@ export const campaignWritePlanTool = createTool({
             }
         });
 
-        // Get available agents for slug -> id lookup
+        // Get available agents scoped to org
         const agents = await prisma.agent.findMany({
-            where: { isActive: true },
+            where: {
+                isActive: true,
+                ...(organizationId ? { workspace: { organizationId } } : {})
+            },
             select: { id: true, slug: true }
         });
 

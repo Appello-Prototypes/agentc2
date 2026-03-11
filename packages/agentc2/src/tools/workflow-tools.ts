@@ -2,6 +2,7 @@ import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { prisma, Prisma, RunEnvironment, RunStatus, RunTriggerType } from "@repo/database";
 import type { WorkflowDefinition } from "../workflows/builder";
+import { callInternalApi } from "./internal-api";
 
 const resolveEnvironment = (requested?: string | null, fallback?: string | null) => {
     const normalized = (requested || fallback || "").trim().toLowerCase();
@@ -45,55 +46,6 @@ const mapStepStatus = (status: "completed" | "failed" | "suspended") => {
 
 const baseOutputSchema = z.object({ success: z.boolean().optional() }).passthrough();
 
-const getInternalBaseUrl = () =>
-    process.env.MASTRA_API_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
-
-const buildHeaders = () => {
-    const headers: Record<string, string> = {
-        "Content-Type": "application/json"
-    };
-    const apiKey = process.env.MASTRA_API_KEY || process.env.MCP_API_KEY;
-    if (apiKey) {
-        headers["X-API-Key"] = apiKey;
-    }
-    const orgSlug =
-        process.env.MASTRA_ORGANIZATION_SLUG ||
-        process.env.MCP_API_ORGANIZATION_SLUG ||
-        process.env.PLATFORM_ORG_SLUG ||
-        "agentc2";
-    headers["X-Organization-Slug"] = orgSlug;
-    return headers;
-};
-
-const callInternalApi = async (
-    path: string,
-    options?: {
-        method?: string;
-        query?: Record<string, unknown>;
-        body?: Record<string, unknown>;
-    }
-) => {
-    const url = new URL(path, getInternalBaseUrl());
-    if (options?.query) {
-        Object.entries(options.query).forEach(([key, value]) => {
-            if (value !== undefined && value !== null) {
-                url.searchParams.set(key, String(value));
-            }
-        });
-    }
-
-    const response = await fetch(url.toString(), {
-        method: options?.method ?? "GET",
-        headers: buildHeaders(),
-        body: options?.body ? JSON.stringify(options.body) : undefined
-    });
-    const data = await response.json();
-    if (!response.ok || data?.success === false) {
-        throw new Error(data?.error || `Request failed (${response.status})`);
-    }
-    return data;
-};
-
 export const workflowExecuteTool = createTool({
     id: "workflow-execute",
     description: "Execute a workflow by slug or ID and return output plus run metadata.",
@@ -135,7 +87,8 @@ export const workflowExecuteTool = createTool({
         triggerType,
         requestContext,
         organizationId,
-        async: asyncMode
+        async: asyncMode,
+        ...rest
     }) => {
         const orgFilter = organizationId ? { workspace: { organizationId } } : {};
         const workflow = await prisma.workflow.findFirst({
@@ -480,7 +433,8 @@ export const workflowListRunsTool = createTool({
         from,
         to,
         search,
-        organizationId
+        organizationId,
+        ...rest
     }) => {
         const orgFilter = organizationId ? { workspace: { organizationId } } : {};
         const workflow = await prisma.workflow.findFirst({
@@ -573,7 +527,7 @@ export const workflowGetRunTool = createTool({
         success: z.boolean(),
         run: z.any()
     }),
-    execute: async ({ workflowSlug, runId, organizationId }) => {
+    execute: async ({ workflowSlug, runId, organizationId, ...rest }) => {
         const orgFilter = organizationId ? { workspace: { organizationId } } : {};
         const workflow = await prisma.workflow.findFirst({
             where: { OR: [{ slug: workflowSlug }, { id: workflowSlug }], ...orgFilter }
@@ -606,10 +560,11 @@ export const workflowResumeTool = createTool({
         requestContext: z.record(z.any()).optional().describe("Optional request context")
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ workflowSlug, runId, resumeData, requestContext }) => {
+    execute: async ({ workflowSlug, runId, resumeData, requestContext, ...rest }) => {
         return callInternalApi(`/api/workflows/${workflowSlug}/runs/${runId}/resume`, {
             method: "POST",
-            body: { resumeData, requestContext }
+            body: { resumeData, requestContext },
+            organizationId: (rest as Record<string, unknown>).organizationId as string | undefined
         });
     }
 });
@@ -622,9 +577,10 @@ export const workflowMetricsTool = createTool({
         days: z.number().optional().describe("Number of days to include")
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ workflowSlug, days }) => {
+    execute: async ({ workflowSlug, days, ...rest }) => {
         return callInternalApi(`/api/workflows/${workflowSlug}/metrics`, {
-            query: { days }
+            query: { days },
+            organizationId: (rest as Record<string, unknown>).organizationId as string | undefined
         });
     }
 });
@@ -636,8 +592,10 @@ export const workflowVersionsTool = createTool({
         workflowSlug: z.string().describe("Workflow slug or ID")
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ workflowSlug }) => {
-        return callInternalApi(`/api/workflows/${workflowSlug}/versions`);
+    execute: async ({ workflowSlug, ...rest }) => {
+        return callInternalApi(`/api/workflows/${workflowSlug}/versions`, {
+            organizationId: (rest as Record<string, unknown>).organizationId as string | undefined
+        });
     }
 });
 
@@ -649,9 +607,10 @@ export const workflowStatsTool = createTool({
         to: z.string().optional().describe("End ISO timestamp")
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ from, to }) => {
+    execute: async ({ from, to, ...rest }) => {
         return callInternalApi("/api/workflows/stats", {
-            query: { from, to }
+            query: { from, to },
+            organizationId: (rest as Record<string, unknown>).organizationId as string | undefined
         });
     }
 });

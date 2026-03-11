@@ -23,9 +23,12 @@ const baseOutputSchema = z.object({ success: z.boolean().optional() }).passthrou
  * Resolve agent ID and slug from a slug input.
  * Returns the agent record needed for backlog operations.
  */
-async function resolveAgent(agentSlug: string) {
+async function resolveAgent(agentSlug: string, organizationId?: string) {
     const agent = await prisma.agent.findFirst({
-        where: { slug: agentSlug },
+        where: {
+            slug: agentSlug,
+            ...(organizationId ? { workspace: { organizationId } } : {})
+        },
         select: { id: true, slug: true, name: true, workspaceId: true }
     });
     if (!agent) {
@@ -58,8 +61,12 @@ export const backlogGetTool = createTool({
         agentSlug: z.string().describe("Agent slug to get backlog for")
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ agentSlug }) => {
-        const agent = await resolveAgent(agentSlug);
+    execute: async (input) => {
+        const agentSlug = (input as { agentSlug: string }).agentSlug;
+        const organizationId = (input as Record<string, unknown>).organizationId as
+            | string
+            | undefined;
+        const agent = await resolveAgent(agentSlug, organizationId);
         const backlog = await getOrCreateBacklog(agent.id, agent.workspaceId);
 
         const counts = await prisma.backlogTask.groupBy({
@@ -118,18 +125,22 @@ export const backlogAddTaskTool = createTool({
         contextJson: z.record(z.unknown()).optional().describe("Additional context as JSON")
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({
-        agentSlug,
-        title,
-        description,
-        priority,
-        dueDate,
-        tags,
-        source,
-        createdById,
-        contextJson
-    }) => {
-        const agent = await resolveAgent(agentSlug);
+    execute: async (input) => {
+        const {
+            agentSlug,
+            title,
+            description,
+            priority,
+            dueDate,
+            tags,
+            source,
+            createdById,
+            contextJson
+        } = input;
+        const organizationId = (input as Record<string, unknown>).organizationId as
+            | string
+            | undefined;
+        const agent = await resolveAgent(agentSlug, organizationId);
         const backlog = await getOrCreateBacklog(agent.id, agent.workspaceId);
 
         // Deduplication: check for an existing task with the same title (case-insensitive, any status)
@@ -222,8 +233,12 @@ export const backlogListTasksTool = createTool({
             .describe("Sort field (default: priority)")
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ agentSlug, status, limit, sortBy }) => {
-        const agent = await resolveAgent(agentSlug);
+    execute: async (input) => {
+        const { agentSlug, status, limit, sortBy } = input;
+        const organizationId = (input as Record<string, unknown>).organizationId as
+            | string
+            | undefined;
+        const agent = await resolveAgent(agentSlug, organizationId);
         const backlog = await prisma.backlog.findUnique({
             where: { agentId: agent.id }
         });
@@ -296,9 +311,15 @@ export const backlogUpdateTaskTool = createTool({
         dueDate: z.string().optional().describe("New due date (ISO 8601)")
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ taskId, status, priority, lastAttemptNote, result, dueDate }) => {
-        const task = await prisma.backlogTask.findUnique({
-            where: { id: taskId },
+    execute: async ({ taskId, status, priority, lastAttemptNote, result, dueDate, ...rest }) => {
+        const organizationId = (rest as Record<string, unknown>).organizationId as
+            | string
+            | undefined;
+        const task = await prisma.backlogTask.findFirst({
+            where: {
+                id: taskId,
+                ...(organizationId ? { backlog: { workspace: { organizationId } } } : {})
+            },
             include: {
                 backlog: {
                     include: {
@@ -394,9 +415,15 @@ export const backlogCompleteTaskTool = createTool({
         result: z.string().describe("What was accomplished")
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ taskId, result }) => {
-        const task = await prisma.backlogTask.findUnique({
-            where: { id: taskId },
+    execute: async ({ taskId, result, ...rest }) => {
+        const organizationId = (rest as Record<string, unknown>).organizationId as
+            | string
+            | undefined;
+        const task = await prisma.backlogTask.findFirst({
+            where: {
+                id: taskId,
+                ...(organizationId ? { backlog: { workspace: { organizationId } } } : {})
+            },
             include: {
                 backlog: {
                     include: {

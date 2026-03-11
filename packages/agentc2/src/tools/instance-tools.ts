@@ -139,24 +139,36 @@ export const instanceGetTool = createTool({
     execute: async ({ instanceId, instanceSlug, organizationId }) => {
         const { prisma } = await import("@repo/database");
 
+        if (instanceSlug && !organizationId) {
+            throw new Error("Provide either instanceId or instanceSlug + organizationId");
+        }
+
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const where: any = instanceId
-            ? { id: instanceId }
+            ? { id: instanceId, ...(organizationId ? { organizationId } : {}) }
             : instanceSlug
-              ? { slug: instanceSlug }
+              ? { slug: instanceSlug, organizationId }
               : null;
 
         if (!where) {
             throw new Error("Provide either instanceId or instanceSlug + organizationId");
         }
 
-        const instance = await prisma.agentInstance.findUniqueOrThrow({
+        const instance = await prisma.agentInstance.findFirst({
             where,
             include: {
                 agent: { select: { slug: true, name: true } },
                 channelBindings: true
             }
         });
+
+        if (!instance) {
+            throw new Error(
+                instanceId
+                    ? `Instance '${instanceId}' not found`
+                    : `Instance with slug '${instanceSlug}' not found`
+            );
+        }
 
         return {
             id: instance.id,
@@ -305,29 +317,39 @@ export const instanceUpdateTool = createTool({
         success: z.boolean(),
         message: z.string()
     }),
-    execute: async ({ instanceId, ...data }) => {
+    execute: async ({ instanceId, ...rest }) => {
         const { prisma } = await import("@repo/database");
+        const organizationId = (rest as Record<string, unknown>).organizationId as
+            | string
+            | undefined;
 
         // Build update payload, only including provided fields
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const updateData: Record<string, any> = {};
-        if (data.name !== undefined) updateData.name = data.name;
-        if (data.contextType !== undefined) updateData.contextType = data.contextType;
-        if (data.contextId !== undefined) updateData.contextId = data.contextId;
-        if (data.contextData !== undefined) updateData.contextData = data.contextData;
-        if (data.instructionOverrides !== undefined)
-            updateData.instructionOverrides = data.instructionOverrides;
-        if (data.temperatureOverride !== undefined)
-            updateData.temperatureOverride = data.temperatureOverride;
-        if (data.maxStepsOverride !== undefined)
-            updateData.maxStepsOverride = data.maxStepsOverride;
-        if (data.isActive !== undefined) updateData.isActive = data.isActive;
-        if (data.metadata !== undefined) updateData.metadata = data.metadata;
+        if (rest.name !== undefined) updateData.name = rest.name;
+        if (rest.contextType !== undefined) updateData.contextType = rest.contextType;
+        if (rest.contextId !== undefined) updateData.contextId = rest.contextId;
+        if (rest.contextData !== undefined) updateData.contextData = rest.contextData;
+        if (rest.instructionOverrides !== undefined)
+            updateData.instructionOverrides = rest.instructionOverrides;
+        if (rest.temperatureOverride !== undefined)
+            updateData.temperatureOverride = rest.temperatureOverride;
+        if (rest.maxStepsOverride !== undefined)
+            updateData.maxStepsOverride = rest.maxStepsOverride;
+        if (rest.isActive !== undefined) updateData.isActive = rest.isActive;
+        if (rest.metadata !== undefined) updateData.metadata = rest.metadata;
 
-        await prisma.agentInstance.update({
-            where: { id: instanceId },
+        const where = {
+            id: instanceId,
+            ...(organizationId ? { organizationId } : {})
+        };
+        const result = await prisma.agentInstance.updateMany({
+            where,
             data: updateData
         });
+        if (result.count === 0) {
+            throw new Error(`Instance ${instanceId} not found`);
+        }
 
         return { success: true, message: `Instance ${instanceId} updated` };
     }
@@ -346,9 +368,20 @@ export const instanceDeleteTool = createTool({
         success: z.boolean(),
         message: z.string()
     }),
-    execute: async ({ instanceId }) => {
+    execute: async ({ instanceId, ...rest }) => {
         const { prisma } = await import("@repo/database");
-        await prisma.agentInstance.delete({ where: { id: instanceId } });
+        const organizationId = (rest as Record<string, unknown>).organizationId as
+            | string
+            | undefined;
+
+        const where = {
+            id: instanceId,
+            ...(organizationId ? { organizationId } : {})
+        };
+        const result = await prisma.agentInstance.deleteMany({ where });
+        if (result.count === 0) {
+            throw new Error(`Instance ${instanceId} not found`);
+        }
         return { success: true, message: `Instance ${instanceId} deleted` };
     }
 });

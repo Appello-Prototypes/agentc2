@@ -22,8 +22,11 @@ async function callGraph(params: {
     const { prisma } = await import("@repo/database");
     const { createDecipheriv } = await import("crypto");
 
-    const connection = await prisma.integrationConnection.findUnique({
-        where: { id: params.connectionId }
+    const connection = await prisma.integrationConnection.findFirst({
+        where: {
+            id: params.connectionId,
+            ...(params.organizationId ? { organizationId: params.organizationId } : {})
+        }
     });
 
     if (!connection || !connection.isActive) {
@@ -96,6 +99,7 @@ export const outlookCalendarListEventsTool = createTool({
         "List upcoming calendar events from Outlook. Returns subject, start/end times, location, and attendees.",
     inputSchema: z.object({
         connectionId: z.string().describe("Microsoft IntegrationConnection ID"),
+        organizationId: z.string().optional().describe("Organization ID for tenant scoping"),
         top: z.number().optional().default(10).describe("Number of events to return (max 50)"),
         startDateTime: z
             .string()
@@ -111,7 +115,7 @@ export const outlookCalendarListEventsTool = createTool({
         events: z.array(z.record(z.unknown())),
         error: z.string().optional()
     }),
-    execute: async ({ connectionId, top, startDateTime, endDateTime }) => {
+    execute: async ({ connectionId, organizationId, top, startDateTime, endDateTime }) => {
         try {
             const now = new Date();
             const startDt = startDateTime || now.toISOString();
@@ -120,6 +124,7 @@ export const outlookCalendarListEventsTool = createTool({
 
             const result = (await callGraph({
                 connectionId,
+                organizationId,
                 path: `/me/calendarView?startDateTime=${encodeURIComponent(startDt)}&endDateTime=${encodeURIComponent(endDt)}&$top=${Math.min(top || 10, 50)}&$orderby=start/dateTime&$select=id,subject,bodyPreview,start,end,isAllDay,location,organizer,attendees,webLink`
             })) as { value?: unknown[] };
 
@@ -142,6 +147,7 @@ export const outlookCalendarGetEventTool = createTool({
     description: "Get a specific Outlook calendar event by ID.",
     inputSchema: z.object({
         connectionId: z.string().describe("Microsoft IntegrationConnection ID"),
+        organizationId: z.string().optional().describe("Organization ID for tenant scoping"),
         eventId: z.string().describe("The Outlook event ID")
     }),
     outputSchema: z.object({
@@ -149,10 +155,11 @@ export const outlookCalendarGetEventTool = createTool({
         event: z.record(z.unknown()).optional(),
         error: z.string().optional()
     }),
-    execute: async ({ connectionId, eventId }) => {
+    execute: async ({ connectionId, organizationId, eventId }) => {
         try {
             const result = await callGraph({
                 connectionId,
+                organizationId,
                 path: `/me/events/${eventId}?$select=id,subject,body,bodyPreview,start,end,isAllDay,location,organizer,attendees,recurrence,sensitivity,webLink`
             });
             return { success: true, event: result as Record<string, unknown> };
@@ -171,6 +178,7 @@ export const outlookCalendarCreateEventTool = createTool({
         "Create a new calendar event in Outlook. Supports subject, start/end times, location, body, and attendees.",
     inputSchema: z.object({
         connectionId: z.string().describe("Microsoft IntegrationConnection ID"),
+        organizationId: z.string().optional().describe("Organization ID for tenant scoping"),
         subject: z.string().describe("Event subject/title"),
         startDateTime: z.string().describe("Start date-time in ISO 8601 format"),
         startTimeZone: z.string().optional().default("UTC").describe("Time zone for start"),
@@ -188,6 +196,7 @@ export const outlookCalendarCreateEventTool = createTool({
     }),
     execute: async ({
         connectionId,
+        organizationId,
         subject,
         startDateTime,
         startTimeZone,
@@ -201,6 +210,7 @@ export const outlookCalendarCreateEventTool = createTool({
         try {
             const result = await callGraph({
                 connectionId,
+                organizationId,
                 path: "/me/events",
                 method: "POST",
                 body: {
@@ -235,6 +245,7 @@ export const outlookCalendarUpdateEventTool = createTool({
     description: "Update an existing Outlook calendar event.",
     inputSchema: z.object({
         connectionId: z.string().describe("Microsoft IntegrationConnection ID"),
+        organizationId: z.string().optional().describe("Organization ID for tenant scoping"),
         eventId: z.string().describe("The Outlook event ID to update"),
         subject: z.string().optional().describe("New subject"),
         startDateTime: z.string().optional().describe("New start date-time (ISO 8601)"),
@@ -251,6 +262,7 @@ export const outlookCalendarUpdateEventTool = createTool({
     }),
     execute: async ({
         connectionId,
+        organizationId,
         eventId,
         subject,
         startDateTime,
@@ -278,6 +290,7 @@ export const outlookCalendarUpdateEventTool = createTool({
 
             const result = await callGraph({
                 connectionId,
+                organizationId,
                 path: `/me/events/${eventId}`,
                 method: "PATCH",
                 body: patchBody

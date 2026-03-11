@@ -73,9 +73,9 @@ export const goalToolDefinitions: McpToolDefinition[] = [
 ];
 
 export const goalToolRoutes: McpToolRoute[] = [
-    { kind: "registry", name: "goal-create" },
-    { kind: "registry", name: "goal-list" },
-    { kind: "registry", name: "goal-get" },
-    { kind: "registry", name: "goal-update" },
-    { kind: "registry", name: "goal-delete" }
+    { kind: "registry", name: "goal-create", enforceOrg: true },
+    { kind: "registry", name: "goal-list", enforceOrg: true },
+    { kind: "registry", name: "goal-get", enforceOrg: true },
+    { kind: "registry", name: "goal-update", enforceOrg: true },
+    { kind: "registry", name: "goal-delete", enforceOrg: true }
 ];

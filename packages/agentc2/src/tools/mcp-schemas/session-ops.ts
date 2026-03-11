@@ -91,8 +91,8 @@ export const sessionOpsToolDefinitions: McpToolDefinition[] = [
 ];
 
 export const sessionOpsToolRoutes: McpToolRoute[] = [
-    { kind: "registry", name: "session-create" },
-    { kind: "registry", name: "session-invoke-peer" },
-    { kind: "registry", name: "session-read-scratchpad" },
-    { kind: "registry", name: "session-write-scratchpad" }
+    { kind: "registry", name: "session-create", enforceOrg: true },
+    { kind: "registry", name: "session-invoke-peer", enforceOrg: true },
+    { kind: "registry", name: "session-read-scratchpad", enforceOrg: true },
+    { kind: "registry", name: "session-write-scratchpad", enforceOrg: true }
 ];
