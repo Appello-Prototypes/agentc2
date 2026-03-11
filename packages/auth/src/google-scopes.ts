@@ -22,7 +22,10 @@ export const GOOGLE_OAUTH_SCOPES = [
 
     // Drive — read/search files + create Google Docs
     "https://www.googleapis.com/auth/drive.readonly",
-    "https://www.googleapis.com/auth/drive.file"
+    "https://www.googleapis.com/auth/drive.file",
+
+    // Search Console — read-only search analytics, sitemaps, URL inspection
+    "https://www.googleapis.com/auth/webmasters.readonly"
 ] as const;
 
 /**

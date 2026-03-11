@@ -27,6 +27,12 @@ import {
     googleDriveCreateDocTool
 } from "./google-drive";
 import {
+    gscQueryAnalyticsTool,
+    gscListSitesTool,
+    gscGetSitemapsTool,
+    gscInspectUrlTool
+} from "./google-search-console";
+import {
     outlookMailListEmailsTool,
     outlookMailGetEmailTool,
     outlookMailSendEmailTool,
@@ -740,6 +746,12 @@ export const toolCategoryMap: Record<string, string> = {
     "google-drive-search-files": "File Storage",
     "google-drive-read-file": "File Storage",
     "google-drive-create-doc": "File Storage",
+
+    // Google Search Console
+    "gsc-query-analytics": "SEO Analytics",
+    "gsc-list-sites": "SEO Analytics",
+    "gsc-get-sitemaps": "SEO Analytics",
+    "gsc-inspect-url": "SEO Analytics",
 
     // Dropbox
     "dropbox-list-files": "File Storage",
@@ -1643,6 +1655,12 @@ export const toolRegistry: Record<string, any> = {
     "google-drive-search-files": googleDriveSearchFilesTool,
     "google-drive-read-file": googleDriveReadFileTool,
     "google-drive-create-doc": googleDriveCreateDocTool,
+
+    // Google Search Console tools
+    "gsc-query-analytics": gscQueryAnalyticsTool,
+    "gsc-list-sites": gscListSitesTool,
+    "gsc-get-sitemaps": gscGetSitemapsTool,
+    "gsc-inspect-url": gscInspectUrlTool,
 
     // Outlook Mail tools
     "outlook-mail-list-emails": outlookMailListEmailsTool,

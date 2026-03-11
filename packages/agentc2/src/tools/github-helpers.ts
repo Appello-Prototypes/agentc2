@@ -143,6 +143,7 @@ export async function githubFetch(
             Authorization: `Bearer ${token}`,
             ...GITHUB_HEADERS,
             ...options.headers
-        }
+        },
+        signal: options.signal ?? AbortSignal.timeout(30_000)
     });
 }

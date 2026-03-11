@@ -36,6 +36,7 @@ interface ExecuteWorkflowOptions {
     workflowMeta?: WorkflowMeta;
     agentStepHooks?: AgentStepHooks;
     _parentIterationIndex?: number;
+    inputSchema?: { required?: string[]; properties?: Record<string, unknown> };
 }
 
 const MAX_NESTING_DEPTH = 5;
@@ -861,6 +862,22 @@ export async function executeWorkflowDefinition(
             steps: [],
             error: "Maximum workflow nesting depth exceeded"
         };
+    }
+
+    if (options.inputSchema?.required && depth === 0) {
+        const inputObj = (options.input ?? {}) as Record<string, unknown>;
+        const missing = options.inputSchema.required.filter(
+            (field) =>
+                inputObj[field] === undefined || inputObj[field] === null || inputObj[field] === ""
+        );
+        if (missing.length > 0) {
+            return {
+                status: "failed",
+                output: null,
+                steps: [],
+                error: `Missing required workflow input fields: ${missing.join(", ")}`
+            };
+        }
     }
 
     const context: WorkflowExecutionContext = {

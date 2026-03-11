@@ -133,7 +133,8 @@ export const awaitDeployTool = createTool({
                         headers: {
                             Authorization: `Bearer ${token}`,
                             Accept: "application/vnd.github+json"
-                        }
+                        },
+                        signal: AbortSignal.timeout(30_000)
                     }
                 );
                 const workflowsData = (await workflowsRes.json()) as {
@@ -151,7 +152,8 @@ export const awaitDeployTool = createTool({
                 headers: {
                     Authorization: `Bearer ${token}`,
                     Accept: "application/vnd.github+json"
-                }
+                },
+                signal: AbortSignal.timeout(30_000)
             });
 
             if (res.ok) {

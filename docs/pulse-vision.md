@@ -40,18 +40,18 @@ None of these require new infrastructure. They use documents, community boards, 
 
 Imagine an organization running ten Pulses concurrently:
 
-| Pulse | Goal | Score Function | Timeline |
-|-------|------|----------------|----------|
-| SEO Growth | Page 1 for 50 keywords | Count of page-1 keywords | Ongoing |
-| Sales Pipeline | Close rate above 25% | Monthly close rate % | Ongoing |
-| Churn Prevention | Reduce churn to under 3% | Monthly churn rate % | Ongoing |
-| Content Engine | 20 articles/month with 1K+ views each | Articles exceeding 1K views | Ongoing |
-| Competitor Intel | Complete dossiers on 5 competitors | Dossier completeness % | 30 days |
-| Product Launch | Launch by March 15 | Milestone completion % | Fixed |
-| Customer Onboarding | Time-to-value under 48 hours | Median onboarding hours | Ongoing |
-| Knowledge Base | Answer 90% of support questions | Auto-resolution rate % | Ongoing |
-| Recruiting Pipeline | 30-day average time-to-hire | Days to hire | Ongoing |
-| OSS Community | 1000 GitHub stars, 20 contributors | Weighted composite | 90 days |
+| Pulse               | Goal                                  | Score Function              | Timeline |
+| ------------------- | ------------------------------------- | --------------------------- | -------- |
+| SEO Growth          | Page 1 for 50 keywords                | Count of page-1 keywords    | Ongoing  |
+| Sales Pipeline      | Close rate above 25%                  | Monthly close rate %        | Ongoing  |
+| Churn Prevention    | Reduce churn to under 3%              | Monthly churn rate %        | Ongoing  |
+| Content Engine      | 20 articles/month with 1K+ views each | Articles exceeding 1K views | Ongoing  |
+| Competitor Intel    | Complete dossiers on 5 competitors    | Dossier completeness %      | 30 days  |
+| Product Launch      | Launch by March 15                    | Milestone completion %      | Fixed    |
+| Customer Onboarding | Time-to-value under 48 hours          | Median onboarding hours     | Ongoing  |
+| Knowledge Base      | Answer 90% of support questions       | Auto-resolution rate %      | Ongoing  |
+| Recruiting Pipeline | 30-day average time-to-hire           | Days to hire                | Ongoing  |
+| OSS Community       | 1000 GitHub stars, 20 contributors    | Weighted composite          | 90 days  |
 
 Each Pulse has its own God Agent, its own worker collective, its own constraint library, its own experiment log. Each is running 24/7, iterating autonomously, accumulating taste. The human reviews each at their configured checkpoints — maybe weekly for the ongoing ones, daily for the fixed-deadline ones.
 
@@ -114,6 +114,7 @@ The platform's moat is not "we have agents." Everyone has agents. The moat is th
 Every Pulse that runs on AgentC2 makes the platform more valuable, because every constraint learned is a data point about what works and what doesn't in autonomous goal pursuit. The platform's intelligence compounds with usage.
 
 This is the flywheel:
+
 1. Organizations create Pulses to pursue goals.
 2. Pulses generate experiments and constraints.
 3. Constraints get promoted to portable Skills.

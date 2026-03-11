@@ -17,18 +17,28 @@ function mapStepStatus(status: "completed" | "failed" | "suspended") {
 }
 
 function executeWorkflowInBackground(
-    workflow: { id: string; slug: string; workspaceId: string | null; definitionJson: unknown },
+    workflow: {
+        id: string;
+        slug: string;
+        workspaceId: string | null;
+        definitionJson: unknown;
+        inputSchemaJson?: unknown;
+    },
     run: { id: string },
     input: Record<string, unknown>,
     body: Record<string, unknown>
 ) {
     setImmediate(async () => {
         try {
+            const inputSchema = workflow.inputSchemaJson as
+                | { required?: string[]; properties?: Record<string, unknown> }
+                | undefined;
             const result = await executeWorkflowDefinition({
                 definition: workflow.definitionJson as unknown as WorkflowDefinition,
                 input,
                 requestContext: body.requestContext as Record<string, unknown> | undefined,
-                workflowMeta: { runId: run.id, workflowSlug: workflow.slug }
+                workflowMeta: { runId: run.id, workflowSlug: workflow.slug },
+                inputSchema: inputSchema ?? undefined
             });
 
             const durationMs = result.steps.reduce((sum, step) => sum + (step.durationMs || 0), 0);
@@ -80,15 +90,22 @@ function executeWorkflowInBackground(
             await refreshWorkflowMetrics(workflow.id, new Date());
         } catch (error) {
             console.error("[Workflow Execute Async] Background error:", error);
-            await prisma.workflowRun.update({
-                where: { id: run.id },
-                data: {
-                    status: "FAILED",
-                    outputJson:
-                        error instanceof Error ? error.message : "Background execution failed",
-                    completedAt: new Date()
-                }
-            });
+            try {
+                await prisma.workflowRun.update({
+                    where: { id: run.id },
+                    data: {
+                        status: "FAILED",
+                        outputJson:
+                            error instanceof Error ? error.message : "Background execution failed",
+                        completedAt: new Date()
+                    }
+                });
+            } catch (updateErr) {
+                console.error(
+                    "[Workflow Execute Async] CRITICAL: Could not mark run as FAILED:",
+                    updateErr
+                );
+            }
         }
     });
 }
@@ -170,11 +187,15 @@ export async function POST(
         }
 
         const SYNC_TIMEOUT_MS = 55_000;
+        const inputSchema = workflow.inputSchemaJson as
+            | { required?: string[]; properties?: Record<string, unknown> }
+            | undefined;
         const executionPromise = executeWorkflowDefinition({
             definition: workflow.definitionJson as unknown as WorkflowDefinition,
             input,
             requestContext: body.requestContext,
-            workflowMeta: { runId: run.id, workflowSlug: workflow.slug }
+            workflowMeta: { runId: run.id, workflowSlug: workflow.slug },
+            inputSchema: inputSchema ?? undefined
         });
 
         const timeoutSymbol = Symbol("timeout");
@@ -191,68 +212,98 @@ export async function POST(
         if (raceResult.kind === "timeout") {
             executionPromise
                 .then(async (bgResult) => {
-                    const bgDuration = bgResult.steps.reduce(
-                        (sum, step) => sum + (step.durationMs || 0),
-                        0
-                    );
-                    if (bgResult.steps.length > 0) {
-                        await prisma.workflowRunStep.createMany({
-                            data: bgResult.steps.map((step) => ({
-                                runId: run.id,
-                                stepId: step.stepId,
-                                stepType: step.stepType,
-                                stepName: step.stepName,
-                                status: mapStepStatus(step.status),
-                                inputJson: step.input as Prisma.InputJsonValue,
-                                outputJson: step.output as Prisma.InputJsonValue,
-                                errorJson: step.error as Prisma.InputJsonValue,
-                                iterationIndex: step.iterationIndex,
-                                startedAt: step.startedAt,
-                                completedAt: step.completedAt,
-                                durationMs: step.durationMs
-                            }))
-                        });
+                    try {
+                        const bgDuration = bgResult.steps.reduce(
+                            (sum, step) => sum + (step.durationMs || 0),
+                            0
+                        );
+                        if (bgResult.steps.length > 0) {
+                            await prisma.workflowRunStep.createMany({
+                                data: bgResult.steps.map((step) => ({
+                                    runId: run.id,
+                                    stepId: step.stepId,
+                                    stepType: step.stepType,
+                                    stepName: step.stepName,
+                                    status: mapStepStatus(step.status),
+                                    inputJson: step.input as Prisma.InputJsonValue,
+                                    outputJson: step.output as Prisma.InputJsonValue,
+                                    errorJson: step.error as Prisma.InputJsonValue,
+                                    iterationIndex: step.iterationIndex,
+                                    startedAt: step.startedAt,
+                                    completedAt: step.completedAt,
+                                    durationMs: step.durationMs
+                                }))
+                            });
+                        }
+                        if (bgResult.status === "suspended") {
+                            const suspStep = bgResult.steps.find((s) => s.status === "suspended");
+                            await prisma.workflowRun.update({
+                                where: { id: run.id },
+                                data: {
+                                    status: "RUNNING",
+                                    outputJson: bgResult.output as Prisma.InputJsonValue,
+                                    suspendedAt: new Date(),
+                                    suspendedStep: suspStep?.stepId || null,
+                                    suspendDataJson: suspStep?.output as Prisma.InputJsonValue,
+                                    durationMs: bgDuration
+                                }
+                            });
+                        } else {
+                            const finalStatus =
+                                bgResult.status === "failed" ? "FAILED" : "COMPLETED";
+                            await prisma.workflowRun.update({
+                                where: { id: run.id },
+                                data: {
+                                    status: finalStatus,
+                                    outputJson: bgResult.output as Prisma.InputJsonValue,
+                                    completedAt: new Date(),
+                                    durationMs: bgDuration
+                                }
+                            });
+                        }
+                        await refreshWorkflowMetrics(workflow.id, new Date());
+                    } catch (persistError) {
+                        console.error(
+                            "[Workflow Execute] Failed to persist background result:",
+                            persistError
+                        );
+                        try {
+                            await prisma.workflowRun.update({
+                                where: { id: run.id },
+                                data: {
+                                    status: "FAILED",
+                                    outputJson: String(persistError),
+                                    completedAt: new Date()
+                                }
+                            });
+                        } catch (finalError) {
+                            console.error(
+                                "[Workflow Execute] CRITICAL: Could not mark run as FAILED:",
+                                finalError
+                            );
+                        }
                     }
-                    if (bgResult.status === "suspended") {
-                        const suspStep = bgResult.steps.find((s) => s.status === "suspended");
-                        await prisma.workflowRun.update({
-                            where: { id: run.id },
-                            data: {
-                                status: "RUNNING",
-                                outputJson: bgResult.output as Prisma.InputJsonValue,
-                                suspendedAt: new Date(),
-                                suspendedStep: suspStep?.stepId || null,
-                                suspendDataJson: suspStep?.output as Prisma.InputJsonValue,
-                                durationMs: bgDuration
-                            }
-                        });
-                    } else {
-                        const finalStatus = bgResult.status === "failed" ? "FAILED" : "COMPLETED";
-                        await prisma.workflowRun.update({
-                            where: { id: run.id },
-                            data: {
-                                status: finalStatus,
-                                outputJson: bgResult.output as Prisma.InputJsonValue,
-                                completedAt: new Date(),
-                                durationMs: bgDuration
-                            }
-                        });
-                    }
-                    await refreshWorkflowMetrics(workflow.id, new Date());
                 })
                 .catch(async (error) => {
                     console.error("[Workflow Execute] Background completion error:", error);
-                    await prisma.workflowRun.update({
-                        where: { id: run.id },
-                        data: {
-                            status: "FAILED",
-                            outputJson:
-                                error instanceof Error
-                                    ? error.message
-                                    : "Background execution failed",
-                            completedAt: new Date()
-                        }
-                    });
+                    try {
+                        await prisma.workflowRun.update({
+                            where: { id: run.id },
+                            data: {
+                                status: "FAILED",
+                                outputJson:
+                                    error instanceof Error
+                                        ? error.message
+                                        : "Background execution failed",
+                                completedAt: new Date()
+                            }
+                        });
+                    } catch (updateError) {
+                        console.error(
+                            "[Workflow Execute] CRITICAL: Could not mark run as FAILED:",
+                            updateError
+                        );
+                    }
                 });
 
             return NextResponse.json({

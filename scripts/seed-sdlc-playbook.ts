@@ -505,7 +505,7 @@ async function main() {
             temperature: 0.5,
             maxSteps: 5,
             skills: [orgSlug("code-analysis"), orgSlug("implementation-planning")],
-            tools: ["memory-recall", "web-fetch"],
+            tools: [],
             scorecard: {
                 criteria: [
                     {

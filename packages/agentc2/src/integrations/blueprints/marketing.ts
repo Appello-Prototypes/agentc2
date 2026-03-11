@@ -110,6 +110,55 @@ export const marketingBlueprints: IntegrationBlueprint[] = [
         }
     },
     {
+        providerKey: "google-search-console",
+        version: 1,
+        skill: {
+            slug: "gsc-expert",
+            name: "Search Console Expert",
+            description: "Expert knowledge for Google Search Console SEO analytics",
+            instructions: `You are a Google Search Console expert. Help users analyze search performance, keyword rankings, indexing status, and technical SEO issues.
+
+Key capabilities:
+- Query search analytics for keyword impressions, clicks, CTR, and position
+- List verified properties and their permission levels
+- Check sitemap submission status and errors
+- Inspect individual URLs for indexing status and rich results
+
+Best practices:
+- Use date ranges of at least 28 days for meaningful trend data
+- Filter by dimension (query, page, country, device) for actionable insights
+- Compare time periods to identify ranking changes
+- Check URL inspection for pages that should be indexed but aren't
+- Monitor sitemap errors regularly`,
+            category: "Marketing",
+            tags: ["marketing", "seo", "google", "search-console", "analytics"],
+            toolDiscovery: "static",
+            staticTools: [
+                "gsc-query-analytics",
+                "gsc-list-sites",
+                "gsc-get-sitemaps",
+                "gsc-inspect-url"
+            ]
+        },
+        agent: {
+            slug: "gsc-agent",
+            name: "Search Console Agent",
+            description: "AI agent for Google Search Console SEO analytics",
+            instructions: `You are a Google Search Console specialist. Help users analyze their search performance, identify keyword opportunities, diagnose indexing issues, and track SEO progress. Always provide data-driven insights with specific metrics.`,
+            modelProvider: "openai",
+            modelName: "gpt-4o",
+            temperature: 0.2,
+            memoryEnabled: true,
+            additionalTools: [],
+            metadata: {
+                slack: {
+                    displayName: "Search Console Agent",
+                    iconEmoji: ":chart_with_upwards_trend:"
+                }
+            }
+        }
+    },
+    {
         providerKey: "firecrawl",
         version: 1,
         skill: {

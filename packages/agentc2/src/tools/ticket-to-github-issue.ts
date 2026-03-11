@@ -104,7 +104,8 @@ export const ticketToGithubIssueTool = createTool({
                 title,
                 body: description + footer,
                 labels: labels || []
-            })
+            }),
+            signal: AbortSignal.timeout(30_000)
         });
 
         if (!response.ok) {

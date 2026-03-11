@@ -7213,6 +7213,13 @@ export const workflowTriggerFireFunction = inngest.createFunction(
 
         // Build mapped input from fieldMapping
         const fieldMapping = triggerConfig?.fieldMapping as Record<string, string> | undefined;
+        if (!triggerConfig || !fieldMapping) {
+            console.warn(
+                `[Trigger ${trigger.id}] No fieldMapping found in inputMapping. ` +
+                    `Workflow will receive empty input. inputMapping:`,
+                JSON.stringify(trigger.inputMapping)
+            );
+        }
         const mappedInput: Record<string, unknown> = {};
         if (fieldMapping) {
             for (const [outputKey, payloadPath] of Object.entries(fieldMapping)) {
@@ -8522,7 +8529,31 @@ export const asyncWorkflowExecuteFunction = inngest.createFunction(
     {
         id: "workflow-execute-async",
         retries: 2,
-        concurrency: { limit: 3 }
+        concurrency: { limit: 3 },
+        onFailure: async ({ event, error }) => {
+            const workflowRunId = event.data.event.data.workflowRunId as string | undefined;
+            if (workflowRunId) {
+                try {
+                    await prisma.workflowRun.update({
+                        where: { id: workflowRunId },
+                        data: {
+                            status: "FAILED",
+                            completedAt: new Date(),
+                            outputJson: `Inngest function failed after retries: ${error.message}`
+                        }
+                    });
+                    console.error(
+                        `[Inngest onFailure] Marked workflow run ${workflowRunId} as FAILED:`,
+                        error.message
+                    );
+                } catch (updateErr) {
+                    console.error(
+                        `[Inngest onFailure] CRITICAL: Could not mark workflow run ${workflowRunId} as FAILED:`,
+                        updateErr
+                    );
+                }
+            }
+        }
     },
     { event: "workflow/execute.async" },
     async ({ event, step }) => {
@@ -8791,7 +8822,10 @@ export const asyncWorkflowExecuteFunction = inngest.createFunction(
                         ((inputObj?._trigger as Record<string, unknown>)?.routedTo as string) ||
                         ""
                 },
-                agentStepHooks
+                agentStepHooks,
+                inputSchema: workflow.inputSchemaJson as
+                    | { required?: string[]; properties?: Record<string, unknown> }
+                    | undefined
             });
         });
 
@@ -9070,6 +9104,58 @@ export const asyncWorkflowExecuteFunction = inngest.createFunction(
             );
             return { status: finalStatus };
         });
+    }
+);
+
+/**
+ * Stale Workflow Run Cleanup
+ *
+ * Runs every 15 minutes. Finds WorkflowRun records stuck in RUNNING (not suspended)
+ * for more than 60 minutes and marks them as FAILED. Without this, zombie runs
+ * accumulate when background continuations fail silently or the process restarts.
+ */
+const staleWorkflowRunCleanerFunction = inngest.createFunction(
+    {
+        id: "stale-workflow-run-cleaner",
+        retries: 1
+    },
+    { cron: "*/15 * * * *" },
+    async ({ step }) => {
+        const sixtyMinutesAgo = new Date(Date.now() - 60 * 60 * 1000);
+
+        const staleRuns = await step.run("find-stale-workflow-runs", async () => {
+            return prisma.workflowRun.findMany({
+                where: {
+                    status: "RUNNING",
+                    suspendedAt: null,
+                    updatedAt: { lt: sixtyMinutesAgo }
+                },
+                select: { id: true, workflowId: true },
+                take: 100
+            });
+        });
+
+        if (staleRuns.length === 0) {
+            return { cleaned: 0 };
+        }
+
+        const cleaned = await step.run("fail-stale-workflow-runs", async () => {
+            const result = await prisma.workflowRun.updateMany({
+                where: {
+                    id: { in: staleRuns.map((r) => r.id) },
+                    status: "RUNNING"
+                },
+                data: {
+                    status: "FAILED",
+                    outputJson: "Run timed out: exceeded maximum execution time",
+                    completedAt: new Date()
+                }
+            });
+            return result.count;
+        });
+
+        console.log(`[StaleWorkflowCleaner] Failed ${cleaned} stale workflow runs`);
+        return { cleaned };
     }
 );
 
@@ -10177,6 +10263,8 @@ export const inngestFunctions = [
     simulationBatchRunFunction,
     // Conversation run finalization
     idleConversationFinalizerFunction,
+    // Stale workflow run cleanup
+    staleWorkflowRunCleanerFunction,
     // Webhook subscription lifecycle
     webhookSubscriptionRenewalFunction,
     // Admin Portal functions

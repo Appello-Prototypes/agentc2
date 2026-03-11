@@ -210,6 +210,11 @@ export const syncSiblingGoogleConnections = async (
                 "https://www.googleapis.com/auth/drive.readonly",
                 "https://www.googleapis.com/auth/drive.file"
             ]
+        },
+        {
+            key: "google-search-console",
+            name: "Google Search Console",
+            requiredScopes: ["https://www.googleapis.com/auth/webmasters.readonly"]
         }
     ];
 

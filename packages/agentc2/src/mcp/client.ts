@@ -656,6 +656,25 @@ const INTEGRATION_PROVIDER_SEEDS: IntegrationProviderSeed[] = [
         }
     },
     {
+        key: "google-search-console",
+        name: "Google Search Console",
+        description:
+            "SEO analytics — keyword rankings, impressions, clicks, sitemaps, and URL inspection via Google Search Console API",
+        category: "marketing",
+        authType: "oauth",
+        providerType: "oauth",
+        configJson: {
+            requiredScopes: ["https://www.googleapis.com/auth/webmasters.readonly"],
+            oauthConfig: {
+                socialProvider: "google",
+                scopes: ["https://www.googleapis.com/auth/webmasters.readonly"],
+                siblingOf: "gmail"
+            },
+            setupUrl: "/mcp/gmail",
+            setupLabel: "Connect via Google Sign-In"
+        }
+    },
+    {
         key: "microsoft",
         name: "Microsoft (Outlook)",
         description:
