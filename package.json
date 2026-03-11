@@ -52,7 +52,8 @@
     "storybook": "8.6.15",
     "axios": "^1.13.5",
     "fast-xml-parser": "^5.3.6",
-    "qs": "^6.14.2"
+    "qs": "^6.14.2",
+    "react-is": "^19.0.0"
   },
   "devDependencies": {
     "@faker-js/faker": "^10.2.0",
