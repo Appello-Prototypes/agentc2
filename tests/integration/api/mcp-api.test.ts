@@ -87,71 +87,56 @@ describe("MCP Gateway API", () => {
             }
         };
         prismaMock.agentInstance.findMany.mockResolvedValue([] as never);
-        prismaMock.agent.findMany.mockImplementation((async (args: any) => {
-            if (args?.where?.workspace?.organizationId === "org-1") {
-                return [
-                    {
-                        id: "agent-1",
-                        slug: "assistant",
-                        name: "Assistant",
-                        description: null,
-                        modelProvider: "anthropic",
-                        modelName: "claude-sonnet-4-20250514",
-                        isActive: true,
-                        visibility: "PUBLIC",
-                        maxSteps: 5,
-                        requiresApproval: false,
-                        version: 1,
-                        workspace: mockWorkspace
-                    }
-                ];
+        (prismaMock.agent.findMany as any).mockResolvedValue([
+            {
+                id: "agent-1",
+                slug: "assistant",
+                name: "Assistant",
+                description: null,
+                modelProvider: "anthropic",
+                modelName: "claude-sonnet-4-20250514",
+                isActive: true,
+                visibility: "PUBLIC",
+                maxSteps: 5,
+                requiresApproval: false,
+                version: 1,
+                workspace: mockWorkspace
             }
-            return [];
-        }) as never);
-        prismaMock.workflow.findMany.mockImplementation((async (args: any) => {
-            if (args?.where?.workspace?.organizationId === "org-1") {
-                return [
-                    {
-                        id: "wf-1",
-                        slug: "sample-workflow",
-                        name: "Sample Workflow",
-                        description: null,
-                        version: 2,
-                        isActive: true,
-                        isPublished: false,
-                        inputSchemaJson: {
-                            type: "object",
-                            properties: { foo: { type: "string" } },
-                            required: ["foo"]
-                        },
-                        outputSchemaJson: {
-                            type: "object",
-                            properties: { result: { type: "string" } }
-                        },
-                        workspace: mockWorkspace
-                    }
-                ];
+        ]);
+        (prismaMock.workflow.findMany as any).mockResolvedValue([
+            {
+                id: "wf-1",
+                slug: "sample-workflow",
+                name: "Sample Workflow",
+                description: null,
+                version: 2,
+                isActive: true,
+                isPublished: false,
+                inputSchemaJson: {
+                    type: "object",
+                    properties: { foo: { type: "string" } },
+                    required: ["foo"]
+                },
+                outputSchemaJson: {
+                    type: "object",
+                    properties: { result: { type: "string" } }
+                },
+                workspace: mockWorkspace
             }
-            return [];
-        }) as never);
-        prismaMock.network.findMany.mockImplementation((async (args: any) => {
-            if (args?.where?.workspace?.organizationId === "org-1") {
-                return [
-                    {
-                        id: "net-1",
-                        slug: "sample-network",
-                        name: "Sample Network",
-                        description: null,
-                        version: 1,
-                        isActive: true,
-                        isPublished: false,
-                        maxSteps: 10,
-                        workspace: mockWorkspace
-                    }
-                ];
+        ]);
+        (prismaMock.network.findMany as any).mockResolvedValue([
+            {
+                id: "net-1",
+                slug: "sample-network",
+                name: "Sample Network",
+                description: null,
+                version: 1,
+                isActive: true,
+                isPublished: false,
+                maxSteps: 10,
+                workspace: mockWorkspace
             }
-            return [];
-        }) as never);
+        ]);
 
         const request = createMockRequest("/api/mcp");
         const response = await GET(request);
