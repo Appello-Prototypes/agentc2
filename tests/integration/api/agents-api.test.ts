@@ -78,6 +78,22 @@ describe("Agents API - modelName Validation (Issue #127)", () => {
 
             expect(result.success).toBe(true);
         });
+
+        it("should reject empty instructions", () => {
+            const result = agentCreateSchema.safeParse({
+                name: "Test Agent",
+                instructions: "",
+                modelProvider: "openai",
+                modelName: "gpt-4o"
+            });
+
+            expect(result.success).toBe(false);
+            if (!result.success) {
+                expect(
+                    result.error.issues.some((issue) => issue.path.includes("instructions"))
+                ).toBe(true);
+            }
+        });
     });
 
     describe("networkCreateSchema", () => {

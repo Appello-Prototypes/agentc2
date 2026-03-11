@@ -75,7 +75,7 @@ export const agentCreateSchema = z.object({
         .regex(/^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$/)
         .optional(),
     description: z.string().max(2000).optional(),
-    instructions: z.string().max(100000),
+    instructions: z.string().min(1).max(100000),
     instructionsTemplate: z.string().max(100000).nullable().optional(),
     modelProvider: z.enum([
         "openai",
