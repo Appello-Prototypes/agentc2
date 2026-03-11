@@ -5,7 +5,7 @@ import { createMockRequest, parseResponse, assertSuccess } from "../../utils/api
 
 const prismaMock = mockDeep<PrismaClient>();
 const computeTakeoffMock = vi.fn();
-const getDemoSessionMock = vi.fn();
+const authenticateRequestMock = vi.fn();
 
 vi.mock("@repo/database", () => ({
     prisma: prismaMock,
@@ -19,17 +19,15 @@ vi.mock("@repo/agentc2/bim", () => ({
     computeTakeoff: computeTakeoffMock
 }));
 
-vi.mock("@/lib/standalone-auth", () => ({
-    getDemoSession: getDemoSessionMock
+vi.mock("@/lib/api-auth", () => ({
+    authenticateRequest: (...args: unknown[]) => authenticateRequestMock(...args)
 }));
 
 describe("BIM Takeoff API", () => {
     beforeEach(() => {
         mockReset(prismaMock);
         vi.clearAllMocks();
-        getDemoSessionMock.mockResolvedValue({
-            user: { id: "user-1", email: "test@example.com", name: "Test User" }
-        });
+        authenticateRequestMock.mockResolvedValue({ userId: "user-1", organizationId: "org-1" });
     });
 
     it("should compute and store a takeoff", async () => {
@@ -38,7 +36,10 @@ describe("BIM Takeoff API", () => {
             summary: { elementCount: 2, totalLength: 10, totalArea: 5, totalVolume: 2 },
             groups: []
         });
-        prismaMock.bimModelVersion.findUnique.mockResolvedValue({ modelId: "model-1" } as never);
+        prismaMock.bimModelVersion.findFirst.mockResolvedValue({
+            id: "version-1",
+            modelId: "model-1"
+        } as never);
         prismaMock.bimTakeoff.create.mockResolvedValue({ id: "takeoff-1" } as never);
 
         const request = createMockRequest("/api/bim/takeoff", {

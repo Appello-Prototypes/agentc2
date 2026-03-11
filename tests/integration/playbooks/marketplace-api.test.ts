@@ -47,6 +47,16 @@ describe("Marketplace API", () => {
         vi.mocked(authz.requireAuth).mockResolvedValue({
             context: { userId: "test-user-id", organizationId: "org-publisher-uuid" }
         } as never);
+
+        prismaMock.organization.findUnique.mockResolvedValue({
+            id: "org-publisher-uuid",
+            slug: "agentc2"
+        } as never);
+        prismaMock.membership.findUnique.mockResolvedValue({
+            userId: "test-user-id",
+            organizationId: "org-publisher-uuid",
+            role: "admin"
+        } as never);
     });
 
     // ── Browse API (US-046, US-047, US-048) ─────────────────────────
@@ -272,10 +282,18 @@ describe("Marketplace API", () => {
             expect(createCall.data.status).toBe("COMPLETED");
         });
 
-        it("should reject purchasing own playbook", async () => {
+        it("should allow publishers to purchase own playbook for free", async () => {
             const { POST } =
                 await import("../../../apps/agent/src/app/api/playbooks/[slug]/purchase/route");
             prismaMock.playbook.findUnique.mockResolvedValue(mockPublishedPlaybook as never);
+            prismaMock.playbookPurchase.findFirst.mockResolvedValue(null as never);
+            prismaMock.playbookPurchase.create.mockResolvedValue({
+                id: "purchase-1",
+                playbookId: mockPublishedPlaybook.id,
+                buyerOrgId: "org-publisher-uuid",
+                status: "COMPLETED",
+                amountUsd: 0
+            } as never);
 
             const request = createMockRequest("/api/playbooks/published-support-network/purchase", {
                 method: "POST"
@@ -284,7 +302,7 @@ describe("Marketplace API", () => {
                 params: createMockParams({ slug: "published-support-network" })
             });
 
-            expect(response.status).toBe(400);
+            expect(response.status).toBe(201);
         });
     });
 
@@ -332,8 +350,9 @@ describe("Marketplace API", () => {
             } as never);
 
             prismaMock.playbook.findUnique.mockResolvedValue(mockPublishedPlaybook as never);
-            prismaMock.playbookInstallation.findUnique.mockResolvedValue({
+            prismaMock.playbookInstallation.findFirst.mockResolvedValue({
                 ...mockPlaybookInstallation,
+                targetOrgId: "org-buyer-uuid",
                 status: "ACTIVE"
             } as never);
             prismaMock.playbookReview.upsert.mockResolvedValue(mockPlaybookReview as never);

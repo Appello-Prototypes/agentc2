@@ -126,7 +126,7 @@ describe("Service-Layer Tenant Isolation", () => {
             expect(prismaMock.skill.findMany).toHaveBeenCalledWith(
                 expect.objectContaining({
                     where: {
-                        OR: [{ workspace: { organizationId: ORG_A } }, { workspaceId: null }]
+                        workspace: { organizationId: ORG_A }
                     }
                 })
             );

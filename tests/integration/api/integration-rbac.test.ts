@@ -4,8 +4,7 @@ import type { PrismaClient } from "@prisma/client";
 import { createMockRequest, parseResponse } from "../../utils/api-helpers";
 
 const prismaMock = mockDeep<PrismaClient>();
-const getSessionMock = vi.fn();
-const getUserOrganizationIdMock = vi.fn();
+const authenticateRequestMock = vi.fn();
 const getIntegrationProvidersMock = vi.fn();
 
 vi.mock("@repo/database", () => ({
@@ -16,16 +15,8 @@ vi.mock("@repo/database", () => ({
     }
 }));
 
-vi.mock("@repo/auth", () => ({
-    auth: {
-        api: {
-            getSession: getSessionMock
-        }
-    }
-}));
-
-vi.mock("@/lib/organization", () => ({
-    getUserOrganizationId: getUserOrganizationIdMock
+vi.mock("@/lib/api-auth", () => ({
+    authenticateRequest: (...args: unknown[]) => authenticateRequestMock(...args)
 }));
 
 vi.mock("@repo/agentc2", () => ({
@@ -36,8 +27,7 @@ describe("Integration RBAC", () => {
     beforeEach(() => {
         mockReset(prismaMock);
         vi.clearAllMocks();
-        getSessionMock.mockResolvedValue({ user: { id: "user-1" } });
-        getUserOrganizationIdMock.mockResolvedValue("org-1");
+        authenticateRequestMock.mockResolvedValue({ userId: "user-1", organizationId: "org-1" });
         getIntegrationProvidersMock.mockResolvedValue([]);
         prismaMock.integrationProvider.findUnique.mockResolvedValue({
             id: "provider-1",

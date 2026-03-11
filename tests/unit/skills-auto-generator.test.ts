@@ -32,10 +32,14 @@ describe("Skill Auto-Generator", () => {
             prismaMock.skillTool.deleteMany.mockResolvedValue({ count: 0 } as never);
             prismaMock.skillTool.createMany.mockResolvedValue({ count: 2 } as never);
 
-            const result = await generateSkillForMcpServer("hubspot", [
-                { name: "hubspot_get-contacts", description: "Get contacts" },
-                { name: "hubspot_create-contact", description: "Create a contact" }
-            ]);
+            const result = await generateSkillForMcpServer(
+                "hubspot",
+                [
+                    { name: "hubspot_get-contacts", description: "Get contacts" },
+                    { name: "hubspot_create-contact", description: "Create a contact" }
+                ],
+                { workspaceId: "ws-1", organizationId: "org-1" }
+            );
 
             expect(result.slug).toBe("mcp-crm-hubspot");
             expect(result.toolCount).toBe(2);
@@ -59,9 +63,11 @@ describe("Skill Auto-Generator", () => {
             prismaMock.skillTool.deleteMany.mockResolvedValue({ count: 0 } as never);
             prismaMock.skillTool.createMany.mockResolvedValue({ count: 1 } as never);
 
-            const result = await generateSkillForMcpServer("newserver", [
-                { name: "newserver_do-thing", description: "Do a thing" }
-            ]);
+            const result = await generateSkillForMcpServer(
+                "newserver",
+                [{ name: "newserver_do-thing", description: "Do a thing" }],
+                { workspaceId: "ws-1", organizationId: "org-1" }
+            );
 
             expect(result.slug).toBe("mcp-custom-newserver");
             expect(result.toolCount).toBe(1);
@@ -78,7 +84,11 @@ describe("Skill Auto-Generator", () => {
             prismaMock.skill.create.mockResolvedValue(mockCreated as never);
             prismaMock.skillTool.deleteMany.mockResolvedValue({ count: 0 } as never);
 
-            const result = await generateSkillForMcpServer("hubspot", []);
+            const result = await generateSkillForMcpServer(
+                "hubspot",
+                [],
+                { workspaceId: "ws-1", organizationId: "org-1" }
+            );
 
             expect(result.toolCount).toBe(0);
             expect(prismaMock.skillTool.createMany).not.toHaveBeenCalled();
