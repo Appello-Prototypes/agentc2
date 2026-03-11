@@ -87,12 +87,26 @@ export async function POST(request: NextRequest) {
             );
         }
         const validatedData = validation.data;
-        const { name, slug, description } = validatedData;
+        const {
+            name,
+            slug,
+            description,
+            instructions,
+            modelProvider,
+            modelName,
+            temperature,
+            topologyJson,
+            memoryConfig,
+            maxSteps,
+            isPublished,
+            isActive,
+            primitives
+        } = validatedData;
 
         // Validate model exists for the provider
         const modelValidation = await validateModelSelection(
-            validatedData.modelProvider as ModelProvider,
-            validatedData.modelName,
+            modelProvider as ModelProvider,
+            modelName,
             authContext.organizationId
         );
         if (!modelValidation.valid) {
@@ -121,11 +135,11 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const primitives = Array.isArray(body.primitives) ? body.primitives : [];
-        const baseTopology = body.topologyJson || { nodes: [], edges: [] };
-        const topologyJson =
-            primitives.length > 0 && isNetworkTopologyEmpty(baseTopology)
-                ? buildNetworkTopologyFromPrimitives(primitives)
+        const primitivesArray = Array.isArray(primitives) ? primitives : [];
+        const baseTopology = topologyJson || { nodes: [], edges: [] };
+        const finalTopologyJson =
+            primitivesArray.length > 0 && isNetworkTopologyEmpty(baseTopology)
+                ? buildNetworkTopologyFromPrimitives(primitivesArray)
                 : baseTopology;
 
         let workspaceId = body.workspaceId;
@@ -152,24 +166,24 @@ export async function POST(request: NextRequest) {
                 slug: networkSlug,
                 name,
                 description: description || null,
-                instructions: body.instructions,
-                modelProvider: body.modelProvider,
-                modelName: body.modelName,
-                temperature: body.temperature ?? 0.7,
-                topologyJson,
-                memoryConfig: body.memoryConfig || {},
-                maxSteps: body.maxSteps ?? 10,
-                isPublished: body.isPublished ?? false,
-                isActive: body.isActive ?? true,
+                instructions,
+                modelProvider,
+                modelName,
+                temperature: temperature ?? 0.7,
+                topologyJson: finalTopologyJson,
+                memoryConfig: memoryConfig || {},
+                maxSteps: maxSteps ?? 10,
+                isPublished: isPublished ?? false,
+                isActive: isActive ?? true,
                 workspaceId,
                 ownerId: body.ownerId || authContext.userId,
                 type: body.type || "USER"
             }
         });
 
-        if (primitives.length > 0) {
+        if (primitivesArray.length > 0) {
             await prisma.networkPrimitive.createMany({
-                data: primitives.map((primitive: Record<string, unknown>) => ({
+                data: primitivesArray.map((primitive: Record<string, unknown>) => ({
                     networkId: network.id,
                     primitiveType: primitive.primitiveType as string,
                     agentId: primitive.agentId as string,
@@ -185,8 +199,8 @@ export async function POST(request: NextRequest) {
             data: {
                 networkId: network.id,
                 version: 1,
-                topologyJson,
-                primitivesJson: primitives,
+                topologyJson: finalTopologyJson,
+                primitivesJson: primitivesArray,
                 description: body.versionDescription || "Initial version",
                 createdBy: body.createdBy || null
             }
