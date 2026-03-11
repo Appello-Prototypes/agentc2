@@ -276,7 +276,7 @@ describe("Cross-Tenant Isolation", () => {
 
             expect(prismaMock.workflow.findMany).toHaveBeenCalledWith(
                 expect.objectContaining({
-                    where: { workspace: { organizationId: ORG_A } }
+                    where: { workspace: { organizationId: ORG_A }, isArchived: false }
                 })
             );
         });
