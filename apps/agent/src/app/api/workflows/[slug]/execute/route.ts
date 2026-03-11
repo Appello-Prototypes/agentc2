@@ -200,7 +200,9 @@ export async function POST(
 
         const timeoutSymbol = Symbol("timeout");
         const raceResult = await Promise.race([
-            executionPromise.then((r) => ({ kind: "done" as const, value: r })),
+            executionPromise
+                .then((r) => ({ kind: "done" as const, value: r }))
+                .catch(() => ({ kind: "timeout" as const, value: timeoutSymbol })),
             new Promise<{ kind: "timeout"; value: typeof timeoutSymbol }>((resolve) =>
                 setTimeout(
                     () => resolve({ kind: "timeout", value: timeoutSymbol }),

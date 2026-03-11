@@ -19,30 +19,31 @@ Dashboard analytics charts render as blank white areas on Firefox 125+ while dis
 ### Primary Root Cause: React 19 / react-is Version Mismatch
 
 **Issue Location:**
+
 - **File:** `/workspace/bun.lock` (lines 3497-3519)
 - **Dependency Chain:** recharts → react-is (transitive dependency)
 
 **Specific Problem:**
 
 1. **Current State:**
-   - React: `19.2.3` (used across all apps)
-   - react-is: `17.0.2` (pulled as transitive dependency)
-   - Recharts: `3.7.0` (requires react-is to match React version)
+    - React: `19.2.3` (used across all apps)
+    - react-is: `17.0.2` (pulled as transitive dependency)
+    - Recharts: `3.7.0` (requires react-is to match React version)
 
 2. **Why This Breaks:**
-   - React 19 introduced breaking changes to internal symbols (`$$typeof`)
-   - `react-is` uses these symbols to identify React element types
-   - Recharts' `ResponsiveContainer` uses `react-is` internally to validate children
-   - Version mismatch causes React element validation to fail
-   - Firefox is stricter about this validation than Chrome/Safari
+    - React 19 introduced breaking changes to internal symbols (`$$typeof`)
+    - `react-is` uses these symbols to identify React element types
+    - Recharts' `ResponsiveContainer` uses `react-is` internally to validate children
+    - Version mismatch causes React element validation to fail
+    - Firefox is stricter about this validation than Chrome/Safari
 
 3. **Evidence from bun.lock:**
 
 ```text
 Line 3497: "react-dom": ["react-dom@19.2.3", ...]
 Line 3499: "react-is": ["react-is@17.0.2", ...]
-Line 3519: "recharts": ["recharts@3.7.0", "", { 
-  "peerDependencies": { 
+Line 3519: "recharts": ["recharts@3.7.0", "", {
+  "peerDependencies": {
     "react": "^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0",
     "react-dom": "^16.0.0 || ^17.0.0 || ^18.0.0 || ^19.0.0",
     "react-is": "^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0"
@@ -55,9 +56,11 @@ Line 3519: "recharts": ["recharts@3.7.0", "", {
 ### Secondary Contributing Factor: Missing Firefox E2E Tests
 
 **Issue Location:**
+
 - **File:** `/workspace/playwright.config.ts` (lines 31-52)
 
 **Problem:**
+
 - Only Chrome (chromium) browser configured in Playwright projects
 - No Firefox or webkit/Safari test configurations
 - Bug would have been caught earlier if Firefox tests existed
@@ -69,7 +72,7 @@ projects: [
     { name: "setup", testMatch: /.*\.setup\.ts/ },
     { name: "marketplace", use: { ...devices["Desktop Chrome"] } },
     { name: "chromium", use: { ...devices["Desktop Chrome"], storageState: ".auth/user.json" } }
-]
+];
 ```
 
 ---
@@ -82,21 +85,21 @@ All components using Recharts `ResponsiveContainer` are affected:
 
 #### File: `src/app/(dashboard)/dashboard-charts.tsx`
 
-| Component | Lines | Usage Location | Chart Type |
-|-----------|-------|----------------|------------|
-| `RevenueSparkChart` | 29-91 | Admin dashboard main page | AreaChart |
-| `TenantStatusChart` | 107-145 | Admin dashboard main page | BarChart |
+| Component           | Lines   | Usage Location            | Chart Type |
+| ------------------- | ------- | ------------------------- | ---------- |
+| `RevenueSparkChart` | 29-91   | Admin dashboard main page | AreaChart  |
+| `TenantStatusChart` | 107-145 | Admin dashboard main page | BarChart   |
 
 **Impact:** Primary admin dashboard page (`/dashboard`) displays two blank chart areas on Firefox
 
 #### File: `src/app/(dashboard)/financials/charts.tsx`
 
-| Component | Lines | Usage Location | Chart Type |
-|-----------|-------|----------------|------------|
-| `RevenueTrendChart` | 37-111 | Financials page | AreaChart |
-| `MarginTrendChart` | 116-143 | Financials page | BarChart |
-| `RevenueByPlanChart` | 162-202 | Financials page | PieChart |
-| `CostByModelChart` | 211-248 | Financials page | BarChart (horizontal) |
+| Component            | Lines   | Usage Location  | Chart Type            |
+| -------------------- | ------- | --------------- | --------------------- |
+| `RevenueTrendChart`  | 37-111  | Financials page | AreaChart             |
+| `MarginTrendChart`   | 116-143 | Financials page | BarChart              |
+| `RevenueByPlanChart` | 162-202 | Financials page | PieChart              |
+| `CostByModelChart`   | 211-248 | Financials page | BarChart (horizontal) |
 
 **Impact:** Financials page (`/financials`) displays four blank chart areas on Firefox
 
@@ -104,16 +107,16 @@ All components using Recharts `ResponsiveContainer` are affected:
 
 #### File: `src/app/agents/[agentSlug]/versions/components/version-trend-chart.tsx`
 
-| Component | Lines | Usage | Chart Type |
-|-----------|-------|-------|------------|
-| `VersionTrendChart` | 21-110 | Agent versions page | LineChart |
+| Component           | Lines  | Usage               | Chart Type |
+| ------------------- | ------ | ------------------- | ---------- |
+| `VersionTrendChart` | 21-110 | Agent versions page | LineChart  |
 
 **Impact:** Agent version trend chart blank on versions page
 
 #### File: `src/app/live/page.tsx`
 
-| Component | Lines | Charts Affected |
-|-----------|-------|-----------------|
+| Component                 | Lines     | Charts Affected                     |
+| ------------------------- | --------- | ----------------------------------- |
 | Live monitoring dashboard | 2268-2425 | 4+ LineChart and BarChart instances |
 
 **Impact:** Live agent monitoring page shows multiple blank charts
@@ -138,11 +141,11 @@ Firefox has historically been more strict about:
 
 **Browser Comparison:**
 
-| Browser | Version | Renders? | Reason |
-|---------|---------|----------|--------|
-| Chrome | Latest | ✅ Yes | More lenient with React version mismatches |
-| Safari | Latest | ✅ Yes | More lenient with React version mismatches |
-| Firefox | 125.0.1+ | ❌ No | Strict React element validation breaks ResponsiveContainer |
+| Browser | Version  | Renders? | Reason                                                     |
+| ------- | -------- | -------- | ---------------------------------------------------------- |
+| Chrome  | Latest   | ✅ Yes   | More lenient with React version mismatches                 |
+| Safari  | Latest   | ✅ Yes   | More lenient with React version mismatches                 |
+| Firefox | 125.0.1+ | ❌ No    | Strict React element validation breaks ResponsiveContainer |
 
 ---
 
@@ -163,7 +166,7 @@ function ResponsiveContainer({ children }) {
   if (!isElement(children)) {
     return null // BLANK RENDER
   }
-  
+
   return <div>{/* render chart */}</div>
 }
 ```
@@ -180,7 +183,7 @@ When `react-is@17.0.2` is used with `react@19.2.3`, the internal symbol checks f
   <AreaChart data={data}>...</AreaChart>
 </ResponsiveContainer>
 
-// Line 117 - TenantStatusChart  
+// Line 117 - TenantStatusChart
 <ResponsiveContainer width="100%" height={220}>
   <BarChart data={data}>...</BarChart>
 </ResponsiveContainer>
@@ -196,6 +199,7 @@ When `react-is@17.0.2` is used with `react@19.2.3`, the internal symbol checks f
 ```
 
 **Analysis:**
+
 - ResponsiveContainer has explicit `height={220}` (not percentage-based)
 - Parent container has no height constraints
 - This configuration is CORRECT - not the root cause
@@ -232,11 +236,13 @@ When `react-is@17.0.2` is used with `react@19.2.3`, the internal symbol checks f
 5. Run full build and type-check: `bun run build && bun run type-check`
 
 **Risk:** LOW
+
 - Non-breaking change - simply aligns dependency versions
 - React 19 officially supports react-is 19.x.x
 - Recharts 3.7.0 declares support for react-is ^19.0.0 in peer dependencies
 
 **Expected Outcome:**
+
 - Recharts will use react-is@19.x.x instead of 17.0.2
 - ResponsiveContainer element validation will succeed
 - Charts will render on Firefox
@@ -253,35 +259,35 @@ Add Firefox project configuration:
 
 ```typescript
 projects: [
-  {
-    name: "setup",
-    testMatch: /.*\.setup\.ts/
-  },
-  {
-    name: "marketplace",
-    testMatch: /marketplace\/.*\.spec\.ts/,
-    use: { ...devices["Desktop Chrome"] }
-  },
-  {
-    name: "chromium",
-    testIgnore: /marketplace\/.*/,
-    use: {
-      ...devices["Desktop Chrome"],
-      storageState: ".auth/user.json"
+    {
+        name: "setup",
+        testMatch: /.*\.setup\.ts/
     },
-    dependencies: ["setup"]
-  },
-  // ADD THIS PROJECT
-  {
-    name: "firefox",
-    testIgnore: /marketplace\/.*/,
-    use: {
-      ...devices["Desktop Firefox"],
-      storageState: ".auth/user.json"
+    {
+        name: "marketplace",
+        testMatch: /marketplace\/.*\.spec\.ts/,
+        use: { ...devices["Desktop Chrome"] }
     },
-    dependencies: ["setup"]
-  }
-]
+    {
+        name: "chromium",
+        testIgnore: /marketplace\/.*/,
+        use: {
+            ...devices["Desktop Chrome"],
+            storageState: ".auth/user.json"
+        },
+        dependencies: ["setup"]
+    },
+    // ADD THIS PROJECT
+    {
+        name: "firefox",
+        testIgnore: /marketplace\/.*/,
+        use: {
+            ...devices["Desktop Firefox"],
+            storageState: ".auth/user.json"
+        },
+        dependencies: ["setup"]
+    }
+];
 ```
 
 **Steps:**
@@ -291,10 +297,12 @@ projects: [
 3. Run `npx playwright test --project=firefox` to verify
 
 **Risk:** LOW
+
 - Additive change - doesn't affect existing tests
 - Standard Playwright configuration
 
 **Expected Outcome:**
+
 - E2E tests will run on both Chrome and Firefox
 - Cross-browser issues will be caught earlier
 
@@ -312,36 +320,36 @@ projects: [
 import { test, expect } from "./fixtures/auth.fixture";
 
 test.describe("Dashboard Charts Rendering", () => {
-  test("admin dashboard charts should render (not blank)", async ({ page }) => {
-    // Navigate to admin dashboard
-    await page.goto("http://localhost:3003/dashboard");
-    await page.waitForLoadState("networkidle");
-    
-    // Wait for charts to load
-    await page.waitForTimeout(2000);
-    
-    // Check Revenue chart renders (should have SVG elements)
-    const revenueSvg = page.locator('svg').first();
-    await expect(revenueSvg).toBeVisible();
-    
-    // Check chart has actual path/line elements (not empty)
-    const chartElements = page.locator('svg path, svg rect, svg line');
-    const count = await chartElements.count();
-    expect(count).toBeGreaterThan(5); // Charts should have multiple elements
-    
-    // Screenshot for visual verification
-    await page.screenshot({ path: 'test-results/dashboard-charts.png' });
-  });
-  
-  test("financials charts should render", async ({ page }) => {
-    await page.goto("http://localhost:3003/financials");
-    await page.waitForLoadState("networkidle");
-    
-    // Check multiple SVG charts render
-    const svgs = page.locator('svg');
-    const count = await svgs.count();
-    expect(count).toBeGreaterThanOrEqual(4); // 4 charts on financials page
-  });
+    test("admin dashboard charts should render (not blank)", async ({ page }) => {
+        // Navigate to admin dashboard
+        await page.goto("http://localhost:3003/dashboard");
+        await page.waitForLoadState("networkidle");
+
+        // Wait for charts to load
+        await page.waitForTimeout(2000);
+
+        // Check Revenue chart renders (should have SVG elements)
+        const revenueSvg = page.locator("svg").first();
+        await expect(revenueSvg).toBeVisible();
+
+        // Check chart has actual path/line elements (not empty)
+        const chartElements = page.locator("svg path, svg rect, svg line");
+        const count = await chartElements.count();
+        expect(count).toBeGreaterThan(5); // Charts should have multiple elements
+
+        // Screenshot for visual verification
+        await page.screenshot({ path: "test-results/dashboard-charts.png" });
+    });
+
+    test("financials charts should render", async ({ page }) => {
+        await page.goto("http://localhost:3003/financials");
+        await page.waitForLoadState("networkidle");
+
+        // Check multiple SVG charts render
+        const svgs = page.locator("svg");
+        const count = await svgs.count();
+        expect(count).toBeGreaterThanOrEqual(4); // 4 charts on financials page
+    });
 });
 ```
 
@@ -353,9 +361,11 @@ test.describe("Dashboard Charts Rendering", () => {
 4. Add to CI/CD pipeline
 
 **Risk:** LOW
+
 - New test file - doesn't modify existing code
 
 **Expected Outcome:**
+
 - Automated detection of chart rendering failures
 - Visual regression detection capability
 
@@ -383,6 +393,7 @@ fi
 ```
 
 **Risk:** LOW
+
 - Informational only - doesn't block commits
 
 ---
@@ -409,6 +420,7 @@ fi
 ```
 
 **Why This Works:**
+
 - Bun respects the `overrides` field (like npm/yarn)
 - Forces all packages (including Recharts' transitive dependencies) to use react-is@19.x.x
 - Aligns with React 19.2.3's internal APIs
@@ -435,24 +447,25 @@ grep -A 1 '"react-is"' bun.lock
 **Test Checklist:**
 
 1. **Start development servers:**
-   ```bash
-   bun run dev:local
-   ```
+
+    ```bash
+    bun run dev:local
+    ```
 
 2. **Test on Chrome (baseline):**
-   - Navigate to `http://localhost:3003/dashboard`
-   - Verify Revenue vs Cost chart displays
-   - Verify Tenants by Status chart displays
+    - Navigate to `http://localhost:3003/dashboard`
+    - Verify Revenue vs Cost chart displays
+    - Verify Tenants by Status chart displays
 
 3. **Test on Firefox 125+:**
-   - Navigate to `http://localhost:3003/dashboard`
-   - Verify Revenue vs Cost chart displays (previously blank)
-   - Verify Tenants by Status chart displays (previously blank)
-   - Navigate to `http://localhost:3003/financials`
-   - Verify all 4 charts display
+    - Navigate to `http://localhost:3003/dashboard`
+    - Verify Revenue vs Cost chart displays (previously blank)
+    - Verify Tenants by Status chart displays (previously blank)
+    - Navigate to `http://localhost:3003/financials`
+    - Verify all 4 charts display
 
 4. **Test Safari (if available):**
-   - Same verification as Chrome
+    - Same verification as Chrome
 
 ### Step 4: Add Firefox E2E Tests (15 minutes)
 
@@ -509,29 +522,30 @@ npx playwright test --project=firefox
 
 ### User Impact
 
-| Metric | Value |
-|--------|-------|
-| **Affected Users** | ~20% (Firefox users) |
-| **Affected Pages** | 4+ pages with charts |
-| **Total Charts Broken** | 8+ chart instances |
-| **User Experience** | Severe - complete loss of data visualization |
-| **Workaround Available** | Yes (use Chrome/Safari) but not acceptable |
+| Metric                   | Value                                        |
+| ------------------------ | -------------------------------------------- |
+| **Affected Users**       | ~20% (Firefox users)                         |
+| **Affected Pages**       | 4+ pages with charts                         |
+| **Total Charts Broken**  | 8+ chart instances                           |
+| **User Experience**      | Severe - complete loss of data visualization |
+| **Workaround Available** | Yes (use Chrome/Safari) but not acceptable   |
 
 ### System Impact
 
 **Affected Applications:**
 
 1. **Admin App (`apps/admin`)** - HIGH IMPACT
-   - Main dashboard page
-   - Financials page
-   - Used by internal team for monitoring
+    - Main dashboard page
+    - Financials page
+    - Used by internal team for monitoring
 
 2. **Agent App (`apps/agent`)** - MEDIUM IMPACT
-   - Agent version trends
-   - Live monitoring page
-   - Used by customers for agent analytics
+    - Agent version trends
+    - Live monitoring page
+    - Used by customers for agent analytics
 
 **Data Flow:**
+
 - No data corruption - only rendering issue
 - Backend APIs unaffected
 - Data is fetched and processed correctly
@@ -540,6 +554,7 @@ npx playwright test --project=firefox
 ### Related Systems
 
 **Not Affected:**
+
 - Custom SVG charts (e.g., `MultiLineTrendChart.tsx` in agent analytics)
 - Simple bar charts using CSS/divs (e.g., `SimpleBarChart` in agent analytics)
 - Database queries and API endpoints
@@ -547,6 +562,7 @@ npx playwright test --project=firefox
 - MCP integrations
 
 **Why Custom SVG Charts Unaffected:**
+
 - `MultiLineTrendChart.tsx` (agent analytics page) uses raw SVG elements
 - Does not depend on Recharts or ResponsiveContainer
 - Works correctly on all browsers including Firefox
@@ -560,66 +576,67 @@ npx playwright test --project=firefox
 **Why Low Risk:**
 
 1. **Isolated Change:**
-   - Single line addition to package.json
-   - No code changes required
-   - Doesn't affect business logic
+    - Single line addition to package.json
+    - No code changes required
+    - Doesn't affect business logic
 
 2. **Well-Documented Solution:**
-   - Official Recharts recommendation for React 19
-   - Used successfully by other projects
-   - Supported by package manager specification
+    - Official Recharts recommendation for React 19
+    - Used successfully by other projects
+    - Supported by package manager specification
 
 3. **Backward Compatible:**
-   - react-is@19.x.x maintains same API as 17.x.x
-   - No breaking changes in react-is between major versions
-   - All existing code continues to work
+    - react-is@19.x.x maintains same API as 17.x.x
+    - No breaking changes in react-is between major versions
+    - All existing code continues to work
 
 4. **Easy Rollback:**
-   - Remove override line from package.json
-   - Run `bun install`
-   - Instant rollback if needed
+    - Remove override line from package.json
+    - Run `bun install`
+    - Instant rollback if needed
 
 ### Testing Risk: LOW
 
 **Why Low Risk:**
 
 1. **Additive Changes:**
-   - Adding Firefox project doesn't affect existing tests
-   - New test file doesn't modify existing code
+    - Adding Firefox project doesn't affect existing tests
+    - New test file doesn't modify existing code
 
 2. **Industry Standard:**
-   - Playwright fully supports Firefox
-   - Standard browser testing practice
+    - Playwright fully supports Firefox
+    - Standard browser testing practice
 
 ### Deployment Risk: LOW
 
 **Considerations:**
 
 1. **Dependency Update:**
-   - Update occurs at build time
-   - Included in production bundle
-   - No runtime configuration needed
+    - Update occurs at build time
+    - Included in production bundle
+    - No runtime configuration needed
 
 2. **Validation:**
-   - Can be validated in staging environment
-   - Visual verification is straightforward
-   - No database migrations required
+    - Can be validated in staging environment
+    - Visual verification is straightforward
+    - No database migrations required
 
 ---
 
 ## Complexity Estimate
 
-| Task | Complexity | Time Estimate | Dependencies |
-|------|------------|---------------|--------------|
-| Add react-is override | TRIVIAL | 1 minute | None |
-| Run bun install | TRIVIAL | 2 minutes | None |
-| Local manual testing | SIMPLE | 10 minutes | Dev servers running |
-| Add Firefox E2E config | SIMPLE | 5 minutes | None |
-| Create chart E2E test | MODERATE | 20 minutes | Firefox config |
-| Full QA + push | SIMPLE | 10 minutes | All above complete |
-| **TOTAL** | **SIMPLE** | **~50 minutes** | - |
+| Task                   | Complexity | Time Estimate   | Dependencies        |
+| ---------------------- | ---------- | --------------- | ------------------- |
+| Add react-is override  | TRIVIAL    | 1 minute        | None                |
+| Run bun install        | TRIVIAL    | 2 minutes       | None                |
+| Local manual testing   | SIMPLE     | 10 minutes      | Dev servers running |
+| Add Firefox E2E config | SIMPLE     | 5 minutes       | None                |
+| Create chart E2E test  | MODERATE   | 20 minutes      | Firefox config      |
+| Full QA + push         | SIMPLE     | 10 minutes      | All above complete  |
+| **TOTAL**              | **SIMPLE** | **~50 minutes** | -                   |
 
 **Overall Complexity:** SIMPLE
+
 - Single root cause
 - Single-line fix
 - Well-documented solution
@@ -632,23 +649,23 @@ npx playwright test --project=firefox
 ### Manual Validation Steps
 
 1. **Before Fix:**
-   - Open Firefox 125+
-   - Navigate to `http://localhost:3003/dashboard`
-   - Confirm charts are blank (reproduce bug)
-   - Take screenshot for comparison
+    - Open Firefox 125+
+    - Navigate to `http://localhost:3003/dashboard`
+    - Confirm charts are blank (reproduce bug)
+    - Take screenshot for comparison
 
 2. **After Fix:**
-   - Apply react-is override
-   - Run `bun install`
-   - Restart dev servers
-   - Navigate to `http://localhost:3003/dashboard`
-   - Verify charts render correctly
-   - Take screenshot for comparison
+    - Apply react-is override
+    - Run `bun install`
+    - Restart dev servers
+    - Navigate to `http://localhost:3003/dashboard`
+    - Verify charts render correctly
+    - Take screenshot for comparison
 
 3. **Cross-Browser Verification:**
-   - Test on Chrome (should still work)
-   - Test on Firefox (should now work)
-   - Test on Safari if available (should still work)
+    - Test on Chrome (should still work)
+    - Test on Firefox (should now work)
+    - Test on Safari if available (should still work)
 
 ### Automated Validation
 
@@ -669,8 +686,8 @@ Consider adding visual regression testing with Playwright:
 
 ```typescript
 // In dashboard-charts.spec.ts
-await expect(page).toHaveScreenshot('dashboard-revenue-chart.png', {
-  maxDiffPixels: 100
+await expect(page).toHaveScreenshot("dashboard-revenue-chart.png", {
+    maxDiffPixels: 100
 });
 ```
 
@@ -693,10 +710,12 @@ await expect(page).toHaveScreenshot('dashboard-revenue-chart.png', {
 ### Alternative 1: Downgrade React to 18.x
 
 **Pros:**
+
 - react-is@18.x would align automatically
 - No override needed
 
 **Cons:**
+
 - ❌ Loses React 19 features
 - ❌ Regression to older version
 - ❌ May break other dependencies expecting React 19
@@ -707,16 +726,19 @@ await expect(page).toHaveScreenshot('dashboard-revenue-chart.png', {
 ### Alternative 2: Replace Recharts with Alternative Library
 
 **Options:**
+
 - Chart.js with react-chartjs-2
 - Victory Charts
 - Apache ECharts
 - Custom D3.js implementation
 
 **Pros:**
+
 - Could avoid react-is dependency entirely
 - Might have better Firefox compatibility
 
 **Cons:**
+
 - ❌ Massive refactoring effort (8+ chart components)
 - ❌ Risk of introducing new bugs
 - ❌ Training overhead for team
@@ -728,12 +750,15 @@ await expect(page).toHaveScreenshot('dashboard-revenue-chart.png', {
 ### Alternative 3: Add Explicit react-is Dependency
 
 **Approach:**
+
 - Add `"react-is": "^19.0.0"` to dependencies (not overrides)
 
 **Pros:**
+
 - Explicit declaration in package.json
 
 **Cons:**
+
 - Less effective than overrides for transitive dependencies
 - Other packages might still pull in older versions
 - Overrides is the recommended approach per Recharts docs
@@ -743,9 +768,11 @@ await expect(page).toHaveScreenshot('dashboard-revenue-chart.png', {
 ### Alternative 4: Wait for Recharts 4.x
 
 **Approach:**
+
 - Wait for next major Recharts version with improved React 19 support
 
 **Cons:**
+
 - ❌ Timeline unknown
 - ❌ May have breaking changes requiring migration
 - ❌ Users affected NOW, not in future
@@ -760,44 +787,45 @@ await expect(page).toHaveScreenshot('dashboard-revenue-chart.png', {
 ### Metrics to Monitor
 
 1. **Browser Analytics:**
-   - Track chart interaction rates by browser
-   - Monitor bounce rates on dashboard/financials pages
-   - Track Firefox user engagement
+    - Track chart interaction rates by browser
+    - Monitor bounce rates on dashboard/financials pages
+    - Track Firefox user engagement
 
 2. **Error Monitoring:**
-   - Monitor Sentry/error logs for React warnings
-   - Track console errors by browser type
-   - Alert on ResponsiveContainer render failures
+    - Monitor Sentry/error logs for React warnings
+    - Track console errors by browser type
+    - Alert on ResponsiveContainer render failures
 
 3. **E2E Test Success:**
-   - Monitor Firefox E2E test pass rate
-   - Alert on chart-related test failures
-   - Track test execution time by browser
+    - Monitor Firefox E2E test pass rate
+    - Alert on chart-related test failures
+    - Track test execution time by browser
 
 ### Rollback Plan
 
 If the fix causes unexpected issues:
 
 1. **Immediate Rollback:**
-   ```bash
-   # Revert package.json change
-   git revert <commit-hash>
-   
-   # Reinstall dependencies
-   bun install
-   
-   # Rebuild and deploy
-   bun run build
-   ```
+
+    ```bash
+    # Revert package.json change
+    git revert <commit-hash>
+
+    # Reinstall dependencies
+    bun install
+
+    # Rebuild and deploy
+    bun run build
+    ```
 
 2. **Diagnostic Steps:**
-   - Check console errors in all browsers
-   - Verify react-is version: `bun pm ls react-is`
-   - Test with different react-is versions: 18.x, 19.0.0-rc, 19.2.3
+    - Check console errors in all browsers
+    - Verify react-is version: `bun pm ls react-is`
+    - Test with different react-is versions: 18.x, 19.0.0-rc, 19.2.3
 
 3. **Alternative Fix:**
-   - If override doesn't work, explicitly install react-is@19.0.0
-   - If still fails, investigate Recharts 2.x downgrade
+    - If override doesn't work, explicitly install react-is@19.0.0
+    - If still fails, investigate Recharts 2.x downgrade
 
 ---
 
@@ -806,27 +834,27 @@ If the fix causes unexpected issues:
 ### Potential Follow-up Tasks
 
 1. **Audit All Dependencies for React 19 Compatibility**
-   - Check if other packages have similar react-is issues
-   - Verify all peer dependencies align with React 19
+    - Check if other packages have similar react-is issues
+    - Verify all peer dependencies align with React 19
 
 2. **Add Cross-Browser Testing to CI/CD**
-   - Ensure Firefox tests run on every PR
-   - Add Safari/webkit tests if applicable
+    - Ensure Firefox tests run on every PR
+    - Add Safari/webkit tests if applicable
 
 3. **Standardize Chart Components**
-   - Consider creating wrapper components around ResponsiveContainer
-   - Add error boundaries for chart failures
-   - Implement loading/fallback states
+    - Consider creating wrapper components around ResponsiveContainer
+    - Add error boundaries for chart failures
+    - Implement loading/fallback states
 
 4. **Visual Regression Testing**
-   - Add Playwright visual comparison tests
-   - Catch rendering differences across browsers
-   - Alert on unexpected visual changes
+    - Add Playwright visual comparison tests
+    - Catch rendering differences across browsers
+    - Alert on unexpected visual changes
 
 5. **Performance Monitoring**
-   - Track chart render times by browser
-   - Monitor ResponsiveContainer resize performance
-   - Optimize if Firefox is slower than Chrome
+    - Track chart render times by browser
+    - Monitor ResponsiveContainer resize performance
+    - Optimize if Firefox is slower than Chrome
 
 ---
 
@@ -835,16 +863,16 @@ If the fix causes unexpected issues:
 ### External Documentation
 
 1. **Recharts React 19 Support:**
-   - GitHub Issue: https://github.com/recharts/recharts/issues/4558
-   - PR for 2.x support: https://github.com/recharts/recharts/pull/4542
-   - PR for peer dependency: https://github.com/recharts/recharts/pull/4541
+    - GitHub Issue: https://github.com/recharts/recharts/issues/4558
+    - PR for 2.x support: https://github.com/recharts/recharts/pull/4542
+    - PR for peer dependency: https://github.com/recharts/recharts/pull/4541
 
 2. **React 19 Breaking Changes:**
-   - React blog post on 19.0 changes
-   - Discussion on react-is isFragment: https://github.com/facebook/react/issues/31688
+    - React blog post on 19.0 changes
+    - Discussion on react-is isFragment: https://github.com/facebook/react/issues/31688
 
 3. **Fix Guide:**
-   - Blog post: https://www.bstefanski.com/blog/recharts-empty-chart-react-19
+    - Blog post: https://www.bstefanski.com/blog/recharts-empty-chart-react-19
 
 ### Internal Files
 
@@ -871,6 +899,7 @@ If the fix causes unexpected issues:
 ### Q: Could this affect other components?
 
 **A:** Unlikely. The issue is specific to:
+
 - Components using Recharts ResponsiveContainer
 - No other components in the codebase use react-is directly
 - Custom SVG charts (like MultiLineTrendChart) are unaffected

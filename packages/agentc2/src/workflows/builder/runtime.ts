@@ -530,9 +530,10 @@ async function executeSteps(
         }
 
         const startedAt = new Date();
-        const stepInput = resolveInputMapping(step.inputMapping, context);
+        let stepInput: Record<string, unknown> = {};
 
         try {
+            stepInput = resolveInputMapping(step.inputMapping, context);
             let output: unknown;
             let status: WorkflowExecutionResult["status"] = "success";
             let suspended: WorkflowExecutionResult["suspended"] | undefined;

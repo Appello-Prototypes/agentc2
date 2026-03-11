@@ -62,6 +62,7 @@ async function cursorFetch(
     const basicAuth = Buffer.from(`${apiKey}:`).toString("base64");
     const response = await fetch(url, {
         ...options,
+        signal: options.signal ?? AbortSignal.timeout(30_000),
         headers: {
             Authorization: `Basic ${basicAuth}`,
             "Content-Type": "application/json",
@@ -323,69 +324,84 @@ export const cursorPollUntilDoneTool = createTool({
 
         const terminalStatuses = new Set(["FINISHED", "COMPLETED", "FAILED", "CANCELLED", "ERROR"]);
 
-        while (Date.now() - startTime < maxDuration) {
-            const response = await cursorFetch(`/agents/${agentId}`, apiKey);
-            const data = await response.json();
-            const status = data.status || "UNKNOWN";
+        const loopAbort = new AbortController();
+        const loopTimer = setTimeout(() => loopAbort.abort(), maxDuration);
 
-            if (terminalStatuses.has(status)) {
-                let summary = data.summary || null;
+        try {
+            while (Date.now() - startTime < maxDuration) {
+                const response = await cursorFetch(`/agents/${agentId}`, apiKey, {
+                    signal: loopAbort.signal
+                });
+                const data = await response.json();
+                const status = data.status || "UNKNOWN";
 
-                if (!summary) {
-                    try {
-                        const convResp = await cursorFetch(
-                            `/agents/${agentId}/conversation`,
-                            apiKey
-                        );
-                        const convData = await convResp.json();
-                        const assistantMessages = (convData.messages || [])
-                            .filter((m: { type?: string }) => m.type === "assistant_message")
-                            .map((m: { text?: string }) => m.text || "");
+                if (terminalStatuses.has(status)) {
+                    let summary = data.summary || null;
 
-                        if (assistantMessages.length > 0) {
-                            summary = assistantMessages[assistantMessages.length - 1];
+                    if (!summary) {
+                        try {
+                            const convResp = await cursorFetch(
+                                `/agents/${agentId}/conversation`,
+                                apiKey
+                            );
+                            const convData = await convResp.json();
+                            const assistantMessages = (convData.messages || [])
+                                .filter((m: { type?: string }) => m.type === "assistant_message")
+                                .map((m: { text?: string }) => m.text || "");
+
+                            if (assistantMessages.length > 0) {
+                                summary = assistantMessages[assistantMessages.length - 1];
+                            }
+                        } catch {
+                            // Conversation fetch failed; leave summary null
                         }
-                    } catch {
-                        // Conversation fetch failed; leave summary null
                     }
-                }
 
-                const branchName = data.target?.branchName || null;
-                let prNumber: number | null = null;
-                let prUrl: string | null = data.target?.prUrl || null;
+                    const branchName = data.target?.branchName || null;
+                    let prNumber: number | null = null;
+                    let prUrl: string | null = data.target?.prUrl || null;
 
-                if (prUrl) {
-                    const match = prUrl.match(/\/pull\/(\d+)/);
-                    if (match) prNumber = Number(match[1]);
-                }
+                    if (prUrl) {
+                        const match = prUrl.match(/\/pull\/(\d+)/);
+                        if (match) prNumber = Number(match[1]);
+                    }
 
-                if (!prNumber && branchName && repository) {
-                    const detected = await detectPrFromBranch(
-                        repository,
+                    if (!prNumber && branchName && repository) {
+                        const detected = await detectPrFromBranch(
+                            repository,
+                            branchName,
+                            organizationId
+                        );
+                        if (detected) {
+                            prNumber = detected.prNumber;
+                            prUrl = detected.prUrl;
+                        }
+                    }
+
+                    return {
+                        agentId,
+                        status,
+                        summary,
                         branchName,
-                        organizationId
-                    );
-                    if (detected) {
-                        prNumber = detected.prNumber;
-                        prUrl = detected.prUrl;
-                    }
+                        prNumber,
+                        prUrl,
+                        repository: repository || null,
+                        durationMs: Date.now() - startTime,
+                        timedOut: false
+                    };
                 }
 
-                return {
-                    agentId,
-                    status,
-                    summary,
-                    branchName,
-                    prNumber,
-                    prUrl,
-                    repository: repository || null,
-                    durationMs: Date.now() - startTime,
-                    timedOut: false
-                };
+                await new Promise((resolve) => setTimeout(resolve, interval));
+                interval = Math.min(interval * 1.5, 30_000);
             }
-
-            await new Promise((resolve) => setTimeout(resolve, interval));
-            interval = Math.min(interval * 1.5, 30_000);
+        } catch (err) {
+            if (loopAbort.signal.aborted) {
+                // Preemptive timeout fired -- fall through to TIMEOUT return
+            } else {
+                throw err;
+            }
+        } finally {
+            clearTimeout(loopTimer);
         }
 
         return {
