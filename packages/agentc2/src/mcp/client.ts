@@ -1258,6 +1258,40 @@ const INTEGRATION_PROVIDER_SEEDS: IntegrationProviderSeed[] = [
         }
     },
     {
+        key: "claude-code",
+        name: "Claude Code Agent",
+        description:
+            "Autonomous coding agent powered by Claude Agent SDK — launch agents to analyze code, fix bugs, and create PRs",
+        category: "developer",
+        authType: "apiKey",
+        providerType: "custom",
+        configJson: {
+            requiredFields: ["ANTHROPIC_API_KEY"],
+            fieldDefinitions: {
+                ANTHROPIC_API_KEY: {
+                    label: "Anthropic API Key",
+                    description:
+                        "Same key used for Claude models. Get from https://console.anthropic.com/settings/keys",
+                    placeholder: "sk-ant-...",
+                    type: "password"
+                }
+            },
+            importHints: {
+                matchNames: ["Claude Code", "claude-code", "Claude Agent SDK"],
+                envAliases: {
+                    ANTHROPIC_API_KEY: "ANTHROPIC_API_KEY"
+                }
+            },
+            linkedProviders: [
+                {
+                    providerKey: "anthropic",
+                    sharedFields: ["ANTHROPIC_API_KEY"],
+                    label: "Use existing Anthropic AI key"
+                }
+            ]
+        }
+    },
+    {
         key: "netlify",
         name: "Netlify",
         description: "Web deployment — sites, deploys, forms, functions, and DNS management",
@@ -1808,7 +1842,14 @@ const INTEGRATION_PROVIDER_SEEDS: IntegrationProviderSeed[] = [
                     placeholder: "sk-ant-...",
                     type: "password"
                 }
-            }
+            },
+            linkedProviders: [
+                {
+                    providerKey: "claude-code",
+                    sharedFields: ["ANTHROPIC_API_KEY"],
+                    label: "Also enable Claude Code Agent"
+                }
+            ]
         }
     },
     {

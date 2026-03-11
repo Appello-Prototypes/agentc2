@@ -119,6 +119,118 @@ export const codingPipelineToolDefinitions: McpToolDefinition[] = [
         category: "coding-pipeline"
     },
     {
+        name: "claude-launch-agent",
+        description:
+            "Launch a Claude Code Agent to implement code changes on a GitHub repository. " +
+            "Provide a detailed prompt describing what to build or fix. " +
+            "Set autoCreatePr to have a PR created automatically when the agent finishes.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                repository: {
+                    type: "string",
+                    description: "GitHub repository URL (e.g., 'https://github.com/org/repo')"
+                },
+                prompt: {
+                    type: "string",
+                    description: "Detailed implementation instructions for the coding agent"
+                },
+                ref: {
+                    type: "string",
+                    description: "Base branch or ref to work from (default: 'main')"
+                },
+                autoCreatePr: {
+                    type: "boolean",
+                    description:
+                        "Automatically create a PR when the agent finishes. " +
+                        "The PR URL will be available via claude-poll-until-done."
+                }
+            },
+            required: ["repository", "prompt"]
+        },
+        invoke_url: "/api/mcp",
+        category: "coding-pipeline"
+    },
+    {
+        name: "claude-get-status",
+        description:
+            "Get the current status of a Claude Code Agent session. " +
+            "Statuses: RUNNING, FINISHED, FAILED.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                agentId: {
+                    type: "string",
+                    description: "The Claude Code session ID"
+                }
+            },
+            required: ["agentId"]
+        },
+        invoke_url: "/api/mcp",
+        category: "coding-pipeline"
+    },
+    {
+        name: "claude-add-followup",
+        description:
+            "Send follow-up instructions to a Claude Code Agent session. " +
+            "Use to refine work or provide error context.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                agentId: {
+                    type: "string",
+                    description: "The Claude Code session ID"
+                },
+                prompt: {
+                    type: "string",
+                    description: "Follow-up instructions or error context"
+                }
+            },
+            required: ["agentId", "prompt"]
+        },
+        invoke_url: "/api/mcp",
+        category: "coding-pipeline"
+    },
+    {
+        name: "claude-get-conversation",
+        description:
+            "Retrieve the conversation history of a Claude Code Agent session for audit trail.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                agentId: {
+                    type: "string",
+                    description: "The Claude Code session ID"
+                }
+            },
+            required: ["agentId"]
+        },
+        invoke_url: "/api/mcp",
+        category: "coding-pipeline"
+    },
+    {
+        name: "claude-poll-until-done",
+        description:
+            "Retrieve the completed result of a Claude Code Agent session. " +
+            "Returns the cached result including status, branch name, and PR number.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                agentId: {
+                    type: "string",
+                    description: "The Claude Code session ID"
+                },
+                maxWaitMinutes: {
+                    type: "number",
+                    description: "Unused (kept for schema parity)"
+                }
+            },
+            required: ["agentId"]
+        },
+        invoke_url: "/api/mcp",
+        category: "coding-pipeline"
+    },
+    {
         name: "verify-branch",
         description:
             "Verify a branch by cloning and running build commands in the sandbox. " +
@@ -275,6 +387,11 @@ export const codingPipelineToolRoutes: McpToolRoute[] = [
     { kind: "registry", name: "cursor-add-followup" },
     { kind: "registry", name: "cursor-get-conversation" },
     { kind: "registry", name: "cursor-poll-until-done" },
+    { kind: "registry", name: "claude-launch-agent" },
+    { kind: "registry", name: "claude-get-status" },
+    { kind: "registry", name: "claude-add-followup" },
+    { kind: "registry", name: "claude-get-conversation" },
+    { kind: "registry", name: "claude-poll-until-done" },
     { kind: "registry", name: "verify-branch", enforceOrg: true },
     { kind: "registry", name: "wait-for-checks", enforceOrg: true },
     { kind: "registry", name: "dispatch-coding-pipeline", enforceOrg: true },

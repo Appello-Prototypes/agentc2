@@ -369,6 +369,13 @@ import {
     cursorGetConversationTool,
     cursorPollUntilDoneTool
 } from "./cursor-tools";
+import {
+    claudeLaunchAgentTool,
+    claudeGetStatusTool,
+    claudeAddFollowupTool,
+    claudeGetConversationTool,
+    claudePollUntilDoneTool
+} from "./claude-tools";
 import { verifyBranchTool, waitForChecksTool } from "./verify-tools";
 import {
     ingestTicketTool,
@@ -494,6 +501,11 @@ export const toolCategoryMap: Record<string, string> = {
     "cursor-add-followup": "Coding Pipeline",
     "cursor-get-conversation": "Coding Pipeline",
     "cursor-poll-until-done": "Coding Pipeline",
+    "claude-launch-agent": "Coding Pipeline",
+    "claude-get-status": "Coding Pipeline",
+    "claude-add-followup": "Coding Pipeline",
+    "claude-get-conversation": "Coding Pipeline",
+    "claude-poll-until-done": "Coding Pipeline",
     "verify-branch": "Coding Pipeline",
     "wait-for-checks": "Coding Pipeline",
     "ingest-ticket": "Coding Pipeline",
@@ -1395,6 +1407,13 @@ export const toolRegistry: Record<string, any> = {
     "cursor-add-followup": cursorAddFollowupTool,
     "cursor-get-conversation": cursorGetConversationTool,
     "cursor-poll-until-done": cursorPollUntilDoneTool,
+
+    // Coding Pipeline (Claude Code Agent)
+    "claude-launch-agent": claudeLaunchAgentTool,
+    "claude-get-status": claudeGetStatusTool,
+    "claude-add-followup": claudeAddFollowupTool,
+    "claude-get-conversation": claudeGetConversationTool,
+    "claude-poll-until-done": claudePollUntilDoneTool,
 
     // Verification
     "verify-branch": verifyBranchTool,

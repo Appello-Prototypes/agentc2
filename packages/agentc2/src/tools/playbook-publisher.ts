@@ -460,7 +460,15 @@ export const playbookPackageTool = createTool({
             .describe("Repackage mode (default: full)"),
         changelog: z.string().optional().describe("Version changelog"),
         includeSkills: z.boolean().optional().describe("Include skills (default: true)"),
-        includeDocuments: z.boolean().optional().describe("Include documents (default: true)")
+        includeDocuments: z.boolean().optional().describe("Include documents (default: true)"),
+        includeWorkflowIds: z
+            .array(z.string())
+            .optional()
+            .describe("Additional workflow IDs to include beyond the entry point"),
+        includeNetworkIds: z
+            .array(z.string())
+            .optional()
+            .describe("Additional network IDs to include beyond the entry point")
     }),
     outputSchema: baseOutputSchema,
     execute: async ({
@@ -472,7 +480,9 @@ export const playbookPackageTool = createTool({
         mode,
         changelog,
         includeSkills,
-        includeDocuments
+        includeDocuments,
+        includeWorkflowIds,
+        includeNetworkIds
     }) => {
         const playbook = await requirePlaybookOwner(slug, organizationId);
         const effectiveMode = mode ?? "full";
@@ -494,6 +504,8 @@ export const playbookPackageTool = createTool({
             mode: effectiveMode,
             includeSkills: includeSkills ?? true,
             includeDocuments: includeDocuments ?? true,
+            includeWorkflows: includeWorkflowIds,
+            includeNetworks: includeNetworkIds,
             entryAgentId: entryType === "agent" ? entryId : undefined,
             entryWorkflowId: entryType === "workflow" ? entryId : undefined,
             entryNetworkId: entryType === "network" ? entryId : undefined

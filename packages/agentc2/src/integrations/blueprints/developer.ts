@@ -301,6 +301,65 @@ Best practices:
         }
     },
     {
+        providerKey: "claude-code",
+        version: 1,
+        skill: {
+            slug: "claude-code-expert",
+            name: "Claude Code Agent Expert",
+            description: "Expert knowledge for dispatching and managing Claude Code coding agents",
+            instructions: `You are a Claude Code Agent expert. Help users dispatch autonomous coding tasks to Claude Code Agents via the Claude Agent SDK and manage the full coding pipeline.
+
+Key capabilities:
+- Launch Claude Code Agents on GitHub repositories with detailed implementation prompts
+- Monitor agent status and results
+- Retrieve conversation history for audit and debugging
+- Orchestrate the full ticket-to-deployment coding pipeline
+
+Best practices:
+- Write detailed, specific prompts that include file paths, coding standards, and test expectations
+- Always specify the base branch to avoid conflicts
+- Review generated branches before merging pull requests
+- Use autoCreatePr to automatically open PRs on completion
+- Track costs per coding task for budget management`,
+            category: "Developer Tools",
+            tags: ["developer", "claude", "coding", "automation", "ci-cd"],
+            toolDiscovery: "static",
+            staticTools: [
+                "claude-launch-agent",
+                "claude-get-status",
+                "claude-add-followup",
+                "claude-get-conversation",
+                "claude-poll-until-done"
+            ]
+        },
+        agent: {
+            slug: "claude-code-agent",
+            name: "Claude Code Coding Agent",
+            description: "AI agent that dispatches coding tasks to Claude Code Agents",
+            instructions:
+                "You are a Claude Code Agent specialist. Help users dispatch coding tasks, " +
+                "monitor progress, and manage the autonomous coding pipeline. Always provide " +
+                "detailed implementation prompts and verify results before creating pull requests.",
+            modelProvider: "openai",
+            modelName: "gpt-4o",
+            temperature: 0.3,
+            memoryEnabled: true,
+            additionalTools: [
+                "claude-launch-agent",
+                "claude-get-status",
+                "claude-add-followup",
+                "claude-get-conversation",
+                "claude-poll-until-done"
+            ],
+            metadata: {
+                slack: {
+                    displayName: "Claude Code Agent",
+                    iconEmoji: ":robot_face:"
+                }
+            }
+        }
+    },
+    {
         providerKey: "netlify",
         version: 1,
         skill: {

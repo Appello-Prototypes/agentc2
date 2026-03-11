@@ -10,7 +10,7 @@ import { invalidateMcpToolsCacheForOrg } from "@repo/agentc2/tools";
 import { clearModelCache } from "@repo/agentc2/agents/model-registry";
 import { provisionIntegration, hasBlueprint } from "@repo/agentc2/integrations";
 import { auditLog } from "@/lib/audit-log";
-import { encryptCredentials } from "@/lib/credential-crypto";
+import { encryptCredentials, decryptCredentials } from "@/lib/credential-crypto";
 import { getConnectionMissingFields } from "@/lib/integrations";
 import { authenticateRequest } from "@/lib/api-auth";
 
@@ -20,7 +20,8 @@ const createConnectionSchema = z.object({
     scope: z.enum(["org", "user"]).default("org"),
     credentials: z.record(z.unknown()).optional(),
     metadata: z.record(z.unknown()).optional(),
-    isDefault: z.boolean().optional()
+    isDefault: z.boolean().optional(),
+    copyFromProviderKey: z.string().max(200).optional()
 });
 
 /**
@@ -119,7 +120,8 @@ export async function POST(request: NextRequest) {
                 { status: 400 }
             );
         }
-        const { providerKey, name, scope, credentials, metadata, isDefault } = parsed.data;
+        const { providerKey, name, scope, credentials, metadata, isDefault, copyFromProviderKey } =
+            parsed.data;
 
         await getIntegrationProviders();
 
@@ -131,6 +133,35 @@ export async function POST(request: NextRequest) {
                 { success: false, error: `Provider '${providerKey}' not found` },
                 { status: 404 }
             );
+        }
+
+        // Resolve credentials: either from manual input or by copying from a linked provider
+        let resolvedCredentials = credentials ?? null;
+        if (!resolvedCredentials && copyFromProviderKey) {
+            const sourceConnection = await prisma.integrationConnection.findFirst({
+                where: {
+                    isActive: true,
+                    provider: { key: copyFromProviderKey },
+                    organizationId
+                },
+                include: { provider: true },
+                orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }]
+            });
+            if (sourceConnection?.credentials) {
+                const decrypted = decryptCredentials(sourceConnection.credentials);
+                if (decrypted && typeof decrypted === "object") {
+                    resolvedCredentials = decrypted as Record<string, unknown>;
+                }
+            }
+            if (!resolvedCredentials) {
+                return NextResponse.json(
+                    {
+                        success: false,
+                        error: `No active credentials found for linked provider '${copyFromProviderKey}'`
+                    },
+                    { status: 400 }
+                );
+            }
         }
 
         const connectionUserId = scope === "user" ? authContext.userId : null;
@@ -147,7 +178,7 @@ export async function POST(request: NextRequest) {
             });
         }
 
-        const encryptedCredentials = encryptCredentials(credentials ?? null);
+        const encryptedCredentials = encryptCredentials(resolvedCredentials);
 
         const connection = await prisma.integrationConnection.create({
             data: {

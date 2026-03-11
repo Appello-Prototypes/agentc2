@@ -128,6 +128,23 @@ function getRequiredFields(provider: IntegrationProvider): string[] {
     return Array.isArray(required) ? required : [];
 }
 
+type LinkedProviderConfig = {
+    providerKey: string;
+    sharedFields: string[];
+    label: string;
+};
+
+function getLinkedProviders(provider: IntegrationProvider): LinkedProviderConfig[] {
+    const config = provider.config as Record<string, unknown> | null;
+    const linked = config?.linkedProviders;
+    return Array.isArray(linked) ? (linked as LinkedProviderConfig[]) : [];
+}
+
+type LinkedProviderMatch = LinkedProviderConfig & {
+    providerName: string;
+    isConnected: boolean;
+};
+
 function getOAuthConfig(provider: IntegrationProvider): OAuthConfig | null {
     const config = provider.config as Record<string, unknown> | null;
     if (config?.oauthConfig && typeof config.oauthConfig === "object") {
@@ -331,16 +348,21 @@ function OverviewStep({ provider, onNext }: { provider: IntegrationProvider; onN
 function CredentialsStep({
     provider,
     onConnect,
+    onConnectLinked,
     connecting,
-    error
+    error,
+    linkedMatch
 }: {
     provider: IntegrationProvider;
     onConnect: (credentials: Record<string, string>) => void;
+    onConnectLinked: (fromProviderKey: string) => void;
     connecting: boolean;
     error: string | null;
+    linkedMatch: LinkedProviderMatch | null;
 }) {
     const requiredFields = getRequiredFields(provider);
     const fieldDefs = getFieldDefinitions(provider);
+    const [useLinked, setUseLinked] = useState(!!linkedMatch?.isConnected);
     const [values, setValues] = useState<Record<string, string>>(() => {
         const initial: Record<string, string> = {};
         requiredFields.forEach((f) => (initial[f] = ""));
@@ -348,10 +370,13 @@ function CredentialsStep({
     });
 
     const allFilled = requiredFields.every((f) => (values[f] || "").trim().length > 0);
+    const canSubmit = useLinked || allFilled;
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (allFilled) {
+        if (useLinked && linkedMatch) {
+            onConnectLinked(linkedMatch.providerKey);
+        } else if (allFilled) {
             onConnect(values);
         }
     };
@@ -380,41 +405,75 @@ function CredentialsStep({
                 </div>
             )}
 
-            <div className="space-y-4">
-                {requiredFields.map((field) => {
-                    const def = fieldDefs[field] || {};
-                    const label = def.label || field;
-                    const description = def.description || "";
-                    const placeholder = def.placeholder || "";
-                    const inputType =
-                        def.type === "password" ? "password" : def.type === "url" ? "url" : "text";
-
-                    return (
-                        <div key={field} className="space-y-1.5">
-                            <Label htmlFor={`wizard-${field}`}>{label}</Label>
-                            <Input
-                                id={`wizard-${field}`}
-                                type={inputType}
-                                placeholder={placeholder}
-                                value={values[field] || ""}
-                                onChange={(e) =>
-                                    setValues((prev) => ({
-                                        ...prev,
-                                        [field]: e.target.value
-                                    }))
-                                }
-                                autoComplete="off"
-                                className="font-mono text-sm"
-                            />
-                            {description && (
-                                <p className="text-muted-foreground text-xs">{description}</p>
-                            )}
+            {linkedMatch?.isConnected && (
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 dark:border-emerald-900 dark:bg-emerald-950/30">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <ShieldCheckIcon className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                            <span className="text-sm font-medium text-emerald-700 dark:text-emerald-300">
+                                {linkedMatch.label}
+                            </span>
                         </div>
-                    );
-                })}
-            </div>
+                        <button
+                            type="button"
+                            role="switch"
+                            aria-checked={useLinked}
+                            onClick={() => setUseLinked(!useLinked)}
+                            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:outline-none ${useLinked ? "bg-emerald-500" : "bg-gray-300 dark:bg-gray-600"}`}
+                        >
+                            <span
+                                className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${useLinked ? "translate-x-5" : "translate-x-0"}`}
+                            />
+                        </button>
+                    </div>
+                    <p className="text-muted-foreground mt-1 text-xs">
+                        Your {linkedMatch.providerName} API key will be shared with {provider.name}.
+                        You can turn this off anytime.
+                    </p>
+                </div>
+            )}
 
-            <Button type="submit" className="w-full" size="lg" disabled={!allFilled || connecting}>
+            {!useLinked && (
+                <div className="space-y-4">
+                    {requiredFields.map((field) => {
+                        const def = fieldDefs[field] || {};
+                        const label = def.label || field;
+                        const description = def.description || "";
+                        const placeholder = def.placeholder || "";
+                        const inputType =
+                            def.type === "password"
+                                ? "password"
+                                : def.type === "url"
+                                  ? "url"
+                                  : "text";
+
+                        return (
+                            <div key={field} className="space-y-1.5">
+                                <Label htmlFor={`wizard-${field}`}>{label}</Label>
+                                <Input
+                                    id={`wizard-${field}`}
+                                    type={inputType}
+                                    placeholder={placeholder}
+                                    value={values[field] || ""}
+                                    onChange={(e) =>
+                                        setValues((prev) => ({
+                                            ...prev,
+                                            [field]: e.target.value
+                                        }))
+                                    }
+                                    autoComplete="off"
+                                    className="font-mono text-sm"
+                                />
+                                {description && (
+                                    <p className="text-muted-foreground text-xs">{description}</p>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+
+            <Button type="submit" className="w-full" size="lg" disabled={!canSubmit || connecting}>
                 {connecting ? (
                     <>
                         <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
@@ -562,13 +621,29 @@ function NoAuthConnectStep({
 function SuccessStep({
     provider,
     toolCount,
-    onComplete
+    onComplete,
+    linkedMatch,
+    onEnableLinked
 }: {
     provider: IntegrationProvider;
     toolCount?: number;
     onComplete?: () => void;
+    linkedMatch?: LinkedProviderMatch | null;
+    onEnableLinked?: (fromProviderKey: string, targetProviderKey: string) => void;
 }) {
     const capabilities = getCapabilities(provider);
+    const [linkedEnabled, setLinkedEnabled] = useState(false);
+    const [enablingLinked, setEnablingLinked] = useState(false);
+
+    const showLinkedOffer = linkedMatch && !linkedMatch.isConnected && onEnableLinked;
+
+    const handleEnableLinked = async () => {
+        if (!onEnableLinked || !linkedMatch) return;
+        setEnablingLinked(true);
+        await onEnableLinked(provider.key, linkedMatch.providerKey);
+        setLinkedEnabled(true);
+        setEnablingLinked(false);
+    };
 
     return (
         <div className="space-y-6 text-center">
@@ -593,6 +668,44 @@ function SuccessStep({
                             <span className="capitalize">{cap}</span>
                         </div>
                     ))}
+                </div>
+            )}
+
+            {showLinkedOffer && !linkedEnabled && (
+                <div className="mx-auto max-w-sm rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-left dark:border-blue-900 dark:bg-blue-950/30">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <PlugIcon className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                            <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                                {linkedMatch.label}
+                            </span>
+                        </div>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleEnableLinked}
+                            disabled={enablingLinked}
+                        >
+                            {enablingLinked ? (
+                                <Loader2Icon className="mr-1 h-3 w-3 animate-spin" />
+                            ) : null}
+                            Enable
+                        </Button>
+                    </div>
+                    <p className="text-muted-foreground mt-1 text-xs">
+                        Uses the same API key you just entered. No additional setup needed.
+                    </p>
+                </div>
+            )}
+
+            {linkedEnabled && (
+                <div className="mx-auto max-w-sm rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-left dark:border-emerald-900 dark:bg-emerald-950/30">
+                    <div className="flex items-center gap-2">
+                        <CheckCircle2Icon className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                        <span className="text-sm font-medium text-emerald-700 dark:text-emerald-300">
+                            {linkedMatch!.providerName} also connected!
+                        </span>
+                    </div>
                 </div>
             )}
 
@@ -890,6 +1003,7 @@ export function SetupWizard({
     const [testing, setTesting] = useState(false);
     const [testResult, setTestResult] = useState<string | null>(null);
     const [disconnecting, setDisconnecting] = useState(false);
+    const [allProviders, setAllProviders] = useState<IntegrationProvider[]>([]);
 
     const apiBase = getApiBase();
 
@@ -932,6 +1046,26 @@ export function SetupWizard({
         }
     }, [step]);
 
+    const linkedMatch = useMemo<LinkedProviderMatch | null>(() => {
+        if (!provider || allProviders.length === 0) return null;
+        const linked = getLinkedProviders(provider);
+        if (linked.length === 0) return null;
+        for (const link of linked) {
+            const linkedProvider = allProviders.find((p) => p.key === link.providerKey);
+            if (linkedProvider) {
+                const isConnected =
+                    linkedProvider.status === "connected" ||
+                    linkedProvider.connections.some((c) => c.isActive && c.connected);
+                return {
+                    ...link,
+                    providerName: linkedProvider.name,
+                    isConnected
+                };
+            }
+        }
+        return null;
+    }, [provider, allProviders]);
+
     // Load provider data
     useEffect(() => {
         const fetchProvider = async () => {
@@ -942,9 +1076,9 @@ export function SetupWizard({
                     setError(data.error || "Failed to load provider");
                     return;
                 }
-                const match = data.providers?.find(
-                    (p: IntegrationProvider) => p.key === providerKey
-                );
+                const providers = data.providers || [];
+                setAllProviders(providers);
+                const match = providers.find((p: IntegrationProvider) => p.key === providerKey);
                 if (!match) {
                     setError("Integration not found");
                     return;
@@ -1040,6 +1174,49 @@ export function SetupWizard({
         [provider, apiBase]
     );
 
+    // Handle connection by copying credentials from a linked provider
+    const handleConnectLinked = useCallback(
+        async (fromProviderKey: string) => {
+            if (!provider) return;
+            setConnecting(true);
+            setConnectError(null);
+            try {
+                const response = await fetch(`${apiBase}/api/integrations/connections`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        providerKey: provider.key,
+                        name: `${provider.name} Connection`,
+                        scope: "org",
+                        copyFromProviderKey: fromProviderKey
+                    })
+                });
+                const data = await response.json();
+                if (!data.success) {
+                    setConnectError(data.error || "Failed to create connection");
+                    setStep("error");
+                    return;
+                }
+
+                if (data.connection?.id) {
+                    const testRes = await fetch(
+                        `${apiBase}/api/integrations/connections/${data.connection.id}/test`,
+                        { method: "POST" }
+                    );
+                    const testData = await testRes.json();
+                    setToolCount(testData.toolCount);
+                }
+                setStep("success");
+            } catch (err) {
+                setConnectError(err instanceof Error ? err.message : "Failed to connect");
+                setStep("error");
+            } finally {
+                setConnecting(false);
+            }
+        },
+        [provider, apiBase]
+    );
+
     // Handle No-Auth connection
     const handleNoAuthConnect = useCallback(async () => {
         if (!provider) return;
@@ -1116,6 +1293,31 @@ export function SetupWizard({
             setDisconnecting(false);
         }
     }, [provider, apiBase]);
+
+    // Handle enabling a linked provider from the success screen
+    const handleEnableLinkedProvider = useCallback(
+        async (fromProviderKey: string, targetProviderKey: string) => {
+            try {
+                const response = await fetch(`${apiBase}/api/integrations/connections`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        providerKey: targetProviderKey,
+                        name: `${targetProviderKey} Connection`,
+                        scope: "org",
+                        copyFromProviderKey: fromProviderKey
+                    })
+                });
+                const data = await response.json();
+                if (!data.success) {
+                    console.warn("Failed to enable linked provider:", data.error);
+                }
+            } catch (err) {
+                console.warn("Failed to enable linked provider:", err);
+            }
+        },
+        [apiBase]
+    );
 
     // Handle standalone OAuth (Microsoft, Dropbox) via their start endpoint
     const handleStandaloneOAuth = useCallback(() => {
@@ -1256,8 +1458,10 @@ export function SetupWizard({
                                     <CredentialsStep
                                         provider={provider}
                                         onConnect={handleApiKeyConnect}
+                                        onConnectLinked={handleConnectLinked}
                                         connecting={connecting}
                                         error={connectError}
+                                        linkedMatch={linkedMatch}
                                     />
                                 )}
 
@@ -1344,6 +1548,8 @@ export function SetupWizard({
                                         provider={provider}
                                         toolCount={toolCount}
                                         onComplete={embedded ? onComplete : undefined}
+                                        linkedMatch={linkedMatch}
+                                        onEnableLinked={handleEnableLinkedProvider}
                                     />
                                 )}
                             </CardContent>

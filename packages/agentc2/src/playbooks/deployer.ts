@@ -30,16 +30,37 @@ function generateUniqueName(baseName: string, existingNames: Set<string>): strin
 /**
  * Recursively walk a workflow definitionJson and remap slug references
  * so deployed workflows point to deployed agents/workflows instead of
- * the publisher's original slugs.
+ * the publisher's original slugs. Also hydrates sanitizer placeholders
+ * like {{ORGANIZATION_ID}} with the target org/workspace IDs.
  */
 function remapDefinitionSlugs(
     definition: unknown,
     agentSlugMap: Map<string, string>,
-    workflowSlugMap: Map<string, string>
+    workflowSlugMap: Map<string, string>,
+    targetOrgId?: string,
+    targetWorkspaceId?: string
 ): unknown {
     if (definition === null || definition === undefined) return definition;
+    if (typeof definition === "string") {
+        let result = definition;
+        if (targetOrgId) {
+            result = result.replaceAll("{{ORGANIZATION_ID}}", targetOrgId);
+        }
+        if (targetWorkspaceId) {
+            result = result.replaceAll("{{WORKSPACE_ID}}", targetWorkspaceId);
+        }
+        return result;
+    }
     if (Array.isArray(definition)) {
-        return definition.map((item) => remapDefinitionSlugs(item, agentSlugMap, workflowSlugMap));
+        return definition.map((item) =>
+            remapDefinitionSlugs(
+                item,
+                agentSlugMap,
+                workflowSlugMap,
+                targetOrgId,
+                targetWorkspaceId
+            )
+        );
     }
     if (typeof definition === "object") {
         const obj = definition as Record<string, unknown>;
@@ -50,7 +71,13 @@ function remapDefinitionSlugs(
             } else if (key === "workflowId" && typeof value === "string") {
                 result[key] = workflowSlugMap.get(value) ?? value;
             } else {
-                result[key] = remapDefinitionSlugs(value, agentSlugMap, workflowSlugMap);
+                result[key] = remapDefinitionSlugs(
+                    value,
+                    agentSlugMap,
+                    workflowSlugMap,
+                    targetOrgId,
+                    targetWorkspaceId
+                );
             }
         }
         return result;
@@ -378,7 +405,9 @@ export async function deployPlaybook(opts: DeployPlaybookOptions) {
             const remappedDefinition = remapDefinitionSlugs(
                 wfSnapshot.definitionJson,
                 agentSlugMap,
-                workflowSlugMap
+                workflowSlugMap,
+                opts.targetOrgId,
+                opts.targetWorkspaceId
             );
             const wf = await prisma.workflow.create({
                 data: {
