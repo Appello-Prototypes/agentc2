@@ -39,9 +39,34 @@ export const networkCreateSchema = z.object({
         .regex(/^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$/)
         .optional(),
     description: z.string().max(2000).optional(),
+    instructions: z.string().min(1).max(100000),
+    modelProvider: z.enum([
+        "openai",
+        "anthropic",
+        "google",
+        "groq",
+        "mistral",
+        "xai",
+        "deepseek",
+        "togetherai",
+        "fireworks",
+        "openrouter",
+        "kimi"
+    ]),
+    modelName: z.string().min(1).max(255),
+    temperature: z.number().min(0).max(2).optional(),
+    maxSteps: z.number().int().min(1).max(500).optional(),
     topologyJson: networkTopologySchema,
+    primitives: z.array(z.record(z.unknown())).optional(),
+    memoryConfig: z.record(z.unknown()).optional(),
     routingStrategy: z.enum(["sequential", "parallel", "conditional", "custom"]).optional(),
-    isActive: z.boolean().optional()
+    isPublished: z.boolean().optional(),
+    isActive: z.boolean().optional(),
+    workspaceId: z.string().optional(),
+    ownerId: z.string().optional(),
+    type: z.enum(["USER"]).optional(),
+    versionDescription: z.string().optional(),
+    createdBy: z.string().optional().nullable()
 });
 
 export const networkUpdateSchema = networkCreateSchema.partial();

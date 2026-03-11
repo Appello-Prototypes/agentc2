@@ -12,6 +12,8 @@
     "./agents": "./src/agents/index.ts",
     "./agents/model-registry": "./src/agents/model-registry.ts",
     "./agents/model-params": "./src/agents/model-params.ts",
+    "./schemas/agent": "./src/schemas/agent.ts",
+    "./schemas/network": "./src/schemas/network.ts",
     "./tools": "./src/tools/index.ts",
     "./tools/outlook-mail": "./src/tools/outlook-mail.ts",
     "./tools/outlook-calendar": "./src/tools/outlook-calendar.ts",
