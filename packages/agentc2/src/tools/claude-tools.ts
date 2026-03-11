@@ -166,8 +166,7 @@ export const claudeLaunchAgentTool = createTool({
                 prompt,
                 options: {
                     allowedTools: ["Read", "Edit", "Write", "Bash", "Glob", "Grep"],
-                    permissionMode: "bypassPermissions",
-                    allowDangerouslySkipPermissions: true,
+                    permissionMode: "acceptEdits",
                     cwd: repoDir,
                     maxTurns: 50,
                     env: {
