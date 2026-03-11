@@ -218,8 +218,9 @@ describe("End-to-End Journey: Free Playbook (US-085)", () => {
                 await import("../../../apps/agent/src/app/api/playbooks/[slug]/reviews/route");
 
             prismaMock.playbook.findUnique.mockResolvedValue(mockPublishedPlaybook as never);
-            prismaMock.playbookInstallation.findUnique.mockResolvedValue({
+            prismaMock.playbookInstallation.findFirst.mockResolvedValue({
                 ...mockPlaybookInstallation,
+                targetOrgId: "org-buyer-uuid",
                 status: "ACTIVE"
             } as never);
             prismaMock.playbookReview.upsert.mockResolvedValue(mockPlaybookReview as never);
@@ -276,10 +277,19 @@ describe("End-to-End Journey: Error Paths", () => {
 
     describe("Invalid status transitions (US-089)", () => {
         it("should reject DRAFT -> PUBLISHED", async () => {
-            await setAuthContext("admin-user", "org-publisher-uuid");
+            await setAuthContext("admin-user", "platform-org-uuid");
             const { PATCH } =
                 await import("../../../apps/agent/src/app/api/admin/playbooks/[id]/status/route");
 
+            prismaMock.organization.findUnique.mockResolvedValue({
+                id: "platform-org-uuid",
+                slug: "agentc2"
+            } as never);
+            prismaMock.membership.findUnique.mockResolvedValue({
+                userId: "admin-user",
+                organizationId: "platform-org-uuid",
+                role: "admin"
+            } as never);
             prismaMock.playbook.findUnique.mockResolvedValue({
                 ...mockPlaybook,
                 status: "DRAFT"
@@ -297,10 +307,19 @@ describe("End-to-End Journey: Error Paths", () => {
         });
 
         it("should reject PUBLISHED -> DRAFT", async () => {
-            await setAuthContext("admin-user", "org-publisher-uuid");
+            await setAuthContext("admin-user", "platform-org-uuid");
             const { PATCH } =
                 await import("../../../apps/agent/src/app/api/admin/playbooks/[id]/status/route");
 
+            prismaMock.organization.findUnique.mockResolvedValue({
+                id: "platform-org-uuid",
+                slug: "agentc2"
+            } as never);
+            prismaMock.membership.findUnique.mockResolvedValue({
+                userId: "admin-user",
+                organizationId: "platform-org-uuid",
+                role: "admin"
+            } as never);
             prismaMock.playbook.findUnique.mockResolvedValue({
                 ...mockPlaybook,
                 status: "PUBLISHED"
@@ -318,10 +337,19 @@ describe("End-to-End Journey: Error Paths", () => {
         });
 
         it("should allow PENDING_REVIEW -> PUBLISHED", async () => {
-            await setAuthContext("admin-user", "org-publisher-uuid");
+            await setAuthContext("admin-user", "platform-org-uuid");
             const { PATCH } =
                 await import("../../../apps/agent/src/app/api/admin/playbooks/[id]/status/route");
 
+            prismaMock.organization.findUnique.mockResolvedValue({
+                id: "platform-org-uuid",
+                slug: "agentc2"
+            } as never);
+            prismaMock.membership.findUnique.mockResolvedValue({
+                userId: "admin-user",
+                organizationId: "platform-org-uuid",
+                role: "admin"
+            } as never);
             prismaMock.playbook.findUnique.mockResolvedValue({
                 ...mockPlaybook,
                 status: "PENDING_REVIEW"
