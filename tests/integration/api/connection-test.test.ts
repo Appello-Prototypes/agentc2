@@ -4,8 +4,7 @@ import type { PrismaClient } from "@prisma/client";
 import { createMockParams, createMockRequest, parseResponse } from "../../utils/api-helpers";
 
 const prismaMock = mockDeep<PrismaClient>();
-const getSessionMock = vi.fn();
-const getUserOrganizationIdMock = vi.fn();
+const authenticateRequestMock = vi.fn();
 const testMcpServerMock = vi.fn();
 
 vi.mock("@repo/database", () => ({
@@ -16,16 +15,8 @@ vi.mock("@repo/database", () => ({
     }
 }));
 
-vi.mock("@repo/auth", () => ({
-    auth: {
-        api: {
-            getSession: getSessionMock
-        }
-    }
-}));
-
-vi.mock("@/lib/organization", () => ({
-    getUserOrganizationId: getUserOrganizationIdMock
+vi.mock("@/lib/api-auth", () => ({
+    authenticateRequest: (...args: unknown[]) => authenticateRequestMock(...args)
 }));
 
 vi.mock("@repo/agentc2/mcp", () => ({
@@ -36,14 +27,13 @@ describe("Integration connection test API", () => {
     beforeEach(() => {
         mockReset(prismaMock);
         vi.clearAllMocks();
-        getSessionMock.mockResolvedValue({ user: { id: "user-1" } });
-        getUserOrganizationIdMock.mockResolvedValue("org-1");
+        authenticateRequestMock.mockResolvedValue({ userId: "user-1", organizationId: "org-1" });
     });
 
     it("returns 401 when unauthorized", async () => {
         const { POST } =
             await import("../../../apps/agent/src/app/api/integrations/connections/[connectionId]/test/route");
-        getSessionMock.mockResolvedValue(null);
+        authenticateRequestMock.mockResolvedValue(null);
         const response = await POST(
             createMockRequest("http://localhost/api/integrations/connections/conn-1/test", {
                 method: "POST"
@@ -57,7 +47,7 @@ describe("Integration connection test API", () => {
     it("returns 403 when organization is missing", async () => {
         const { POST } =
             await import("../../../apps/agent/src/app/api/integrations/connections/[connectionId]/test/route");
-        getUserOrganizationIdMock.mockResolvedValue(null);
+        authenticateRequestMock.mockResolvedValue(null);
         const response = await POST(
             createMockRequest("http://localhost/api/integrations/connections/conn-1/test", {
                 method: "POST"
@@ -65,7 +55,7 @@ describe("Integration connection test API", () => {
             { params: createMockParams({ connectionId: "conn-1" }) }
         );
         const result = await parseResponse(response);
-        expect(result.status).toBe(403);
+        expect(result.status).toBe(401);
     });
 
     it("returns 404 when connection is not found", async () => {
