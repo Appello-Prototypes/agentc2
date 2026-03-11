@@ -26,9 +26,13 @@ export function TimezoneProvider({ children }: { children: React.ReactNode }) {
         let cancelled = false;
 
         async function fetchTimezone() {
+            if (!document.cookie.includes("better-auth.session_token")) {
+                if (!cancelled) setState((prev) => ({ ...prev, loading: false }));
+                return;
+            }
             try {
                 const res = await fetch(`${getApiBase()}/api/user/timezone`);
-                if (!res.ok) throw new Error("Failed to fetch timezone");
+                if (!res.ok) return;
                 const data = await res.json();
                 if (!cancelled && data.success) {
                     setState({
@@ -38,6 +42,8 @@ export function TimezoneProvider({ children }: { children: React.ReactNode }) {
                     });
                 }
             } catch {
+                // Silently fail — browser timezone is already set as default
+            } finally {
                 if (!cancelled) {
                     setState((prev) => ({ ...prev, loading: false }));
                 }

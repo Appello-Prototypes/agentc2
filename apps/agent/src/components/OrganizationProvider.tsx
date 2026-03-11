@@ -36,9 +36,13 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
         let cancelled = false;
 
         async function fetchOrgs() {
+            if (!document.cookie.includes("better-auth.session_token")) {
+                if (!cancelled) setLoading(false);
+                return;
+            }
             try {
                 const res = await fetch("/api/organizations/switch");
-                if (!res.ok) throw new Error("Failed to fetch organizations");
+                if (!res.ok) return;
                 const data = await res.json();
                 if (!cancelled && data.success) {
                     setActiveOrganization(data.activeOrganization);
