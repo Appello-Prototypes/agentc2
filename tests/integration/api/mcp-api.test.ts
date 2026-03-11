@@ -75,6 +75,14 @@ describe("MCP Gateway API", () => {
 
     it("should list active workflow and network tools", async () => {
         const { GET } = await import("../../../apps/agent/src/app/api/mcp/route");
+        const mockWorkspace = {
+            slug: "default",
+            environment: "development",
+            organization: {
+                slug: "test-org",
+                name: "Test Organization"
+            }
+        };
         prismaMock.agentInstance.findMany.mockResolvedValue([] as never);
         prismaMock.agent.findMany.mockResolvedValue([
             {
@@ -89,7 +97,7 @@ describe("MCP Gateway API", () => {
                 maxSteps: 5,
                 requiresApproval: false,
                 version: 1,
-                workspace: null
+                workspace: mockWorkspace
             }
         ] as never);
         prismaMock.workflow.findMany.mockResolvedValue([
@@ -110,7 +118,7 @@ describe("MCP Gateway API", () => {
                     type: "object",
                     properties: { result: { type: "string" } }
                 },
-                workspace: null
+                workspace: mockWorkspace
             }
         ] as never);
         prismaMock.network.findMany.mockResolvedValue([
@@ -123,7 +131,7 @@ describe("MCP Gateway API", () => {
                 isActive: true,
                 isPublished: false,
                 maxSteps: 10,
-                workspace: null
+                workspace: mockWorkspace
             }
         ] as never);
 
