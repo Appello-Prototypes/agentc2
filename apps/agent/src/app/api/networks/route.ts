@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@repo/database";
+import { prisma, Prisma } from "@repo/database";
 import { validateModelSelection } from "@repo/agentc2/agents";
 import type { ModelProvider } from "@repo/agentc2/agents";
 import { buildNetworkTopologyFromPrimitives, isNetworkTopologyEmpty } from "@repo/agentc2/networks";
 import { authenticateRequest } from "@/lib/api-auth";
 import { requireEntityAccess } from "@/lib/authz/require-entity-access";
+import { networkCreateSchema } from "@repo/agentc2/schemas/network";
 
 function generateSlug(name: string): string {
     return name
@@ -67,22 +68,31 @@ export async function POST(request: NextRequest) {
         if (!access.allowed) return access.response;
 
         const body = await request.json();
-        const { name, slug, description } = body;
 
-        if (!name || !body.instructions || !body.modelProvider || !body.modelName) {
+        // Validate request body with Zod schema
+        const validation = networkCreateSchema.safeParse(body);
+        if (!validation.success) {
             return NextResponse.json(
                 {
                     success: false,
-                    error: "Missing required fields: name, instructions, modelProvider, modelName"
+                    error: "Validation failed",
+                    details: validation.error.issues.map(
+                        (issue: { path: (string | number)[]; message: string }) => ({
+                            field: issue.path.join("."),
+                            message: issue.message
+                        })
+                    )
                 },
                 { status: 400 }
             );
         }
+        const validatedData = validation.data;
+        const { name, slug, description } = validatedData;
 
         // Validate model exists for the provider
         const modelValidation = await validateModelSelection(
-            body.modelProvider as ModelProvider,
-            body.modelName,
+            validatedData.modelProvider as ModelProvider,
+            validatedData.modelName,
             authContext.organizationId
         );
         if (!modelValidation.valid) {
@@ -188,6 +198,24 @@ export async function POST(request: NextRequest) {
         });
     } catch (error) {
         console.error("[Network Create] Error:", error);
+
+        // Handle Prisma-specific errors
+        if (error instanceof Prisma.PrismaClientKnownRequestError) {
+            if (error.code === "P2011") {
+                return NextResponse.json(
+                    { success: false, error: "Required field is null or missing" },
+                    { status: 400 }
+                );
+            }
+            if (error.code === "P2002") {
+                return NextResponse.json(
+                    { success: false, error: "A record with this identifier already exists" },
+                    { status: 409 }
+                );
+            }
+        }
+
+        // Generic error (no sensitive details)
         return NextResponse.json(
             { success: false, error: "Failed to create network" },
             { status: 500 }

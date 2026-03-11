@@ -14,6 +14,7 @@ import { authenticateRequest } from "@/lib/api-auth";
 import { requireEntityAccess } from "@/lib/authz/require-entity-access";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { RATE_LIMIT_POLICIES } from "@/lib/security/rate-limit-policy";
+import { agentCreateSchema } from "@repo/agentc2/schemas/agent";
 
 /**
  * Generate a URL-safe slug from a name
@@ -286,17 +287,25 @@ export async function POST(request: NextRequest) {
             }
         }
 
-        // Validate required fields
-        const { name, instructions, modelProvider, modelName } = body;
-        if (!name || !instructions || !modelProvider || !modelName) {
+        // Validate request body with Zod schema
+        const validation = agentCreateSchema.safeParse(body);
+        if (!validation.success) {
             return NextResponse.json(
                 {
                     success: false,
-                    error: "Missing required fields: name, instructions, modelProvider, modelName"
+                    error: "Validation failed",
+                    details: validation.error.issues.map(
+                        (issue: { path: (string | number)[]; message: string }) => ({
+                            field: issue.path.join("."),
+                            message: issue.message
+                        })
+                    )
                 },
                 { status: 400 }
             );
         }
+        const validatedData = validation.data;
+        const { name, instructions, modelProvider, modelName } = validatedData;
 
         // Validate model exists for the provider
         const modelValidation = await validateModelSelection(
@@ -477,6 +486,24 @@ export async function POST(request: NextRequest) {
         });
     } catch (error) {
         console.error("[Agents Create] Error:", error);
+
+        // Handle Prisma-specific errors
+        if (error instanceof Prisma.PrismaClientKnownRequestError) {
+            if (error.code === "P2011") {
+                return NextResponse.json(
+                    { success: false, error: "Required field is null or missing" },
+                    { status: 400 }
+                );
+            }
+            if (error.code === "P2002") {
+                return NextResponse.json(
+                    { success: false, error: "A record with this identifier already exists" },
+                    { status: 409 }
+                );
+            }
+        }
+
+        // Generic error (no sensitive details)
         return NextResponse.json(
             {
                 success: false,

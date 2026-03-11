@@ -573,3 +573,15 @@ export type {
 // Re-export useful types from @mastra/core
 export type { Agent } from "@mastra/core/agent";
 export type { Mastra } from "@mastra/core/mastra";
+
+// Validation schemas
+export {
+    agentCreateSchema,
+    agentUpdateSchema,
+    agentConfigSchema,
+    modelConfigSchema,
+    memoryConfigSchema,
+    routingConfigSchema,
+    contextConfigSchema
+} from "./schemas/agent";
+export { networkCreateSchema, networkUpdateSchema, networkTopologySchema } from "./schemas/network";

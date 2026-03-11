@@ -39,9 +39,17 @@ export const networkCreateSchema = z.object({
         .regex(/^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$/)
         .optional(),
     description: z.string().max(2000).optional(),
+    instructions: z.string().max(100000),
+    modelProvider: z.enum(["openai", "anthropic"]),
+    modelName: z.string().min(1).max(255),
+    temperature: z.number().min(0).max(2).optional(),
     topologyJson: networkTopologySchema,
     routingStrategy: z.enum(["sequential", "parallel", "conditional", "custom"]).optional(),
-    isActive: z.boolean().optional()
+    memoryConfig: z.record(z.unknown()).optional(),
+    maxSteps: z.number().int().min(1).max(500).optional(),
+    isPublished: z.boolean().optional(),
+    isActive: z.boolean().optional(),
+    primitives: z.array(z.record(z.unknown())).optional()
 });
 
 export const networkUpdateSchema = networkCreateSchema.partial();

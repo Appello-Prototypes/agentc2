@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@repo/database";
+import { prisma, Prisma } from "@repo/database";
 import { validateModelSelection } from "@repo/agentc2/agents";
 import type { ModelProvider } from "@repo/agentc2/agents";
 import { recordActivity } from "@repo/agentc2/activity/service";
@@ -175,8 +175,10 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         if (body.instructions !== undefined) updateData.instructions = body.instructions;
         if (body.instructionsTemplate !== undefined)
             updateData.instructionsTemplate = body.instructionsTemplate;
-        if (body.modelProvider !== undefined) updateData.modelProvider = body.modelProvider;
-        if (body.modelName !== undefined) updateData.modelName = body.modelName;
+        if (body.modelProvider !== undefined && body.modelProvider !== null)
+            updateData.modelProvider = body.modelProvider;
+        if (body.modelName !== undefined && body.modelName !== null)
+            updateData.modelName = body.modelName;
 
         // Validate model when provider or model name is being changed
         const effectiveProvider = (body.modelProvider ?? existing.modelProvider) as string;
@@ -627,6 +629,24 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         });
     } catch (error) {
         console.error("[Agent Update] Error:", error);
+
+        // Handle Prisma-specific errors
+        if (error instanceof Prisma.PrismaClientKnownRequestError) {
+            if (error.code === "P2011") {
+                return NextResponse.json(
+                    { success: false, error: "Required field is null or missing" },
+                    { status: 400 }
+                );
+            }
+            if (error.code === "P2002") {
+                return NextResponse.json(
+                    { success: false, error: "A record with this identifier already exists" },
+                    { status: 409 }
+                );
+            }
+        }
+
+        // Generic error (no sensitive details)
         return NextResponse.json(
             {
                 success: false,
