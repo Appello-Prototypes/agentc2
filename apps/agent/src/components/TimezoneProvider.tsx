@@ -26,7 +26,7 @@ export function TimezoneProvider({ children }: { children: React.ReactNode }) {
         let cancelled = false;
 
         async function fetchTimezone() {
-            if (!document.cookie.includes("better-auth.session_token")) {
+            if (!document.cookie.includes("better-auth.session_data")) {
                 if (!cancelled) setState((prev) => ({ ...prev, loading: false }));
                 return;
             }

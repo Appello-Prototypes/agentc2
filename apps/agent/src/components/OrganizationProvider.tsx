@@ -36,7 +36,7 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
         let cancelled = false;
 
         async function fetchOrgs() {
-            if (!document.cookie.includes("better-auth.session_token")) {
+            if (!document.cookie.includes("better-auth.session_data")) {
                 if (!cancelled) setLoading(false);
                 return;
             }
