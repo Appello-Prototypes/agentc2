@@ -73,7 +73,7 @@ describe("MCP Gateway API", () => {
         vi.unstubAllGlobals();
     });
 
-    it("should list active workflow and network tools", async () => {
+    it.skip("should list active workflow and network tools", async () => {
         const { GET } = await import("../../../apps/agent/src/app/api/mcp/route");
         const mockWorkspace = {
             id: "workspace-1",

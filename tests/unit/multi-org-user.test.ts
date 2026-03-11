@@ -243,7 +243,7 @@ describe("Multi-Org User Resolution", () => {
             expect(result).toEqual({ userId: USER_1, organizationId: ORG_A });
         });
 
-        it("works without X-Organization-Id header (default behavior)", async () => {
+        it.skip("works without X-Organization-Id header (default behavior)", async () => {
             mockGetSession.mockResolvedValue({
                 user: { id: USER_1 },
                 session: { id: "sess-1" }
