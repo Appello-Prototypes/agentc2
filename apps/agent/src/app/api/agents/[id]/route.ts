@@ -183,7 +183,10 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         // Validate model when provider or model name is being changed
         const effectiveProvider = (body.modelProvider ?? existing.modelProvider) as string;
         const effectiveModel = (body.modelName ?? existing.modelName) as string;
-        if (body.modelProvider !== undefined || body.modelName !== undefined) {
+        if (
+            (body.modelProvider !== undefined && body.modelProvider !== null) ||
+            (body.modelName !== undefined && body.modelName !== null)
+        ) {
             const modelValidation = await validateModelSelection(
                 effectiveProvider as ModelProvider,
                 effectiveModel,
@@ -341,10 +344,18 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         if (body.instructions !== undefined && body.instructions !== existing.instructions) {
             changes.push("Updated instructions");
         }
-        if (body.modelProvider !== undefined && body.modelProvider !== existing.modelProvider) {
+        if (
+            body.modelProvider !== undefined &&
+            body.modelProvider !== null &&
+            body.modelProvider !== existing.modelProvider
+        ) {
             changes.push(`Provider: ${existing.modelProvider} → ${body.modelProvider}`);
         }
-        if (body.modelName !== undefined && body.modelName !== existing.modelName) {
+        if (
+            body.modelName !== undefined &&
+            body.modelName !== null &&
+            body.modelName !== existing.modelName
+        ) {
             changes.push(`Model: ${existing.modelName} → ${body.modelName}`);
         }
         if (body.temperature !== undefined && body.temperature !== existing.temperature) {
