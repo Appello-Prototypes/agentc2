@@ -11,7 +11,7 @@
 
 ## ⚠️ Design Corrections (2026-03-12)
 
-This design was reviewed by Cursor Bugbot and two critical issues were identified and fixed:
+This design was reviewed by Cursor Bugbot over multiple iterations. Four critical issues were identified and fixed:
 
 ### Issue 1: Circuit Breaker Never Opens (High Severity) ✅ FIXED
 **Problem**: Original design had retry wrapper catch all errors and return `{ error: "..." }` without re-throwing. Circuit breaker only records failures when wrapped function throws, so it would never open.
@@ -19,7 +19,7 @@ This design was reviewed by Cursor Bugbot and two critical issues were identifie
 **Fix**: 
 - Retry wrapper now re-throws errors after retries are exhausted (for thrown errors)
 - Retry wrapper handles both thrown errors and `{ error }` return patterns (from permission guard)
-- Circuit breaker checks circuit state before execution and manually tracks failures for both patterns
+- Circuit breaker uses public `breaker.execute()` API with throwingWrapper pattern
 - Permission blocks (`[TOOL BLOCKED]`) are excluded from circuit failure tracking
 
 ### Issue 2: Retry-After Header Support Inoperative (Medium Severity) ✅ FIXED
@@ -31,7 +31,27 @@ This design was reviewed by Cursor Bugbot and two critical issues were identifie
 - Respects Retry-After for rate limits, falls back to exponential backoff otherwise
 - Maintains full control over delay calculation
 
-**Architecture Decision**: Wrapper order is Permission → Retry → Health → Circuit (innermost to outermost). Retry and circuit wrappers both handle the `{ error }` return pattern from permission guard to ensure proper failure tracking.
+### Issue 3: Circuit Breaker Accessing Private Methods (High Severity) ✅ FIXED
+**Problem**: Second design iteration used `breaker["onFailure"]?.()` to manually trigger circuit tracking, bypassing TypeScript access control and relying on internal implementation details.
+
+**Fix**:
+- Circuit wrapper now uses public `breaker.execute()` API exclusively
+- Converts `{ error }` returns to thrown errors temporarily via throwingWrapper
+- Lets breaker.execute() handle all success/failure tracking via public API
+- Converts errors back to `{ error }` returns after circuit tracking completes
+- No access to private methods; fully uses public API contract
+
+### Issue 4: Synthetic Errors Lose Classification Context (High Severity) ✅ FIXED
+**Problem**: Creating `new Error(result.error)` from `{ error }` returns lost HTTP status codes and other metadata, causing classifier to fall through to "unknown" with `isRetryable: false`.
+
+**Fix**:
+- Enhanced `classifyToolError()` with pattern-based classification
+- Matches error message strings against known patterns (rate limit, transient, auth, validation, not found)
+- Handles both structured errors (with status codes) and string-only errors
+- Retry wrapper passes `{ error }` objects directly to classifier without synthetic Error creation
+- Comprehensive pattern matching ensures proper classification even without HTTP context
+
+**Architecture Decision**: Wrapper order is Permission → Retry → Health → Circuit (innermost to outermost). Both retry and circuit wrappers handle the `{ error }` return pattern from permission guard. Circuit wrapper temporarily converts to thrown errors for tracking, then converts back.
 
 ---
 
@@ -236,7 +256,7 @@ export interface ClassifiedError {
 }
 
 export function classifyToolError(error: unknown): ClassifiedError {
-    // HTTP status code detection
+    // HTTP status code detection (from actual error objects)
     if (hasStatusCode(error)) {
         const status = getStatusCode(error);
         
@@ -297,43 +317,111 @@ export function classifyToolError(error: unknown): ClassifiedError {
         }
     }
     
-    // Network errors (retryable)
+    // Extract error message for pattern matching
+    let errorMessage = "";
     if (error instanceof Error) {
-        const msg = error.message.toLowerCase();
-        const networkPatterns = [
-            "econnreset", "econnrefused", "etimedout",
-            "socket hang up", "epipe", "enetunreach",
-            "network error", "fetch failed", "timeout"
-        ];
-        
-        if (networkPatterns.some(p => msg.includes(p))) {
-            return {
-                category: "transient",
-                isRetryable: true,
-                message: "Network error",
-                originalError: error
-            };
-        }
+        errorMessage = error.message;
+    } else if (error && typeof error === "object" && "error" in error) {
+        errorMessage = String((error as any).error);
+    } else {
+        errorMessage = String(error);
     }
     
+    const msgLower = errorMessage.toLowerCase();
+    
     // Permission guard errors (not retryable at tool level)
-    if (error && typeof error === "object" && "error" in error) {
-        const errStr = String(error.error);
-        if (errStr.includes("[TOOL BLOCKED]")) {
-            return {
-                category: "permission",
-                isRetryable: false,
-                message: errStr,
-                originalError: error
-            };
-        }
+    if (errorMessage.includes("[TOOL BLOCKED]")) {
+        return {
+            category: "permission",
+            isRetryable: false,
+            message: errorMessage,
+            originalError: error
+        };
+    }
+    
+    // Pattern-based classification for string error messages
+    // This handles { error: "..." } returns that lost HTTP context
+    
+    // Rate limit patterns
+    const rateLimitPatterns = [
+        "rate limit", "too many requests", "quota exceeded",
+        "throttle", "429", "rate-limited"
+    ];
+    if (rateLimitPatterns.some(p => msgLower.includes(p))) {
+        return {
+            category: "rate_limit",
+            isRetryable: true,
+            retryAfterMs: 60000, // Default 60s (no Retry-After header available)
+            message: errorMessage,
+            originalError: error
+        };
+    }
+    
+    // Transient error patterns
+    const transientPatterns = [
+        "service unavailable", "temporarily unavailable", "503", "502", "504",
+        "gateway timeout", "bad gateway", "connection timeout",
+        "econnreset", "econnrefused", "etimedout",
+        "socket hang up", "epipe", "enetunreach",
+        "network error", "fetch failed", "timeout exceeded"
+    ];
+    if (transientPatterns.some(p => msgLower.includes(p))) {
+        return {
+            category: "transient",
+            isRetryable: true,
+            message: errorMessage,
+            originalError: error
+        };
+    }
+    
+    // Auth error patterns
+    const authPatterns = [
+        "unauthorized", "forbidden", "401", "403",
+        "invalid api key", "invalid token", "authentication failed",
+        "access denied", "invalid credentials"
+    ];
+    if (authPatterns.some(p => msgLower.includes(p))) {
+        return {
+            category: "auth",
+            isRetryable: false,
+            message: errorMessage,
+            originalError: error
+        };
+    }
+    
+    // Validation error patterns
+    const validationPatterns = [
+        "invalid request", "bad request", "400",
+        "validation error", "invalid parameter", "missing required",
+        "schema mismatch", "invalid input"
+    ];
+    if (validationPatterns.some(p => msgLower.includes(p))) {
+        return {
+            category: "validation",
+            isRetryable: false,
+            message: errorMessage,
+            originalError: error
+        };
+    }
+    
+    // Not found patterns
+    const notFoundPatterns = [
+        "not found", "404", "does not exist", "resource not found"
+    ];
+    if (notFoundPatterns.some(p => msgLower.includes(p))) {
+        return {
+            category: "not_found",
+            isRetryable: false,
+            message: errorMessage,
+            originalError: error
+        };
     }
     
     // Unknown error (not retryable by default)
     return {
         category: "unknown",
         isRetryable: false,
-        message: error instanceof Error ? error.message : String(error),
+        message: errorMessage,
         originalError: error
     };
 }
@@ -406,8 +494,9 @@ export function wrapToolWithRetry(
                     }
                     
                     // Treat other { error } returns as failures
-                    const syntheticError = new Error(result.error);
-                    lastClassifiedError = classifyToolError(syntheticError);
+                    // Classify the result object directly (not a synthetic Error)
+                    // The classifier now handles { error: "..." } pattern matching
+                    lastClassifiedError = classifyToolError(result);
                     
                     // Check if retryable
                     if (!lastClassifiedError.isRetryable) {
@@ -750,7 +839,7 @@ export function wrapToolWithCircuitBreaker(
     const originalExecute = tool.execute.bind(tool);
     
     tool.execute = async (context: any) => {
-        // Check circuit state before executing
+        // Check circuit state before executing (early exit for OPEN circuit)
         const state = breaker.getState();
         if (state === "OPEN") {
             console.warn(`[ToolCircuit] ${toolId}: Circuit OPEN, rejecting call`);
@@ -759,26 +848,40 @@ export function wrapToolWithCircuitBreaker(
             };
         }
         
-        // Execute and track success/failure
-        try {
+        // Wrapper function that converts { error } returns to thrown errors
+        // This allows breaker.execute() to properly track all failures
+        const throwingWrapper = async () => {
             const result = await originalExecute(context);
             
             // Check if result indicates error (permission guard pattern)
             if (result && typeof result === "object" && "error" in result && typeof result.error === "string") {
-                // Treat { error: "..." } returns as failures for circuit tracking
-                // But DON'T count permission blocks (start with [TOOL BLOCKED])
-                if (!result.error.startsWith("[TOOL BLOCKED]")) {
-                    breaker["onFailure"]?.(); // Manually trigger failure tracking
+                // Permission blocks should NOT trigger circuit breaker
+                if (result.error.startsWith("[TOOL BLOCKED]")) {
+                    return result; // Pass through without throwing
                 }
-                return result;
+                
+                // Convert other { error } returns to thrown errors so circuit can track them
+                const error: any = new Error(result.error);
+                error.isToolErrorResult = true; // Flag to re-convert later
+                error.originalResult = result;
+                throw error;
             }
             
-            // Success - close circuit if in HALF_OPEN
-            breaker["onSuccess"]?.();
             return result;
-        } catch (error) {
-            // Thrown errors are failures
-            breaker["onFailure"]?.();
+        };
+        
+        // Use breaker.execute() to properly track success/failure
+        try {
+            const result = await breaker.execute(throwingWrapper);
+            return result;
+        } catch (error: any) {
+            // Re-convert thrown errors back to { error } returns for LLM consumption
+            // But preserve the circuit breaker's failure tracking
+            if (error.isToolErrorResult && error.originalResult) {
+                return error.originalResult; // Return original { error } format
+            }
+            
+            // Other thrown errors propagate normally
             throw error;
         }
     };
