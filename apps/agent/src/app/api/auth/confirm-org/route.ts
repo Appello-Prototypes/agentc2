@@ -108,6 +108,9 @@ export async function POST(request: NextRequest) {
                 }
             });
 
+            // Sync OAuth credentials (Gmail, Calendar, Drive, Microsoft)
+            await syncOAuthCredentials(session.user.id, organizationId);
+
             return NextResponse.json({
                 success: true,
                 organization: {
@@ -127,6 +130,11 @@ export async function POST(request: NextRequest) {
                 { success: false, error: result.error || "Failed to create organization" },
                 { status: 500 }
             );
+        }
+
+        // Sync OAuth credentials (Gmail, Calendar, Drive, Microsoft)
+        if (result.organization?.id) {
+            await syncOAuthCredentials(session.user.id, result.organization.id);
         }
 
         // Auto-deploy starter kit for the new org
@@ -184,5 +192,43 @@ export async function POST(request: NextRequest) {
             },
             { status: 500 }
         );
+    }
+}
+
+/**
+ * Sync OAuth credentials from Better Auth Account table to IntegrationConnection records.
+ * Handles both Google (Gmail, Calendar, Drive) and Microsoft (Outlook, Calendar) integrations.
+ * Errors are logged but don't block org creation/joining.
+ */
+async function syncOAuthCredentials(userId: string, organizationId: string): Promise<void> {
+    try {
+        const { syncGmailFromAccount } = await import("@/lib/gmail-sync");
+        const { syncMicrosoftFromAccount } = await import("@/lib/microsoft-sync");
+
+        const [gmailResult, msftResult] = await Promise.allSettled([
+            syncGmailFromAccount(userId, organizationId),
+            syncMicrosoftFromAccount(userId, organizationId)
+        ]);
+
+        if (gmailResult.status === "fulfilled" && gmailResult.value.success) {
+            console.log("[Confirm Org] Gmail synced:", gmailResult.value.gmailAddress);
+            const siblings = gmailResult.value.siblingsCreated || [];
+            if (siblings.length > 0) {
+                console.log(
+                    "[Confirm Org] Google sibling connections synced:",
+                    siblings.join(", ")
+                );
+            }
+        } else if (gmailResult.status === "fulfilled" && !gmailResult.value.skipped) {
+            console.warn("[Confirm Org] Gmail sync failed:", gmailResult.value.error);
+        }
+
+        if (msftResult.status === "fulfilled" && msftResult.value.success) {
+            console.log("[Confirm Org] Microsoft synced:", msftResult.value.email);
+        } else if (msftResult.status === "fulfilled" && !msftResult.value.skipped) {
+            console.warn("[Confirm Org] Microsoft sync failed:", msftResult.value.error);
+        }
+    } catch (syncError) {
+        console.error("[Confirm Org] OAuth credential sync failed:", syncError);
     }
 }

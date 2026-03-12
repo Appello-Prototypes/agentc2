@@ -8887,9 +8887,9 @@ export const asyncWorkflowExecuteFunction = inngest.createFunction(
                         const tool = tools[statusToolName];
                         const handler =
                             (tool as { execute?: (...a: unknown[]) => unknown }).execute ||
-                                (tool as { invoke?: (...a: unknown[]) => unknown }).invoke ||
-                                (tool as { run?: (...a: unknown[]) => unknown }).run ||
-                                (tool as (...a: unknown[]) => unknown);
+                            (tool as { invoke?: (...a: unknown[]) => unknown }).invoke ||
+                            (tool as { run?: (...a: unknown[]) => unknown }).run ||
+                            (tool as (...a: unknown[]) => unknown);
                         return handler({ agentId, organizationId });
                     });
 
@@ -8915,7 +8915,7 @@ export const asyncWorkflowExecuteFunction = inngest.createFunction(
                                         const convTool = convTools[convToolName];
                                         const convHandler =
                                             (convTool as { execute?: (...a: unknown[]) => unknown })
-                                            .execute ||
+                                                .execute ||
                                             (convTool as { invoke?: (...a: unknown[]) => unknown })
                                                 .invoke ||
                                             (convTool as { run?: (...a: unknown[]) => unknown })
