@@ -398,6 +398,7 @@ export const inngest = new Inngest({
                 workflowSlug: string;
                 input: Record<string, unknown>;
                 pipelineRunId?: string;
+                organizationId?: string;
             };
         };
         // Dark Factory Pipeline Stats Events

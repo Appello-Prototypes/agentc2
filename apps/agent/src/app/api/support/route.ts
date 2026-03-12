@@ -47,7 +47,12 @@ export async function POST(request: NextRequest) {
         }
     });
 
-    maybeAutoDispatch({ id: ticket.id, title: ticket.title, description: ticket.description, type: ticket.type });
+    maybeAutoDispatch({
+        id: ticket.id,
+        title: ticket.title,
+        description: ticket.description,
+        type: ticket.type
+    });
 
     return NextResponse.json({ success: true, ticket });
 }

@@ -7239,6 +7239,16 @@ export const workflowTriggerFireFunction = inngest.createFunction(
             }
         }
 
+        // Resolve organizationId from the trigger's workspace so downstream
+        // tool steps (e.g. ticket-to-github-issue) can look up DB credentials.
+        const triggerOrgId = await step.run("resolve-org-id", async () => {
+            const ws = await prisma.workspace.findUnique({
+                where: { id: trigger.workspaceId },
+                select: { organizationId: true }
+            });
+            return ws?.organizationId ?? null;
+        });
+
         const runResult = await step.run("create-workflow-run", async () => {
             const workflowRun = await prisma.workflowRun.create({
                 data: {
@@ -7290,7 +7300,8 @@ export const workflowTriggerFireFunction = inngest.createFunction(
                 workflowRunId: runResult.workflowRunId,
                 workflowId: targetWorkflowId,
                 workflowSlug: targetWorkflowSlug,
-                input: mappedInput
+                input: mappedInput,
+                organizationId: triggerOrgId ?? undefined
             }
         });
 
@@ -8582,7 +8593,8 @@ export const asyncWorkflowExecuteFunction = inngest.createFunction(
         // to prevent duplicate side effects (e.g., posting GitHub comments twice).
         const result = await step.run("execute-workflow", async () => {
             const workflow = await prisma.workflow.findUnique({
-                where: { id: workflowId }
+                where: { id: workflowId },
+                include: { workspace: { select: { organizationId: true } } }
             });
 
             if (!workflow) {
@@ -8595,9 +8607,12 @@ export const asyncWorkflowExecuteFunction = inngest.createFunction(
             type WorkflowDefinition = Parameters<typeof executeWorkflowDefinition>[0]["definition"];
             type AgentStepHooks = Parameters<typeof executeWorkflowDefinition>[0]["agentStepHooks"];
 
-            const organizationId = (input as Record<string, unknown>)?.organizationId as
-                | string
-                | undefined;
+            // Resolve organizationId: prefer explicit event data, then input, then workflow's workspace
+            const organizationId =
+                (event.data.organizationId as string | undefined) ||
+                ((input as Record<string, unknown>)?.organizationId as string | undefined) ||
+                workflow.workspace?.organizationId ||
+                undefined;
             const inputObj = input as Record<string, unknown> | undefined;
 
             // --- Retry resilience: load previously completed steps from DB ---

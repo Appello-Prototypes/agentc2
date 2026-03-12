@@ -167,7 +167,8 @@ export async function POST(
                 workflowRunId: workflowRun.id,
                 workflowId: workflow.id,
                 workflowSlug: workflow.slug,
-                input: mappedInput
+                input: mappedInput,
+                organizationId: authContext.organizationId
             }
         });
 

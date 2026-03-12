@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@repo/database";
+import { prisma, type Prisma } from "@repo/database";
 import { requireAdmin, AdminAuthError } from "@repo/admin-auth";
 import {
     ADMIN_SETTING_KEYS,
@@ -12,10 +12,13 @@ import {
  * Dispatches a ticket directly to the configured workflow on the agent app.
  * Uses Inngest for durable execution of long-running workflows.
  * Authenticates with the agent API via MCP_API_KEY + X-Organization-Slug.
+ *
+ * Supports redispatch: if the ticket already has a pipelineRunId, a new
+ * dispatch replaces it and appends to the dispatch history in metadata.
  */
 export async function POST(request: NextRequest) {
     try {
-        await requireAdmin(request, "platform_admin");
+        const admin = await requireAdmin(request, "platform_admin");
 
         const body = await request.json();
         const { sourceType, sourceId, title, description, labels } = body;
@@ -94,8 +97,49 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        const runId = data.runId as string | undefined;
+
+        if (sourceType === "support_ticket" && runId) {
+            try {
+                const ticket = await prisma.supportTicket.findUnique({
+                    where: { id: sourceId },
+                    select: { metadata: true, pipelineRunId: true }
+                });
+
+                const existingMeta = (ticket?.metadata as Record<string, unknown>) ?? {};
+                const dispatches =
+                    (existingMeta.dispatches as Array<Record<string, unknown>>) ?? [];
+
+                if (ticket?.pipelineRunId) {
+                    dispatches.push({
+                        runId: ticket.pipelineRunId,
+                        replacedAt: new Date().toISOString(),
+                        replacedBy: admin.name || admin.email
+                    });
+                }
+
+                await prisma.supportTicket.update({
+                    where: { id: sourceId },
+                    data: {
+                        pipelineRunId: runId,
+                        status: "IN_PROGRESS",
+                        metadata: {
+                            ...existingMeta,
+                            dispatches,
+                            lastDispatchedAt: new Date().toISOString(),
+                            lastDispatchedBy: admin.name || admin.email,
+                            workflowSlug: config.workflowSlug
+                        } as Prisma.InputJsonValue
+                    }
+                });
+            } catch (e) {
+                console.warn("[Admin Dispatch] Failed to update ticket:", e);
+            }
+        }
+
         return NextResponse.json({
             success: true,
+            runId,
             ...data,
             dispatchConfig: {
                 organizationName: config.targetOrganizationName,

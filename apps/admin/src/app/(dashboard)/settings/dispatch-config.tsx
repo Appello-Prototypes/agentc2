@@ -390,8 +390,8 @@ export function DispatchConfigManager() {
                             <div>
                                 <label className="text-sm font-medium">Auto Dispatch</label>
                                 <p className="text-muted-foreground text-xs">
-                                    Automatically triage and dispatch every new ticket to the
-                                    coding pipeline — no manual approval needed.
+                                    Automatically triage and dispatch every new ticket to the coding
+                                    pipeline — no manual approval needed.
                                 </p>
                             </div>
                             <button

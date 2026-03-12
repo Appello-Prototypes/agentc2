@@ -1,8 +1,19 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { X, Plus } from "lucide-react";
+import {
+    X,
+    Plus,
+    RefreshCw,
+    CheckCircle2,
+    XCircle,
+    Clock,
+    Loader2,
+    ChevronDown,
+    ChevronRight,
+    RotateCcw
+} from "lucide-react";
 import { useTimezone } from "@/lib/timezone-context";
 
 interface TriageTicket {
@@ -38,6 +49,43 @@ type DispatchConfig = {
     repository: string;
 };
 
+interface LifecycleStep {
+    stepId: string;
+    stepType: string;
+    stepName: string | null;
+    status: string;
+    durationMs: number | null;
+    startedAt: string | null;
+    completedAt: string | null;
+    error: string | null;
+}
+
+interface LifecycleRun {
+    runId: string;
+    status: string;
+    workflowSlug: string | null;
+    workflowName: string | null;
+    source: string | null;
+    isCurrent: boolean;
+    createdAt: string;
+    completedAt: string | null;
+    durationMs: number | null;
+    errorMessage: string | null;
+    repository: string | null;
+    steps: LifecycleStep[];
+    totalSteps: number;
+    completedSteps: number;
+    failedSteps: number;
+}
+
+interface LifecycleData {
+    dispatched: boolean;
+    currentRunId: string | null;
+    runs: LifecycleRun[];
+    lastDispatchedAt: string | null;
+    lastDispatchedBy: string | null;
+}
+
 export function TicketTriagePanel({
     ticket,
     adminUsers
@@ -57,6 +105,51 @@ export function TicketTriagePanel({
     const [pipelineRunId, setPipelineRunId] = useState(ticket.pipelineRunId ?? null);
     const [dispatchConfig, setDispatchConfig] = useState<DispatchConfig | null>(null);
     const [dispatchConfigLoading, setDispatchConfigLoading] = useState(false);
+    const [lifecycle, setLifecycle] = useState<LifecycleData | null>(null);
+    const [lifecycleLoading, setLifecycleLoading] = useState(false);
+    const [expandedRun, setExpandedRun] = useState<string | null>(null);
+
+    const loadLifecycle = useCallback(async () => {
+        setLifecycleLoading(true);
+        try {
+            const res = await fetch(`/admin/api/tickets/${ticket.id}/lifecycle`, {
+                credentials: "include"
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setLifecycle(data);
+                if (data.currentRunId && !expandedRun) {
+                    setExpandedRun(data.currentRunId);
+                }
+            }
+        } catch {
+            /* ignore */
+        } finally {
+            setLifecycleLoading(false);
+        }
+    }, [ticket.id, expandedRun]);
+
+    useEffect(() => {
+        if (pipelineRunId) {
+            void loadLifecycle();
+        }
+    }, [pipelineRunId, loadLifecycle]);
+
+    // Auto-refresh lifecycle for active runs
+    useEffect(() => {
+        if (!lifecycle?.dispatched) return;
+        const currentRun = lifecycle.runs.find((r) => r.isCurrent);
+        if (
+            !currentRun ||
+            currentRun.status === "COMPLETED" ||
+            currentRun.status === "FAILED" ||
+            currentRun.status === "CANCELLED"
+        )
+            return;
+
+        const interval = setInterval(() => void loadLifecycle(), 10_000);
+        return () => clearInterval(interval);
+    }, [lifecycle, loadLifecycle]);
 
     useEffect(() => {
         if (!showPipelineModal) return;
@@ -144,6 +237,7 @@ export function TicketTriagePanel({
                 setPipelineRunId(data.runId || "dispatched");
                 setShowPipelineModal(false);
                 setStatus("IN_PROGRESS");
+                setExpandedRun(data.runId || null);
                 router.refresh();
             } else if (data.error) {
                 setPipelineError(data.error);
@@ -168,6 +262,14 @@ export function TicketTriagePanel({
     useEffect(() => {
         setTags(ticket.tags);
     }, [ticket.tags]);
+
+    const currentRun = lifecycle?.runs.find((r) => r.isCurrent);
+    const canRedispatch =
+        !pipelineDispatching &&
+        currentRun &&
+        (currentRun.status === "FAILED" ||
+            currentRun.status === "COMPLETED" ||
+            currentRun.status === "CANCELLED");
 
     return (
         <div className="bg-card border-border rounded-lg border">
@@ -271,13 +373,60 @@ export function TicketTriagePanel({
 
                 {/* Coding Pipeline */}
                 <div className="border-border space-y-2 border-t pt-4">
-                    <p className="text-muted-foreground text-xs font-medium">Coding Pipeline</p>
-                    {pipelineRunId ? (
-                        <div className="rounded-md bg-blue-500/10 px-3 py-2 text-sm text-blue-500">
-                            Pipeline dispatched
-                            <span className="mt-1 block text-xs opacity-70">
-                                Run: {pipelineRunId.slice(0, 12)}...
-                            </span>
+                    <div className="flex items-center justify-between">
+                        <p className="text-muted-foreground text-xs font-medium">Coding Pipeline</p>
+                        {pipelineRunId && (
+                            <button
+                                onClick={() => void loadLifecycle()}
+                                disabled={lifecycleLoading}
+                                className="text-muted-foreground hover:text-foreground p-0.5 transition-colors"
+                                title="Refresh status"
+                            >
+                                <RefreshCw
+                                    className={`h-3 w-3 ${lifecycleLoading ? "animate-spin" : ""}`}
+                                />
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Lifecycle display */}
+                    {lifecycle?.dispatched && lifecycle.runs.length > 0 ? (
+                        <div className="space-y-2">
+                            {lifecycle.runs.map((run) => (
+                                <RunCard
+                                    key={run.runId}
+                                    run={run}
+                                    expanded={expandedRun === run.runId}
+                                    onToggle={() =>
+                                        setExpandedRun(expandedRun === run.runId ? null : run.runId)
+                                    }
+                                    formatDateTime={formatDateTime}
+                                />
+                            ))}
+
+                            {/* Dispatch info */}
+                            {lifecycle.lastDispatchedBy && (
+                                <p className="text-muted-foreground text-[10px]">
+                                    Last dispatched by {lifecycle.lastDispatchedBy}
+                                </p>
+                            )}
+
+                            {/* Redispatch button */}
+                            {canRedispatch && (
+                                <button
+                                    onClick={() => setShowPipelineModal(true)}
+                                    disabled={pipelineDispatching}
+                                    className="flex w-full items-center justify-center gap-1.5 rounded-md bg-amber-500/10 px-3 py-2 text-sm font-medium text-amber-600 transition-colors hover:bg-amber-500/20 disabled:opacity-50"
+                                >
+                                    <RotateCcw className="h-3.5 w-3.5" />
+                                    Redispatch
+                                </button>
+                            )}
+                        </div>
+                    ) : pipelineRunId && lifecycleLoading ? (
+                        <div className="flex items-center gap-2 rounded-md bg-blue-500/10 px-3 py-2 text-sm text-blue-500">
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            Loading lifecycle...
                         </div>
                     ) : (
                         <>
@@ -288,65 +437,80 @@ export function TicketTriagePanel({
                             >
                                 Dispatch to Coding Pipeline
                             </button>
-                            {showPipelineModal && (
-                                <div className="bg-background border-border space-y-3 rounded-md border p-3">
-                                    {dispatchConfigLoading ? (
-                                        <div className="text-muted-foreground text-xs">
-                                            Loading config...
-                                        </div>
-                                    ) : dispatchConfig ? (
-                                        <div className="space-y-1">
-                                            <div className="rounded-md bg-blue-500/10 px-3 py-2 text-xs text-blue-600">
-                                                <div>
-                                                    <span className="font-medium">
-                                                        {dispatchConfig.targetOrganizationName}
-                                                    </span>
-                                                    {" / "}
-                                                    <span className="font-medium">
-                                                        {dispatchConfig.workflowName}
-                                                    </span>
-                                                    <span className="text-muted-foreground ml-1">
-                                                        ({dispatchConfig.workflowSlug})
-                                                    </span>
-                                                </div>
-                                                <div className="text-muted-foreground mt-1">
-                                                    {dispatchConfig.repository}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <div className="rounded-md bg-amber-500/10 px-3 py-2 text-xs text-amber-600">
-                                            No dispatch target configured.{" "}
-                                            <a
-                                                href="/admin/settings"
-                                                className="underline hover:no-underline"
-                                            >
-                                                Go to Settings &gt; Dispatch
-                                            </a>
-                                        </div>
-                                    )}
+                        </>
+                    )}
 
-                                    {pipelineError && (
-                                        <p className="text-xs text-red-500">{pipelineError}</p>
-                                    )}
-                                    <div className="flex gap-2">
-                                        <button
-                                            onClick={handleDispatchPipeline}
-                                            disabled={pipelineDispatching || !dispatchConfig}
-                                            className="flex-1 rounded-md bg-purple-500 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-purple-600 disabled:opacity-50"
-                                        >
-                                            {pipelineDispatching ? "Dispatching..." : "Dispatch"}
-                                        </button>
-                                        <button
-                                            onClick={() => setShowPipelineModal(false)}
-                                            className="rounded-md bg-gray-500/10 px-3 py-2 text-sm font-medium text-gray-500 transition-colors hover:bg-gray-500/20"
-                                        >
-                                            Cancel
-                                        </button>
+                    {/* Dispatch modal */}
+                    {showPipelineModal && (
+                        <div className="bg-background border-border space-y-3 rounded-md border p-3">
+                            {dispatchConfigLoading ? (
+                                <div className="text-muted-foreground text-xs">
+                                    Loading config...
+                                </div>
+                            ) : dispatchConfig ? (
+                                <div className="space-y-1">
+                                    <div className="rounded-md bg-blue-500/10 px-3 py-2 text-xs text-blue-600">
+                                        <div>
+                                            <span className="font-medium">
+                                                {dispatchConfig.targetOrganizationName}
+                                            </span>
+                                            {" / "}
+                                            <span className="font-medium">
+                                                {dispatchConfig.workflowName}
+                                            </span>
+                                            <span className="text-muted-foreground ml-1">
+                                                ({dispatchConfig.workflowSlug})
+                                            </span>
+                                        </div>
+                                        <div className="text-muted-foreground mt-1">
+                                            {dispatchConfig.repository}
+                                        </div>
                                     </div>
+                                    {canRedispatch && (
+                                        <div className="rounded-md bg-amber-500/10 px-2 py-1.5 text-[10px] text-amber-600">
+                                            Previous run{" "}
+                                            {currentRun?.status === "FAILED"
+                                                ? "failed"
+                                                : "completed"}
+                                            . This will create a new run.
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                <div className="rounded-md bg-amber-500/10 px-3 py-2 text-xs text-amber-600">
+                                    No dispatch target configured.{" "}
+                                    <a
+                                        href="/admin/settings"
+                                        className="underline hover:no-underline"
+                                    >
+                                        Go to Settings &gt; Dispatch
+                                    </a>
                                 </div>
                             )}
-                        </>
+
+                            {pipelineError && (
+                                <p className="text-xs text-red-500">{pipelineError}</p>
+                            )}
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={handleDispatchPipeline}
+                                    disabled={pipelineDispatching || !dispatchConfig}
+                                    className="flex-1 rounded-md bg-purple-500 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-purple-600 disabled:opacity-50"
+                                >
+                                    {pipelineDispatching
+                                        ? "Dispatching..."
+                                        : canRedispatch
+                                          ? "Redispatch"
+                                          : "Dispatch"}
+                                </button>
+                                <button
+                                    onClick={() => setShowPipelineModal(false)}
+                                    className="rounded-md bg-gray-500/10 px-3 py-2 text-sm font-medium text-gray-500 transition-colors hover:bg-gray-500/20"
+                                >
+                                    Cancel
+                                </button>
+                            </div>
+                        </div>
                     )}
                 </div>
 
@@ -486,4 +650,150 @@ function TagManager({
             </div>
         </div>
     );
+}
+
+const STATUS_CONFIG: Record<string, { icon: typeof CheckCircle2; color: string; bg: string }> = {
+    COMPLETED: { icon: CheckCircle2, color: "text-green-500", bg: "bg-green-500/10" },
+    FAILED: { icon: XCircle, color: "text-red-500", bg: "bg-red-500/10" },
+    CANCELLED: { icon: XCircle, color: "text-gray-500", bg: "bg-gray-500/10" },
+    RUNNING: { icon: Loader2, color: "text-blue-500", bg: "bg-blue-500/10" },
+    QUEUED: { icon: Clock, color: "text-amber-500", bg: "bg-amber-500/10" }
+};
+
+function RunCard({
+    run,
+    expanded,
+    onToggle,
+    formatDateTime
+}: {
+    run: LifecycleRun;
+    expanded: boolean;
+    onToggle: () => void;
+    formatDateTime: (d: string) => string;
+}) {
+    const cfg = STATUS_CONFIG[run.status] ?? STATUS_CONFIG.QUEUED;
+    const StatusIcon = cfg.icon;
+    const isActive = run.status === "RUNNING" || run.status === "QUEUED";
+
+    return (
+        <div
+            className={`rounded-md border ${run.isCurrent ? "border-border" : "border-border/50 opacity-70"}`}
+        >
+            <button
+                onClick={onToggle}
+                className={`flex w-full items-center gap-2 rounded-t-md px-3 py-2 text-left text-xs ${cfg.bg}`}
+            >
+                <StatusIcon
+                    className={`h-3.5 w-3.5 shrink-0 ${cfg.color} ${isActive && run.status === "RUNNING" ? "animate-spin" : ""}`}
+                />
+                <div className="min-w-0 flex-1">
+                    <span className={`font-medium ${cfg.color}`}>
+                        {run.status === "RUNNING"
+                            ? "Running"
+                            : run.status === "QUEUED"
+                              ? "Queued"
+                              : run.status === "FAILED"
+                                ? "Failed"
+                                : run.status === "COMPLETED"
+                                  ? "Completed"
+                                  : run.status}
+                    </span>
+                    {run.isCurrent && <span className="text-muted-foreground ml-1">(current)</span>}
+                    {run.workflowName && (
+                        <span className="text-muted-foreground ml-1 truncate">
+                            &middot; {run.workflowName}
+                        </span>
+                    )}
+                </div>
+                <span className="text-muted-foreground shrink-0 text-[10px]">
+                    {run.runId.slice(0, 8)}
+                </span>
+                {expanded ? (
+                    <ChevronDown className="text-muted-foreground h-3 w-3 shrink-0" />
+                ) : (
+                    <ChevronRight className="text-muted-foreground h-3 w-3 shrink-0" />
+                )}
+            </button>
+
+            {expanded && (
+                <div className="space-y-2 px-3 py-2">
+                    {/* Timing */}
+                    <div className="text-muted-foreground space-y-0.5 text-[10px]">
+                        <div>Started: {formatDateTime(run.createdAt)}</div>
+                        {run.completedAt && <div>Ended: {formatDateTime(run.completedAt)}</div>}
+                        {run.durationMs != null && (
+                            <div>Duration: {formatDuration(run.durationMs)}</div>
+                        )}
+                    </div>
+
+                    {/* Error message */}
+                    {run.errorMessage && (
+                        <div className="rounded bg-red-500/10 px-2 py-1.5 text-[10px] break-words text-red-500">
+                            {run.errorMessage.length > 300
+                                ? run.errorMessage.slice(0, 300) + "..."
+                                : run.errorMessage}
+                        </div>
+                    )}
+
+                    {/* Steps */}
+                    {run.steps.length > 0 && (
+                        <div className="space-y-1">
+                            <p className="text-muted-foreground text-[10px] font-medium">
+                                Steps ({run.completedSteps}/{run.totalSteps}
+                                {run.failedSteps > 0 && `, ${run.failedSteps} failed`})
+                            </p>
+                            <div className="space-y-0.5">
+                                {run.steps.map((step, i) => {
+                                    const stepCfg =
+                                        STATUS_CONFIG[step.status] ?? STATUS_CONFIG.QUEUED;
+                                    const StepIcon = stepCfg.icon;
+                                    return (
+                                        <div
+                                            key={`${step.stepId}-${i}`}
+                                            className="flex items-start gap-1.5 text-[10px]"
+                                        >
+                                            <StepIcon
+                                                className={`mt-0.5 h-3 w-3 shrink-0 ${stepCfg.color} ${step.status === "RUNNING" ? "animate-spin" : ""}`}
+                                            />
+                                            <div className="min-w-0 flex-1">
+                                                <span className="font-medium">
+                                                    {step.stepName || step.stepId}
+                                                </span>
+                                                {step.durationMs != null && (
+                                                    <span className="text-muted-foreground ml-1">
+                                                        ({formatDuration(step.durationMs)})
+                                                    </span>
+                                                )}
+                                                {step.error && (
+                                                    <p className="mt-0.5 break-words text-red-500">
+                                                        {step.error.length > 200
+                                                            ? step.error.slice(0, 200) + "..."
+                                                            : step.error}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+
+                    {run.totalSteps === 0 && run.status !== "QUEUED" && (
+                        <p className="text-muted-foreground text-[10px] italic">
+                            No step data recorded
+                        </p>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+}
+
+function formatDuration(ms: number): string {
+    if (ms < 1000) return `${ms}ms`;
+    if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
+    const mins = Math.floor(ms / 60_000);
+    const secs = Math.round((ms % 60_000) / 1000);
+    return `${mins}m ${secs}s`;
 }

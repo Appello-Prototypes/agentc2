@@ -27,17 +27,22 @@ function executeWorkflowInBackground(
     },
     run: { id: string },
     input: Record<string, unknown>,
-    body: Record<string, unknown>
+    body: Record<string, unknown>,
+    organizationId?: string
 ) {
     setImmediate(async () => {
         try {
             const inputSchema = workflow.inputSchemaJson as
                 | { required?: string[]; properties?: Record<string, unknown> }
                 | undefined;
+            const reqCtx = (body.requestContext as Record<string, unknown>) ?? {};
+            if (organizationId && !reqCtx.organizationId) {
+                reqCtx.organizationId = organizationId;
+            }
             const result = await executeWorkflowDefinition({
                 definition: workflow.definitionJson as unknown as WorkflowDefinition,
                 input,
-                requestContext: body.requestContext as Record<string, unknown> | undefined,
+                requestContext: reqCtx,
                 workflowMeta: { runId: run.id, workflowSlug: workflow.slug },
                 inputSchema: inputSchema ?? undefined
             });
@@ -189,7 +194,8 @@ export async function POST(
                     workflowRunId: run.id,
                     workflowId: workflow.id,
                     workflowSlug: workflow.slug,
-                    input
+                    input,
+                    organizationId: authContext.organizationId
                 }
             });
 
@@ -238,7 +244,7 @@ export async function POST(
         }
 
         if (asyncMode) {
-            executeWorkflowInBackground(workflow, run, input, body);
+            executeWorkflowInBackground(workflow, run, input, body, authContext.organizationId);
             return NextResponse.json({
                 success: true,
                 status: "running",
@@ -251,10 +257,14 @@ export async function POST(
         const inputSchema = workflow.inputSchemaJson as
             | { required?: string[]; properties?: Record<string, unknown> }
             | undefined;
+        const syncReqCtx = (body.requestContext as Record<string, unknown>) ?? {};
+        if (authContext.organizationId && !syncReqCtx.organizationId) {
+            syncReqCtx.organizationId = authContext.organizationId;
+        }
         const executionPromise = executeWorkflowDefinition({
             definition: workflow.definitionJson as unknown as WorkflowDefinition,
             input,
-            requestContext: body.requestContext,
+            requestContext: syncReqCtx,
             workflowMeta: { runId: run.id, workflowSlug: workflow.slug },
             inputSchema: inputSchema ?? undefined
         });

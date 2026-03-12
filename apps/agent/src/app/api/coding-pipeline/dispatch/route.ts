@@ -203,7 +203,8 @@ export async function POST(request: NextRequest) {
                     pipelineRunId: pipelineRun.id,
                     organizationId: orgId
                 },
-                pipelineRunId: pipelineRun.id
+                pipelineRunId: pipelineRun.id,
+                organizationId: orgId
             }
         });
 

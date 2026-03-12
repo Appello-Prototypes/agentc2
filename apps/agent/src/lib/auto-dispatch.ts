@@ -1,1 +1,1 @@
-export { maybeAutoDispatch } from "@repo/agentc2/auto-dispatch"
+export { maybeAutoDispatch } from "@repo/agentc2/auto-dispatch";

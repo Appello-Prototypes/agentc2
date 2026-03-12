@@ -205,11 +205,7 @@ async function maybeAutoDispatchFromAdmin(ticket: {
         });
 
         const typeLabel =
-            ticket.type === "BUG"
-                ? "bug"
-                : ticket.type === "FEATURE_REQUEST"
-                  ? "feature"
-                  : "task";
+            ticket.type === "BUG" ? "bug" : ticket.type === "FEATURE_REQUEST" ? "feature" : "task";
 
         const agentBaseUrl = process.env.NEXT_PUBLIC_AGENT_URL || "http://localhost:3001";
         const apiKey = process.env.MCP_API_KEY;
