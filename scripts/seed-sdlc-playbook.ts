@@ -1872,8 +1872,8 @@ Every critical step includes a revision cycle powered by the \`dowhile\` workflo
 
     const triageNetworkSlug = orgSlug("sdlc-triage-network");
 
-    let triageNetwork = await prisma.network.findUnique({
-        where: { slug: triageNetworkSlug }
+    let triageNetwork = await prisma.network.findFirst({
+        where: { slug: triageNetworkSlug, workspaceId: workspace.id }
     });
 
     if (!triageNetwork) {
