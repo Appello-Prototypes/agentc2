@@ -65,7 +65,9 @@ export async function GET(request: NextRequest) {
             );
         }
 
-        const [providers, connections] = await Promise.all([
+        const filterKey = request.nextUrl.searchParams.get("key") ?? undefined;
+
+        const [allProviders, connections] = await Promise.all([
             getIntegrationProviders(),
             prisma.integrationConnection.findMany({
                 where: {
@@ -76,6 +78,10 @@ export async function GET(request: NextRequest) {
                 orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }]
             })
         ]);
+
+        const providers = filterKey
+            ? allProviders.filter((p) => p.key === filterKey)
+            : allProviders;
 
         const connectionsByProvider = new Map<string, typeof connections>();
         for (const connection of connections) {

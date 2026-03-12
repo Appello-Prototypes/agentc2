@@ -111,8 +111,11 @@ export function IntegrationManagePage({ providerKey }: { providerKey: string }) 
                 `${getApiBase()}/api/integrations/providers?key=${providerKey}`
             );
             const data = await res.json();
-            if (data.success && data.providers?.length > 0) {
-                setProvider(data.providers[0]);
+            if (data.success && data.providers) {
+                const match = data.providers.find(
+                    (p: IntegrationProvider) => p.key === providerKey
+                );
+                if (match) setProvider(match);
             }
         } catch (err) {
             console.error("Failed to fetch provider:", err);
@@ -385,10 +388,10 @@ function OverviewTab({
                                             </div>
                                         </div>
 
-                                        {conn.missingFields.length > 0 && (
+                                        {(conn.missingFields?.length ?? 0) > 0 && (
                                             <div className="flex items-center gap-2 rounded-md bg-amber-500/10 px-3 py-2 text-sm text-amber-600">
                                                 <AlertTriangleIcon className="h-4 w-4 shrink-0" />
-                                                Missing fields: {conn.missingFields.join(", ")}
+                                                Missing fields: {conn.missingFields?.join(", ")}
                                             </div>
                                         )}
 

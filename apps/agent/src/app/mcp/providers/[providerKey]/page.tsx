@@ -36,8 +36,14 @@ export default function ProviderDetailPage() {
                 );
                 const data = await res.json();
                 if (cancelled) return;
-                if (data.success && data.providers?.length > 0) {
-                    const provider = data.providers[0];
+                if (data.success && data.providers) {
+                    const provider = data.providers.find(
+                        (p: { key: string }) => p.key === providerKey
+                    );
+                    if (!provider) {
+                        setIsConnected(false);
+                        return;
+                    }
                     setIsConnected(
                         provider.status === "connected" && provider.connections?.length > 0
                     );
