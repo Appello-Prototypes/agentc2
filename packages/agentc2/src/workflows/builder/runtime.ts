@@ -39,6 +39,13 @@ interface ExecuteWorkflowOptions {
     inputSchema?: { required?: string[]; properties?: Record<string, unknown> };
     /** When true, sub-workflow steps return suspended with child metadata instead of executing inline. */
     deferSubWorkflows?: boolean;
+    /** Callback to wrap each step's execution for durable per-step handling (e.g. Inngest step.run). */
+    stepExecutor?: (
+        stepId: string,
+        meta: { name: string; type: string; toolId?: string; iterationIndex?: number },
+        stepInput: Record<string, unknown>,
+        executeFn: () => Promise<unknown>
+    ) => Promise<unknown>;
 }
 
 const MAX_NESTING_DEPTH = 5;
@@ -598,24 +605,59 @@ async function executeSteps(
 
             switch (step.type) {
                 case "agent": {
-                    const agentResult = await executeAgentStep(
-                        step,
-                        context,
-                        options.requestContext,
-                        options.agentStepHooks
-                    );
-                    output = agentResult.output;
-                    agentRunId = agentResult.agentRunId;
+                    const agentExecFn = () =>
+                        executeAgentStep(
+                            step,
+                            context,
+                            options.requestContext,
+                            options.agentStepHooks
+                        );
+                    if (options.stepExecutor) {
+                        const agentResult = (await options.stepExecutor(
+                            step.id,
+                            {
+                                name: step.name || step.id,
+                                type: "agent",
+                                iterationIndex: options._parentIterationIndex
+                            },
+                            stepInput,
+                            agentExecFn
+                        )) as { output: unknown; agentRunId?: string };
+                        output = agentResult.output;
+                        agentRunId = agentResult.agentRunId;
+                    } else {
+                        const agentResult = await agentExecFn();
+                        output = agentResult.output;
+                        agentRunId = agentResult.agentRunId;
+                    }
                     break;
                 }
-                case "tool":
-                    output = await executeToolStep(
-                        step,
-                        context,
-                        options.requestContext,
-                        options.workflowMeta
-                    );
+                case "tool": {
+                    const toolExecFn = () =>
+                        executeToolStep(
+                            step,
+                            context,
+                            options.requestContext,
+                            options.workflowMeta
+                        );
+                    if (options.stepExecutor) {
+                        const toolConfig = (step.config || {}) as unknown as WorkflowToolConfig;
+                        output = await options.stepExecutor(
+                            step.id,
+                            {
+                                name: step.name || step.id,
+                                type: "tool",
+                                toolId: toolConfig.toolId,
+                                iterationIndex: options._parentIterationIndex
+                            },
+                            stepInput,
+                            toolExecFn
+                        );
+                    } else {
+                        output = await toolExecFn();
+                    }
                     break;
+                }
                 case "workflow": {
                     const result = await executeWorkflowStep(
                         step,

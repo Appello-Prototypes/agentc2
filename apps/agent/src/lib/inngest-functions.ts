@@ -8543,6 +8543,9 @@ export const asyncWorkflowExecuteFunction = inngest.createFunction(
         concurrency: { limit: 3 },
         onFailure: async ({ event, error }) => {
             const workflowRunId = event.data.event.data.workflowRunId as string | undefined;
+            const parentRunId = event.data.event.data.parentRunId as string | undefined;
+            const parentStepId = event.data.event.data.parentStepId as string | undefined;
+
             if (workflowRunId) {
                 try {
                     await prisma.workflowRun.update({
@@ -8554,7 +8557,6 @@ export const asyncWorkflowExecuteFunction = inngest.createFunction(
                         }
                     });
 
-                    // Clean up any steps stuck in RUNNING status
                     const cleaned = await prisma.workflowRunStep.updateMany({
                         where: {
                             runId: workflowRunId,
@@ -8578,6 +8580,30 @@ export const asyncWorkflowExecuteFunction = inngest.createFunction(
                     console.error(
                         `[Inngest onFailure] CRITICAL: Could not mark workflow run ${workflowRunId} as FAILED:`,
                         updateErr
+                    );
+                }
+            }
+
+            // Notify parent workflow so it doesn't hang on step.waitForEvent
+            if (parentRunId && parentStepId) {
+                try {
+                    await inngest.send({
+                        name: "workflow/child.complete",
+                        data: {
+                            parentRunId,
+                            parentStepId,
+                            childRunId: workflowRunId || "",
+                            childStatus: "FAILED",
+                            childOutput: `Child workflow failed: ${error.message}`
+                        }
+                    });
+                    console.error(
+                        `[Inngest onFailure] Notified parent ${parentRunId} that child ${workflowRunId} FAILED`
+                    );
+                } catch (notifyErr) {
+                    console.error(
+                        `[Inngest onFailure] CRITICAL: Could not notify parent ${parentRunId}:`,
+                        notifyErr
                     );
                 }
             }
@@ -8605,267 +8631,407 @@ export const asyncWorkflowExecuteFunction = inngest.createFunction(
             });
         });
 
-        // Step 2: Load workflow and execute with progressive step persistence.
-        // On Inngest retries, previously completed steps are loaded from DB and skipped
-        // to prevent duplicate side effects (e.g., posting GitHub comments twice).
-        //
-        // Sub-workflow steps are deferred: instead of executing inline (which can
-        // take 30+ minutes for Cursor Cloud polling), they return a suspended status.
-        // The Inngest function then dispatches the child as its own durable function
-        // and waits for completion via step.waitForEvent, avoiding HTTP proxy timeouts.
+        // Step 2: Load workflow definition (memoized once per Inngest function invocation chain).
         const isChildDispatch = !!(event.data.parentRunId && event.data.parentStepId);
-        const result = await step.run("execute-workflow", async () => {
+        const workflowData = await step.run("load-workflow", async () => {
             const workflow = await prisma.workflow.findUnique({
                 where: { id: workflowId },
                 include: { workspace: { select: { organizationId: true } } }
             });
-
             if (!workflow) {
                 throw new Error(`Workflow not found: ${workflowId}`);
             }
-
-            const { executeWorkflowDefinition } = await import("@repo/agentc2/workflows");
-            const { agentResolver } = await import("@repo/agentc2");
-            const { startRun } = await import("./run-recorder");
-            type WorkflowDefinition = Parameters<typeof executeWorkflowDefinition>[0]["definition"];
-            type AgentStepHooks = Parameters<typeof executeWorkflowDefinition>[0]["agentStepHooks"];
-
-            // Resolve organizationId: prefer explicit event data, then input, then workflow's workspace
-            const organizationId =
+            const orgId =
                 (event.data.organizationId as string | undefined) ||
                 ((input as Record<string, unknown>)?.organizationId as string | undefined) ||
                 workflow.workspace?.organizationId ||
                 undefined;
-            const inputObj = input as Record<string, unknown> | undefined;
+            return {
+                definitionJson: workflow.definitionJson,
+                slug: workflow.slug,
+                organizationId: orgId || null,
+                inputSchemaJson: workflow.inputSchemaJson
+            };
+        });
 
-            // --- Retry resilience: load previously completed steps from DB ---
-            const savedSteps = await prisma.workflowRunStep.findMany({
-                where: { runId: workflowRunId },
-                select: {
-                    stepId: true,
-                    outputJson: true,
-                    iterationIndex: true,
-                    status: true
-                }
-            });
+        // --- Per-step execution: each workflow step gets its own Inngest step.run ---
+        // This prevents 524 timeouts by keeping each HTTP request short.
+        // Step state is reloaded fresh (NOT memoized) so re-invocations see latest DB data.
+        const organizationId = workflowData.organizationId || undefined;
+        const inputObj = input as Record<string, unknown> | undefined;
 
-            // Build existingSteps from top-level completed steps only.
-            // Steps inside dowhile loops have iterationIndex set -- those must
-            // NOT be pre-skipped because each iteration needs fresh execution.
-            const existingSteps: Record<string, unknown> = {};
-            for (const s of savedSteps) {
-                if (s.iterationIndex === null && s.status === "COMPLETED") {
-                    existingSteps[s.stepId] = s.outputJson;
-                }
+        const savedStepRecords = await prisma.workflowRunStep.findMany({
+            where: { runId: workflowRunId },
+            select: { stepId: true, outputJson: true, iterationIndex: true, status: true }
+        });
+        const existingSteps: Record<string, unknown> = {};
+        for (const s of savedStepRecords) {
+            if (s.iterationIndex === null && s.status === "COMPLETED") {
+                existingSteps[s.stepId] = s.outputJson;
             }
-
-            if (Object.keys(existingSteps).length > 0) {
-                console.log(
-                    `[Inngest] Resuming workflow ${workflowRunId} — skipping ${Object.keys(existingSteps).length} completed steps:`,
-                    Object.keys(existingSteps)
-                );
-            }
-
-            // Track which steps are already persisted to avoid duplicate DB writes
-            const persistedKeys = new Set(
-                savedSteps.map((s) => `${s.stepId}:${s.iterationIndex ?? ""}`)
+        }
+        if (Object.keys(existingSteps).length > 0) {
+            console.log(
+                `[Inngest] Resuming workflow ${workflowRunId} — skipping ${Object.keys(existingSteps).length} completed steps:`,
+                Object.keys(existingSteps)
             );
+        }
+        const persistedKeys = new Set(
+            savedStepRecords.map((s) => `${s.stepId}:${s.iterationIndex ?? ""}`)
+        );
 
-            function mapStepStatus(status: string) {
-                if (status === "failed") return "FAILED" as const;
-                if (status === "suspended") return "RUNNING" as const;
-                return "COMPLETED" as const;
+        function mapStepStatus(status: string) {
+            if (status === "failed") return "FAILED" as const;
+            if (status === "suspended") return "RUNNING" as const;
+            return "COMPLETED" as const;
+        }
+
+        const onStepEvent = async (stepResult: {
+            stepId: string;
+            stepType: string;
+            stepName?: string;
+            status: "completed" | "failed" | "suspended";
+            input?: unknown;
+            output?: unknown;
+            error?: unknown;
+            iterationIndex?: number;
+            startedAt?: Date;
+            completedAt?: Date;
+            durationMs?: number;
+            agentRunId?: string;
+        }) => {
+            const key = `${stepResult.stepId}:${stepResult.iterationIndex ?? ""}`;
+            if (persistedKeys.has(key)) return;
+            try {
+                await prisma.workflowRunStep.create({
+                    data: {
+                        runId: workflowRunId,
+                        stepId: stepResult.stepId,
+                        stepType: stepResult.stepType,
+                        stepName: stepResult.stepName ?? stepResult.stepId,
+                        status: mapStepStatus(stepResult.status),
+                        inputJson: stepResult.input as Prisma.InputJsonValue,
+                        outputJson: stepResult.output as Prisma.InputJsonValue,
+                        errorJson: stepResult.error as Prisma.InputJsonValue,
+                        iterationIndex: stepResult.iterationIndex,
+                        startedAt: stepResult.startedAt,
+                        completedAt: stepResult.completedAt,
+                        durationMs: stepResult.durationMs,
+                        agentRunId: stepResult.agentRunId
+                    }
+                });
+                persistedKeys.add(key);
+            } catch (err) {
+                console.warn(`[Inngest] Failed to persist step ${stepResult.stepId}:`, err);
             }
+        };
 
-            // --- Progressive step persistence: save each step as it completes ---
-            const onStepEvent = async (stepResult: {
-                stepId: string;
-                stepType: string;
-                stepName?: string;
-                status: "completed" | "failed" | "suspended";
-                input?: unknown;
-                output?: unknown;
-                error?: unknown;
-                iterationIndex?: number;
-                startedAt?: Date;
-                completedAt?: Date;
-                durationMs?: number;
-                agentRunId?: string;
-            }) => {
-                const key = `${stepResult.stepId}:${stepResult.iterationIndex ?? ""}`;
-                if (persistedKeys.has(key)) return;
+        const { executeWorkflowDefinition } = await import("@repo/agentc2/workflows");
+        const { agentResolver } = await import("@repo/agentc2");
+        const { startRun } = await import("./run-recorder");
+        type WorkflowDefinition = Parameters<typeof executeWorkflowDefinition>[0]["definition"];
+        type AgentStepHooks = Parameters<typeof executeWorkflowDefinition>[0]["agentStepHooks"];
 
+        const agentStepHooks: AgentStepHooks = {
+            onAgentStart: async ({ agentSlug, prompt }) => {
                 try {
-                    await prisma.workflowRunStep.create({
-                        data: {
-                            runId: workflowRunId,
-                            stepId: stepResult.stepId,
-                            stepType: stepResult.stepType,
-                            stepName: stepResult.stepName ?? stepResult.stepId,
-                            status: mapStepStatus(stepResult.status),
-                            inputJson: stepResult.input as Prisma.InputJsonValue,
-                            outputJson: stepResult.output as Prisma.InputJsonValue,
-                            errorJson: stepResult.error as Prisma.InputJsonValue,
-                            iterationIndex: stepResult.iterationIndex,
-                            startedAt: stepResult.startedAt,
-                            completedAt: stepResult.completedAt,
-                            durationMs: stepResult.durationMs,
-                            agentRunId: stepResult.agentRunId
+                    const resolved = await agentResolver.resolve({
+                        slug: agentSlug,
+                        requestContext: organizationId ? { organizationId } : {}
+                    });
+                    const agentId = resolved.record?.id;
+                    if (!agentId) return undefined;
+                    const handle = await startRun({
+                        agentId,
+                        agentSlug,
+                        input: prompt.slice(0, 2000),
+                        source: "workflow",
+                        organizationId,
+                        metadata: {
+                            workflowRunId,
+                            workflowSlug: workflowSlug || workflowData.slug
                         }
                     });
-                    persistedKeys.add(key);
+                    return handle.runId;
                 } catch (err) {
-                    console.warn(`[Inngest] Failed to persist step ${stepResult.stepId}:`, err);
+                    console.warn(`[Inngest] Failed to start agent sub-run for ${agentSlug}:`, err);
+                    return undefined;
                 }
-            };
-
-            const agentStepHooks: AgentStepHooks = {
-                onAgentStart: async ({ agentSlug, prompt }) => {
-                    try {
-                        const resolved = await agentResolver.resolve({
-                            slug: agentSlug,
-                            requestContext: organizationId ? { organizationId: organizationId } : {}
-                        });
-                        const agentId = resolved.record?.id;
-                        if (!agentId) return undefined;
-
-                        const handle = await startRun({
-                            agentId,
-                            agentSlug,
-                            input: prompt.slice(0, 2000),
-                            source: "workflow",
-                            organizationId: organizationId,
-                            metadata: {
-                                workflowRunId,
-                                workflowSlug: workflowSlug || workflow.slug
-                            }
-                        });
-                        return handle.runId;
-                    } catch (err) {
-                        console.warn(
-                            `[Inngest] Failed to start agent sub-run for ${agentSlug}:`,
-                            err
-                        );
-                        return undefined;
-                    }
-                },
-                onAgentComplete: async ({
-                    agentRunId,
-                    output,
-                    durationMs,
-                    modelName,
-                    totalTokens,
-                    toolCalls,
-                    steps
-                }) => {
-                    if (!agentRunId) return;
-                    try {
-                        const outputText =
-                            typeof output === "string"
-                                ? output.slice(0, 5000)
-                                : JSON.stringify(output).slice(0, 5000);
-                        await prisma.agentRun.update({
-                            where: { id: agentRunId },
-                            data: {
-                                status: "COMPLETED",
-                                outputText,
-                                completedAt: new Date(),
-                                durationMs,
-                                modelName,
-                                totalTokens
-                            }
-                        });
-                        await prisma.agentTrace.updateMany({
-                            where: { runId: agentRunId },
-                            data: {
-                                status: "COMPLETED" as RunStatus,
-                                outputText,
-                                durationMs,
-                                tokensJson: {
-                                    prompt: 0,
-                                    completion: 0,
-                                    total: totalTokens || 0
-                                } as Prisma.InputJsonValue,
-                                ...(steps && steps.length > 0
-                                    ? { stepsJson: steps as Prisma.InputJsonValue }
-                                    : {})
-                            }
-                        });
-                        if (toolCalls && toolCalls.length > 0) {
-                            for (const tc of toolCalls) {
-                                try {
-                                    await prisma.agentToolCall.create({
-                                        data: {
-                                            runId: agentRunId,
-                                            toolKey: tc.toolName || "unknown",
-                                            inputJson: (tc.args || {}) as Prisma.InputJsonValue,
-                                            outputJson:
-                                                tc.output !== undefined
-                                                    ? (tc.output as Prisma.InputJsonValue)
-                                                    : undefined,
-                                            durationMs: tc.durationMs ?? undefined,
-                                            success: !tc.error,
-                                            error: tc.error || undefined
-                                        }
-                                    });
-                                } catch {
-                                    // best-effort
-                                }
+            },
+            onAgentComplete: async ({
+                agentRunId,
+                output,
+                durationMs,
+                modelName,
+                totalTokens,
+                toolCalls,
+                steps
+            }) => {
+                if (!agentRunId) return;
+                try {
+                    const outputText =
+                        typeof output === "string"
+                            ? output.slice(0, 5000)
+                            : JSON.stringify(output).slice(0, 5000);
+                    await prisma.agentRun.update({
+                        where: { id: agentRunId },
+                        data: {
+                            status: "COMPLETED",
+                            outputText,
+                            completedAt: new Date(),
+                            durationMs,
+                            modelName,
+                            totalTokens
+                        }
+                    });
+                    await prisma.agentTrace.updateMany({
+                        where: { runId: agentRunId },
+                        data: {
+                            status: "COMPLETED" as RunStatus,
+                            outputText,
+                            durationMs,
+                            tokensJson: {
+                                prompt: 0,
+                                completion: 0,
+                                total: totalTokens || 0
+                            } as Prisma.InputJsonValue,
+                            ...(steps && steps.length > 0
+                                ? { stepsJson: steps as Prisma.InputJsonValue }
+                                : {})
+                        }
+                    });
+                    if (toolCalls && toolCalls.length > 0) {
+                        for (const tc of toolCalls) {
+                            try {
+                                await prisma.agentToolCall.create({
+                                    data: {
+                                        runId: agentRunId,
+                                        toolKey: tc.toolName || "unknown",
+                                        inputJson: (tc.args || {}) as Prisma.InputJsonValue,
+                                        outputJson:
+                                            tc.output !== undefined
+                                                ? (tc.output as Prisma.InputJsonValue)
+                                                : undefined,
+                                        durationMs: tc.durationMs ?? undefined,
+                                        success: !tc.error,
+                                        error: tc.error || undefined
+                                    }
+                                });
+                            } catch {
+                                // best-effort
                             }
                         }
-                    } catch (err) {
-                        console.warn(
-                            `[Inngest] Failed to complete agent sub-run ${agentRunId}:`,
-                            err
-                        );
                     }
-                },
-                onAgentFail: async ({ agentRunId, error, durationMs }) => {
-                    if (!agentRunId) return;
-                    try {
-                        await prisma.agentRun.update({
-                            where: { id: agentRunId },
-                            data: {
-                                status: "FAILED",
-                                failureReason: error.message?.slice(0, 2000),
-                                completedAt: new Date(),
-                                durationMs
+                } catch (err) {
+                    console.warn(`[Inngest] Failed to complete agent sub-run ${agentRunId}:`, err);
+                }
+            },
+            onAgentFail: async ({ agentRunId, error, durationMs }) => {
+                if (!agentRunId) return;
+                try {
+                    await prisma.agentRun.update({
+                        where: { id: agentRunId },
+                        data: {
+                            status: "FAILED",
+                            failureReason: error.message?.slice(0, 2000),
+                            completedAt: new Date(),
+                            durationMs
+                        }
+                    });
+                    await prisma.agentTrace.updateMany({
+                        where: { runId: agentRunId },
+                        data: {
+                            status: "FAILED",
+                            outputText: error.message?.slice(0, 2000) || "Agent step failed",
+                            durationMs
+                        }
+                    });
+                } catch (err) {
+                    console.warn(`[Inngest] Failed to fail agent sub-run ${agentRunId}:`, err);
+                }
+            }
+        };
+
+        // Per-step executor: wraps each tool/agent step in its own Inngest step.run,
+        // keeping each HTTP request short. Long-running polling tools (cursor/claude)
+        // are handled with Inngest-level step.sleep + step.run loops instead.
+        const POLLING_TOOLS = new Set(["cursor-poll-until-done", "claude-poll-until-done"]);
+
+        const stepExecutor = async (
+            stepId: string,
+            meta: { name: string; type: string; toolId?: string; iterationIndex?: number },
+            stepInput: Record<string, unknown>,
+            executeFn: () => Promise<unknown>
+        ): Promise<unknown> => {
+            const inngestStepId =
+                meta.iterationIndex != null
+                    ? `wf-${stepId}-i${meta.iterationIndex}`
+                    : `wf-${stepId}`;
+
+            if (meta.toolId && POLLING_TOOLS.has(meta.toolId)) {
+                const agentId = stepInput.agentId as string;
+                const repository = stepInput.repository as string | undefined;
+                const maxWaitMinutes = (stepInput.maxWaitMinutes as number) || 30;
+                const maxPolls = Math.ceil((maxWaitMinutes * 60) / 15);
+                const { getToolsByNamesAsync } = await import("@repo/agentc2");
+                const statusToolName = meta.toolId.replace("poll-until-done", "get-status");
+                const convToolName = meta.toolId.replace("poll-until-done", "get-conversation");
+
+                for (let i = 0; i < maxPolls; i++) {
+                    if (i > 0) {
+                        await step.sleep(`${inngestStepId}-wait-${i}`, "15s");
+                    }
+
+                    const statusResult = await step.run(`${inngestStepId}-poll-${i}`, async () => {
+                        const tools = await getToolsByNamesAsync([statusToolName], organizationId);
+                        const tool = tools[statusToolName];
+                        const handler =
+                            (tool as { execute?: (...a: unknown[]) => unknown }).execute ||
+                                (tool as { invoke?: (...a: unknown[]) => unknown }).invoke ||
+                                (tool as { run?: (...a: unknown[]) => unknown }).run ||
+                                (tool as (...a: unknown[]) => unknown);
+                        return handler({ agentId, organizationId });
+                    });
+
+                    const terminalStatuses = [
+                        "FINISHED",
+                        "COMPLETED",
+                        "FAILED",
+                        "CANCELLED",
+                        "ERROR"
+                    ];
+                    const sr = statusResult as Record<string, unknown>;
+                    if (terminalStatuses.includes(sr.status as string)) {
+                        const finalResult = await step.run(
+                            `${inngestStepId}-finalize`,
+                            async () => {
+                                let summary = (sr.summary as string) || null;
+                                if (!summary) {
+                                    try {
+                                        const convTools = await getToolsByNamesAsync(
+                                            [convToolName],
+                                            organizationId
+                                        );
+                                        const convTool = convTools[convToolName];
+                                        const convHandler =
+                                            (convTool as { execute?: (...a: unknown[]) => unknown })
+                                            .execute ||
+                                            (convTool as { invoke?: (...a: unknown[]) => unknown })
+                                                .invoke ||
+                                            (convTool as { run?: (...a: unknown[]) => unknown })
+                                                .run ||
+                                            (convTool as (...a: unknown[]) => unknown);
+                                        const conv = (await convHandler({
+                                            agentId,
+                                            organizationId
+                                        })) as {
+                                            messages?: { role: string; content: string }[];
+                                        };
+                                        const msgs = (conv.messages || []).filter(
+                                            (m) => m.role === "assistant_message"
+                                        );
+                                        if (msgs.length > 0)
+                                            summary = msgs[msgs.length - 1].content;
+                                    } catch {
+                                        /* ignore */
+                                    }
+                                }
+
+                                const branchName = (sr.branchName as string) || null;
+                                let prNumber: number | null = null;
+                                let prUrl: string | null = (sr.agentUrl as string) || null;
+
+                                if (prUrl) {
+                                    const match = prUrl.match(/\/pull\/(\d+)/);
+                                    if (match) prNumber = Number(match[1]);
+                                }
+
+                                if (!prNumber && branchName && repository) {
+                                    try {
+                                        const ghTools = await getToolsByNamesAsync(
+                                            ["github-list-prs"],
+                                            organizationId
+                                        );
+                                        if (!ghTools["github-list-prs"]) {
+                                            const repoMatch = repository.match(
+                                                /github\.com\/([^/]+)\/([^/]+)/
+                                            );
+                                            if (repoMatch) {
+                                                const res = await fetch(
+                                                    `https://api.github.com/repos/${repoMatch[1]}/${repoMatch[2]}/pulls?head=${repoMatch[1]}:${branchName}&state=open`,
+                                                    {
+                                                        headers: {
+                                                            Authorization: `token ${process.env.GITHUB_PERSONAL_ACCESS_TOKEN}`,
+                                                            Accept: "application/vnd.github.v3+json"
+                                                        }
+                                                    }
+                                                );
+                                                const pulls = await res.json();
+                                                if (Array.isArray(pulls) && pulls.length > 0) {
+                                                    prNumber = pulls[0].number;
+                                                    prUrl = pulls[0].html_url || "";
+                                                }
+                                            }
+                                        }
+                                    } catch {
+                                        /* ignore */
+                                    }
+                                }
+
+                                return {
+                                    agentId,
+                                    status: sr.status,
+                                    summary,
+                                    branchName,
+                                    prNumber,
+                                    prUrl,
+                                    repository: repository || null,
+                                    durationMs: i * 15_000,
+                                    timedOut: false
+                                };
                             }
-                        });
-                        await prisma.agentTrace.updateMany({
-                            where: { runId: agentRunId },
-                            data: {
-                                status: "FAILED",
-                                outputText: error.message?.slice(0, 2000) || "Agent step failed",
-                                durationMs
-                            }
-                        });
-                    } catch (err) {
-                        console.warn(`[Inngest] Failed to fail agent sub-run ${agentRunId}:`, err);
+                        );
+                        return finalResult;
                     }
                 }
-            };
 
-            return await executeWorkflowDefinition({
-                definition: workflow.definitionJson as unknown as WorkflowDefinition,
-                input,
-                existingSteps,
-                onStepEvent,
-                requestContext: organizationId ? { organizationId: organizationId } : {},
-                workflowMeta: {
-                    runId: workflowRunId,
-                    workflowSlug:
-                        workflowSlug ||
-                        workflow.slug ||
-                        ((inputObj?._trigger as Record<string, unknown>)?.routedTo as string) ||
-                        ""
-                },
-                agentStepHooks,
-                deferSubWorkflows: true,
-                inputSchema: workflow.inputSchemaJson as
-                    | { required?: string[]; properties?: Record<string, unknown> }
-                    | undefined
-            });
+                return {
+                    agentId,
+                    status: "TIMEOUT",
+                    summary: null,
+                    branchName: null,
+                    prNumber: null,
+                    prUrl: null,
+                    repository: repository || null,
+                    durationMs: maxWaitMinutes * 60_000,
+                    timedOut: true
+                };
+            }
+
+            return step.run(inngestStepId, executeFn);
+        };
+
+        // Execute workflow: each step is its own Inngest step.run via stepExecutor
+        const result = await executeWorkflowDefinition({
+            definition: workflowData.definitionJson as unknown as WorkflowDefinition,
+            input,
+            existingSteps,
+            onStepEvent,
+            requestContext: organizationId ? { organizationId } : {},
+            workflowMeta: {
+                runId: workflowRunId,
+                workflowSlug:
+                    workflowSlug ||
+                    workflowData.slug ||
+                    ((inputObj?._trigger as Record<string, unknown>)?.routedTo as string) ||
+                    ""
+            },
+            agentStepHooks,
+            deferSubWorkflows: true,
+            stepExecutor,
+            inputSchema: workflowData.inputSchemaJson as
+                | { required?: string[]; properties?: Record<string, unknown> }
+                | undefined
         });
 
         // Handle deferred sub-workflow: dispatch child and wait for completion
