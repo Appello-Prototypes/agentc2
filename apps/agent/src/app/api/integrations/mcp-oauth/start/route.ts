@@ -22,9 +22,7 @@ import { getUserOrganizationId } from "@/lib/organization";
 
 function getMcpOAuthRedirectUri(): string {
     const base = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
-    const isProduction = process.env.NODE_ENV === "production";
-    const prefix = isProduction ? "/agent" : "";
-    return `${base}${prefix}/api/integrations/mcp-oauth/callback`;
+    return `${base}/api/integrations/mcp-oauth/callback`;
 }
 
 export async function GET(request: NextRequest) {

@@ -169,9 +169,7 @@ const SUBSCRIPTION_MAX_MINUTES = 4230; // ~3 days
 
 function getCalendarWebhookUrl(): string {
     const base = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
-    const isProduction = process.env.NODE_ENV === "production";
-    const prefix = isProduction ? "/agent" : "";
-    return `${base}${prefix}/api/microsoft/webhook`;
+    return `${base}/api/microsoft/webhook`;
 }
 
 /**

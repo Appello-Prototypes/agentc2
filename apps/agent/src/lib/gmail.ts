@@ -21,10 +21,8 @@ export const getGmailOAuthClient = () => {
     const clientId = process.env.GOOGLE_CLIENT_ID || process.env.GMAIL_OAUTH_CLIENT_ID;
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET || process.env.GMAIL_OAUTH_CLIENT_SECRET;
     const base = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
-    const isProduction = process.env.NODE_ENV === "production";
-    const prefix = isProduction ? "/agent" : "";
     const redirectUri =
-        process.env.GMAIL_OAUTH_REDIRECT_URI || `${base}${prefix}/api/integrations/google/callback`;
+        process.env.GMAIL_OAUTH_REDIRECT_URI || `${base}/api/integrations/google/callback`;
 
     if (!clientId || !clientSecret) {
         throw new Error("Google OAuth is not configured");

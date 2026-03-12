@@ -442,9 +442,5 @@ export async function getMicrosoftUserProfile(connectionId: string): Promise<{
  */
 export function getMicrosoftRedirectUri(): string {
     const base = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
-    // In production (behind Caddy), routes include /agent basePath
-    // In development, no basePath
-    const isProduction = process.env.NODE_ENV === "production";
-    const prefix = isProduction ? "/agent" : "";
-    return `${base}${prefix}/api/integrations/microsoft/callback`;
+    return `${base}/api/integrations/microsoft/callback`;
 }

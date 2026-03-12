@@ -23,16 +23,12 @@ import { encryptCredentials } from "@/lib/credential-crypto";
 
 function getMcpOAuthRedirectUri(): string {
     const base = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
-    const isProduction = process.env.NODE_ENV === "production";
-    const prefix = isProduction ? "/agent" : "";
-    return `${base}${prefix}/api/integrations/mcp-oauth/callback`;
+    return `${base}/api/integrations/mcp-oauth/callback`;
 }
 
 function getSetupPageUrl(): string {
     const base = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
-    const isProduction = process.env.NODE_ENV === "production";
-    const prefix = isProduction ? "/agent" : "";
-    return `${base}${prefix}/mcp/setup`;
+    return `${base}/mcp/setup`;
 }
 
 export async function GET(request: NextRequest) {

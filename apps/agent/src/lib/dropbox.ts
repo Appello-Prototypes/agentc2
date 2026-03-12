@@ -107,9 +107,7 @@ export function buildDropboxAuthorizationUrl(params: {
 
 export function getDropboxRedirectUri(): string {
     const base = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
-    const isProduction = process.env.NODE_ENV === "production";
-    const prefix = isProduction ? "/agent" : "";
-    return `${base}${prefix}/api/integrations/dropbox/callback`;
+    return `${base}/api/integrations/dropbox/callback`;
 }
 
 // ── Token Exchange ─────────────────────────────────────────────────
