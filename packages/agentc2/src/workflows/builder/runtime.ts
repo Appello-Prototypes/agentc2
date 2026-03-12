@@ -642,6 +642,11 @@ async function executeSteps(
                         );
                     if (options.stepExecutor) {
                         const toolConfig = (step.config || {}) as unknown as WorkflowToolConfig;
+                        const hasInputMapping =
+                            step.inputMapping && Object.keys(step.inputMapping).length > 0;
+                        const resolvedToolInput = hasInputMapping
+                            ? stepInput
+                            : resolveInputMapping(toolConfig.parameters, context);
                         output = await options.stepExecutor(
                             step.id,
                             {
@@ -650,7 +655,7 @@ async function executeSteps(
                                 toolId: toolConfig.toolId,
                                 iterationIndex: options._parentIterationIndex
                             },
-                            stepInput,
+                            resolvedToolInput,
                             toolExecFn
                         );
                     } else {
