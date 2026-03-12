@@ -4,7 +4,34 @@
 **GitHub Issue**: https://github.com/Appello-Prototypes/agentc2/issues/151  
 **Scope**: High | **Priority**: Medium  
 **Status**: Design Phase  
-**Author**: AI Agent | **Date**: 2026-03-12
+**Author**: AI Agent | **Date**: 2026-03-12  
+**Last Updated**: 2026-03-12 (Fixed Bugbot issues)
+
+---
+
+## ⚠️ Design Corrections (2026-03-12)
+
+This design was reviewed by Cursor Bugbot and two critical issues were identified and fixed:
+
+### Issue 1: Circuit Breaker Never Opens (High Severity) ✅ FIXED
+**Problem**: Original design had retry wrapper catch all errors and return `{ error: "..." }` without re-throwing. Circuit breaker only records failures when wrapped function throws, so it would never open.
+
+**Fix**: 
+- Retry wrapper now re-throws errors after retries are exhausted (for thrown errors)
+- Retry wrapper handles both thrown errors and `{ error }` return patterns (from permission guard)
+- Circuit breaker checks circuit state before execution and manually tracks failures for both patterns
+- Permission blocks (`[TOOL BLOCKED]`) are excluded from circuit failure tracking
+
+### Issue 2: Retry-After Header Support Inoperative (Medium Severity) ✅ FIXED
+**Problem**: Original design tried to use `withRetry` utility's `onRetry` callback to override delay based on Retry-After headers, but the callback is side-effect-only with no ability to change delays.
+
+**Fix**: 
+- Implemented custom retry loop instead of using `withRetry` utility
+- Loop directly extracts `retryAfterMs` from classified errors
+- Respects Retry-After for rate limits, falls back to exponential backoff otherwise
+- Maintains full control over delay calculation
+
+**Architecture Decision**: Wrapper order is Permission → Retry → Health → Circuit (innermost to outermost). Retry and circuit wrappers both handle the `{ error }` return pattern from permission guard to ensure proper failure tracking.
 
 ---
 
@@ -366,72 +393,102 @@ export function wrapToolWithRetry(
     tool.execute = async (execContext: any) => {
         let lastClassifiedError: ClassifiedError | null = null;
         
-        try {
-            return await withRetry(
-                () => originalExecute(execContext),
-                {
-                    maxRetries: fullConfig.maxRetries,
-                    initialDelayMs: fullConfig.initialDelayMs,
-                    maxDelayMs: fullConfig.maxDelayMs,
-                    jitter: fullConfig.enableJitter,
-                    
-                    isRetryable: (error: unknown) => {
-                        lastClassifiedError = classifyToolError(error);
-                        
-                        // Don't retry if error is classified as non-retryable
-                        if (!lastClassifiedError.isRetryable) {
-                            console.log(
-                                `[ToolRetry] ${context.toolId}: Non-retryable error (${lastClassifiedError.category}) - ${lastClassifiedError.message}`
-                            );
-                            return false;
-                        }
-                        
-                        console.log(
-                            `[ToolRetry] ${context.toolId}: Retryable error (${lastClassifiedError.category}) - will retry`
-                        );
-                        return true;
-                    },
-                    
-                    onRetry: (error: unknown, attempt: number) => {
-                        const classified = classifyToolError(error);
-                        
-                        // Use Retry-After if available for rate limits
-                        if (
-                            fullConfig.respectRetryAfter &&
-                            classified.category === "rate_limit" &&
-                            classified.retryAfterMs
-                        ) {
-                            console.log(
-                                `[ToolRetry] ${context.toolId}: Rate limited, respecting Retry-After: ${classified.retryAfterMs}ms`
-                            );
-                            // Override delay (handled by withRetry)
-                        }
-                        
-                        console.log(
-                            `[ToolRetry] ${context.toolId}: Attempt ${attempt}/${fullConfig.maxRetries} failed (${classified.category}), retrying...`
-                        );
-                        
-                        // TODO: Emit telemetry event
-                        // inngest.send({
-                        //     name: "tool/retry",
-                        //     data: { toolId, attempt, error: classified }
-                        // });
+        // Custom retry loop to support Retry-After headers
+        for (let attempt = 0; attempt <= fullConfig.maxRetries; attempt++) {
+            try {
+                const result = await originalExecute(execContext);
+                
+                // Check if result indicates error (permission guard returns { error: "..." })
+                if (result && typeof result === "object" && "error" in result && typeof result.error === "string") {
+                    // Permission blocks ([TOOL BLOCKED]) should NOT be retried
+                    if (result.error.startsWith("[TOOL BLOCKED]")) {
+                        return result; // Pass through immediately
                     }
+                    
+                    // Treat other { error } returns as failures
+                    const syntheticError = new Error(result.error);
+                    lastClassifiedError = classifyToolError(syntheticError);
+                    
+                    // Check if retryable
+                    if (!lastClassifiedError.isRetryable) {
+                        console.log(
+                            `[ToolRetry] ${context.toolId}: Non-retryable error (${lastClassifiedError.category}) - ${lastClassifiedError.message}`
+                        );
+                        return result; // Return error result
+                    }
+                    
+                    // Last attempt - don't retry
+                    if (attempt >= fullConfig.maxRetries) {
+                        console.error(
+                            `[ToolRetry] ${context.toolId}: All retries exhausted (${fullConfig.maxRetries}). Final error: ${lastClassifiedError.message}`
+                        );
+                        return result; // Return error result
+                    }
+                    
+                    // Will retry below
+                } else {
+                    // Success - return result
+                    return result;
                 }
-            );
-        } catch (finalError) {
-            // All retries exhausted
-            const classified = lastClassifiedError ?? classifyToolError(finalError);
+            } catch (error) {
+                lastClassifiedError = classifyToolError(error);
+                
+                // Check if retryable
+                if (!lastClassifiedError.isRetryable) {
+                    console.log(
+                        `[ToolRetry] ${context.toolId}: Non-retryable error (${lastClassifiedError.category}) - ${lastClassifiedError.message}`
+                    );
+                    // Re-throw to propagate to circuit breaker
+                    throw error;
+                }
+                
+                // Last attempt - don't retry
+                if (attempt >= fullConfig.maxRetries) {
+                    console.error(
+                        `[ToolRetry] ${context.toolId}: All retries exhausted (${fullConfig.maxRetries}). Final error: ${lastClassifiedError.message}`
+                    );
+                    // Re-throw to propagate to circuit breaker
+                    throw error;
+                }
+            }
             
-            console.error(
-                `[ToolRetry] ${context.toolId}: All retries exhausted (${fullConfig.maxRetries}). Final error: ${classified.message}`
+            // Calculate delay (respect Retry-After for rate limits)
+            let delayMs: number;
+            
+            if (
+                fullConfig.respectRetryAfter &&
+                lastClassifiedError?.category === "rate_limit" &&
+                lastClassifiedError.retryAfterMs
+            ) {
+                delayMs = Math.min(lastClassifiedError.retryAfterMs, fullConfig.maxDelayMs);
+                console.log(
+                    `[ToolRetry] ${context.toolId}: Rate limited, respecting Retry-After: ${delayMs}ms`
+                );
+            } else {
+                // Exponential backoff with jitter
+                const expDelay = Math.min(
+                    fullConfig.maxDelayMs,
+                    fullConfig.initialDelayMs * Math.pow(2, attempt)
+                );
+                delayMs = fullConfig.enableJitter ? Math.random() * expDelay : expDelay;
+            }
+            
+            console.log(
+                `[ToolRetry] ${context.toolId}: Attempt ${attempt + 1}/${fullConfig.maxRetries} failed (${lastClassifiedError?.category}), retrying in ${delayMs}ms...`
             );
             
-            // Return structured error for LLM context
-            return {
-                error: formatErrorForModel(classified, fullConfig.maxRetries)
-            };
+            // TODO: Emit telemetry event
+            // inngest.send({
+            //     name: "tool/retry",
+            //     data: { toolId: context.toolId, attempt: attempt + 1, error: lastClassifiedError }
+            // });
+            
+            // Wait before retry
+            await new Promise(resolve => setTimeout(resolve, delayMs));
         }
+        
+        // Should never reach here (loop exits via return or throw)
+        throw new Error("Unexpected end of retry loop");
     };
     
     return tool;
@@ -693,22 +750,35 @@ export function wrapToolWithCircuitBreaker(
     const originalExecute = tool.execute.bind(tool);
     
     tool.execute = async (context: any) => {
+        // Check circuit state before executing
+        const state = breaker.getState();
+        if (state === "OPEN") {
+            console.warn(`[ToolCircuit] ${toolId}: Circuit OPEN, rejecting call`);
+            return {
+                error: `[TOOL UNAVAILABLE] ${toolId} is temporarily unavailable due to repeated failures. The system will retry automatically in ${Math.ceil(fullConfig.resetTimeoutMs / 1000)} seconds.`
+            };
+        }
+        
+        // Execute and track success/failure
         try {
-            const result = await breaker.execute(() => originalExecute(context));
-            return result;
-        } catch (error) {
-            if (error instanceof CircuitBreakerError) {
-                // Circuit is OPEN - return structured error
-                console.warn(
-                    `[ToolCircuit] ${toolId}: Circuit OPEN, rejecting call`
-                );
-                
-                return {
-                    error: `[TOOL UNAVAILABLE] ${toolId} is temporarily unavailable due to repeated failures. The system will retry automatically in ${Math.ceil(fullConfig.resetTimeoutMs / 1000)} seconds.`
-                };
+            const result = await originalExecute(context);
+            
+            // Check if result indicates error (permission guard pattern)
+            if (result && typeof result === "object" && "error" in result && typeof result.error === "string") {
+                // Treat { error: "..." } returns as failures for circuit tracking
+                // But DON'T count permission blocks (start with [TOOL BLOCKED])
+                if (!result.error.startsWith("[TOOL BLOCKED]")) {
+                    breaker["onFailure"]?.(); // Manually trigger failure tracking
+                }
+                return result;
             }
             
-            // Other errors propagate normally
+            // Success - close circuit if in HALF_OPEN
+            breaker["onSuccess"]?.();
+            return result;
+        } catch (error) {
+            // Thrown errors are failures
+            breaker["onFailure"]?.();
             throw error;
         }
     };
@@ -990,6 +1060,26 @@ finalInstructions += `\n\n---\n# Tool Execution Guidelines
 
 **Modified Module**: `packages/agentc2/src/agents/resolver.ts`
 
+**Wrapper Architecture**:
+
+The wrappers are applied in this order (innermost to outermost):
+
+1. **Permission Guard** (innermost) - Returns `{ error: "[TOOL BLOCKED] ..." }` for denied calls
+2. **Retry Wrapper** - Retries transient failures; handles both thrown errors and `{ error }` returns
+3. **Health Tracker** - Records success/failure metrics (observability only, no error handling)
+4. **Circuit Breaker** (outermost) - Fast-fails when circuit OPEN; tracks failures from retry wrapper
+
+**Error Flow**:
+- Permission blocks: `{ error }` return → retry passes through → circuit ignores
+- Transient errors: Thrown → retry catches + retries → eventually throws → circuit records
+- Non-retryable errors: Thrown → retry passes through → circuit records
+
+**Key Design Decision**: 
+The retry wrapper now uses a custom retry loop (not `withRetry` utility) to support:
+- Retry-After header respect for rate limits
+- Handling both thrown errors and `{ error }` return patterns
+- Proper error propagation to circuit breaker
+
 **Changes to Tool Wrapping** (around line 992-1024):
 
 ```typescript
@@ -1017,9 +1107,32 @@ for (const [toolId, tool] of Object.entries(tools)) {
     );
 }
 
-// 3. 🆕 Health tracking wrapper
+// 3. 🆕 Health tracking wrapper (instrumentation only, no error handling)
 for (const [toolId, tool] of Object.entries(tools)) {
-    tools[toolId] = wrapToolWithHealthTracking(tool, toolId);
+    const originalExecute = tools[toolId].execute.bind(tools[toolId]);
+    tools[toolId].execute = async (context: any) => {
+        const startTime = Date.now();
+        try {
+            const result = await originalExecute(context);
+            const latencyMs = Date.now() - startTime;
+            
+            // Check if result indicates error
+            const isError = result && typeof result === "object" && "error" in result;
+            
+            if (isError && !result.error.startsWith("[TOOL BLOCKED]")) {
+                toolHealthTracker.recordFailure(toolId, "unknown", false);
+            } else if (!isError) {
+                toolHealthTracker.recordSuccess(toolId, latencyMs);
+            }
+            
+            return result;
+        } catch (error) {
+            const latencyMs = Date.now() - startTime;
+            const classified = classifyToolError(error);
+            toolHealthTracker.recordFailure(toolId, classified.category, true);
+            throw error;
+        }
+    };
 }
 
 // 4. 🆕 Circuit breaker (outermost layer)
