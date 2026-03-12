@@ -30,6 +30,7 @@ export type GmailSyncResult = {
     error?: string;
     missingScopes?: string[];
     skipped?: boolean;
+    siblingsCreated?: string[];
 };
 
 /**
@@ -109,12 +110,14 @@ export async function syncGmailFromAccount(
         const saved = await saveGmailCredentials(organizationId, gmailAddress, tokenPayload);
 
         // Sync sibling Google services (Calendar, Drive) that share the same OAuth tokens
+        let siblingsCreated: string[] = [];
         try {
             const siblingResult = await syncSiblingGoogleConnections(
                 organizationId,
                 gmailAddress,
                 tokenPayload
             );
+            siblingsCreated = siblingResult.created;
             if (siblingResult.created.length > 0) {
                 console.log(
                     `[GmailSync] Synced sibling connections: ${siblingResult.created.join(", ")}`
@@ -130,7 +133,8 @@ export async function syncGmailFromAccount(
         return {
             success: true,
             gmailAddress,
-            connectionId: (saved as { connectionId?: string }).connectionId || undefined
+            connectionId: (saved as { connectionId?: string }).connectionId || undefined,
+            siblingsCreated
         };
     } catch (error) {
         console.error("[GmailSync] Error during sync:", error);
