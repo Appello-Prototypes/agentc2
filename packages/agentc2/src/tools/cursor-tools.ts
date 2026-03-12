@@ -93,6 +93,13 @@ export const cursorLaunchAgentTool = createTool({
             .describe("GitHub repository URL (e.g., 'https://github.com/org/repo')"),
         prompt: z.string().describe("Detailed implementation instructions for the coding agent"),
         ref: z.string().optional().describe("Base branch or ref to work from (default: 'main')"),
+        model: z
+            .string()
+            .optional()
+            .describe(
+                "Explicit model ID (e.g., 'claude-4.6-opus-high-thinking'). " +
+                    "When omitted, Cursor resolves your user/team/system default."
+            ),
         autoCreatePr: z
             .boolean()
             .optional()
@@ -120,6 +127,7 @@ export const cursorLaunchAgentTool = createTool({
         repository,
         prompt,
         ref,
+        model,
         autoCreatePr,
         openAsCursorGithubApp,
         organizationId
@@ -134,6 +142,7 @@ export const cursorLaunchAgentTool = createTool({
             method: "POST",
             body: JSON.stringify({
                 prompt: { text: prompt },
+                ...(model ? { model } : {}),
                 source: {
                     repository,
                     ref: ref || "main"

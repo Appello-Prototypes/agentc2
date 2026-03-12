@@ -830,7 +830,8 @@ async function main() {
                                 toolId: "cursor-launch-agent",
                                 parameters: {
                                     prompt: "You are performing a codebase analysis for a development ticket. Do NOT implement any changes — analysis only.\n\n## Ticket\n\nTitle: {{input.title}}\n\n{{input.description}}\n\nClassification: {{steps.classify.classification}} | Priority: {{steps.classify.priority}} | Complexity: {{steps.classify.complexity}}\nGitHub Issue: {{steps.intake.issueUrl}}\nRepository: {{input.repository}}\n\n## Your Task\n\n1. **Search the codebase** to find all code related to this ticket.\n2. **Architecture Analysis**: Identify the relevant architecture patterns, key files, and areas that need changes.\n3. **Impact Assessment**: What other parts of the system are affected?\n4. **Development Options**: Suggest 2-3 approaches with pros/cons and risk levels.\n\nOutput your complete analysis as a structured markdown document.",
-                                    repository: "https://github.com/{{input.repository}}"
+                                    repository: "https://github.com/{{input.repository}}",
+                                    model: "claude-4.6-opus-high-thinking"
                                 }
                             }
                         },
@@ -951,7 +952,8 @@ async function main() {
                                 toolId: "cursor-launch-agent",
                                 parameters: {
                                     prompt: "Implement the following approved plan. Create a branch, make the changes, and push.\n\n## Ticket\nTitle: {{input.title}}\nGitHub Issue: {{steps.intake.issueUrl}}\n\n## Approved Implementation Plan\n{{steps.plan.text}}\n\n## Instructions\n1. Create a feature branch from main\n2. Implement the changes according to the approved plan\n3. Add or update tests as needed\n4. Run linting and type-checking to verify\n5. Commit with a conventional commit message\n6. Push the branch — do NOT create a PR or merge",
-                                    repository: "https://github.com/{{input.repository}}"
+                                    repository: "https://github.com/{{input.repository}}",
+                                    model: "claude-4.6-opus-high-thinking"
                                 }
                             }
                         },
@@ -1036,7 +1038,8 @@ async function main() {
                     toolId: "cursor-launch-agent",
                     parameters: {
                         prompt: "You are performing a root cause analysis for a bug report. Do NOT implement any fix — analysis and planning only.\n\n## Bug Report\n\nTitle: {{input.title}}\n\n{{input.description}}\n\nGitHub Issue: {{steps.intake.issueUrl}}\nRepository: {{input.repository}}\n\n## Your Task\n\n1. **Search the codebase** to find all code related to this bug. Use grep, semantic search, and file reading to thoroughly understand the relevant code.\n\n2. **Root Cause Analysis**: Identify the exact root cause with specific file paths, function names, and line numbers.\n\n3. **Impact Assessment**: What other parts of the system are affected?\n\n4. **Fix Plan**: Create a detailed, step-by-step fix plan:\n   - Specific files to modify and what changes to make\n   - Any new files or tests needed\n   - Risk assessment (low/medium/high)\n   - Estimated complexity\n\nOutput your complete analysis as a structured markdown document. Be thorough — your analysis will be reviewed by an auditor and a human before any code is written.",
-                        repository: "https://github.com/{{input.repository}}"
+                        repository: "https://github.com/{{input.repository}}",
+                        model: "claude-4.6-opus-high-thinking"
                     }
                 }
             },
@@ -1146,7 +1149,8 @@ async function main() {
                     parameters: {
                         prompt: "Implement the following approved bugfix.\n\n## Bug\nTitle: {{input.title}}\nGitHub Issue: {{steps.intake.issueUrl}}\n\n## Approved Fix Plan\n{{steps['analyze-wait'].summary}}\n\n## Instructions\n1. Implement the fix according to the approved plan on the current branch (do NOT create a new branch)\n2. Add or update tests as needed\n3. Run linting and type-checking to verify\n4. Commit with a conventional commit message: fix: <description>\n5. Push the branch. Do NOT merge or create a PR — the system handles PR creation automatically.",
                         repository: "https://github.com/{{input.repository}}",
-                        autoCreatePr: true
+                        autoCreatePr: true,
+                        model: "claude-4.6-opus-high-thinking"
                     }
                 }
             },
@@ -1248,7 +1252,8 @@ async function main() {
                     toolId: "cursor-launch-agent",
                     parameters: {
                         prompt: "You are creating a technical design for a feature request. Do NOT implement anything — design and analysis only.\n\n## Feature Request\n\nTitle: {{input.title}}\n\n{{input.description}}\n\nScope: {{steps.classify.complexity}} | Priority: {{steps.classify.priority}}\nGitHub Issue: {{steps.intake.issueUrl}}\nRepository: {{input.repository}}\n\n## Your Task\n\n1. **Search the codebase** to understand the relevant architecture, patterns, and existing implementations.\n2. **Technical Design**: Create a comprehensive design document including architecture changes, new components, data model changes, API changes, and integration points.\n3. **Impact Assessment**: What existing functionality is affected? What are the risks?\n4. **Phased Approach**: Break the feature into deliverable phases with clear milestones.\n\nOutput your complete design as a structured markdown document.",
-                        repository: "https://github.com/{{input.repository}}"
+                        repository: "https://github.com/{{input.repository}}",
+                        model: "claude-4.6-opus-high-thinking"
                     }
                 }
             },
@@ -1390,7 +1395,8 @@ async function main() {
                     parameters: {
                         prompt: "Implement the following approved feature plan.\n\n## Feature\nTitle: {{input.title}}\nGitHub Issue: {{steps.intake.issueUrl}}\n\n## Approved Implementation Plan\n{{steps['feature-plan'].text}}\n\n## Instructions\n1. Implement the feature according to the approved phased plan on the current branch (do NOT create a new branch)\n2. Add comprehensive tests\n3. Run linting and type-checking to verify\n4. Commit with conventional commit messages: feat: <description>\n5. Push the branch. Do NOT merge or create a PR — the system handles PR creation automatically.",
                         repository: "https://github.com/{{input.repository}}",
-                        autoCreatePr: true
+                        autoCreatePr: true,
+                        model: "claude-4.6-opus-high-thinking"
                     }
                 }
             },
