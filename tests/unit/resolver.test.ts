@@ -266,4 +266,49 @@ describe("AgentResolver Logic", () => {
             expect(result).toBeNull();
         });
     });
+
+    describe("Tool health check logic", () => {
+        it("should not report filtered tools as missing", () => {
+            const expectedToolNames = new Set(["tool-a", "tool-b", "tool-c", "tool-d"]);
+            const loadedTools = { "tool-a": {}, "tool-b": {} };
+            const filteredTools = ["tool-c"];
+
+            const loadedToolNames = new Set(Object.keys(loadedTools));
+            const filteredToolsSet = new Set(filteredTools);
+            const missingTools = [...expectedToolNames].filter(
+                (t) => !loadedToolNames.has(t) && !filteredToolsSet.has(t)
+            );
+
+            expect(missingTools).toEqual(["tool-d"]);
+            expect(missingTools).not.toContain("tool-c");
+        });
+
+        it("should handle empty filtered tools", () => {
+            const expectedToolNames = new Set(["tool-a", "tool-b"]);
+            const loadedTools = { "tool-a": {} };
+            const filteredTools: string[] = [];
+
+            const loadedToolNames = new Set(Object.keys(loadedTools));
+            const filteredToolsSet = new Set(filteredTools);
+            const missingTools = [...expectedToolNames].filter(
+                (t) => !loadedToolNames.has(t) && !filteredToolsSet.has(t)
+            );
+
+            expect(missingTools).toEqual(["tool-b"]);
+        });
+
+        it("should handle all tools loaded successfully", () => {
+            const expectedToolNames = new Set(["tool-a", "tool-b"]);
+            const loadedTools = { "tool-a": {}, "tool-b": {} };
+            const filteredTools: string[] = [];
+
+            const loadedToolNames = new Set(Object.keys(loadedTools));
+            const filteredToolsSet = new Set(filteredTools);
+            const missingTools = [...expectedToolNames].filter(
+                (t) => !loadedToolNames.has(t) && !filteredToolsSet.has(t)
+            );
+
+            expect(missingTools).toEqual([]);
+        });
+    });
 });

@@ -817,7 +817,10 @@ export class AgentResolver {
         // --- Tool Health Check ---
         // Compare loaded tools against what was expected from AgentTool + SkillTool records
         const loadedToolNames = new Set(Object.keys(tools));
-        const missingTools = [...expectedToolNames].filter((t) => !loadedToolNames.has(t));
+        const filteredToolsSet = new Set(filteredTools);
+        const missingTools = [...expectedToolNames].filter(
+            (t) => !loadedToolNames.has(t) && !filteredToolsSet.has(t)
+        );
         const toolHealth: ToolHealthSnapshot = {
             expectedCount: expectedToolNames.size,
             loadedCount: loadedToolNames.size,
