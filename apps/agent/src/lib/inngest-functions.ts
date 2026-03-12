@@ -8553,8 +8553,25 @@ export const asyncWorkflowExecuteFunction = inngest.createFunction(
                             outputJson: `Inngest function failed after retries: ${error.message}`
                         }
                     });
+
+                    // Clean up any steps stuck in RUNNING status
+                    const cleaned = await prisma.workflowRunStep.updateMany({
+                        where: {
+                            runId: workflowRunId,
+                            status: "RUNNING"
+                        },
+                        data: {
+                            status: "FAILED",
+                            completedAt: new Date(),
+                            errorJson: `Parent workflow failed: ${error.message}`
+                        }
+                    });
+
                     console.error(
-                        `[Inngest onFailure] Marked workflow run ${workflowRunId} as FAILED:`,
+                        `[Inngest onFailure] Marked workflow run ${workflowRunId} as FAILED` +
+                            (cleaned.count > 0
+                                ? ` (cleaned ${cleaned.count} zombie RUNNING steps)`
+                                : ""),
                         error.message
                     );
                 } catch (updateErr) {
@@ -8591,6 +8608,12 @@ export const asyncWorkflowExecuteFunction = inngest.createFunction(
         // Step 2: Load workflow and execute with progressive step persistence.
         // On Inngest retries, previously completed steps are loaded from DB and skipped
         // to prevent duplicate side effects (e.g., posting GitHub comments twice).
+        //
+        // Sub-workflow steps are deferred: instead of executing inline (which can
+        // take 30+ minutes for Cursor Cloud polling), they return a suspended status.
+        // The Inngest function then dispatches the child as its own durable function
+        // and waits for completion via step.waitForEvent, avoiding HTTP proxy timeouts.
+        const isChildDispatch = !!(event.data.parentRunId && event.data.parentStepId);
         const result = await step.run("execute-workflow", async () => {
             const workflow = await prisma.workflow.findUnique({
                 where: { id: workflowId },
@@ -8838,11 +8861,149 @@ export const asyncWorkflowExecuteFunction = inngest.createFunction(
                         ""
                 },
                 agentStepHooks,
+                deferSubWorkflows: true,
                 inputSchema: workflow.inputSchemaJson as
                     | { required?: string[]; properties?: Record<string, unknown> }
                     | undefined
             });
         });
+
+        // Handle deferred sub-workflow: dispatch child and wait for completion
+        if (result.status === "suspended" && result.suspended?.data?._deferredWorkflow) {
+            const {
+                childWorkflowId,
+                childWorkflowSlug,
+                childInput,
+                organizationId: childOrgId
+            } = result.suspended.data as {
+                childWorkflowId: string;
+                childWorkflowSlug: string;
+                childInput: Record<string, unknown>;
+                organizationId: string;
+            };
+            const parentStepId = result.suspended.stepId;
+
+            // Create a child WorkflowRun record
+            const childRun = await step.run(`create-child-run-${parentStepId}`, async () => {
+                const run = await prisma.workflowRun.create({
+                    data: {
+                        workflowId: childWorkflowId,
+                        status: "QUEUED",
+                        inputJson: childInput as Prisma.InputJsonValue,
+                        source: "sub-workflow",
+                        environment: "PRODUCTION",
+                        triggerType: "API"
+                    }
+                });
+                return { childRunId: run.id };
+            });
+
+            // Dispatch the child workflow via Inngest
+            await step.sendEvent(`dispatch-child-${parentStepId}`, {
+                name: "workflow/execute.async",
+                data: {
+                    workflowRunId: childRun.childRunId,
+                    workflowId: childWorkflowId,
+                    workflowSlug: childWorkflowSlug,
+                    input: childInput,
+                    organizationId: childOrgId,
+                    parentRunId: workflowRunId,
+                    parentStepId
+                }
+            });
+
+            console.log(
+                `[Inngest] Dispatched child workflow ${childWorkflowSlug} (run ${childRun.childRunId}) for parent step "${parentStepId}"`
+            );
+
+            // Wait for the child to complete (up to 2 hours)
+            const childCompletion = await step.waitForEvent(`wait-child-${parentStepId}`, {
+                event: "workflow/child.complete",
+                if: `async.data.parentRunId == '${workflowRunId}' && async.data.parentStepId == '${parentStepId}'`,
+                timeout: "2h"
+            });
+
+            if (!childCompletion) {
+                throw new Error(`Child workflow ${childWorkflowSlug} timed out after 2 hours`);
+            }
+
+            // Persist the sub-workflow step result in the parent
+            await step.run(`persist-child-result-${parentStepId}`, async () => {
+                const existing = await prisma.workflowRunStep.findFirst({
+                    where: { runId: workflowRunId, stepId: parentStepId },
+                    select: { id: true }
+                });
+                const stepStatus =
+                    childCompletion.data.childStatus === "COMPLETED"
+                        ? ("COMPLETED" as const)
+                        : ("FAILED" as const);
+                if (existing) {
+                    await prisma.workflowRunStep.update({
+                        where: { id: existing.id },
+                        data: {
+                            status: stepStatus,
+                            outputJson: childCompletion.data.childOutput as Prisma.InputJsonValue,
+                            completedAt: new Date()
+                        }
+                    });
+                } else {
+                    await prisma.workflowRunStep.create({
+                        data: {
+                            runId: workflowRunId,
+                            stepId: parentStepId,
+                            stepType: "workflow",
+                            stepName: `Execute ${childWorkflowSlug}`,
+                            status: stepStatus,
+                            outputJson: childCompletion.data.childOutput as Prisma.InputJsonValue,
+                            completedAt: new Date()
+                        }
+                    });
+                }
+            });
+
+            // Replace result with the child's outcome for downstream steps
+            const childStatus = childCompletion.data.childStatus;
+            if (childStatus !== "COMPLETED" && childStatus !== "FAILED") {
+                // Child suspended (human approval) — mark parent as suspended too
+                Object.assign(result, {
+                    status: "suspended",
+                    suspended: {
+                        stepId: parentStepId,
+                        data: { childRunId: childRun.childRunId, childStatus }
+                    }
+                });
+            } else {
+                Object.assign(result, {
+                    status: childStatus === "COMPLETED" ? "success" : "failed",
+                    output: childCompletion.data.childOutput,
+                    suspended: undefined
+                });
+            }
+        }
+
+        // If this is a child workflow, send completion event to parent
+        if (
+            isChildDispatch &&
+            (result.status === "success" ||
+                result.status === "failed" ||
+                result.status === "suspended")
+        ) {
+            await step.sendEvent("notify-parent", {
+                name: "workflow/child.complete",
+                data: {
+                    parentRunId: event.data.parentRunId!,
+                    parentStepId: event.data.parentStepId!,
+                    childRunId: workflowRunId,
+                    childStatus:
+                        result.status === "success"
+                            ? "COMPLETED"
+                            : result.status === "failed"
+                              ? "FAILED"
+                              : "SUSPENDED",
+                    childOutput: result.output ?? null
+                }
+            });
+        }
 
         // Step 3: Reconcile step results — only save steps not already persisted progressively
         await step.run("save-steps", async () => {

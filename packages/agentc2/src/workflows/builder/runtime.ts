@@ -37,6 +37,8 @@ interface ExecuteWorkflowOptions {
     agentStepHooks?: AgentStepHooks;
     _parentIterationIndex?: number;
     inputSchema?: { required?: string[]; properties?: Record<string, unknown> };
+    /** When true, sub-workflow steps return suspended with child metadata instead of executing inline. */
+    deferSubWorkflows?: boolean;
 }
 
 const MAX_NESTING_DEPTH = 5;
@@ -447,9 +449,41 @@ async function executeToolStep(
         throw new Error(`Tool "${config.toolId}" does not expose an executable handler`);
     }
 
-    const rawResult = await handler(input);
-    // Bug 3 fix: unwrap MCP protocol-format results
-    return unwrapToolResult(rawResult);
+    const maxRetries = (config as { retries?: number }).retries ?? 2;
+    const RETRYABLE_PATTERNS = [
+        "401",
+        "403",
+        "429",
+        "500",
+        "502",
+        "503",
+        "524",
+        "ETIMEDOUT",
+        "ECONNRESET",
+        "ECONNREFUSED",
+        "fetch failed"
+    ];
+
+    let lastError: unknown;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        if (attempt > 0) {
+            const delay = Math.min(1000 * Math.pow(2, attempt - 1), 10_000);
+            await new Promise((r) => setTimeout(r, delay));
+            console.log(
+                `[WorkflowRuntime] Retrying tool "${config.toolId}" (attempt ${attempt + 1}/${maxRetries + 1})`
+            );
+        }
+        try {
+            const rawResult = await handler(input);
+            return unwrapToolResult(rawResult);
+        } catch (error) {
+            lastError = error;
+            const msg = error instanceof Error ? error.message : String(error);
+            const isRetryable = RETRYABLE_PATTERNS.some((p) => msg.includes(p));
+            if (!isRetryable || attempt === maxRetries) throw error;
+        }
+    }
+    throw lastError;
 }
 
 async function executeWorkflowStep(
@@ -457,7 +491,8 @@ async function executeWorkflowStep(
     context: WorkflowExecutionContext,
     resume: WorkflowResumeInput | undefined,
     requestContext?: RequestContext,
-    depth = 0
+    depth = 0,
+    deferSubWorkflows = false
 ): Promise<WorkflowExecutionResult> {
     const config = (step.config || {}) as unknown as WorkflowCallConfig;
     if (!config.workflowId) {
@@ -472,12 +507,33 @@ async function executeWorkflowStep(
         hasWfInputMapping ? step.inputMapping : config.input,
         context
     );
+
     const dbWorkflow = await prisma.workflow.findFirst({
         where: {
             OR: [{ id: config.workflowId }, { slug: config.workflowId }],
             ...(organizationId ? { workspace: { organizationId } } : {})
         }
     });
+
+    // Defer mode: return suspended with child workflow metadata so the caller
+    // (e.g. Inngest) can dispatch the child as a separate durable function.
+    if (deferSubWorkflows && dbWorkflow) {
+        return {
+            status: "suspended",
+            output: null,
+            steps: [],
+            suspended: {
+                stepId: step.id,
+                data: {
+                    _deferredWorkflow: true,
+                    childWorkflowId: dbWorkflow.id,
+                    childWorkflowSlug: dbWorkflow.slug,
+                    childInput: input as Record<string, unknown>,
+                    organizationId: organizationId || ""
+                }
+            }
+        };
+    }
 
     if (dbWorkflow?.definitionJson) {
         return executeWorkflowDefinition({
@@ -566,7 +622,8 @@ async function executeSteps(
                         context,
                         options.resume,
                         options.requestContext,
-                        options.depth
+                        options.depth,
+                        options.deferSubWorkflows
                     );
                     status = result.status;
                     output = result.output;

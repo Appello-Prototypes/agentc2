@@ -63,6 +63,39 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        // Idempotency: reuse existing GitHub issue from previous run on redispatch
+        let existingIssueUrl: string | undefined;
+        let existingIssueNumber: number | undefined;
+
+        if (sourceType === "support_ticket") {
+            try {
+                const ticket = await prisma.supportTicket.findUnique({
+                    where: { id: sourceId },
+                    select: { pipelineRunId: true }
+                });
+                if (ticket?.pipelineRunId) {
+                    const prevIntakeStep = await prisma.workflowRunStep.findFirst({
+                        where: {
+                            runId: ticket.pipelineRunId,
+                            stepId: "intake",
+                            status: "COMPLETED"
+                        },
+                        select: { outputJson: true }
+                    });
+                    if (prevIntakeStep?.outputJson) {
+                        const output = prevIntakeStep.outputJson as {
+                            issueUrl?: string;
+                            issueNumber?: number;
+                        };
+                        existingIssueUrl = output.issueUrl;
+                        existingIssueNumber = output.issueNumber;
+                    }
+                }
+            } catch (e) {
+                console.warn("[Admin Dispatch] Failed to look up existing issue:", e);
+            }
+        }
+
         const executePayload = {
             input: {
                 sourceType,
@@ -70,7 +103,9 @@ export async function POST(request: NextRequest) {
                 title: title || "",
                 description: description || "",
                 labels: labels || ["agentc2-sdlc"],
-                repository: config.repository
+                repository: config.repository,
+                ...(existingIssueUrl ? { existingIssueUrl } : {}),
+                ...(existingIssueNumber ? { existingIssueNumber } : {})
             },
             via: "inngest",
             source: "admin-dispatch",

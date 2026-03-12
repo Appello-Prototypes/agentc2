@@ -399,6 +399,17 @@ export const inngest = new Inngest({
                 input: Record<string, unknown>;
                 pipelineRunId?: string;
                 organizationId?: string;
+                parentRunId?: string;
+                parentStepId?: string;
+            };
+        };
+        "workflow/child.complete": {
+            data: {
+                parentRunId: string;
+                parentStepId: string;
+                childRunId: string;
+                childStatus: string;
+                childOutput: unknown;
             };
         };
         // Dark Factory Pipeline Stats Events

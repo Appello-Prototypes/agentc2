@@ -61,6 +61,33 @@ async function runAutoDispatch(ticket: {
             return;
         }
 
+        // Idempotency: reuse existing GitHub issue if a previous run already created one
+        let existingIssueUrl: string | undefined;
+        let existingIssueNumber: number | undefined;
+
+        const existingTicket = await prisma.supportTicket.findUnique({
+            where: { id: ticket.id },
+            select: { pipelineRunId: true }
+        });
+        if (existingTicket?.pipelineRunId) {
+            const prevIntakeStep = await prisma.workflowRunStep.findFirst({
+                where: {
+                    runId: existingTicket.pipelineRunId,
+                    stepId: "intake",
+                    status: "COMPLETED"
+                },
+                select: { outputJson: true }
+            });
+            if (prevIntakeStep?.outputJson) {
+                const output = prevIntakeStep.outputJson as {
+                    issueUrl?: string;
+                    issueNumber?: number;
+                };
+                existingIssueUrl = output.issueUrl;
+                existingIssueNumber = output.issueNumber;
+            }
+        }
+
         const workflowSlug = encodeURIComponent(config.workflowSlug);
         const res = await fetch(`${agentBaseUrl}/api/workflows/${workflowSlug}/execute`, {
             method: "POST",
@@ -76,7 +103,9 @@ async function runAutoDispatch(ticket: {
                     title: ticket.title,
                     description: ticket.description,
                     labels: ["agentc2-sdlc", typeLabel],
-                    repository: config.repository
+                    repository: config.repository,
+                    ...(existingIssueUrl ? { existingIssueUrl } : {}),
+                    ...(existingIssueNumber ? { existingIssueNumber } : {})
                 },
                 via: "inngest",
                 source: "auto-dispatch",
