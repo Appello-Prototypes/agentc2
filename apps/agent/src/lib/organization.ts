@@ -3,10 +3,20 @@ import { cookies } from "next/headers";
 
 const ACTIVE_ORG_COOKIE = "agentc2-active-org";
 
-export async function getUserMembership(userId: string) {
+export async function getUserMembership(userId: string, organizationId?: string) {
+    // When organizationId is provided, use findUnique for deterministic lookup
+    if (organizationId) {
+        return prisma.membership.findUnique({
+            where: {
+                userId_organizationId: { userId, organizationId }
+            }
+        });
+    }
+
+    // Without organizationId, return first membership (for backwards compatibility)
+    // Note: This assumes single-org users. Multi-org users should always provide organizationId.
     return prisma.membership.findFirst({
-        where: { userId },
-        orderBy: { createdAt: "asc" }
+        where: { userId }
     });
 }
 

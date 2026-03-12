@@ -131,14 +131,26 @@ export const submitSupportTicketTool = createTool({
             };
         }
 
-        const user = await prisma.user.findUnique({
-            where: { id: userId },
-            select: { id: true, name: true, email: true }
+        // Validate user exists and belongs to organization (prevents attribution bugs)
+        const membership = await prisma.membership.findUnique({
+            where: {
+                userId_organizationId: { userId, organizationId }
+            },
+            include: {
+                user: {
+                    select: { id: true, name: true, email: true }
+                }
+            }
         });
 
-        if (!user) {
-            return { success: false, error: `User not found for ID: ${userId}` };
+        if (!membership) {
+            return {
+                success: false,
+                error: `User ${userId} is not a member of organization ${organizationId}`
+            };
         }
+
+        const user = membership.user;
 
         const validPriorities = ["CRITICAL", "HIGH", "MEDIUM", "LOW"] as const;
         type PrismaTicketPriority = (typeof validPriorities)[number];

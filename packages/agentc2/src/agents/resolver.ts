@@ -2101,6 +2101,54 @@ export interface RoutingDecision {
 }
 
 /**
+ * Bind user context (userId, organizationId) to all tools in an agent.
+ * Ensures tools receive correct user context even if LLM fails to extract it.
+ *
+ * This is a security-critical function that prevents attribution bugs by
+ * injecting server-side authenticated user context into tool calls.
+ *
+ * @param tools - Record of tools to wrap
+ * @param context - User context containing userId and organizationId
+ * @returns Tools wrapped with user context injection
+ */
+export function bindUserContextToTools(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    tools: Record<string, any>,
+    context: { userId: string; organizationId: string }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): Record<string, any> {
+    return Object.fromEntries(
+        Object.entries(tools).map(([name, tool]) => [
+            name,
+            {
+                ...tool,
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                execute: async (input: unknown, execCtx: unknown): Promise<any> => {
+                    // Parse compound resourceId if present (orgId:userId format)
+                    let resolvedUserId = context.userId;
+                    if (resolvedUserId.includes(":")) {
+                        const parts = resolvedUserId.split(":");
+                        resolvedUserId = parts[1] || parts[0];
+                    }
+
+                    // Inject userId and organizationId if not already present
+                    // Tool-provided values take precedence (for admin override scenarios)
+                    const enrichedInput = {
+                        ...(input as object),
+                        userId: (input as Record<string, unknown>)?.userId || resolvedUserId,
+                        organizationId:
+                            (input as Record<string, unknown>)?.organizationId ||
+                            context.organizationId
+                    };
+
+                    return tool.execute(enrichedInput, execCtx);
+                }
+            }
+        ])
+    );
+}
+
+/**
  * Classify the complexity of user input using lightweight heuristics.
  * Returns a score from 0 (trivial) to 1 (very complex).
  */

@@ -67,7 +67,8 @@ export {
     BudgetExceededError,
     classifyComplexity,
     resolveRoutingDecision,
-    resolveModelOverride
+    resolveModelOverride,
+    bindUserContextToTools
 } from "./resolver";
 export type {
     RequestContext,

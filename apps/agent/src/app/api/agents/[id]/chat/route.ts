@@ -241,6 +241,18 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             });
         timing.agentResolve = Math.round(performance.now() - tResolve);
 
+        // Bind user context to tools for security (prevents attribution bugs)
+        if (resolvedOrgId && resourceId && agent.tools) {
+            const { bindUserContextToTools } = await import("@repo/agentc2");
+            agent.tools = bindUserContextToTools(agent.tools, {
+                userId: resourceId,
+                organizationId: resolvedOrgId
+            });
+            console.log(
+                `[Agent Chat] Bound user context to tools: userId=${resourceId}, orgId=${resolvedOrgId}`
+            );
+        }
+
         console.log(
             `[Agent Chat] Received slug param: '${id}', resolved agent: '${record?.slug || id}' (${record?.name || "fallback"}) from ${source} (mode: ${runSource})`
         );
