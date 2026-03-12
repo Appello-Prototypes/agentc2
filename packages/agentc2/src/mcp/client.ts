@@ -2815,16 +2815,17 @@ async function getIntegrationConnections(options: {
         orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }]
     });
 
-    // Filter out connections with persistent errors to prevent loading broken tools
-    const connections = allConnections.filter((conn) => {
+    // Log connections with errors but don't filter them out - let per-server
+    // error isolation handle failures gracefully with retry + stale cache fallback
+    for (const conn of allConnections) {
         if (conn.errorMessage) {
             console.warn(
-                `[MCP] Skipping connection "${conn.name}" (${conn.provider.key}): ${conn.errorMessage}`
+                `[MCP] Connection "${conn.name}" (${conn.provider.key}) has error: ${conn.errorMessage} ` +
+                    `(will attempt to load with retry + stale cache fallback)`
             );
-            return false;
         }
-        return true;
-    });
+    }
+    const connections = allConnections;
 
     if (connections.length > 0) {
         return connections;
@@ -3347,9 +3348,13 @@ function buildServerDefinitionForProvider(options: {
 function buildServerConfigs(options: {
     connections: ConnectionWithProvider[];
     allowEnvFallback?: boolean;
-}): Record<string, MastraMCPServerDefinition> {
+}): {
+    servers: Record<string, MastraMCPServerDefinition>;
+    serverToConnection: Map<string, string>;
+} {
     const { connections, allowEnvFallback = false } = options;
     const servers: Record<string, MastraMCPServerDefinition> = {};
+    const serverToConnection = new Map<string, string>();
 
     const connectionsByProvider = new Map<string, ConnectionWithProvider[]>();
     for (const connection of connections) {
@@ -3383,6 +3388,7 @@ function buildServerConfigs(options: {
             });
             if (serverDefinition) {
                 servers[serverId] = serverDefinition;
+                serverToConnection.set(serverId, connection.id);
             }
         }
     }
@@ -3406,7 +3412,7 @@ function buildServerConfigs(options: {
         }
     }
 
-    return servers;
+    return { servers, serverToConnection };
 }
 
 /**
@@ -3853,7 +3859,7 @@ export const MCP_SERVER_CONFIGS: McpServerConfig[] = INTEGRATION_PROVIDER_SEEDS.
  */
 function getMcpClient(): MCPClient {
     if (!global.mcpClient) {
-        const servers = buildServerConfigs({
+        const { servers } = buildServerConfigs({
             connections: [],
             allowEnvFallback: true
         });
@@ -3891,7 +3897,7 @@ async function getMcpClientForOrganization(options?: {
         userId: options?.userId
     });
 
-    const servers = buildServerConfigs({
+    const { servers } = buildServerConfigs({
         connections,
         allowEnvFallback: false
     });
@@ -3937,8 +3943,8 @@ export async function getMcpTools(
         return { tools: cached.tools, serverErrors: cached.serverErrors };
     }
 
-    const servers = await buildServerConfigsForOptions(options);
-    const result = await loadToolsPerServer(servers, cacheKey);
+    const { servers, serverToConnection } = await buildServerConfigsForOptions(options);
+    const result = await loadToolsPerServer(servers, cacheKey, serverToConnection);
 
     // If some servers failed, backfill from last-known-good cache (stale fallback)
     const failedServerIds = Object.keys(result.serverErrors);
@@ -3972,7 +3978,10 @@ export async function getMcpTools(
 async function buildServerConfigsForOptions(options: {
     organizationId?: string | null;
     userId?: string | null;
-}): Promise<Record<string, MastraMCPServerDefinition>> {
+}): Promise<{
+    servers: Record<string, MastraMCPServerDefinition>;
+    serverToConnection: Map<string, string>;
+}> {
     const organizationId = options.organizationId;
     if (!organizationId) {
         return buildServerConfigs({ connections: [], allowEnvFallback: true });
@@ -4025,10 +4034,12 @@ async function loadToolsFromServer(
  * Each server gets 1 retry on failure before being marked as errored.
  * Successful loads are stored in a last-known-good cache for stale fallback.
  * Returns merged tools and a map of serverId -> error message for failures.
+ * Clears errorMessage for connections whose servers successfully load.
  */
 async function loadToolsPerServer(
     servers: Record<string, MastraMCPServerDefinition>,
-    cacheKey = "__default__"
+    cacheKey = "__default__",
+    serverToConnection?: Map<string, string>
 ): Promise<{
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     tools: Record<string, any>;
@@ -4047,6 +4058,8 @@ async function loadToolsPerServer(
         serverEntries.map(([serverId, serverDef]) => loadToolsFromServer(serverId, serverDef))
     );
 
+    const successfulConnectionIds: string[] = [];
+
     for (const result of results) {
         if (result.status === "fulfilled") {
             const { serverId, tools } = result.value;
@@ -4056,6 +4069,11 @@ async function loadToolsPerServer(
                 tools,
                 loadedAt: Date.now()
             });
+            // Track successful connection IDs for error clearing
+            const connectionId = serverToConnection?.get(serverId);
+            if (connectionId) {
+                successfulConnectionIds.push(connectionId);
+            }
         } else {
             // Extract serverId from the error context
             const idx = results.indexOf(result);
@@ -4063,6 +4081,26 @@ async function loadToolsPerServer(
             const message = formatTestError(result.reason);
             serverErrors[serverId] = message;
             console.warn(`[MCP] Server "${serverId}" failed to load tools after retry: ${message}`);
+        }
+    }
+
+    // Clear errorMessage for connections that successfully loaded
+    if (successfulConnectionIds.length > 0) {
+        try {
+            await prisma.integrationConnection.updateMany({
+                where: {
+                    id: { in: successfulConnectionIds },
+                    errorMessage: { not: null }
+                },
+                data: { errorMessage: null }
+            });
+            if (successfulConnectionIds.length > 0) {
+                console.log(
+                    `[MCP] Cleared error messages for ${successfulConnectionIds.length} successfully loaded connection(s)`
+                );
+            }
+        } catch (error) {
+            console.warn("[MCP] Failed to clear connection error messages:", error);
         }
     }
 
