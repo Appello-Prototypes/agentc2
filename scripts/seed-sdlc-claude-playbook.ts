@@ -305,8 +305,7 @@ async function main() {
                 name: "Validation & Self-Heal Cycle",
                 config: {
                     maxIterations: 3,
-                    conditionExpression:
-                        "steps['verify-branch']?.passed !== true",
+                    conditionExpression: "steps['verify-branch']?.passed !== true",
                     steps: [
                         {
                             id: "verify-branch",
@@ -345,7 +344,7 @@ async function main() {
                                                     agentSlug: orgSlug("sdlc-auditor"),
                                                     outputFormat: "json",
                                                     promptTemplate:
-                                                        "You are a QA validation agent with Playwright browser tools. Verify the AgentC2 platform is functioning correctly.\n\n## Context\nBug fix: {{input.title}}\nChanges: {{steps['implement-wait'].summary}}\n\nNavigate to the AgentC2 platform and validate:\n1. Login page loads\n2. Workspace dashboard renders\n3. Agents list page loads\n4. Workflows page loads\n5. Networks page loads\n6. Settings/Integrations page loads\n\nUse playwright_browser_navigate, playwright_browser_snapshot, playwright_browser_click.\nFor each check, take a snapshot and verify key elements are present.\n\nRespond with JSON: { \"verdict\": \"PASS\" or \"FAIL\", \"checks\": [...], \"failureDetails\": \"...\" }"
+                                                        'You are a QA validation agent with Playwright browser tools. Verify the AgentC2 platform is functioning correctly.\n\n## Context\nBug fix: {{input.title}}\nChanges: {{steps[\'implement-wait\'].summary}}\n\nNavigate to the AgentC2 platform and validate:\n1. Login page loads\n2. Workspace dashboard renders\n3. Agents list page loads\n4. Workflows page loads\n5. Networks page loads\n6. Settings/Integrations page loads\n\nUse playwright_browser_navigate, playwright_browser_snapshot, playwright_browser_click.\nFor each check, take a snapshot and verify key elements are present.\n\nRespond with JSON: { "verdict": "PASS" or "FAIL", "checks": [...], "failureDetails": "..." }'
                                                 }
                                             }
                                         ]
@@ -360,7 +359,8 @@ async function main() {
                                             toolId: "claude-launch-agent",
                                             parameters: {
                                                 prompt: "CI validation failed on branch {{steps['implement-wait'].branchName}}.\n\n## Failures\n{{helpers.json(steps['verify-branch'].results)}}\n\nFix the failing commands. The branch is already checked out. Fix the code, run the failing command to verify, then commit and push.\n\nDo NOT create a new branch. Push fixes to the existing branch.",
-                                                repository: "https://github.com/{{input.repository}}",
+                                                repository:
+                                                    "https://github.com/{{input.repository}}",
                                                 branch: "{{steps['implement-wait'].branchName}}"
                                             }
                                         }
@@ -671,8 +671,7 @@ async function main() {
                 name: "Validation & Self-Heal Cycle",
                 config: {
                     maxIterations: 3,
-                    conditionExpression:
-                        "steps['verify-branch']?.passed !== true",
+                    conditionExpression: "steps['verify-branch']?.passed !== true",
                     steps: [
                         {
                             id: "verify-branch",
@@ -711,7 +710,7 @@ async function main() {
                                                     agentSlug: orgSlug("sdlc-auditor"),
                                                     outputFormat: "json",
                                                     promptTemplate:
-                                                        "You are a QA validation agent with Playwright browser tools. Verify the AgentC2 platform is functioning correctly.\n\n## Context\nFeature: {{input.title}}\nChanges: {{steps['implement-wait'].summary}}\n\nNavigate to the AgentC2 platform and validate:\n1. Login page loads\n2. Workspace dashboard renders\n3. Agents list page loads\n4. Workflows page loads\n5. Networks page loads\n6. Settings/Integrations page loads\n\nUse playwright_browser_navigate, playwright_browser_snapshot, playwright_browser_click.\nFor each check, take a snapshot and verify key elements are present.\n\nRespond with JSON: { \"verdict\": \"PASS\" or \"FAIL\", \"checks\": [...], \"failureDetails\": \"...\" }"
+                                                        'You are a QA validation agent with Playwright browser tools. Verify the AgentC2 platform is functioning correctly.\n\n## Context\nFeature: {{input.title}}\nChanges: {{steps[\'implement-wait\'].summary}}\n\nNavigate to the AgentC2 platform and validate:\n1. Login page loads\n2. Workspace dashboard renders\n3. Agents list page loads\n4. Workflows page loads\n5. Networks page loads\n6. Settings/Integrations page loads\n\nUse playwright_browser_navigate, playwright_browser_snapshot, playwright_browser_click.\nFor each check, take a snapshot and verify key elements are present.\n\nRespond with JSON: { "verdict": "PASS" or "FAIL", "checks": [...], "failureDetails": "..." }'
                                                 }
                                             }
                                         ]
@@ -726,7 +725,8 @@ async function main() {
                                             toolId: "claude-launch-agent",
                                             parameters: {
                                                 prompt: "CI validation failed on branch {{steps['implement-wait'].branchName}}.\n\n## Failures\n{{helpers.json(steps['verify-branch'].results)}}\n\nFix the failing commands. The branch is already checked out. Fix the code, run the failing command to verify, then commit and push.\n\nDo NOT create a new branch. Push fixes to the existing branch.",
-                                                repository: "https://github.com/{{input.repository}}",
+                                                repository:
+                                                    "https://github.com/{{input.repository}}",
                                                 branch: "{{steps['implement-wait'].branchName}}"
                                             }
                                         }

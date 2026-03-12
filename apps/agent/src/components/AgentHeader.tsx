@@ -31,6 +31,8 @@ const navItems = [
             { label: "Dashboard", href: "/observe" },
             { label: "Runs", href: "/observe?tab=runs" },
             { label: "Triggers", href: "/observe?tab=triggers" },
+            { label: "SDLC Pipeline", href: "/coding-pipeline" },
+            { label: "Dark Factory", href: "/coding-pipeline/dark-factory" },
             { label: "God Mode", href: "/godmode" }
         ]
     },

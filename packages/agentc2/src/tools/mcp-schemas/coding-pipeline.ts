@@ -348,6 +348,44 @@ export const codingPipelineToolDefinitions: McpToolDefinition[] = [
         category: "coding-pipeline"
     },
     {
+        name: "update-pipeline-config",
+        description:
+            "Update the PipelinePolicy for an organization. Controls auto-approval " +
+            "thresholds for the coding pipeline. Set enabled=true and adjust " +
+            "autoApprovePlanBelow / autoApprovePrBelow to control autonomy level.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                organizationId: {
+                    type: "string",
+                    description: "Organization ID"
+                },
+                enabled: {
+                    type: "boolean",
+                    description: "Enable/disable auto-approval policy"
+                },
+                autoApprovePlanBelow: {
+                    type: "string",
+                    enum: ["trivial", "low", "medium", "high", "critical"],
+                    description: "Auto-approve analysis plans below this risk level"
+                },
+                autoApprovePrBelow: {
+                    type: "string",
+                    enum: ["trivial", "low", "medium", "high", "critical"],
+                    description: "Auto-approve PRs below this risk level"
+                },
+                allowedRepos: {
+                    type: "array",
+                    items: { type: "string" },
+                    description: "Restrict pipeline to these repository URLs (empty = all)"
+                }
+            },
+            required: ["organizationId"]
+        },
+        invoke_url: "/api/mcp",
+        category: "coding-pipeline"
+    },
+    {
         name: "ingest-ticket",
         description:
             "Fetch and normalize a ticket from any source (SupportTicket, BacklogTask, " +
@@ -396,5 +434,6 @@ export const codingPipelineToolRoutes: McpToolRoute[] = [
     { kind: "registry", name: "wait-for-checks", enforceOrg: true },
     { kind: "registry", name: "dispatch-coding-pipeline", enforceOrg: true },
     { kind: "registry", name: "lookup-pipeline-config", enforceOrg: true },
+    { kind: "registry", name: "update-pipeline-config", enforceOrg: true },
     { kind: "registry", name: "ingest-ticket", enforceOrg: true }
 ];

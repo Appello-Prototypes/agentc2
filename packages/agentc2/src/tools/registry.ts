@@ -383,7 +383,7 @@ import {
     updatePipelineStatusTool
 } from "./coding-pipeline-tools";
 import { ticketToGithubIssueTool } from "./ticket-to-github-issue";
-import { lookupPipelineConfigTool } from "./pipeline-config-tools";
+import { lookupPipelineConfigTool, updatePipelineConfigTool } from "./pipeline-config-tools";
 import { mergePullRequestTool, awaitDeployTool } from "./merge-deploy-tools";
 import { githubAddIssueCommentTool } from "./github-issue-comment";
 import { githubCreatePullRequestTool } from "./github-create-pr";
@@ -512,6 +512,7 @@ export const toolCategoryMap: Record<string, string> = {
     "dispatch-coding-pipeline": "Coding Pipeline",
     "update-pipeline-status": "Coding Pipeline",
     "lookup-pipeline-config": "Coding Pipeline",
+    "update-pipeline-config": "Coding Pipeline",
     "merge-pull-request": "Coding Pipeline",
     "github-add-issue-comment": "Coding Pipeline",
     "github-create-pull-request": "Coding Pipeline",
@@ -1424,6 +1425,7 @@ export const toolRegistry: Record<string, any> = {
     "dispatch-coding-pipeline": dispatchCodingPipelineTool,
     "update-pipeline-status": updatePipelineStatusTool,
     "lookup-pipeline-config": lookupPipelineConfigTool,
+    "update-pipeline-config": updatePipelineConfigTool,
     "merge-pull-request": mergePullRequestTool,
     "await-deploy": awaitDeployTool,
     "run-scenarios": runScenariosTool,

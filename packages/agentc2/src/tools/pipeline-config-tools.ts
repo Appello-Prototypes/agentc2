@@ -89,6 +89,68 @@ export const lookupPipelineConfigTool = createTool({
     }
 });
 
+export const updatePipelineConfigTool = createTool({
+    id: "update-pipeline-config",
+    description:
+        "Update the PipelinePolicy for an organization. Controls auto-approval " +
+        "thresholds for the coding pipeline. Set enabled=true and adjust " +
+        "autoApprovePlanBelow / autoApprovePrBelow to control autonomy level.",
+    inputSchema: z.object({
+        organizationId: z.string().describe("Organization ID"),
+        enabled: z.boolean().optional().describe("Enable/disable auto-approval policy"),
+        autoApprovePlanBelow: z
+            .enum(RISK_LEVELS)
+            .optional()
+            .describe("Auto-approve analysis plans below this risk level"),
+        autoApprovePrBelow: z
+            .enum(RISK_LEVELS)
+            .optional()
+            .describe("Auto-approve PRs below this risk level"),
+        allowedRepos: z
+            .array(z.string())
+            .optional()
+            .describe("Restrict pipeline to these repository URLs (empty = all)")
+    }),
+    outputSchema: z.object({
+        policy: policySchema
+    }),
+    execute: async ({
+        organizationId,
+        enabled,
+        autoApprovePlanBelow,
+        autoApprovePrBelow,
+        allowedRepos
+    }) => {
+        const { prisma } = await import("@repo/database");
+
+        const policy = await prisma.pipelinePolicy.upsert({
+            where: { organizationId },
+            update: {
+                ...(enabled !== undefined && { enabled }),
+                ...(autoApprovePlanBelow && { autoApprovePlanBelow }),
+                ...(autoApprovePrBelow && { autoApprovePrBelow }),
+                ...(allowedRepos && { allowedRepos })
+            },
+            create: {
+                organizationId,
+                enabled: enabled ?? false,
+                autoApprovePlanBelow: autoApprovePlanBelow ?? "medium",
+                autoApprovePrBelow: autoApprovePrBelow ?? "low",
+                allowedRepos: allowedRepos ?? []
+            }
+        });
+
+        return {
+            policy: {
+                enabled: policy.enabled,
+                autoApprovePlanBelow: policy.autoApprovePlanBelow,
+                autoApprovePrBelow: policy.autoApprovePrBelow,
+                allowedRepos: policy.allowedRepos
+            }
+        };
+    }
+});
+
 /**
  * Check if a risk level is strictly below a threshold.
  * Used by workflow branch conditions.
