@@ -38,7 +38,14 @@ import {
 /*  Types                                                              */
 /* ================================================================== */
 
-type ProviderStatus = "connected" | "disconnected" | "missing_auth";
+type ProviderStatus =
+    | "connected"
+    | "disconnected"
+    | "missing_auth"
+    | "needs_auth"
+    | "needs_validation"
+    | "degraded"
+    | "error";
 
 type ConnectionSummary = {
     id: string;
@@ -99,7 +106,7 @@ type DebugLogEntry = {
 /* ================================================================== */
 
 const StatusBadge = ({ status }: { status: ProviderStatus }) => {
-    const variants: Record<ProviderStatus, { label: string; className: string }> = {
+    const variants: Record<string, { label: string; className: string }> = {
         connected: {
             label: "Connected",
             className: "bg-green-500/10 text-green-600 border-green-500/20"
@@ -111,9 +118,28 @@ const StatusBadge = ({ status }: { status: ProviderStatus }) => {
         missing_auth: {
             label: "Missing Auth",
             className: "bg-yellow-500/10 text-yellow-700 border-yellow-500/20"
+        },
+        needs_auth: {
+            label: "Needs Auth",
+            className: "bg-yellow-500/10 text-yellow-700 border-yellow-500/20"
+        },
+        needs_validation: {
+            label: "Needs Validation",
+            className: "bg-blue-500/10 text-blue-600 border-blue-500/20"
+        },
+        degraded: {
+            label: "Degraded",
+            className: "bg-amber-500/10 text-amber-600 border-amber-500/20"
+        },
+        error: {
+            label: "Error",
+            className: "bg-red-500/10 text-red-600 border-red-500/20"
         }
     };
-    const variant = variants[status];
+    const variant = variants[status] ?? {
+        label: status,
+        className: "bg-gray-500/10 text-gray-600 border-gray-500/20"
+    };
     return (
         <span
             className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${variant.className}`}

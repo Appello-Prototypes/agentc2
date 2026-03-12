@@ -241,7 +241,8 @@ export const executionTriggerToolDefinitions: McpToolDefinition[] = [
     },
     {
         name: "workflow-trigger-update",
-        description: "Update a workflow trigger's name, description, filter, inputMapping, or config.",
+        description:
+            "Update a workflow trigger's name, description, filter, inputMapping, or config.",
         inputSchema: {
             type: "object",
             properties: {
@@ -305,7 +306,8 @@ export const executionTriggerToolDefinitions: McpToolDefinition[] = [
     },
     {
         name: "workflow-trigger-test",
-        description: "Dry-run a workflow trigger without creating a run. Tests filter matching and input mapping.",
+        description:
+            "Dry-run a workflow trigger without creating a run. Tests filter matching and input mapping.",
         inputSchema: {
             type: "object",
             properties: {
@@ -320,7 +322,8 @@ export const executionTriggerToolDefinitions: McpToolDefinition[] = [
     },
     {
         name: "workflow-trigger-execute",
-        description: "Fire a workflow trigger with an optional payload, creating a real workflow run.",
+        description:
+            "Fire a workflow trigger with an optional payload, creating a real workflow run.",
         inputSchema: {
             type: "object",
             properties: {
@@ -376,7 +379,8 @@ export const executionTriggerToolDefinitions: McpToolDefinition[] = [
     },
     {
         name: "network-trigger-update",
-        description: "Update a network trigger's name, description, filter, inputMapping, or config.",
+        description:
+            "Update a network trigger's name, description, filter, inputMapping, or config.",
         inputSchema: {
             type: "object",
             properties: {
@@ -455,7 +459,8 @@ export const executionTriggerToolDefinitions: McpToolDefinition[] = [
     },
     {
         name: "network-trigger-execute",
-        description: "Fire a network trigger with an optional payload, queuing a real network execution.",
+        description:
+            "Fire a network trigger with an optional payload, queuing a real network execution.",
         inputSchema: {
             type: "object",
             properties: {
