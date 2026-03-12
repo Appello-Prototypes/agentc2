@@ -1630,13 +1630,21 @@ export function LiveRunsContent() {
                                                 <Button
                                                     variant="outline"
                                                     size="sm"
-                                                    onClick={() =>
-                                                        router.push(
-                                                            `/agents/${selectedRun.agentSlug || selectedRun.slug}/runs?runId=${selectedRun.id}`
-                                                        )
-                                                    }
+                                                    onClick={() => {
+                                                        const url =
+                                                            selectedRun.kind === "workflow"
+                                                                ? `/workflows/${selectedRun.slug}/runs/${selectedRun.id}`
+                                                                : selectedRun.kind === "network"
+                                                                  ? `/networks/${selectedRun.slug}/runs/${selectedRun.id}`
+                                                                  : `/agents/${selectedRun.agentSlug || selectedRun.slug}/runs?runId=${selectedRun.id}`;
+                                                        router.push(url);
+                                                    }}
                                                 >
-                                                    Open in Agents
+                                                    {selectedRun.kind === "workflow"
+                                                        ? "Open in Workflows"
+                                                        : selectedRun.kind === "network"
+                                                          ? "Open in Networks"
+                                                          : "Open in Agents"}
                                                 </Button>
                                                 <Button
                                                     variant="ghost"

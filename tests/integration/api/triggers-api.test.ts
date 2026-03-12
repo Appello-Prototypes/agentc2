@@ -83,7 +83,7 @@ describe("Triggers API", () => {
             expect.objectContaining({
                 where: expect.objectContaining({
                     triggerType: "webhook",
-                    agent: { workspace: { organizationId: "org-1" } }
+                    workspace: { organizationId: "org-1" }
                 })
             })
         );

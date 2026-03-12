@@ -74,6 +74,19 @@ export async function POST(request: NextRequest) {
                     select: { pipelineRunId: true }
                 });
                 if (ticket?.pipelineRunId) {
+                    const existingRun = await prisma.workflowRun.findUnique({
+                        where: { id: ticket.pipelineRunId },
+                        select: { status: true }
+                    });
+                    if (existingRun?.status === "RUNNING" || existingRun?.status === "QUEUED") {
+                        return NextResponse.json({
+                            success: true,
+                            runId: ticket.pipelineRunId,
+                            message:
+                                "Pipeline already running for this ticket; returning existing run"
+                        });
+                    }
+
                     const prevIntakeStep = await prisma.workflowRunStep.findFirst({
                         where: {
                             runId: ticket.pipelineRunId,

@@ -51,6 +51,7 @@ export interface WorkflowHumanConfig {
     prompt?: string;
     formSchema?: Record<string, unknown>;
     timeout?: number;
+    contextMapping?: Record<string, string>;
 }
 
 export interface WorkflowAgentConfig {

@@ -15,7 +15,14 @@ import {
     Textarea,
     type StepStatus
 } from "@repo/ui";
-import { ArrowLeftIcon, RefreshCwIcon } from "lucide-react";
+import {
+    ArrowLeftIcon,
+    RefreshCwIcon,
+    ExternalLinkIcon,
+    GitPullRequestIcon,
+    ChevronDownIcon,
+    ChevronUpIcon
+} from "lucide-react";
 import { getApiBase } from "@/lib/utils";
 
 /* ---------- Types ---------- */
@@ -417,72 +424,13 @@ export default function WorkflowRunDetailPage() {
 
                             {/* Approval panel for suspended human steps */}
                             {isSuspended && (
-                                <Card className="border-amber-500">
-                                    <CardHeader className="pb-3">
-                                        <CardTitle className="text-sm text-amber-600">
-                                            Awaiting Approval
-                                        </CardTitle>
-                                    </CardHeader>
-                                    <CardContent className="space-y-4">
-                                        {run.suspendDataJson?.prompt != null && (
-                                            <p className="text-sm">
-                                                {String(run.suspendDataJson.prompt)}
-                                            </p>
-                                        )}
-
-                                        <div>
-                                            <label className="mb-1 block text-xs font-medium">
-                                                Feedback (optional for revision)
-                                            </label>
-                                            <Textarea
-                                                value={feedback}
-                                                onChange={(e) => setFeedback(e.target.value)}
-                                                placeholder="Provide feedback or revision instructions..."
-                                                className="h-20"
-                                            />
-                                        </div>
-
-                                        <div className="flex gap-2">
-                                            <Button
-                                                onClick={() =>
-                                                    handleResume({
-                                                        approved: true
-                                                    })
-                                                }
-                                                disabled={resumeLoading}
-                                                className="flex-1 bg-green-600 hover:bg-green-700"
-                                            >
-                                                {resumeLoading ? "Processing..." : "Approve"}
-                                            </Button>
-                                            <Button
-                                                onClick={() =>
-                                                    handleResume({
-                                                        approved: false,
-                                                        feedback
-                                                    })
-                                                }
-                                                disabled={resumeLoading}
-                                                variant="outline"
-                                                className="flex-1"
-                                            >
-                                                {resumeLoading ? "..." : "Request Revision"}
-                                            </Button>
-                                            <Button
-                                                onClick={() =>
-                                                    handleResume({
-                                                        approved: false,
-                                                        rejected: true,
-                                                        reason: feedback || "Rejected by reviewer"
-                                                    })
-                                                }
-                                                disabled={resumeLoading}
-                                                variant="destructive"
-                                            >
-                                                {resumeLoading ? "..." : "Reject"}
-                                            </Button>
-                                        </div>
-                                    </CardContent>
-                                </Card>
+                                <ApprovalCard
+                                    run={run}
+                                    feedback={feedback}
+                                    setFeedback={setFeedback}
+                                    resumeLoading={resumeLoading}
+                                    handleResume={handleResume}
+                                />
                             )}
                         </>
                     ) : (
@@ -497,5 +445,210 @@ export default function WorkflowRunDetailPage() {
                 </div>
             </div>
         </div>
+    );
+}
+
+/* ---------- Approval Card ---------- */
+
+function formatDurationHuman(ms: unknown): string | null {
+    if (typeof ms !== "number" || ms <= 0) return null;
+    if (ms < 1000) return `${Math.round(ms)}ms`;
+    const s = ms / 1000;
+    if (s < 60) return `${s.toFixed(1)}s`;
+    const m = Math.floor(s / 60);
+    return `${m}m ${Math.round(s % 60)}s`;
+}
+
+function ApprovalCard({
+    run,
+    feedback,
+    setFeedback,
+    resumeLoading,
+    handleResume
+}: {
+    run: RunDetail;
+    feedback: string;
+    setFeedback: (v: string) => void;
+    resumeLoading: boolean;
+    handleResume: (data: Record<string, unknown>) => Promise<void>;
+}) {
+    const [designExpanded, setDesignExpanded] = useState(false);
+    const ctx = (run.suspendDataJson?.context ?? null) as Record<string, unknown> | null;
+
+    const issueUrl = ctx?.issueUrl as string | undefined;
+    const issueNumber = ctx?.issueNumber;
+    const repository = ctx?.repository as string | undefined;
+    const prUrl = ctx?.prUrl as string | undefined;
+    const prNumber = ctx?.prNumber;
+    const classification = ctx?.classification as string | undefined;
+    const priority = ctx?.priority as string | undefined;
+    const complexity = ctx?.complexity as string | undefined;
+    const rationale = ctx?.rationale as string | undefined;
+    const designSummary = ctx?.designSummary as string | undefined;
+    const designDuration = formatDurationHuman(ctx?.designDurationMs);
+
+    const hasLinks = issueUrl || prUrl;
+    const hasClassification = classification || priority || complexity;
+
+    return (
+        <Card className="border-amber-500">
+            <CardHeader className="pb-3">
+                <CardTitle className="text-sm text-amber-600">Awaiting Approval</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                {run.suspendDataJson?.prompt != null && (
+                    <p className="text-sm">{String(run.suspendDataJson.prompt)}</p>
+                )}
+
+                {hasLinks && (
+                    <div className="space-y-2">
+                        <div className="text-muted-foreground text-xs font-medium uppercase">
+                            Links
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            {issueUrl && (
+                                <a
+                                    href={String(issueUrl)}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="bg-muted/50 hover:bg-muted inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors"
+                                >
+                                    <ExternalLinkIcon className="size-3" />
+                                    {issueNumber
+                                        ? `View Issue #${issueNumber} on GitHub`
+                                        : "View GitHub Issue"}
+                                </a>
+                            )}
+                            {prUrl && (
+                                <a
+                                    href={String(prUrl)}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="bg-muted/50 hover:bg-muted inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors"
+                                >
+                                    <GitPullRequestIcon className="size-3" />
+                                    {prNumber
+                                        ? `View Pull Request #${prNumber}`
+                                        : "View Pull Request"}
+                                </a>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {hasClassification && (
+                    <div className="space-y-2">
+                        <div className="text-muted-foreground text-xs font-medium uppercase">
+                            Classification
+                        </div>
+                        <div className="rounded-md border p-3">
+                            <div className="flex flex-wrap gap-2">
+                                {classification && (
+                                    <Badge variant="outline" className="capitalize">
+                                        {String(classification)}
+                                    </Badge>
+                                )}
+                                {priority && (
+                                    <Badge variant="outline" className="capitalize">
+                                        {String(priority)} priority
+                                    </Badge>
+                                )}
+                                {complexity && (
+                                    <Badge variant="outline" className="capitalize">
+                                        {String(complexity)} complexity
+                                    </Badge>
+                                )}
+                                {repository && (
+                                    <Badge variant="secondary" className="font-mono text-[10px]">
+                                        {String(repository)}
+                                    </Badge>
+                                )}
+                            </div>
+                            {rationale && (
+                                <p className="text-muted-foreground mt-2 text-xs">
+                                    {String(rationale)}
+                                </p>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {designSummary && (
+                    <div className="space-y-2">
+                        <button
+                            type="button"
+                            onClick={() => setDesignExpanded(!designExpanded)}
+                            className="text-muted-foreground hover:text-foreground flex w-full items-center gap-1 text-xs font-medium uppercase transition-colors"
+                        >
+                            Design Summary
+                            {designDuration && (
+                                <span className="text-muted-foreground ml-1 font-normal normal-case">
+                                    ({designDuration})
+                                </span>
+                            )}
+                            <span className="ml-auto">
+                                {designExpanded ? (
+                                    <ChevronUpIcon className="size-3" />
+                                ) : (
+                                    <ChevronDownIcon className="size-3" />
+                                )}
+                            </span>
+                        </button>
+                        <div
+                            className={`overflow-hidden rounded-md border transition-all ${
+                                designExpanded ? "max-h-[600px]" : "max-h-48"
+                            }`}
+                        >
+                            <pre className="overflow-auto p-3 text-xs whitespace-pre-wrap">
+                                {String(designSummary)}
+                            </pre>
+                        </div>
+                    </div>
+                )}
+
+                <div>
+                    <label className="mb-1 block text-xs font-medium">
+                        Feedback (optional for revision)
+                    </label>
+                    <Textarea
+                        value={feedback}
+                        onChange={(e) => setFeedback(e.target.value)}
+                        placeholder="Provide feedback or revision instructions..."
+                        className="h-20"
+                    />
+                </div>
+
+                <div className="flex gap-2">
+                    <Button
+                        onClick={() => handleResume({ approved: true })}
+                        disabled={resumeLoading}
+                        className="flex-1 bg-green-600 hover:bg-green-700"
+                    >
+                        {resumeLoading ? "Processing..." : "Approve"}
+                    </Button>
+                    <Button
+                        onClick={() => handleResume({ approved: false, feedback })}
+                        disabled={resumeLoading}
+                        variant="outline"
+                        className="flex-1"
+                    >
+                        {resumeLoading ? "..." : "Request Revision"}
+                    </Button>
+                    <Button
+                        onClick={() =>
+                            handleResume({
+                                approved: false,
+                                rejected: true,
+                                reason: feedback || "Rejected by reviewer"
+                            })
+                        }
+                        disabled={resumeLoading}
+                        variant="destructive"
+                    >
+                        {resumeLoading ? "..." : "Reject"}
+                    </Button>
+                </div>
+            </CardContent>
+        </Card>
     );
 }

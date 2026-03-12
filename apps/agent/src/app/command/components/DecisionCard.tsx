@@ -17,6 +17,7 @@ import {
     RISK_COLORS,
     RISK_BORDER_COLORS,
     SOURCE_TYPE_STYLES,
+    CHANNEL_ICONS,
     formatTimeAgo,
     getUrgencyClass,
     getRiskLevel,
@@ -172,6 +173,12 @@ export function DecisionCard({
                                     {review.suspendedStep && (
                                         <StepTimeline step={review.suspendedStep} />
                                     )}
+                                    {review.originChannel && (
+                                        <span>
+                                            {CHANNEL_ICONS[review.originChannel] || "📡"} from{" "}
+                                            {review.originChannel}
+                                        </span>
+                                    )}
                                     {review.workflowSlug && (
                                         <span>
                                             via{" "}
@@ -197,7 +204,7 @@ export function DecisionCard({
                             )}
                             {review.notifiedChannels.map((ch) => (
                                 <Badge key={ch} variant="outline" className="text-xs">
-                                    {ch}
+                                    {CHANNEL_ICONS[ch] || "📡"} {ch}
                                 </Badge>
                             ))}
                             {isConditional && (
@@ -223,7 +230,9 @@ export function DecisionCard({
                             )}
                             {!isPending && review.decidedBy && (
                                 <span className="text-muted-foreground text-xs">
-                                    by {review.decidedBy} via {review.responseChannel}
+                                    by {review.decidedBy} via{" "}
+                                    {CHANNEL_ICONS[review.responseChannel || ""] || ""}{" "}
+                                    {review.responseChannel}
                                 </span>
                             )}
                         </div>

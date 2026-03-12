@@ -59,6 +59,7 @@ export async function GET(request: NextRequest) {
                     select: {
                         id: true,
                         status: true,
+                        source: true,
                         inputJson: true,
                         workflow: {
                             select: { slug: true, name: true }
@@ -74,32 +75,42 @@ export async function GET(request: NextRequest) {
             take: limit
         });
 
-        const items = reviews.map((r) => ({
-            id: r.id,
-            status: r.status,
-            sourceType: r.sourceType,
-            agentId: r.agentId,
-            agentSlug: r.agent?.slug ?? null,
-            agentName: r.agent?.name ?? null,
-            workflowSlug: r.workflowRun?.workflow?.slug,
-            workflowName: r.workflowRun?.workflow?.name,
-            runId: r.workflowRunId,
-            runStatus: r.workflowRun?.status,
-            suspendedStep: r.sourceId,
-            reviewContext: r.reviewContext,
-            githubRepo: r.githubRepo,
-            githubIssueNumber: r.githubIssueNumber,
-            notifiedChannels: r.notifiedChannels,
-            responseChannel: r.responseChannel,
-            feedbackRound: r.feedbackRound,
-            feedbackText: r.feedbackText,
-            decidedBy: r.decidedBy,
-            decidedAt: r.decidedAt,
-            decisionReason: r.decisionReason,
-            orgName: r.organization?.name,
-            createdAt: r.createdAt,
-            updatedAt: r.updatedAt
-        }));
+        const items = reviews.map((r) => {
+            const runSource = r.workflowRun?.source || null;
+            const originChannel = runSource?.startsWith("channel-")
+                ? runSource.replace("channel-", "")
+                : runSource === "admin-dispatch"
+                  ? "admin"
+                  : runSource || null;
+
+            return {
+                id: r.id,
+                status: r.status,
+                sourceType: r.sourceType,
+                agentId: r.agentId,
+                agentSlug: r.agent?.slug ?? null,
+                agentName: r.agent?.name ?? null,
+                workflowSlug: r.workflowRun?.workflow?.slug,
+                workflowName: r.workflowRun?.workflow?.name,
+                runId: r.workflowRunId,
+                runStatus: r.workflowRun?.status,
+                originChannel,
+                suspendedStep: r.sourceId,
+                reviewContext: r.reviewContext,
+                githubRepo: r.githubRepo,
+                githubIssueNumber: r.githubIssueNumber,
+                notifiedChannels: r.notifiedChannels,
+                responseChannel: r.responseChannel,
+                feedbackRound: r.feedbackRound,
+                feedbackText: r.feedbackText,
+                decidedBy: r.decidedBy,
+                decidedAt: r.decidedAt,
+                decisionReason: r.decisionReason,
+                orgName: r.organization?.name,
+                createdAt: r.createdAt,
+                updatedAt: r.updatedAt
+            };
+        });
 
         return NextResponse.json({ success: true, reviews: items, total: items.length });
     } catch (error) {

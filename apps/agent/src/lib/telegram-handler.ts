@@ -273,6 +273,74 @@ export async function handleTelegramMessage(
         return { ok: true };
     }
 
+    // Handle SDLC ticket submission: /sdlc <title>\n<description> or sdlc: <title>
+    const sdlcMatch = text.match(/^(?:\/sdlc\s+|sdlc:\s*)([\s\S]+)/i);
+    if (sdlcMatch) {
+        await sendChatAction(chatId, ctx.botToken);
+        const sdlcText = sdlcMatch[1].trim();
+        const lines = sdlcText.split("\n").filter((l: string) => l.trim());
+        const title = lines[0] || sdlcText.slice(0, 200);
+        const description = lines.length > 1 ? lines.slice(1).join("\n") : title;
+
+        try {
+            const agentBaseUrl = process.env.NEXT_PUBLIC_APP_URL
+                ? `${process.env.NEXT_PUBLIC_APP_URL}/agent`
+                : "http://localhost:3001";
+
+            const org = ctx.organizationId
+                ? await prisma.organization.findUnique({
+                      where: { id: ctx.organizationId },
+                      select: { slug: true }
+                  })
+                : null;
+
+            const res = await fetch(`${agentBaseUrl}/api/sdlc/submit`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-API-Key": process.env.MCP_API_KEY || "",
+                    "X-Organization-Slug": org?.slug || ""
+                },
+                body: JSON.stringify({
+                    title,
+                    description,
+                    channel: "telegram",
+                    channelUserId: userId
+                })
+            });
+
+            const data = await res.json();
+            if (data.success) {
+                await sendTelegramMessage(
+                    chatId,
+                    `📋 *SDLC Ticket #${data.ticketNumber} created*\n\n` +
+                        `*Title:* ${title}\n` +
+                        `*Pipeline:* \`${data.workflowSlug}\`\n\n` +
+                        `The ticket has been dispatched to the SDLC coding pipeline. ` +
+                        `You'll be notified when a review is needed.`,
+                    messageId,
+                    ctx.botToken
+                );
+            } else {
+                await sendTelegramMessage(
+                    chatId,
+                    `❌ Failed to create SDLC ticket: ${data.error || "Unknown error"}`,
+                    messageId,
+                    ctx.botToken
+                );
+            }
+        } catch (err) {
+            console.error("[Telegram] SDLC submission error:", err);
+            await sendTelegramMessage(
+                chatId,
+                "❌ Failed to submit SDLC ticket. Please try again.",
+                messageId,
+                ctx.botToken
+            );
+        }
+        return { ok: true };
+    }
+
     // Look up instance channel binding (unless pre-resolved)
     let instanceBinding: InstanceContext | null =
         ctx.fixedInstance !== undefined ? ctx.fixedInstance : null;
@@ -527,6 +595,7 @@ export async function handleTelegramMessage(
 
 /**
  * Process a callback query update (inline keyboard buttons).
+ * Handles agent switching and engagement approval/reject/feedback actions.
  */
 export async function handleCallbackQuery(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -534,25 +603,199 @@ export async function handleCallbackQuery(
     ctx: TelegramHandlerContext
 ): Promise<void> {
     const chatId = query.message?.chat?.id?.toString();
-    const data = query.data;
+    const data = query.data as string | undefined;
 
-    if (chatId && data) {
-        if (data.startsWith("agent:")) {
-            const newAgentSlug = data.slice(6);
-            const userId = query.from?.id?.toString() || chatId;
-            const session = await getOrCreateSession(
-                chatId,
-                userId,
-                ctx.fixedAgentSlug || FALLBACK_AGENT_SLUG,
-                ctx.organizationId
-            );
+    if (!chatId || !data) return;
 
-            await prisma.channelSession.update({
-                where: { id: session.id },
-                data: { agentSlug: newAgentSlug }
+    if (data.startsWith("agent:")) {
+        const newAgentSlug = data.slice(6);
+        const userId = query.from?.id?.toString() || chatId;
+        const session = await getOrCreateSession(
+            chatId,
+            userId,
+            ctx.fixedAgentSlug || FALLBACK_AGENT_SLUG,
+            ctx.organizationId
+        );
+
+        await prisma.channelSession.update({
+            where: { id: session.id },
+            data: { agentSlug: newAgentSlug }
+        });
+
+        await answerCallbackQuery(query.id, `Switched to ${newAgentSlug}`, ctx.botToken);
+        return;
+    }
+
+    // Engagement approval actions: engagement_approve:ID, engagement_reject:ID, engagement_feedback:ID
+    const engagementMatch = data.match(/^engagement_(approve|reject|feedback):(.+)$/);
+    if (engagementMatch) {
+        const [, action, approvalId] = engagementMatch;
+        const decidedBy =
+            query.from?.username ||
+            query.from?.first_name ||
+            query.from?.id?.toString() ||
+            "telegram-user";
+
+        try {
+            const { findEngagementById, resolveEngagement } =
+                await import("@repo/agentc2/workflows");
+
+            const engagementId = await findEngagementById(approvalId);
+            if (!engagementId) {
+                await answerCallbackQuery(
+                    query.id,
+                    "This review has already been resolved.",
+                    ctx.botToken
+                );
+                return;
+            }
+
+            if (action === "feedback") {
+                await answerCallbackQuery(
+                    query.id,
+                    "Reply to this message with your feedback.",
+                    ctx.botToken
+                );
+                // Store the approval ID in metadata so we can match the reply
+                await prisma.channelSession.upsert({
+                    where: {
+                        channel_channelId: {
+                            channel: "telegram",
+                            channelId: `feedback:${chatId}`
+                        }
+                    },
+                    update: {
+                        agentSlug: approvalId,
+                        lastActive: new Date()
+                    },
+                    create: {
+                        channel: "telegram",
+                        channelId: `feedback:${chatId}`,
+                        agentSlug: approvalId,
+                        organizationId: ctx.organizationId || "",
+                        workspaceId: "",
+                        metadata: { type: "pending-feedback" }
+                    }
+                });
+                return;
+            }
+
+            const decision = action === "approve" ? "approved" : "rejected";
+            const result = await resolveEngagement({
+                approvalRequestId: engagementId,
+                decision: decision as "approved" | "rejected",
+                decidedBy,
+                channel: "telegram"
             });
 
-            await answerCallbackQuery(query.id, `Switched to ${newAgentSlug}`, ctx.botToken);
+            if (result.resumed) {
+                const emoji = decision === "approved" ? "✅" : "❌";
+                const label = decision === "approved" ? "Approved" : "Rejected";
+                await answerCallbackQuery(query.id, `${emoji} ${label}`, ctx.botToken);
+
+                // Update the original message to reflect the decision
+                try {
+                    const messageId = query.message?.message_id;
+                    if (messageId) {
+                        const originalText = query.message?.text || "";
+                        await fetch(`https://api.telegram.org/bot${ctx.botToken}/editMessageText`, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                                chat_id: chatId,
+                                message_id: messageId,
+                                text: `${originalText}\n\n${emoji} *${label}* by ${decidedBy}`,
+                                parse_mode: "Markdown"
+                            })
+                        });
+                    }
+                } catch {
+                    // Best-effort message update
+                }
+            } else {
+                await answerCallbackQuery(
+                    query.id,
+                    result.error || "Failed to resolve review.",
+                    ctx.botToken
+                );
+            }
+        } catch (err) {
+            console.error("[Telegram] Engagement callback error:", err);
+            await answerCallbackQuery(query.id, "Error processing review action.", ctx.botToken);
         }
+    }
+}
+
+/**
+ * Handle a reply that may be feedback for a pending engagement.
+ * Called from the webhook route when a message is a reply to a bot message.
+ */
+export async function handleEngagementFeedbackReply(
+    chatId: string,
+    text: string,
+    userId: string,
+    ctx: TelegramHandlerContext
+): Promise<boolean> {
+    const feedbackSession = await prisma.channelSession.findUnique({
+        where: {
+            channel_channelId: {
+                channel: "telegram",
+                channelId: `feedback:${chatId}`
+            }
+        }
+    });
+
+    if (!feedbackSession || !feedbackSession.agentSlug) return false;
+
+    const approvalId = feedbackSession.agentSlug;
+
+    // Clean up the feedback session
+    await prisma.channelSession.delete({
+        where: { id: feedbackSession.id }
+    });
+
+    try {
+        const { findEngagementById, resolveEngagement } = await import("@repo/agentc2/workflows");
+
+        const engagementId = await findEngagementById(approvalId);
+        if (!engagementId) {
+            await sendTelegramMessage(
+                chatId,
+                "This review has already been resolved.",
+                undefined,
+                ctx.botToken
+            );
+            return true;
+        }
+
+        const decidedBy = userId;
+        const result = await resolveEngagement({
+            approvalRequestId: engagementId,
+            decision: "feedback",
+            message: text,
+            decidedBy,
+            channel: "telegram"
+        });
+
+        if (result.resumed) {
+            await sendTelegramMessage(
+                chatId,
+                "💬 Feedback submitted. Workflow will re-analyze with your comments.",
+                undefined,
+                ctx.botToken
+            );
+        } else {
+            await sendTelegramMessage(
+                chatId,
+                `Failed to submit feedback: ${result.error || "Unknown error"}`,
+                undefined,
+                ctx.botToken
+            );
+        }
+
+        return true;
+    } catch (err) {
+        console.error("[Telegram] Engagement feedback reply error:", err);
+        return false;
     }
 }

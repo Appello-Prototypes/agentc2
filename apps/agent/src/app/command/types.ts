@@ -18,6 +18,7 @@ export interface ReviewItem {
     workflowName?: string;
     runId?: string;
     runStatus?: string;
+    originChannel?: string;
     suspendedStep?: string;
     reviewContext?: ReviewContext;
     githubRepo?: string;
@@ -33,6 +34,16 @@ export interface ReviewItem {
     createdAt: string;
     sourceType?: string;
 }
+
+export const CHANNEL_ICONS: Record<string, string> = {
+    slack: "💬",
+    github: "🐙",
+    telegram: "📨",
+    whatsapp: "📱",
+    admin: "🖥️",
+    api: "🔌",
+    web: "🌐"
+};
 
 export interface LearningProposal {
     id: string;

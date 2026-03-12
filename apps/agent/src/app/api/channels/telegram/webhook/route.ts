@@ -12,6 +12,7 @@ import { resolveChannelCredentials } from "@/lib/channel-credentials";
 import {
     handleTelegramMessage,
     handleCallbackQuery,
+    handleEngagementFeedbackReply,
     isDuplicate,
     type TelegramHandlerContext
 } from "@/lib/telegram-handler";
@@ -102,6 +103,15 @@ export async function POST(request: NextRequest) {
         };
 
         if (update.message) {
+            const chatId = update.message.chat?.id?.toString();
+            const text = (update.message.text || "").trim();
+            const userId = update.message.from?.id?.toString() || chatId || "";
+            if (chatId && text) {
+                const handled = await handleEngagementFeedbackReply(chatId, text, userId, ctx);
+                if (handled) {
+                    return NextResponse.json({ ok: true });
+                }
+            }
             await handleTelegramMessage(update.message, ctx);
         }
 

@@ -8650,6 +8650,7 @@ export const asyncWorkflowExecuteFunction = inngest.createFunction(
                 definitionJson: workflow.definitionJson,
                 slug: workflow.slug,
                 organizationId: orgId || null,
+                workspaceId: workflow.workspaceId || null,
                 inputSchemaJson: workflow.inputSchemaJson
             };
         });
@@ -9300,14 +9301,12 @@ export const asyncWorkflowExecuteFunction = inngest.createFunction(
                 });
 
                 // Create human engagement for suspended human steps
-                const orgId = (input as Record<string, unknown>)?.organizationId as
-                    | string
-                    | undefined;
-                if (orgId && result.suspended?.stepId) {
+                if (organizationId && result.suspended?.stepId) {
                     try {
                         const { createEngagement } = await import("@repo/agentc2/workflows");
                         const slug =
                             workflowSlug ||
+                            workflowData.slug ||
                             (
                                 await prisma.workflow.findUnique({
                                     where: { id: workflowId },
@@ -9319,12 +9318,9 @@ export const asyncWorkflowExecuteFunction = inngest.createFunction(
                             select: { stepId: true, stepType: true, outputJson: true },
                             orderBy: { startedAt: "asc" }
                         });
-                        const wsId = (input as Record<string, unknown>)?.workspaceId as
-                            | string
-                            | undefined;
                         await createEngagement({
-                            organizationId: orgId,
-                            workspaceId: wsId || null,
+                            organizationId,
+                            workspaceId: workflowData.workspaceId || null,
                             workflowRunId,
                             workflowSlug: slug || "",
                             suspendedStep: result.suspended.stepId,

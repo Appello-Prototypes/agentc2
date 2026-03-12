@@ -29,6 +29,7 @@ export {
     getEngagementContext,
     findEngagementByGitHubIssue,
     findEngagementBySlackMessage,
+    findEngagementById,
     type EngagementDecision,
     type EngagementContext,
     type CreateEngagementOptions,

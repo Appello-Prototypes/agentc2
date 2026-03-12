@@ -437,13 +437,216 @@ async function postSlackReviewMessage(
     };
 }
 
+/* ─── Telegram transport ──────────────────────────────────────────────────── */
+
+function buildTelegramReviewText(
+    workflowSlug: string,
+    runId: string,
+    context: EngagementContext
+): string {
+    const shortRunId = runId.length > 12 ? runId.slice(0, 12) + "…" : runId;
+    const runUrl = `${PLATFORM_URL}/workflows/${workflowSlug}/runs/${runId}`;
+
+    const lines: string[] = [];
+    lines.push("🔍 *Review Required*\n");
+    lines.push(`*Workflow:* \`${workflowSlug}\` | *Run:* [${shortRunId}](${runUrl})\n`);
+
+    if (context.prompt) {
+        lines.push(`> ${context.prompt}\n`);
+    }
+
+    if (context.summary) {
+        const truncated =
+            context.summary.length > 500 ? context.summary.slice(0, 500) + "…" : context.summary;
+        lines.push(truncated + "\n");
+    }
+
+    const links: string[] = [];
+    if (context.issueUrl) links.push(`[GitHub Issue](${context.issueUrl})`);
+    if (context.analysisUrl) links.push(`[Analysis](${context.analysisUrl})`);
+    if (context.prUrl) links.push(`[Pull Request](${context.prUrl})`);
+    if (links.length > 0) lines.push(links.join(" | "));
+
+    return lines.join("\n");
+}
+
+async function notifyTelegram(
+    context: EngagementContext,
+    workflowSlug: string,
+    runId: string,
+    approvalId: string,
+    organizationId: string
+): Promise<{ chatId: string; messageId: number } | null> {
+    try {
+        const { prisma } = await import("@repo/database");
+        const { decryptJson } = await import("../crypto/encryption");
+
+        const connection = await prisma.integrationConnection.findFirst({
+            where: {
+                organizationId,
+                isActive: true,
+                provider: { key: "telegram-bot" }
+            },
+            include: { provider: true },
+            orderBy: [{ isDefault: "desc" }, { updatedAt: "desc" }]
+        });
+
+        if (!connection?.credentials) return null;
+
+        const decrypted = decryptJson(connection.credentials);
+        const botToken =
+            (decrypted?.TELEGRAM_BOT_TOKEN as string) || (decrypted?.bot_token as string);
+        if (!botToken) return null;
+
+        const meta =
+            connection.metadata && typeof connection.metadata === "object"
+                ? (connection.metadata as Record<string, unknown>)
+                : {};
+        const alertsChatId = (meta.alertsChatId as string) || (meta.defaultChatId as string);
+        if (!alertsChatId) return null;
+
+        const text = buildTelegramReviewText(workflowSlug, runId, context);
+
+        const inlineKeyboard = [
+            [
+                { text: "✅ Approve", callback_data: `engagement_approve:${approvalId}` },
+                { text: "❌ Reject", callback_data: `engagement_reject:${approvalId}` }
+            ],
+            [{ text: "💬 Feedback", callback_data: `engagement_feedback:${approvalId}` }]
+        ];
+
+        const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                chat_id: alertsChatId,
+                text,
+                parse_mode: "Markdown",
+                reply_markup: { inline_keyboard: inlineKeyboard }
+            })
+        });
+
+        const data = (await response.json()) as {
+            ok: boolean;
+            result?: { message_id: number; chat: { id: number } };
+        };
+        if (!data.ok || !data.result) return null;
+
+        return {
+            chatId: String(data.result.chat.id),
+            messageId: data.result.message_id
+        };
+    } catch (err) {
+        console.error("[HumanEngagement] Telegram notification error:", err);
+        return null;
+    }
+}
+
+/* ─── WhatsApp transport ──────────────────────────────────────────────────── */
+
+function buildWhatsAppReviewText(
+    workflowSlug: string,
+    runId: string,
+    approvalId: string,
+    context: EngagementContext
+): string {
+    const shortRunId = runId.length > 12 ? runId.slice(0, 12) + "…" : runId;
+    const runUrl = `${PLATFORM_URL}/workflows/${workflowSlug}/runs/${runId}`;
+
+    const lines: string[] = [];
+    lines.push("🔍 *Review Required*\n");
+    lines.push(`*Workflow:* ${workflowSlug} | *Run:* ${shortRunId}`);
+    lines.push(runUrl + "\n");
+
+    if (context.prompt) {
+        lines.push(`> ${context.prompt}\n`);
+    }
+
+    if (context.summary) {
+        const truncated =
+            context.summary.length > 500 ? context.summary.slice(0, 500) + "…" : context.summary;
+        lines.push(truncated + "\n");
+    }
+
+    if (context.issueUrl) lines.push(`📋 Issue: ${context.issueUrl}`);
+    if (context.prUrl) lines.push(`🔀 PR: ${context.prUrl}`);
+
+    lines.push("\n*Reply with one of:*");
+    lines.push(`/approve ${approvalId}`);
+    lines.push(`/reject ${approvalId}`);
+    lines.push(`/feedback ${approvalId} <your comments>`);
+
+    return lines.join("\n");
+}
+
+async function notifyWhatsApp(
+    context: EngagementContext,
+    workflowSlug: string,
+    runId: string,
+    approvalId: string,
+    organizationId: string
+): Promise<{ jid: string } | null> {
+    try {
+        const { prisma } = await import("@repo/database");
+        const { decryptJson } = await import("../crypto/encryption");
+
+        const connection = await prisma.integrationConnection.findFirst({
+            where: {
+                organizationId,
+                isActive: true,
+                provider: { key: "whatsapp-web" }
+            },
+            include: { provider: true },
+            orderBy: [{ isDefault: "desc" }, { updatedAt: "desc" }]
+        });
+
+        if (!connection) return null;
+
+        const meta =
+            connection.metadata && typeof connection.metadata === "object"
+                ? (connection.metadata as Record<string, unknown>)
+                : {};
+        const status = meta.status as string | undefined;
+        if (status !== "connected") return null;
+
+        const alertsJid = (meta.alertsJid as string) || (meta.defaultJid as string);
+        if (!alertsJid) return null;
+
+        let botToken: string | undefined;
+        if (connection.credentials) {
+            const decrypted = decryptJson(connection.credentials);
+            botToken = decrypted?.WHATSAPP_ENABLED as string | undefined;
+        }
+        if (!botToken && !connection.isActive) return null;
+
+        const text = buildWhatsAppReviewText(workflowSlug, runId, approvalId, context);
+
+        const agentBaseUrl = process.env.NEXT_PUBLIC_APP_URL
+            ? `${process.env.NEXT_PUBLIC_APP_URL}/agent`
+            : "http://localhost:3001";
+
+        const res = await fetch(`${agentBaseUrl}/api/channels/whatsapp/send`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ to: alertsJid, text })
+        });
+
+        if (!res.ok) return null;
+
+        return { jid: alertsJid };
+    } catch (err) {
+        console.error("[HumanEngagement] WhatsApp notification error:", err);
+        return null;
+    }
+}
+
 /* ─── Core engagement manager ─────────────────────────────────────────────── */
 
 export async function createEngagement(options: CreateEngagementOptions): Promise<string | null> {
     const { prisma } = await import("@repo/database");
 
     const context = getEngagementContext(options.stepOutputs, options.suspendData);
-    const channels = options.channels || ["github", "slack"];
+    const channels = options.channels || ["github", "slack", "telegram", "whatsapp"];
     const notifiedChannels: string[] = [];
 
     const approval = await prisma.approvalRequest.create({
@@ -498,6 +701,55 @@ export async function createEngagement(options: CreateEngagementOptions): Promis
             });
             notifiedChannels.push("slack");
             console.log("[HumanEngagement] Slack review message sent");
+        }
+    }
+
+    if (channels.includes("telegram")) {
+        const tgResult = await notifyTelegram(
+            context,
+            options.workflowSlug,
+            options.workflowRunId,
+            approval.id,
+            options.organizationId
+        );
+        if (tgResult) {
+            const existingMeta = (approval.metadata as Record<string, unknown>) || {};
+            await prisma.approvalRequest.update({
+                where: { id: approval.id },
+                data: {
+                    metadata: {
+                        ...existingMeta,
+                        telegramChatId: tgResult.chatId,
+                        telegramMessageId: tgResult.messageId
+                    } as unknown as Prisma.InputJsonValue
+                }
+            });
+            notifiedChannels.push("telegram");
+            console.log("[HumanEngagement] Telegram review message sent");
+        }
+    }
+
+    if (channels.includes("whatsapp")) {
+        const waResult = await notifyWhatsApp(
+            context,
+            options.workflowSlug,
+            options.workflowRunId,
+            approval.id,
+            options.organizationId
+        );
+        if (waResult) {
+            const existingMeta = (approval.metadata as Record<string, unknown>) || {};
+            await prisma.approvalRequest.update({
+                where: { id: approval.id },
+                data: {
+                    metadata: {
+                        ...existingMeta,
+                        whatsappJid: waResult.jid
+                    } as unknown as Prisma.InputJsonValue
+                }
+            });
+            notifiedChannels.push("whatsapp");
+            console.log("[HumanEngagement] WhatsApp review message sent");
         }
     }
 
@@ -687,6 +939,24 @@ export async function findEngagementBySlackMessage(
             slackChannelId: channelId,
             slackMessageTs: messageTs,
             status: "pending"
+        },
+        select: { id: true }
+    });
+
+    return approval?.id ?? null;
+}
+
+/**
+ * Find a pending engagement by its ID.
+ * Used by Telegram callback queries and WhatsApp reply commands.
+ */
+export async function findEngagementById(approvalId: string): Promise<string | null> {
+    const { prisma } = await import("@repo/database");
+
+    const approval = await prisma.approvalRequest.findFirst({
+        where: {
+            id: approvalId,
+            status: { in: ["pending", "conditional"] }
         },
         select: { id: true }
     });

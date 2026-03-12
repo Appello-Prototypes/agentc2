@@ -120,9 +120,23 @@ async function runAutoDispatch(ticket: {
         }
 
         const data = await res.json().catch(() => ({}));
-        console.log(
-            `[Auto-Dispatch] Ticket ${ticket.id} dispatched → run ${data.runId ?? "unknown"}`
-        );
+        const runId = data.runId as string | undefined;
+
+        if (runId) {
+            await prisma.supportTicket.update({
+                where: { id: ticket.id },
+                data: {
+                    pipelineRunId: runId,
+                    metadata: {
+                        lastDispatchedAt: new Date().toISOString(),
+                        lastDispatchedBy: "auto-dispatch",
+                        workflowSlug: config.workflowSlug
+                    }
+                }
+            });
+        }
+
+        console.log(`[Auto-Dispatch] Ticket ${ticket.id} dispatched → run ${runId ?? "unknown"}`);
     } catch (err) {
         console.error("[Auto-Dispatch] Error:", err);
     }

@@ -90,6 +90,7 @@ export async function GET(
                 workflowName: run.workflow?.name ?? null,
                 source: run.source,
                 triggerType: run.triggerType,
+                suspendedStep: run.suspendedStep ?? null,
                 isCurrent: run.id === ticket.pipelineRunId,
                 createdAt: run.createdAt.toISOString(),
                 completedAt: run.completedAt?.toISOString() ?? null,

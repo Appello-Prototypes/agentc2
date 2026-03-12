@@ -54,7 +54,27 @@ describe("integration-import tools (integration)", () => {
                 }
             }
         ] as never);
-        prismaMock.integrationConnection.findFirst.mockResolvedValue(null as never);
+        prismaMock.integrationConnection.findFirst
+            .mockResolvedValueOnce(null as never)
+            .mockResolvedValueOnce(null as never)
+            .mockResolvedValueOnce({
+                id: "conn-1",
+                providerId: "provider-1",
+                organizationId: "org-1",
+                isDefault: true,
+                credentials: {
+                    SLACK_BOT_TOKEN: "xoxb-123",
+                    SLACK_TEAM_ID: "T123"
+                },
+                provider: {
+                    key: "slack",
+                    providerType: "mcp",
+                    authType: "apiKey",
+                    configJson: {
+                        requiredFields: ["SLACK_BOT_TOKEN", "SLACK_TEAM_ID"]
+                    }
+                }
+            } as never);
         prismaMock.integrationConnection.create.mockResolvedValue({
             id: "conn-1",
             providerId: "provider-1",

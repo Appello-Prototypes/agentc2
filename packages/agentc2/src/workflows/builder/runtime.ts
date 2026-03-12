@@ -864,13 +864,23 @@ async function executeSteps(
                         const resolvedPrompt = config.prompt
                             ? (resolveTemplate(config.prompt, context) as string)
                             : step.name || "Human approval required";
+
+                        let resolvedContext: Record<string, unknown> | undefined;
+                        if (config.contextMapping) {
+                            resolvedContext = {};
+                            for (const [key, template] of Object.entries(config.contextMapping)) {
+                                resolvedContext[key] = resolveTemplate(template, context);
+                            }
+                        }
+
                         status = "suspended";
                         suspended = {
                             stepId: step.id,
                             data: {
                                 prompt: resolvedPrompt,
                                 formSchema: config.formSchema || {},
-                                timeout: config.timeout
+                                timeout: config.timeout,
+                                ...(resolvedContext && { context: resolvedContext })
                             }
                         };
                     }

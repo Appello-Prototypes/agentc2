@@ -320,7 +320,7 @@ describe("Cross-Tenant Isolation", () => {
             expect(prismaMock.agentTrigger.findMany).toHaveBeenCalledWith(
                 expect.objectContaining({
                     where: expect.objectContaining({
-                        agent: { workspace: { organizationId: ORG_A } }
+                        workspace: { organizationId: ORG_A }
                     })
                 })
             );

@@ -431,7 +431,20 @@ async function main() {
                 type: "human",
                 name: "Design Review",
                 config: {
-                    prompt: "A technical design has been posted on the GitHub issue:\n\n{{steps.intake.issueUrl}}\n\nReview the design. Approve to proceed with implementation planning, provide feedback, or reject."
+                    prompt: "Review the technical design below. Approve to proceed with implementation, provide feedback for revision, or reject.",
+                    contextMapping: {
+                        issueUrl: "{{steps.intake.issueUrl}}",
+                        issueNumber: "{{steps.intake.issueNumber}}",
+                        repository: "{{steps.intake.repository}}",
+                        classification: "{{steps.classify.classification}}",
+                        priority: "{{steps.classify.priority}}",
+                        complexity: "{{steps.classify.complexity}}",
+                        rationale: "{{steps.classify.rationale}}",
+                        designSummary: "{{steps['design-wait'].summary}}",
+                        prUrl: "{{steps['design-wait'].prUrl}}",
+                        prNumber: "{{steps['design-wait'].prNumber}}",
+                        designDurationMs: "{{steps['design-wait'].durationMs}}"
+                    }
                 }
             },
             {

@@ -12,7 +12,9 @@ import {
     Loader2,
     ChevronDown,
     ChevronRight,
-    RotateCcw
+    RotateCcw,
+    ExternalLink,
+    PauseCircle
 } from "lucide-react";
 import { useTimezone } from "@/lib/timezone-context";
 
@@ -66,6 +68,7 @@ interface LifecycleRun {
     workflowSlug: string | null;
     workflowName: string | null;
     source: string | null;
+    suspendedStep: string | null;
     isCurrent: boolean;
     createdAt: string;
     completedAt: string | null;
@@ -657,6 +660,7 @@ const STATUS_CONFIG: Record<string, { icon: typeof CheckCircle2; color: string; 
     FAILED: { icon: XCircle, color: "text-red-500", bg: "bg-red-500/10" },
     CANCELLED: { icon: XCircle, color: "text-gray-500", bg: "bg-gray-500/10" },
     RUNNING: { icon: Loader2, color: "text-blue-500", bg: "bg-blue-500/10" },
+    SUSPENDED: { icon: PauseCircle, color: "text-amber-500", bg: "bg-amber-500/10" },
     QUEUED: { icon: Clock, color: "text-amber-500", bg: "bg-amber-500/10" }
 };
 
@@ -696,7 +700,9 @@ function RunCard({
                                 ? "Failed"
                                 : run.status === "COMPLETED"
                                   ? "Completed"
-                                  : run.status}
+                                  : run.status === "SUSPENDED"
+                                    ? "Needs Review"
+                                    : run.status}
                     </span>
                     {run.isCurrent && <span className="text-muted-foreground ml-1">(current)</span>}
                     {run.workflowName && (
@@ -783,6 +789,22 @@ function RunCard({
                         <p className="text-muted-foreground text-[10px] italic">
                             No step data recorded
                         </p>
+                    )}
+
+                    {run.workflowSlug && (
+                        <a
+                            href={`/agent/workflows/${run.workflowSlug}/runs/${run.runId}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={`flex w-full items-center justify-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium transition-colors ${
+                                run.status === "SUSPENDED"
+                                    ? "bg-amber-500/10 text-amber-600 hover:bg-amber-500/20"
+                                    : "bg-muted/50 text-muted-foreground hover:bg-muted"
+                            }`}
+                        >
+                            <ExternalLink className="h-3 w-3" />
+                            {run.status === "SUSPENDED" ? "Review & Approve" : "View Run"}
+                        </a>
                     )}
                 </div>
             )}

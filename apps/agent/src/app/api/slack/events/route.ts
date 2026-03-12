@@ -561,6 +561,84 @@ function markdownToSlack(text: string): string {
 }
 
 /**
+ * Handle SDLC ticket submission from any Slack context.
+ * Creates a ticket and dispatches it to the SDLC pipeline via the internal API.
+ */
+async function handleSdlcSubmission(
+    text: string,
+    channel: string,
+    threadTs: string,
+    userId: string,
+    source: string,
+    installation: SlackInstallationContext,
+    token: string
+): Promise<void> {
+    const lines = text.split("\n").filter((l) => l.trim());
+    const title = lines[0] || text.slice(0, 200);
+    const description = lines.length > 1 ? lines.slice(1).join("\n") : title;
+
+    try {
+        const agentBaseUrl = process.env.NEXT_PUBLIC_APP_URL
+            ? `${process.env.NEXT_PUBLIC_APP_URL}/agent`
+            : "http://localhost:3001";
+
+        const org = await prisma.organization.findUnique({
+            where: { id: installation.organizationId },
+            select: { slug: true }
+        });
+
+        const res = await fetch(`${agentBaseUrl}/api/sdlc/submit`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-API-Key": process.env.MCP_API_KEY || "",
+                "X-Organization-Slug": org?.slug || ""
+            },
+            body: JSON.stringify({
+                title,
+                description,
+                channel: source,
+                channelUserId: userId
+            })
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+            await sendSlackMessageSafe(
+                channel,
+                `📋 *SDLC Ticket #${data.ticketNumber} created*\n\n` +
+                    `*Title:* ${title}\n` +
+                    `*Pipeline:* \`${data.workflowSlug}\`\n` +
+                    `*Run:* \`${data.workflowRunId?.slice(0, 12)}…\`\n\n` +
+                    `The ticket has been dispatched to the SDLC coding pipeline. ` +
+                    `You'll be notified when a review is needed.`,
+                threadTs,
+                undefined,
+                token
+            );
+        } else {
+            await sendSlackMessageSafe(
+                channel,
+                `❌ Failed to create SDLC ticket: ${data.error || "Unknown error"}`,
+                threadTs,
+                undefined,
+                token
+            );
+        }
+    } catch (err) {
+        console.error("[Slack] SDLC submission error:", err);
+        await sendSlackMessageSafe(
+            channel,
+            "❌ Failed to submit SDLC ticket. Please try again.",
+            threadTs,
+            undefined,
+            token
+        );
+    }
+}
+
+/**
  * Parse an optional agent directive from the message text.
  * Supports:
  *   "agent:research What is X?" -> { slug: "research", text: "What is X?", isExplicitSlug: true }
@@ -1479,6 +1557,20 @@ export async function POST(request: NextRequest) {
                     return;
                 }
 
+                // Handle SDLC ticket submission (agent:sdlc <title>)
+                if (directive.isExplicitSlug && directive.slug === "sdlc" && directive.text) {
+                    await handleSdlcSubmission(
+                        directive.text,
+                        mentionEvent.channel,
+                        threadTs,
+                        mentionEvent.user,
+                        "slack",
+                        installation,
+                        token
+                    );
+                    return;
+                }
+
                 // If the user didn't explicitly pick an agent (via agent:slug) and
                 // this is a thread reply, route to the agent that originally
                 // created the thread so the conversation stays in context.
@@ -1830,6 +1922,20 @@ export async function POST(request: NextRequest) {
                             helpText,
                             threadTs,
                             undefined,
+                            token
+                        );
+                        return;
+                    }
+
+                    // Handle SDLC ticket submission (agent:sdlc <title>)
+                    if (directive.isExplicitSlug && directive.slug === "sdlc" && directive.text) {
+                        await handleSdlcSubmission(
+                            directive.text,
+                            messageEvent.channel,
+                            threadTs,
+                            messageEvent.user,
+                            "slack",
+                            installation,
                             token
                         );
                         return;

@@ -178,6 +178,110 @@ const messageHandler: MessageHandler = async (message) => {
 
     const text = message.text.trim();
 
+    // Handle engagement approval commands: /approve ID, /reject ID, /feedback ID <text>
+    const approveMatch = text.match(/^\/?approve\s+([a-z0-9]+)$/i);
+    const rejectMatch = text.match(/^\/?reject\s+([a-z0-9]+)$/i);
+    const feedbackMatch = text.match(/^\/?feedback\s+([a-z0-9]+)\s+([\s\S]+)/i);
+
+    if (approveMatch || rejectMatch || feedbackMatch) {
+        try {
+            const { findEngagementById, resolveEngagement } =
+                await import("@repo/agentc2/workflows");
+            const approvalId = (approveMatch || rejectMatch || feedbackMatch)![1];
+            const engagementId = await findEngagementById(approvalId);
+            if (!engagementId) {
+                return "This review has already been resolved or does not exist.";
+            }
+
+            let decision: "approved" | "rejected" | "feedback";
+            let feedbackText: string | undefined;
+            if (approveMatch) {
+                decision = "approved";
+            } else if (rejectMatch) {
+                decision = "rejected";
+            } else {
+                decision = "feedback";
+                feedbackText = feedbackMatch![2].trim();
+            }
+
+            const result = await resolveEngagement({
+                approvalRequestId: engagementId,
+                decision,
+                message: feedbackText,
+                decidedBy: channelId,
+                channel: "whatsapp"
+            });
+
+            if (result.resumed) {
+                const emoji =
+                    decision === "approved" ? "✅" : decision === "rejected" ? "❌" : "💬";
+                const label =
+                    decision === "approved"
+                        ? "Approved"
+                        : decision === "rejected"
+                          ? "Rejected"
+                          : "Feedback submitted";
+                return `${emoji} ${label}. Workflow will continue processing.`;
+            }
+            return `Failed to resolve review: ${result.error || "Unknown error"}`;
+        } catch (err) {
+            console.error("[WhatsApp] Engagement command error:", err);
+            return "Error processing review command. Please try again.";
+        }
+    }
+
+    // Handle SDLC ticket submission: /sdlc <title> or sdlc: <title>
+    const sdlcMatch = text.match(/^(?:\/sdlc\s+|sdlc:\s*)([\s\S]+)/i);
+    if (sdlcMatch) {
+        const sdlcText = sdlcMatch[1].trim();
+        const sdlcLines = sdlcText.split("\n").filter((l: string) => l.trim());
+        const sdlcTitle = sdlcLines[0] || sdlcText.slice(0, 200);
+        const sdlcDescription = sdlcLines.length > 1 ? sdlcLines.slice(1).join("\n") : sdlcTitle;
+
+        try {
+            const agentBaseUrl = process.env.NEXT_PUBLIC_APP_URL
+                ? `${process.env.NEXT_PUBLIC_APP_URL}/agent`
+                : "http://localhost:3001";
+
+            const org = channelOrgId
+                ? await prisma.organization.findUnique({
+                      where: { id: channelOrgId },
+                      select: { slug: true }
+                  })
+                : null;
+
+            const res = await fetch(`${agentBaseUrl}/api/sdlc/submit`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-API-Key": process.env.MCP_API_KEY || "",
+                    "X-Organization-Slug": org?.slug || ""
+                },
+                body: JSON.stringify({
+                    title: sdlcTitle,
+                    description: sdlcDescription,
+                    channel: "whatsapp",
+                    channelUserId: channelId
+                })
+            });
+
+            const data = await res.json();
+            if (data.success) {
+                return (
+                    `📋 *SDLC Ticket #${data.ticketNumber} created*\n\n` +
+                    `*Title:* ${sdlcTitle}\n` +
+                    `*Pipeline:* ${data.workflowSlug}\n\n` +
+                    `The ticket has been dispatched to the SDLC coding pipeline. ` +
+                    `You'll be notified when a review is needed.`
+                );
+            }
+            return `❌ Failed to create SDLC ticket: ${data.error || "Unknown error"}`;
+        } catch (err) {
+            console.error("[WhatsApp] SDLC submission error:", err);
+            return "❌ Failed to submit SDLC ticket. Please try again.";
+        }
+    }
+
     // Handle help / list commands
     if (/^\/?(help|agents|agent:list)$/i.test(text)) {
         return await listActiveAgents(config.defaultAgentSlug, channelOrgId);
