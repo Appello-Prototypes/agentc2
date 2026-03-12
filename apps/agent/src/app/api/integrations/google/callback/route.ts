@@ -33,7 +33,8 @@ export async function GET(request: NextRequest) {
     const cookieStore = await cookies();
 
     const customReturn = consumeReturnUrlCookie(cookieStore);
-    const setupUrl = new URL(customReturn || "/mcp/gmail", request.url);
+    const appBase = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
+    const setupUrl = new URL(customReturn || "/mcp/gmail", appBase);
 
     if (errorParam) {
         const msg =

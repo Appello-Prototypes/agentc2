@@ -35,7 +35,8 @@ export async function GET(request: NextRequest) {
 
     // Determine redirect target for success/error
     const customReturn = consumeReturnUrlCookie(cookieStore);
-    const setupUrl = new URL(customReturn || "/mcp/microsoft", request.url);
+    const appBase = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
+    const setupUrl = new URL(customReturn || "/mcp/microsoft", appBase);
 
     if (errorParam) {
         const msg =

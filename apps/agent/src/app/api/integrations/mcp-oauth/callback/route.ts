@@ -35,9 +35,10 @@ export async function GET(request: NextRequest) {
     const cookieStore = await cookies();
     const customReturn = consumeReturnUrlCookie(cookieStore);
 
+    const appBase = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
     const buildRedirectUrl = () => {
         if (customReturn) {
-            return new URL(customReturn, request.url);
+            return new URL(customReturn, appBase);
         }
         return new URL(getSetupPageUrl());
     };
