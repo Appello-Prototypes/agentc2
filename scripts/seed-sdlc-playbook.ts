@@ -309,8 +309,8 @@ async function main() {
 
     const documents: Record<string, { id: string; slug: string }> = {};
     for (const doc of docDefs) {
-        let existing = await prisma.document.findUnique({
-            where: { slug: doc.slug }
+        let existing = await prisma.document.findFirst({
+            where: { slug: doc.slug, organizationId: org.id }
         });
         if (!existing) {
             existing = await prisma.document.create({
@@ -1651,7 +1651,16 @@ async function main() {
             });
             console.log("Created workflow:", existing.slug);
         } else {
-            console.log("Workflow exists:", existing.slug);
+            await prisma.workflow.update({
+                where: { id: existing.id },
+                data: {
+                    definitionJson: wfDef.definitionJson,
+                    description: wfDef.description,
+                    isActive: wfDef.isActive,
+                    isPublished: wfDef.isPublished
+                }
+            });
+            console.log("Updated workflow:", existing.slug);
         }
         workflows[wfDef.slug] = { id: existing.id, slug: existing.slug };
     }

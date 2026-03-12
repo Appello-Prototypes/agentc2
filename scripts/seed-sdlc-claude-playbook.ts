@@ -750,7 +750,16 @@ async function main() {
             });
             console.log("Created workflow:", existing.slug);
         } else {
-            console.log("Workflow exists:", existing.slug);
+            await prisma.workflow.update({
+                where: { id: existing.id },
+                data: {
+                    definitionJson: wfDef.definitionJson,
+                    description: wfDef.description,
+                    isActive: wfDef.isActive,
+                    isPublished: wfDef.isPublished
+                }
+            });
+            console.log("Updated workflow:", existing.slug);
         }
         workflows[wfDef.slug] = { id: existing.id, slug: existing.slug };
     }
