@@ -201,10 +201,13 @@ jobs:
               fi
               if [ "$CURRENT_HASH" != "$STORED_HASH" ] || ! docker image inspect agentc2-sandbox >/dev/null 2>&1; then
                 echo "   Dockerfile changed or image missing — rebuilding..."
-                docker build -t agentc2-sandbox -f "$DOCKERFILE" . 2>&1 | tail -5
-                mkdir -p /var/lib/agentc2
-                echo "$CURRENT_HASH" > /var/lib/agentc2/.sandbox-image-hash
-                echo "   Sandbox image built."
+                if docker build -t agentc2-sandbox -f "$DOCKERFILE" . 2>&1 | tail -20; then
+                  mkdir -p /var/lib/agentc2
+                  echo "$CURRENT_HASH" > /var/lib/agentc2/.sandbox-image-hash
+                  echo "   Sandbox image built."
+                else
+                  echo "   WARNING: Sandbox image build failed (non-fatal). Continuing deploy..."
+                fi
               else
                 echo "   Sandbox image unchanged — skipping build."
               fi
