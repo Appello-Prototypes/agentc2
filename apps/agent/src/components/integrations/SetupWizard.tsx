@@ -71,6 +71,21 @@ const OAUTH_PROVIDER_MAP: Record<string, OAuthConfig> = {
         ],
         statusEndpoint: "/api/integrations/gmail/status",
         syncEndpoint: "/api/integrations/gmail/sync"
+    },
+    "google-calendar": {
+        socialProvider: "google",
+        scopes: ["https://www.googleapis.com/auth/calendar.events"],
+        statusEndpoint: "/api/integrations/google-calendar/status",
+        syncEndpoint: "/api/integrations/google-calendar/sync"
+    },
+    "google-drive": {
+        socialProvider: "google",
+        scopes: [
+            "https://www.googleapis.com/auth/drive.readonly",
+            "https://www.googleapis.com/auth/drive.file"
+        ],
+        statusEndpoint: "/api/integrations/google-drive/status",
+        syncEndpoint: "/api/integrations/google-drive/sync"
     }
 };
 
