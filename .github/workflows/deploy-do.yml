@@ -190,30 +190,33 @@ jobs:
 
             echo ""
             echo "7a. Building sandbox Docker image (if changed)..."
-            DOCKERFILE="packages/agentc2/docker/Dockerfile.sandbox"
-            if ! command -v docker >/dev/null 2>&1; then
-              echo "   Docker not installed — skipping sandbox image build."
-            elif [ -f "$DOCKERFILE" ]; then
-              CURRENT_HASH=$(sha256sum "$DOCKERFILE" | cut -d' ' -f1)
-              STORED_HASH=""
-              if [ -f "/var/lib/agentc2/.sandbox-image-hash" ]; then
-                STORED_HASH=$(cat /var/lib/agentc2/.sandbox-image-hash)
-              fi
-              if [ "$CURRENT_HASH" != "$STORED_HASH" ] || ! docker image inspect agentc2-sandbox >/dev/null 2>&1; then
-                echo "   Dockerfile changed or image missing — rebuilding..."
-                if docker build -t agentc2-sandbox -f "$DOCKERFILE" . 2>&1 | tail -20; then
-                  mkdir -p /var/lib/agentc2
-                  echo "$CURRENT_HASH" > /var/lib/agentc2/.sandbox-image-hash
-                  echo "   Sandbox image built."
+            (
+              set +e
+              DOCKERFILE="packages/agentc2/docker/Dockerfile.sandbox"
+              if ! command -v docker >/dev/null 2>&1; then
+                echo "   Docker not installed — skipping sandbox image build."
+              elif [ -f "$DOCKERFILE" ]; then
+                CURRENT_HASH=$(sha256sum "$DOCKERFILE" | cut -d' ' -f1)
+                STORED_HASH=""
+                if [ -f "/var/lib/agentc2/.sandbox-image-hash" ]; then
+                  STORED_HASH=$(cat /var/lib/agentc2/.sandbox-image-hash)
+                fi
+                if [ "$CURRENT_HASH" != "$STORED_HASH" ] || ! docker image inspect agentc2-sandbox >/dev/null 2>&1; then
+                  echo "   Dockerfile changed or image missing — rebuilding..."
+                  if docker build -t agentc2-sandbox -f "$DOCKERFILE" . 2>&1 | tail -20; then
+                    mkdir -p /var/lib/agentc2
+                    echo "$CURRENT_HASH" > /var/lib/agentc2/.sandbox-image-hash
+                    echo "   Sandbox image built."
+                  else
+                    echo "   WARNING: Sandbox image build failed (non-fatal)."
+                  fi
                 else
-                  echo "   WARNING: Sandbox image build failed (non-fatal). Continuing deploy..."
+                  echo "   Sandbox image unchanged — skipping build."
                 fi
               else
-                echo "   Sandbox image unchanged — skipping build."
+                echo "   No Dockerfile.sandbox found — skipping."
               fi
-            else
-              echo "   No Dockerfile.sandbox found — skipping."
-            fi
+            ) || echo "   WARNING: Sandbox build step failed (non-fatal). Continuing deploy..."
 
             echo ""
             echo "7b. Building applications (on-server, full .env, 24GB heap, remote cache)..."
