@@ -30,9 +30,9 @@ const MAX_OUTPUT_SIZE = 100_000; // 100KB of stdout/stderr
 
 const DOCKER_MEMORY_LIMIT = process.env.SANDBOX_MEMORY_LIMIT || "512m";
 const DOCKER_CPU_LIMIT = process.env.SANDBOX_CPU_LIMIT || "1.0";
-const ALLOW_UNSANDBOXED_FALLBACK =
-    process.env.SANDBOX_ALLOW_UNSANDBOXED_FALLBACK === "true" &&
-    process.env.NODE_ENV !== "production";
+const ALLOW_UNSANDBOXED_FALLBACK = process.env.SANDBOX_ALLOW_UNSANDBOXED_FALLBACK === "true";
+
+const IS_PRODUCTION = process.env.NODE_ENV === "production";
 
 const ALLOWED_WRITE_EXTENSIONS = new Set([
     ".html",
@@ -355,6 +355,7 @@ async function executeWithChildProcess(opts: {
     code: string;
     workspaceDir: string;
     timeoutMs: number;
+    credentials?: Record<string, string>;
 }): Promise<{
     stdout: string;
     stderr: string;
@@ -362,7 +363,7 @@ async function executeWithChildProcess(opts: {
     durationMs: number;
     timedOut: boolean;
 }> {
-    const { language, code, workspaceDir, timeoutMs } = opts;
+    const { language, code, workspaceDir, timeoutMs, credentials } = opts;
     const startTime = Date.now();
 
     let command: string;
@@ -392,6 +393,11 @@ async function executeWithChildProcess(opts: {
             throw new Error(`Unsupported language: ${language}`);
     }
 
+    const env = buildSafeEnv();
+    if (credentials) {
+        Object.assign(env, credentials);
+    }
+
     return new Promise((resolve) => {
         let stdout = "";
         let stderr = "";
@@ -400,7 +406,7 @@ async function executeWithChildProcess(opts: {
 
         const child: ChildProcess = spawn(command, args, {
             cwd: workspaceDir,
-            env: buildSafeEnv() as NodeJS.ProcessEnv,
+            env: env as NodeJS.ProcessEnv,
             timeout: timeoutMs,
             stdio: ["ignore", "pipe", "pipe"]
         });
@@ -534,20 +540,24 @@ export const executeCodeTool = createTool({
 
         if (!ALLOW_UNSANDBOXED_FALLBACK) {
             throw new Error(
-                "Docker sandbox is unavailable and unsandboxed fallback is disabled. Enable Docker or explicitly set SANDBOX_ALLOW_UNSANDBOXED_FALLBACK=true in non-production environments."
+                "Docker sandbox is unavailable and unsandboxed fallback is disabled. " +
+                    "Enable Docker or set SANDBOX_ALLOW_UNSANDBOXED_FALLBACK=true."
             );
         }
 
-        if (providerKeys.length && Object.keys(credentials).length) {
-            const env = buildSafeEnv();
-            Object.assign(env, credentials);
+        if (IS_PRODUCTION) {
+            console.warn(
+                "[Sandbox] WARNING: Running code via child_process fallback in production. " +
+                    "Docker sandbox is unavailable. Secrets are stripped from the environment."
+            );
         }
 
         const result = await executeWithChildProcess({
             language,
             code,
             workspaceDir,
-            timeoutMs
+            timeoutMs,
+            credentials
         });
         return { ...result, executionMode: "child_process" };
     }
