@@ -300,24 +300,144 @@ async function main() {
                 }
             },
             {
-                id: "merge-review",
-                type: "human",
-                name: "Review PR on GitHub",
+                id: "heal-cycle",
+                type: "dowhile",
+                name: "Validation & Self-Heal Cycle",
                 config: {
-                    prompt: "A pull request has been created:\n\n{{steps['implement-wait'].prUrl}}\n\nReview the code changes on GitHub. Approve to merge, or reject."
+                    maxIterations: 3,
+                    conditionExpression:
+                        "steps['verify-branch']?.passed !== true",
+                    steps: [
+                        {
+                            id: "verify-branch",
+                            type: "tool",
+                            name: "Run CI Suite",
+                            config: {
+                                toolId: "verify-branch",
+                                parameters: {
+                                    repository: "{{input.repository}}",
+                                    branch: "{{steps['implement-wait'].branchName}}",
+                                    commands: [
+                                        "bun run type-check",
+                                        "bun run lint",
+                                        "bun run test:unit",
+                                        "bun run test:integration",
+                                        "bun run build"
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            id: "ci-heal-route",
+                            type: "branch",
+                            name: "Route CI Result",
+                            config: {
+                                branches: [
+                                    {
+                                        id: "ci-passed",
+                                        condition: "steps['verify-branch']?.passed === true",
+                                        steps: [
+                                            {
+                                                id: "e2e-validate",
+                                                type: "agent",
+                                                name: "E2E Playwright Validation",
+                                                config: {
+                                                    agentSlug: orgSlug("sdlc-auditor"),
+                                                    outputFormat: "json",
+                                                    promptTemplate:
+                                                        "You are a QA validation agent with Playwright browser tools. Verify the AgentC2 platform is functioning correctly.\n\n## Context\nBug fix: {{input.title}}\nChanges: {{steps['implement-wait'].summary}}\n\nNavigate to the AgentC2 platform and validate:\n1. Login page loads\n2. Workspace dashboard renders\n3. Agents list page loads\n4. Workflows page loads\n5. Networks page loads\n6. Settings/Integrations page loads\n\nUse playwright_browser_navigate, playwright_browser_snapshot, playwright_browser_click.\nFor each check, take a snapshot and verify key elements are present.\n\nRespond with JSON: { \"verdict\": \"PASS\" or \"FAIL\", \"checks\": [...], \"failureDetails\": \"...\" }"
+                                                }
+                                            }
+                                        ]
+                                    }
+                                ],
+                                defaultBranch: [
+                                    {
+                                        id: "ci-fix-launch",
+                                        type: "tool",
+                                        name: "Launch CI Fix",
+                                        config: {
+                                            toolId: "claude-launch-agent",
+                                            parameters: {
+                                                prompt: "CI validation failed on branch {{steps['implement-wait'].branchName}}.\n\n## Failures\n{{helpers.json(steps['verify-branch'].results)}}\n\nFix the failing commands. The branch is already checked out. Fix the code, run the failing command to verify, then commit and push.\n\nDo NOT create a new branch. Push fixes to the existing branch.",
+                                                repository: "https://github.com/{{input.repository}}",
+                                                branch: "{{steps['implement-wait'].branchName}}"
+                                            }
+                                        }
+                                    },
+                                    {
+                                        id: "ci-fix-wait",
+                                        type: "tool",
+                                        name: "Wait for CI Fix",
+                                        config: {
+                                            toolId: "claude-poll-until-done",
+                                            parameters: {
+                                                agentId: "{{steps['ci-fix-launch'].agentId}}",
+                                                maxWaitMinutes: 15,
+                                                repository: "{{input.repository}}"
+                                            }
+                                        }
+                                    },
+                                    {
+                                        id: "ci-fix-notes",
+                                        type: "tool",
+                                        name: "Post Fix Attempt",
+                                        config: {
+                                            toolId: "github-add-issue-comment",
+                                            parameters: {
+                                                body: "## Self-Heal: CI Fix Attempt\n\n**Failed commands:** {{helpers.json(steps['verify-branch'].results)}}\n\n**Fix agent:** {{steps['ci-fix-launch'].agentId}}\n**Fix summary:** {{steps['ci-fix-wait'].summary}}\n\nRe-running validation...",
+                                                repository: "{{input.repository}}",
+                                                issueNumber: "{{steps.intake.issueNumber}}"
+                                            }
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    ]
                 }
             },
             {
-                id: "merge",
-                type: "tool",
-                name: "Merge PR",
+                id: "merge-gate",
+                type: "branch",
+                name: "Final Merge Gate",
                 config: {
-                    toolId: "merge-pull-request",
-                    parameters: {
-                        prNumber: "{{steps['implement-wait'].prNumber}}",
-                        repository: "{{input.repository}}",
-                        mergeMethod: "squash"
-                    }
+                    branches: [
+                        {
+                            id: "merge-approved",
+                            condition: "steps['verify-branch']?.passed === true",
+                            steps: [
+                                {
+                                    id: "merge",
+                                    type: "tool",
+                                    name: "Merge PR",
+                                    config: {
+                                        toolId: "merge-pull-request",
+                                        parameters: {
+                                            prNumber: "{{steps['implement-wait'].prNumber}}",
+                                            repository: "{{input.repository}}",
+                                            mergeMethod: "squash"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    ],
+                    defaultBranch: [
+                        {
+                            id: "merge-fail",
+                            type: "tool",
+                            name: "Post Merge Failure",
+                            config: {
+                                toolId: "github-add-issue-comment",
+                                parameters: {
+                                    body: "## SDLC Pipeline: Merge Blocked\n\nAfter 3 self-heal attempts, CI validation still fails.\n\n**Last failure:** {{helpers.json(steps['verify-branch'].results)}}\n\nManual intervention required.",
+                                    repository: "{{input.repository}}",
+                                    issueNumber: "{{steps.intake.issueNumber}}"
+                                }
+                            }
+                        }
+                    ]
                 }
             },
             {
@@ -546,24 +666,144 @@ async function main() {
                 }
             },
             {
-                id: "merge-review",
-                type: "human",
-                name: "Review PR on GitHub",
+                id: "heal-cycle",
+                type: "dowhile",
+                name: "Validation & Self-Heal Cycle",
                 config: {
-                    prompt: "A pull request has been created:\n\n{{steps['implement-wait'].prUrl}}\n\nReview the code changes on GitHub. Approve to merge, or reject."
+                    maxIterations: 3,
+                    conditionExpression:
+                        "steps['verify-branch']?.passed !== true",
+                    steps: [
+                        {
+                            id: "verify-branch",
+                            type: "tool",
+                            name: "Run CI Suite",
+                            config: {
+                                toolId: "verify-branch",
+                                parameters: {
+                                    repository: "{{input.repository}}",
+                                    branch: "{{steps['implement-wait'].branchName}}",
+                                    commands: [
+                                        "bun run type-check",
+                                        "bun run lint",
+                                        "bun run test:unit",
+                                        "bun run test:integration",
+                                        "bun run build"
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            id: "ci-heal-route",
+                            type: "branch",
+                            name: "Route CI Result",
+                            config: {
+                                branches: [
+                                    {
+                                        id: "ci-passed",
+                                        condition: "steps['verify-branch']?.passed === true",
+                                        steps: [
+                                            {
+                                                id: "e2e-validate",
+                                                type: "agent",
+                                                name: "E2E Playwright Validation",
+                                                config: {
+                                                    agentSlug: orgSlug("sdlc-auditor"),
+                                                    outputFormat: "json",
+                                                    promptTemplate:
+                                                        "You are a QA validation agent with Playwright browser tools. Verify the AgentC2 platform is functioning correctly.\n\n## Context\nFeature: {{input.title}}\nChanges: {{steps['implement-wait'].summary}}\n\nNavigate to the AgentC2 platform and validate:\n1. Login page loads\n2. Workspace dashboard renders\n3. Agents list page loads\n4. Workflows page loads\n5. Networks page loads\n6. Settings/Integrations page loads\n\nUse playwright_browser_navigate, playwright_browser_snapshot, playwright_browser_click.\nFor each check, take a snapshot and verify key elements are present.\n\nRespond with JSON: { \"verdict\": \"PASS\" or \"FAIL\", \"checks\": [...], \"failureDetails\": \"...\" }"
+                                                }
+                                            }
+                                        ]
+                                    }
+                                ],
+                                defaultBranch: [
+                                    {
+                                        id: "ci-fix-launch",
+                                        type: "tool",
+                                        name: "Launch CI Fix",
+                                        config: {
+                                            toolId: "claude-launch-agent",
+                                            parameters: {
+                                                prompt: "CI validation failed on branch {{steps['implement-wait'].branchName}}.\n\n## Failures\n{{helpers.json(steps['verify-branch'].results)}}\n\nFix the failing commands. The branch is already checked out. Fix the code, run the failing command to verify, then commit and push.\n\nDo NOT create a new branch. Push fixes to the existing branch.",
+                                                repository: "https://github.com/{{input.repository}}",
+                                                branch: "{{steps['implement-wait'].branchName}}"
+                                            }
+                                        }
+                                    },
+                                    {
+                                        id: "ci-fix-wait",
+                                        type: "tool",
+                                        name: "Wait for CI Fix",
+                                        config: {
+                                            toolId: "claude-poll-until-done",
+                                            parameters: {
+                                                agentId: "{{steps['ci-fix-launch'].agentId}}",
+                                                maxWaitMinutes: 15,
+                                                repository: "{{input.repository}}"
+                                            }
+                                        }
+                                    },
+                                    {
+                                        id: "ci-fix-notes",
+                                        type: "tool",
+                                        name: "Post Fix Attempt",
+                                        config: {
+                                            toolId: "github-add-issue-comment",
+                                            parameters: {
+                                                body: "## Self-Heal: CI Fix Attempt\n\n**Failed commands:** {{helpers.json(steps['verify-branch'].results)}}\n\n**Fix agent:** {{steps['ci-fix-launch'].agentId}}\n**Fix summary:** {{steps['ci-fix-wait'].summary}}\n\nRe-running validation...",
+                                                repository: "{{input.repository}}",
+                                                issueNumber: "{{steps.intake.issueNumber}}"
+                                            }
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    ]
                 }
             },
             {
-                id: "merge",
-                type: "tool",
-                name: "Merge PR",
+                id: "merge-gate",
+                type: "branch",
+                name: "Final Merge Gate",
                 config: {
-                    toolId: "merge-pull-request",
-                    parameters: {
-                        prNumber: "{{steps['implement-wait'].prNumber}}",
-                        repository: "{{input.repository}}",
-                        mergeMethod: "squash"
-                    }
+                    branches: [
+                        {
+                            id: "merge-approved",
+                            condition: "steps['verify-branch']?.passed === true",
+                            steps: [
+                                {
+                                    id: "merge",
+                                    type: "tool",
+                                    name: "Merge PR",
+                                    config: {
+                                        toolId: "merge-pull-request",
+                                        parameters: {
+                                            prNumber: "{{steps['implement-wait'].prNumber}}",
+                                            repository: "{{input.repository}}",
+                                            mergeMethod: "squash"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    ],
+                    defaultBranch: [
+                        {
+                            id: "merge-fail",
+                            type: "tool",
+                            name: "Post Merge Failure",
+                            config: {
+                                toolId: "github-add-issue-comment",
+                                parameters: {
+                                    body: "## SDLC Pipeline: Merge Blocked\n\nAfter 3 self-heal attempts, CI validation still fails.\n\n**Last failure:** {{helpers.json(steps['verify-branch'].results)}}\n\nManual intervention required.",
+                                    repository: "{{input.repository}}",
+                                    issueNumber: "{{steps.intake.issueNumber}}"
+                                }
+                            }
+                        }
+                    ]
                 }
             }
         ]
