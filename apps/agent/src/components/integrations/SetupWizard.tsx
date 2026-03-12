@@ -61,18 +61,7 @@ type WizardStep = "overview" | "credentials" | "connecting" | "success" | "error
 /*  Constants                                                                  */
 /* -------------------------------------------------------------------------- */
 
-const OAUTH_PROVIDER_MAP: Record<string, OAuthConfig> = {
-    gmail: {
-        socialProvider: "google",
-        scopes: [
-            "https://www.googleapis.com/auth/gmail.modify",
-            "https://www.googleapis.com/auth/gmail.send",
-            "https://www.googleapis.com/auth/calendar.readonly"
-        ],
-        statusEndpoint: "/api/integrations/gmail/status",
-        syncEndpoint: "/api/integrations/gmail/sync"
-    }
-};
+const OAUTH_PROVIDER_MAP: Record<string, OAuthConfig> = {};
 
 /** Maps OAuth scopes to plain-English descriptions */
 const SCOPE_DESCRIPTIONS: Record<string, string> = {
@@ -149,7 +138,10 @@ type LinkedProviderMatch = LinkedProviderConfig & {
 function getOAuthConfig(provider: IntegrationProvider): OAuthConfig | null {
     const config = provider.config as Record<string, unknown> | null;
     if (config?.oauthConfig && typeof config.oauthConfig === "object") {
-        return config.oauthConfig as OAuthConfig;
+        const oaCfg = config.oauthConfig as Record<string, unknown>;
+        if (typeof oaCfg.socialProvider === "string") {
+            return oaCfg as unknown as OAuthConfig;
+        }
     }
     return OAUTH_PROVIDER_MAP[provider.key] || null;
 }
@@ -1022,7 +1014,9 @@ export function SetupWizard({
     const isNoAuth = provider?.authType === "none";
     const oauthConfig = provider ? getOAuthConfig(provider) : null;
     const isNativeOAuth = isOAuth && oauthConfig !== null;
-    const isMcpOAuth = isOAuth && !isNativeOAuth;
+    const isStandaloneOAuth =
+        isOAuth && !isNativeOAuth && !!(provider && getOAuthStartEndpoint(provider));
+    const isMcpOAuth = isOAuth && !isNativeOAuth && !isStandaloneOAuth;
     const hasSetupUrl = provider ? !!getSetupUrl(provider) : false;
 
     // Step labels for the indicator
@@ -1399,6 +1393,8 @@ export function SetupWizard({
         } else if (isNativeOAuth) {
             setStep("connecting");
             handleNativeOAuth();
+        } else if (isStandaloneOAuth) {
+            handleStandaloneOAuth();
         } else if (isMcpOAuth) {
             setStep("connecting");
             handleMcpOAuth();
@@ -1424,6 +1420,7 @@ export function SetupWizard({
     }, [
         isApiKey,
         isNativeOAuth,
+        isStandaloneOAuth,
         isMcpOAuth,
         hasSetupUrl,
         isNoAuth,
@@ -1549,7 +1546,11 @@ export function SetupWizard({
                                     <OAuthConnectStep
                                         provider={provider}
                                         onStartOAuth={
-                                            isNativeOAuth ? handleNativeOAuth : handleMcpOAuth
+                                            isNativeOAuth
+                                                ? handleNativeOAuth
+                                                : isStandaloneOAuth
+                                                  ? handleStandaloneOAuth
+                                                  : handleMcpOAuth
                                         }
                                         connecting={connecting}
                                         error={connectError}

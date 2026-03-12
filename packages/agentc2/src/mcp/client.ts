@@ -594,13 +594,13 @@ const INTEGRATION_PROVIDER_SEEDS: IntegrationProviderSeed[] = [
         configJson: {
             requiredScopes: ["https://www.googleapis.com/auth/gmail.modify"],
             oauthConfig: {
-                socialProvider: "google",
                 scopes: ["https://www.googleapis.com/auth/gmail.modify"],
                 statusEndpoint: "/api/integrations/gmail/status",
-                syncEndpoint: "/api/integrations/gmail/sync"
+                startEndpoint: "/api/integrations/google/start",
+                callbackEndpoint: "/api/integrations/google/callback"
             },
             setupUrl: "/mcp/gmail",
-            setupLabel: "Open OAuth Setup"
+            setupLabel: "Connect Google Account"
         },
         triggersJson: {
             triggers: [
@@ -629,12 +629,13 @@ const INTEGRATION_PROVIDER_SEEDS: IntegrationProviderSeed[] = [
         configJson: {
             requiredScopes: ["https://www.googleapis.com/auth/calendar.events"],
             oauthConfig: {
-                socialProvider: "google",
                 scopes: ["https://www.googleapis.com/auth/calendar.events"],
-                siblingOf: "gmail"
+                siblingOf: "gmail",
+                startEndpoint: "/api/integrations/google/start",
+                callbackEndpoint: "/api/integrations/google/callback"
             },
             setupUrl: "/mcp/gmail",
-            setupLabel: "Connect via Google Sign-In"
+            setupLabel: "Connect via Google Account"
         }
     },
     {
@@ -650,15 +651,16 @@ const INTEGRATION_PROVIDER_SEEDS: IntegrationProviderSeed[] = [
                 "https://www.googleapis.com/auth/drive.file"
             ],
             oauthConfig: {
-                socialProvider: "google",
                 scopes: [
                     "https://www.googleapis.com/auth/drive.readonly",
                     "https://www.googleapis.com/auth/drive.file"
                 ],
-                siblingOf: "gmail"
+                siblingOf: "gmail",
+                startEndpoint: "/api/integrations/google/start",
+                callbackEndpoint: "/api/integrations/google/callback"
             },
             setupUrl: "/mcp/gmail",
-            setupLabel: "Connect via Google Sign-In"
+            setupLabel: "Connect via Google Account"
         }
     },
     {
@@ -672,12 +674,13 @@ const INTEGRATION_PROVIDER_SEEDS: IntegrationProviderSeed[] = [
         configJson: {
             requiredScopes: ["https://www.googleapis.com/auth/webmasters.readonly"],
             oauthConfig: {
-                socialProvider: "google",
                 scopes: ["https://www.googleapis.com/auth/webmasters.readonly"],
-                siblingOf: "gmail"
+                siblingOf: "gmail",
+                startEndpoint: "/api/integrations/google/start",
+                callbackEndpoint: "/api/integrations/google/callback"
             },
             setupUrl: "/mcp/gmail",
-            setupLabel: "Connect via Google Sign-In"
+            setupLabel: "Connect via Google Account"
         }
     },
     {

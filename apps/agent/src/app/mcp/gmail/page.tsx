@@ -2,8 +2,6 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { linkSocial } from "@repo/auth/client";
-import { GOOGLE_OAUTH_SCOPES } from "@repo/auth/google-scopes";
 import {
     Button,
     Card,
@@ -93,20 +91,11 @@ function GmailIntegrationClient() {
         }
     }, [status?.gmailAddress]);
 
-    const handleReconnect = async () => {
+    const handleReconnect = () => {
         setError(null);
         setReconnectLoading(true);
-
-        try {
-            await linkSocial({
-                provider: "google",
-                scopes: [...GOOGLE_OAUTH_SCOPES],
-                callbackURL: "/mcp/gmail"
-            });
-        } catch (err) {
-            setError(err instanceof Error ? err.message : "Failed to reconnect Gmail");
-            setReconnectLoading(false);
-        }
+        const returnUrl = encodeURIComponent("/mcp/gmail");
+        window.location.href = `${getApiBase()}/api/integrations/google/start?returnUrl=${returnUrl}`;
     };
 
     const handleSave = async () => {
@@ -158,8 +147,7 @@ function GmailIntegrationClient() {
             <div>
                 <h1 className="text-2xl font-semibold">Gmail Integration</h1>
                 <p className="text-muted-foreground text-sm">
-                    Gmail access is granted during Google sign-in. Manage connection status and
-                    agent triggers here.
+                    Connect your Google account to enable Gmail, Calendar, and Drive integrations.
                 </p>
             </div>
 
