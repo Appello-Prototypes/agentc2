@@ -233,7 +233,7 @@ export async function GET(request: NextRequest) {
                 hasBlueprint: hasBlueprint(provider.key),
                 actions: provider.actionsJson,
                 triggers: provider.triggersJson,
-                config: provider.configJson,
+                config: provider.configJson || {},
                 provisioned: provisionedMeta,
                 healthStatus: healthStatus || null
             };

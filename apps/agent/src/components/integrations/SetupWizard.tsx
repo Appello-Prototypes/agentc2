@@ -114,11 +114,28 @@ function getCapabilities(provider: IntegrationProvider): string[] {
 }
 
 function getFieldDefinitions(provider: IntegrationProvider) {
-    const config = provider.config as Record<string, unknown> | null;
-    const defs = config?.fieldDefinitions;
-    if (!defs || typeof defs !== "object" || Array.isArray(defs)) {
+    // Guard against null/undefined provider
+    if (!provider) {
+        console.warn("[SetupWizard] getFieldDefinitions called with null/undefined provider");
         return {} as Record<string, Record<string, string>>;
     }
+
+    const config = provider.config as Record<string, unknown> | null | undefined;
+
+    // Guard against missing config
+    if (!config) {
+        console.debug(`[SetupWizard] Provider "${provider.key}" has no config object`);
+        return {} as Record<string, Record<string, string>>;
+    }
+
+    const defs = config.fieldDefinitions;
+
+    // Guard against missing/invalid fieldDefinitions
+    if (!defs || typeof defs !== "object" || Array.isArray(defs)) {
+        console.debug(`[SetupWizard] Provider "${provider.key}" has no fieldDefinitions in config`);
+        return {} as Record<string, Record<string, string>>;
+    }
+
     return defs as Record<string, Record<string, string>>;
 }
 
@@ -361,7 +378,7 @@ function CredentialsStep({
     linkedMatch: LinkedProviderMatch | null;
 }) {
     const requiredFields = getRequiredFields(provider);
-    const fieldDefs = getFieldDefinitions(provider);
+    const fieldDefs = getFieldDefinitions(provider) || {};
     const [useLinked, setUseLinked] = useState(!!linkedMatch?.isConnected);
     const [values, setValues] = useState<Record<string, string>>(() => {
         const initial: Record<string, string> = {};
@@ -768,7 +785,7 @@ function AlreadyConnectedView({
     const [saveError, setSaveError] = useState<string | null>(null);
 
     const requiredFields = getRequiredFields(provider);
-    const fieldDefs = getFieldDefinitions(provider);
+    const fieldDefs = getFieldDefinitions(provider) || {};
 
     const handleStartEdit = (connId: string) => {
         const initial: Record<string, string> = {};
