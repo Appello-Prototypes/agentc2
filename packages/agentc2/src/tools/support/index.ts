@@ -14,6 +14,7 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { prisma } from "@repo/database";
+import { maybeAutoDispatch } from "../../auto-dispatch";
 
 const baseOutputSchema = z.object({ success: z.boolean().optional() }).passthrough();
 
@@ -161,6 +162,8 @@ export const submitSupportTicketTool = createTool({
                 organizationId
             }
         });
+
+        maybeAutoDispatch({ id: ticket.id, title: ticket.title, description, type: ticket.type });
 
         return {
             success: true,

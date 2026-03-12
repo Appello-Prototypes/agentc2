@@ -36,6 +36,7 @@ type SavedConfig = {
     workflowSlug: string;
     workflowName: string;
     repository: string;
+    autoDispatch?: boolean;
 };
 
 export function DispatchConfigManager() {
@@ -54,6 +55,7 @@ export function DispatchConfigManager() {
     const [reposError, setReposError] = useState("");
     const [repository, setRepository] = useState("");
 
+    const [autoDispatch, setAutoDispatch] = useState(false);
     const [savedConfig, setSavedConfig] = useState<SavedConfig | null>(null);
 
     useEffect(() => {
@@ -83,6 +85,7 @@ export function DispatchConfigManager() {
                 setSelectedOrgId(configData.config.targetOrganizationId);
                 setSelectedWorkflowId(configData.config.workflowId);
                 setRepository(configData.config.repository || "");
+                setAutoDispatch(configData.config.autoDispatch ?? false);
             }
         } catch (err) {
             setError(err instanceof Error ? err.message : "Failed to load configuration");
@@ -170,7 +173,8 @@ export function DispatchConfigManager() {
                     workflowId: selectedWorkflow.id,
                     workflowSlug: selectedWorkflow.slug,
                     workflowName: selectedWorkflow.name,
-                    repository: repository.trim()
+                    repository: repository.trim(),
+                    autoDispatch
                 })
             });
 
@@ -190,7 +194,8 @@ export function DispatchConfigManager() {
     const hasChanges =
         savedConfig?.targetOrganizationId !== selectedOrgId ||
         savedConfig?.workflowId !== selectedWorkflowId ||
-        (savedConfig?.repository || "") !== repository.trim();
+        (savedConfig?.repository || "") !== repository.trim() ||
+        (savedConfig?.autoDispatch ?? false) !== autoDispatch;
 
     if (loading) {
         return (
@@ -248,6 +253,14 @@ export function DispatchConfigManager() {
                         <div className="flex justify-between">
                             <span className="text-muted-foreground">Repository</span>
                             <span className="font-medium">{savedConfig.repository}</span>
+                        </div>
+                        <div className="flex justify-between">
+                            <span className="text-muted-foreground">Auto Dispatch</span>
+                            <span
+                                className={`font-medium ${savedConfig.autoDispatch ? "text-green-500" : "text-muted-foreground"}`}
+                            >
+                                {savedConfig.autoDispatch ? "Enabled" : "Disabled"}
+                            </span>
                         </div>
                     </div>
                 </div>
@@ -371,6 +384,43 @@ export function DispatchConfigManager() {
                             )}
                         </div>
                     )}
+
+                    <div className="border-border space-y-2 border-t pt-4">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <label className="text-sm font-medium">Auto Dispatch</label>
+                                <p className="text-muted-foreground text-xs">
+                                    Automatically triage and dispatch every new ticket to the
+                                    coding pipeline — no manual approval needed.
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                role="switch"
+                                aria-checked={autoDispatch}
+                                onClick={() => {
+                                    setAutoDispatch(!autoDispatch);
+                                    setSuccess("");
+                                }}
+                                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
+                                    autoDispatch ? "bg-purple-500" : "bg-gray-500/30"
+                                }`}
+                            >
+                                <span
+                                    className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${
+                                        autoDispatch ? "translate-x-5" : "translate-x-0"
+                                    }`}
+                                />
+                            </button>
+                        </div>
+                        {autoDispatch && (
+                            <div className="rounded-md bg-amber-500/10 px-3 py-2 text-xs text-amber-600">
+                                All new tickets will be auto-triaged and dispatched to the
+                                configured workflow. Human approval gates in the pipeline still
+                                apply unless Dark Factory is also enabled.
+                            </div>
+                        )}
+                    </div>
 
                     <button
                         onClick={handleSave}

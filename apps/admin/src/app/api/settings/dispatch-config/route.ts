@@ -33,7 +33,8 @@ export async function POST(request: NextRequest) {
             workflowId,
             workflowSlug,
             workflowName,
-            repository
+            repository,
+            autoDispatch
         } = body;
 
         if (!targetOrganizationId || !workflowId || !workflowSlug || !repository) {
@@ -51,7 +52,8 @@ export async function POST(request: NextRequest) {
             workflowId,
             workflowSlug,
             workflowName: workflowName || "",
-            repository
+            repository,
+            autoDispatch: autoDispatch === true
         };
 
         await upsertAdminSetting(ADMIN_SETTING_KEYS.dispatchConfig, config, admin.adminUserId);

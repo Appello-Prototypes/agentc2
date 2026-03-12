@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma, Prisma } from "@repo/database";
 import { requireAdminAction, AdminAuthError } from "@repo/admin-auth";
 import { adminAudit, getRequestContext } from "@/lib/admin-audit";
+import {
+    ADMIN_SETTING_KEYS,
+    getAdminSettingValue,
+    type DispatchConfig
+} from "@/lib/admin-settings";
 
 export async function GET(request: NextRequest) {
     try {
@@ -163,6 +168,8 @@ export async function POST(request: NextRequest) {
             userAgent
         });
 
+        setImmediate(() => void maybeAutoDispatchFromAdmin(ticket));
+
         return NextResponse.json({ ticket }, { status: 201 });
     } catch (error) {
         if (error instanceof AdminAuthError) {
@@ -170,5 +177,78 @@ export async function POST(request: NextRequest) {
         }
         console.error("[Admin Ticket Create] Error:", error);
         return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    }
+}
+
+async function maybeAutoDispatchFromAdmin(ticket: {
+    id: string;
+    title: string;
+    description: string;
+    type: string;
+}) {
+    try {
+        const config = await getAdminSettingValue<DispatchConfig>(
+            ADMIN_SETTING_KEYS.dispatchConfig
+        );
+        if (!config?.autoDispatch) return;
+        if (!config.targetOrganizationId || !config.workflowSlug || !config.repository) return;
+
+        const org = await prisma.organization.findUnique({
+            where: { id: config.targetOrganizationId },
+            select: { slug: true }
+        });
+        if (!org) return;
+
+        await prisma.supportTicket.update({
+            where: { id: ticket.id },
+            data: { status: "IN_PROGRESS", triagedAt: new Date() }
+        });
+
+        const typeLabel =
+            ticket.type === "BUG"
+                ? "bug"
+                : ticket.type === "FEATURE_REQUEST"
+                  ? "feature"
+                  : "task";
+
+        const agentBaseUrl = process.env.NEXT_PUBLIC_AGENT_URL || "http://localhost:3001";
+        const apiKey = process.env.MCP_API_KEY;
+        if (!apiKey) return;
+
+        const workflowSlug = encodeURIComponent(config.workflowSlug);
+        const res = await fetch(`${agentBaseUrl}/api/workflows/${workflowSlug}/execute`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-API-Key": apiKey,
+                "X-Organization-Slug": org.slug
+            },
+            body: JSON.stringify({
+                input: {
+                    sourceType: "support_ticket",
+                    sourceId: ticket.id,
+                    title: ticket.title,
+                    description: ticket.description,
+                    labels: ["agentc2-sdlc", typeLabel],
+                    repository: config.repository
+                },
+                via: "inngest",
+                source: "auto-dispatch",
+                triggerType: "auto"
+            })
+        });
+
+        if (!res.ok) {
+            const body = await res.text().catch(() => "");
+            console.error(`[Auto-Dispatch Admin] Workflow execute failed (${res.status}):`, body);
+            return;
+        }
+
+        const data = await res.json().catch(() => ({}));
+        console.log(
+            `[Auto-Dispatch Admin] Ticket ${ticket.id} dispatched → run ${data.runId ?? "unknown"}`
+        );
+    } catch (err) {
+        console.error("[Auto-Dispatch Admin] Error:", err);
     }
 }

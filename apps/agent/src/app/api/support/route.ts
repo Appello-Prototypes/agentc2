@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { prisma } from "@repo/database";
 import { auth } from "@repo/auth";
 import { getUserOrganizationId } from "@/lib/organization";
+import { maybeAutoDispatch } from "@/lib/auto-dispatch";
 
 export async function POST(request: NextRequest) {
     const session = await auth.api.getSession({
@@ -45,6 +46,8 @@ export async function POST(request: NextRequest) {
             organizationId
         }
     });
+
+    maybeAutoDispatch({ id: ticket.id, title: ticket.title, description: ticket.description, type: ticket.type });
 
     return NextResponse.json({ success: true, ticket });
 }

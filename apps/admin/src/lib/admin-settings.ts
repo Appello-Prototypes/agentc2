@@ -17,6 +17,7 @@ export type DispatchConfig = {
     workflowSlug: string;
     workflowName: string;
     repository: string;
+    autoDispatch?: boolean;
 };
 
 export type PipelineRepository = {

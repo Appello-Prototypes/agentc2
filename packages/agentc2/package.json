@@ -44,7 +44,8 @@
     "./security/financial-approvals": "./src/security/financial-approvals.ts",
     "./skills/marketplace": "./src/skills/marketplace.ts",
     "./tenant-scope": "./src/tenant-scope.ts",
-    "./lib/logger": "./src/lib/logger.ts"
+    "./lib/logger": "./src/lib/logger.ts",
+    "./auto-dispatch": "./src/auto-dispatch.ts"
   },
   "scripts": {
     "type-check": "tsc --noEmit"
