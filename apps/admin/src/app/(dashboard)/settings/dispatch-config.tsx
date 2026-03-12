@@ -336,7 +336,7 @@ export function DispatchConfigManager() {
                                 >
                                     <option value="">Select repository...</option>
                                     {githubRepos.map((repo) => (
-                                        <option key={repo.id} value={repo.url}>
+                                        <option key={repo.id} value={repo.fullName}>
                                             {repo.fullName}
                                             {repo.isPrivate ? " (Private)" : ""}
                                         </option>
