@@ -114,7 +114,8 @@ export async function POST(request: Request) {
                 return NextResponse.json(
                     {
                         success: false,
-                        error: "Google Calendar scopes not granted during OAuth"
+                        error:
+                            "Failed to sync Google Calendar. Either the required OAuth scopes were not granted or the google-calendar provider is not configured in the database."
                     },
                     { status: 400 }
                 );

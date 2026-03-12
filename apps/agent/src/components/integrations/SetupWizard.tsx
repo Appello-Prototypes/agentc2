@@ -95,8 +95,10 @@ const SCOPE_DESCRIPTIONS: Record<string, string> = {
     "https://www.googleapis.com/auth/gmail.send": "Send emails on your behalf",
     "https://www.googleapis.com/auth/calendar.readonly": "View your calendar events",
     "https://www.googleapis.com/auth/calendar": "Manage your calendar events",
+    "https://www.googleapis.com/auth/calendar.events": "Manage your calendar events",
     "https://www.googleapis.com/auth/drive.readonly": "View files in your Google Drive",
     "https://www.googleapis.com/auth/drive": "Manage files in your Google Drive",
+    "https://www.googleapis.com/auth/drive.file": "Create and manage files in your Google Drive",
     "Mail.ReadWrite": "Read and manage your Outlook emails",
     "Mail.Send": "Send emails from Outlook",
     "Calendars.ReadWrite": "Manage your Outlook calendar"

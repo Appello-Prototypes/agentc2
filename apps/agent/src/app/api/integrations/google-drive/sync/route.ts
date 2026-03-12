@@ -115,7 +115,8 @@ export async function POST(request: Request) {
                 return NextResponse.json(
                     {
                         success: false,
-                        error: "Google Drive scopes not granted during OAuth"
+                        error:
+                            "Failed to sync Google Drive. Either the required OAuth scopes were not granted or the google-drive provider is not configured in the database."
                     },
                     { status: 400 }
                 );
