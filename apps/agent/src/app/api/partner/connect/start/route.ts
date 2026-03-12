@@ -79,7 +79,8 @@ export async function GET(request: NextRequest) {
             access_type: "offline",
             prompt: "consent",
             scope: [...GOOGLE_REQUIRED_SCOPES],
-            state
+            state,
+            include_granted_scopes: true
         });
         return NextResponse.redirect(authUrl);
     }

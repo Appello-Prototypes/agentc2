@@ -38,7 +38,8 @@ export const getGmailAuthUrl = () => {
     return client.generateAuthUrl({
         access_type: "offline",
         prompt: "consent",
-        scope: [...GMAIL_REQUIRED_SCOPES]
+        scope: [...GMAIL_REQUIRED_SCOPES],
+        include_granted_scopes: true
     });
 };
 
