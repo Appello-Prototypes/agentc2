@@ -5,7 +5,7 @@ import { authenticateRequest } from "@/lib/api-auth";
 /**
  * GET /api/triggers?type=webhook
  *
- * List agent triggers, optionally filtered by type.
+ * List triggers (agent, workflow, network), optionally filtered by type.
  * Used by the webhooks page to show all webhook triggers in a flat table.
  */
 export async function GET(request: NextRequest) {
@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const where: Record<string, any> = {
-            agent: { workspace: { organizationId: authContext.organizationId } }
+            workspace: { organizationId: authContext.organizationId }
         };
         if (type) {
             where.triggerType = type;
@@ -32,6 +32,7 @@ export async function GET(request: NextRequest) {
                 id: true,
                 name: true,
                 description: true,
+                entityType: true,
                 triggerType: true,
                 webhookPath: true,
                 webhookSecret: true,
@@ -40,6 +41,18 @@ export async function GET(request: NextRequest) {
                 triggerCount: true,
                 lastTriggeredAt: true,
                 agent: {
+                    select: {
+                        slug: true,
+                        name: true
+                    }
+                },
+                workflow: {
+                    select: {
+                        slug: true,
+                        name: true
+                    }
+                },
+                network: {
                     select: {
                         slug: true,
                         name: true

@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { linkSocial } from "@repo/auth/client";
 import { getApiBase } from "@/lib/utils";
 import { Badge, Button, Card, CardContent, Input, Label, buttonVariants } from "@repo/ui";
@@ -1004,6 +1005,7 @@ export function SetupWizard({
     const [testResult, setTestResult] = useState<string | null>(null);
     const [disconnecting, setDisconnecting] = useState(false);
     const [allProviders, setAllProviders] = useState<IntegrationProvider[]>([]);
+    const [oauthSyncing, setOauthSyncing] = useState(false);
 
     const apiBase = getApiBase();
 
@@ -1066,6 +1068,9 @@ export function SetupWizard({
         return null;
     }, [provider, allProviders]);
 
+    const searchParams = useSearchParams();
+    const oauthReturnHandled = useRef(false);
+
     // Load provider data
     useEffect(() => {
         const fetchProvider = async () => {
@@ -1093,16 +1098,74 @@ export function SetupWizard({
         fetchProvider();
     }, [providerKey, apiBase]);
 
+    // Post-OAuth return: detect oauth_return param, trigger sync, and show result
+    useEffect(() => {
+        if (oauthReturnHandled.current) return;
+        if (!provider) return;
+        if (searchParams.get("oauth_return") !== "1") return;
+
+        const oauthCfg = getOAuthConfig(provider);
+        if (!oauthCfg?.syncEndpoint) return;
+
+        oauthReturnHandled.current = true;
+        setStep("connecting");
+        setConnecting(true);
+        setOauthSyncing(true);
+
+        // Clean the oauth_return param from the URL without navigation
+        const url = new URL(window.location.href);
+        url.searchParams.delete("oauth_return");
+        window.history.replaceState({}, "", url.toString());
+
+        const runSync = async () => {
+            try {
+                const syncRes = await fetch(`${apiBase}${oauthCfg.syncEndpoint}`, {
+                    method: "POST"
+                });
+                const syncData = await syncRes.json();
+
+                if (syncData.success) {
+                    setToolCount(syncData.toolCount);
+                    setStep("success");
+                } else if (
+                    Array.isArray(syncData.missingScopes) &&
+                    syncData.missingScopes.length > 0
+                ) {
+                    setConnectError(
+                        "Additional permissions are needed. Please disconnect and reconnect Gmail."
+                    );
+                    setStep("error");
+                } else {
+                    setConnectError(syncData.error || "Failed to sync credentials after OAuth");
+                    setStep("error");
+                }
+            } catch (err) {
+                setConnectError(
+                    err instanceof Error ? err.message : "Failed to complete connection"
+                );
+                setStep("error");
+            } finally {
+                setConnecting(false);
+                setOauthSyncing(false);
+            }
+        };
+
+        void runSync();
+    }, [provider, searchParams, apiBase]);
+
     // Handle native OAuth (Better Auth social login)
     const handleNativeOAuth = useCallback(async () => {
         if (!provider || !oauthConfig) return;
         setConnecting(true);
         setConnectError(null);
         try {
+            const base = returnUrl || `/mcp/providers/${provider.key}`;
+            const sep = base.includes("?") ? "&" : "?";
+            const callbackURL = `${base}${sep}oauth_return=1`;
             await linkSocial({
                 provider: oauthConfig.socialProvider,
                 scopes: oauthConfig.scopes,
-                callbackURL: returnUrl || `/mcp/providers/${provider.key}`
+                callbackURL
             });
         } catch (err) {
             setConnectError(err instanceof Error ? err.message : "Failed to start OAuth flow");
@@ -1465,7 +1528,24 @@ export function SetupWizard({
                                     />
                                 )}
 
-                                {step === "connecting" && isOAuth && (
+                                {step === "connecting" && isOAuth && oauthSyncing && (
+                                    <div className="space-y-6 text-center">
+                                        <div className="bg-primary/10 mx-auto flex h-16 w-16 items-center justify-center rounded-full">
+                                            <Loader2Icon className="text-primary h-8 w-8 animate-spin" />
+                                        </div>
+                                        <div>
+                                            <h2 className="text-xl font-semibold">
+                                                Completing Connection
+                                            </h2>
+                                            <p className="text-muted-foreground mt-1 text-sm">
+                                                Setting up {provider.name} — this only takes a
+                                                moment.
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {step === "connecting" && isOAuth && !oauthSyncing && (
                                     <OAuthConnectStep
                                         provider={provider}
                                         onStartOAuth={

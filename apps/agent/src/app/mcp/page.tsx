@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { PlusIcon } from "lucide-react";
 import { getApiBase } from "@/lib/utils";
-import WebhookChat from "@/components/webhooks/WebhookChat";
+import WebhookCreateForm from "@/components/webhooks/WebhookCreateForm";
 import WebhookDetail from "@/components/webhooks/WebhookDetail";
 import type { WebhookTrigger } from "@/components/webhooks/types";
 import { ConnectToolsTab } from "@/components/integrations/ConnectToolsTab";
@@ -378,16 +378,19 @@ function WebhooksTab({
         }
     };
 
+    const resolveTargetName = (wh: WebhookTrigger) =>
+        wh.agent?.name || wh.workflow?.name || wh.network?.name || "Unknown";
+
+    const resolveTargetType = (wh: WebhookTrigger) => {
+        if (wh.entityType === "workflow") return "Workflow";
+        if (wh.entityType === "network") return "Network";
+        return "Agent";
+    };
+
     return (
         <div className="flex flex-col gap-6 md:flex-row" style={{ height: "calc(100dvh - 18rem)" }}>
-            {/* Left 1/3: Chat */}
-            <WebhookChat
-                webhooksCount={webhooks.length}
-                onRefresh={onRefresh}
-                showHeader
-                headerTitle="Webhook Setup"
-                className="w-full md:w-1/3"
-            />
+            {/* Left 1/3: Create form */}
+            <WebhookCreateForm onCreated={onRefresh} className="w-full md:w-1/3" />
 
             {/* Right 2/3: Detail or table */}
             <div className="flex min-h-0 w-full flex-col gap-4 overflow-auto md:w-2/3">
@@ -415,14 +418,15 @@ function WebhooksTab({
                         <CardContent className="p-0">
                             {webhooks.length === 0 ? (
                                 <div className="text-muted-foreground px-6 py-8 text-center text-sm">
-                                    No webhooks yet. Use the chat to create one.
+                                    No webhooks yet. Use the form to create one.
                                 </div>
                             ) : (
                                 <Table>
                                     <TableHeader>
                                         <TableRow>
                                             <TableHead>Name</TableHead>
-                                            <TableHead>Agent</TableHead>
+                                            <TableHead>Target</TableHead>
+                                            <TableHead>Type</TableHead>
                                             <TableHead>Status</TableHead>
                                             <TableHead>Triggered</TableHead>
                                             <TableHead>Created</TableHead>
@@ -443,7 +447,15 @@ function WebhooksTab({
                                                     {wh.name}
                                                 </TableCell>
                                                 <TableCell className="text-muted-foreground text-xs">
-                                                    {wh.agent?.name || "Unknown"}
+                                                    {resolveTargetName(wh)}
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Badge
+                                                        variant="secondary"
+                                                        className="text-xs capitalize"
+                                                    >
+                                                        {resolveTargetType(wh)}
+                                                    </Badge>
                                                 </TableCell>
                                                 <TableCell>
                                                     <Badge

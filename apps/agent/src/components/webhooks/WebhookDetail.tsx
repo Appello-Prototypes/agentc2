@@ -103,8 +103,19 @@ export default function WebhookDetail({
 
                 <div className="grid grid-cols-2 gap-3 text-xs">
                     <div>
-                        <span className="text-muted-foreground">Agent</span>
-                        <div className="font-medium">{webhook.agent?.name || "Unknown"}</div>
+                        <span className="text-muted-foreground">
+                            {webhook.entityType === "workflow"
+                                ? "Workflow"
+                                : webhook.entityType === "network"
+                                  ? "Network"
+                                  : "Agent"}
+                        </span>
+                        <div className="font-medium">
+                            {webhook.agent?.name ||
+                                webhook.workflow?.name ||
+                                webhook.network?.name ||
+                                "Unknown"}
+                        </div>
                     </div>
                     <div>
                         <span className="text-muted-foreground">Status</span>

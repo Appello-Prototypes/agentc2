@@ -141,7 +141,7 @@ export function TicketTriagePanel({
             });
             const data = await res.json();
             if (data.success) {
-                setPipelineRunId(data.pipelineRunId || data.issueUrl || "dispatched");
+                setPipelineRunId(data.runId || "dispatched");
                 setShowPipelineModal(false);
                 setStatus("IN_PROGRESS");
                 router.refresh();

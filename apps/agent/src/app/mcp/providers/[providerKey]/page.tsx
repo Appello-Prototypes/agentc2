@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { getApiBase } from "@/lib/utils";
 import { SetupWizard } from "@/components/integrations/SetupWizard";
 import { IntegrationManagePage } from "@/components/integrations/IntegrationManagePage";
@@ -16,15 +16,17 @@ const CUSTOM_PROVIDER_PAGES: Record<string, React.FC> = {
 
 export default function ProviderDetailPage() {
     const params = useParams();
+    const searchParams = useSearchParams();
     const providerKey = typeof params.providerKey === "string" ? params.providerKey : "";
-    const [isConnected, setIsConnected] = useState<boolean | null>(null);
+    const isOAuthReturn = searchParams.get("oauth_return") === "1";
+    const [isConnected, setIsConnected] = useState<boolean | null>(isOAuthReturn ? false : null);
     const fetched = useRef(false);
 
     const CustomPage = CUSTOM_PROVIDER_PAGES[providerKey] ?? null;
     const hasCustomPage = CustomPage !== null;
 
     useEffect(() => {
-        if (hasCustomPage) return;
+        if (hasCustomPage || isOAuthReturn) return;
         if (fetched.current) return;
         fetched.current = true;
 
@@ -51,7 +53,7 @@ export default function ProviderDetailPage() {
         return () => {
             cancelled = true;
         };
-    }, [providerKey, hasCustomPage]);
+    }, [providerKey, hasCustomPage, isOAuthReturn]);
 
     if (CustomPage) {
         return <CustomPage />;

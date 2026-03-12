@@ -9,9 +9,9 @@ import {
 
 /**
  * POST /admin/api/dispatch
- * Server-side proxy that dispatches a ticket to the agent app's coding pipeline.
- * Uses the saved dispatch config (targetOrgId + workflowId) and authenticates
- * with the agent API via MCP_API_KEY.
+ * Dispatches a ticket directly to the configured workflow on the agent app.
+ * Uses Inngest for durable execution of long-running workflows.
+ * Authenticates with the agent API via MCP_API_KEY + X-Organization-Slug.
  */
 export async function POST(request: NextRequest) {
     try {
@@ -60,27 +60,29 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const dispatchPayload = {
-            sourceType,
-            sourceId,
-            repository: config.repository,
-            variant: "standard",
-            via: "github",
-            title: title || "",
-            description: description || "",
-            labels: labels || ["agentc2-sdlc"],
-            targetOrganizationId: config.targetOrganizationId,
-            workflowId: config.workflowId
+        const executePayload = {
+            input: {
+                sourceType,
+                sourceId,
+                title: title || "",
+                description: description || "",
+                labels: labels || ["agentc2-sdlc"],
+                repository: config.repository
+            },
+            via: "inngest",
+            source: "admin-dispatch",
+            triggerType: "admin"
         };
 
-        const res = await fetch(`${agentBaseUrl}/api/coding-pipeline/dispatch`, {
+        const workflowSlug = encodeURIComponent(config.workflowSlug);
+        const res = await fetch(`${agentBaseUrl}/api/workflows/${workflowSlug}/execute`, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
                 "X-API-Key": apiKey,
                 "X-Organization-Slug": org.slug
             },
-            body: JSON.stringify(dispatchPayload)
+            body: JSON.stringify(executePayload)
         });
 
         const data = await res.json().catch(() => ({ error: "Invalid response from agent API" }));

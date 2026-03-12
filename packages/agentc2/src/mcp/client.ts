@@ -338,7 +338,10 @@ const INTEGRATION_PROVIDER_SEEDS: IntegrationProviderSeed[] = [
                     PRIVATE_APP_ACCESS_TOKEN: "HUBSPOT_ACCESS_TOKEN",
                     HUBSPOT_ACCESS_TOKEN: "HUBSPOT_ACCESS_TOKEN"
                 }
-            }
+            },
+            webhookEndpoint: "/api/integrations/hubspot/webhook",
+            webhookSetupInstructions:
+                "Paste this URL into your HubSpot account under Settings > Integrations > Webhooks."
         }
     },
     {
@@ -513,7 +516,10 @@ const INTEGRATION_PROVIDER_SEEDS: IntegrationProviderSeed[] = [
                 envAliases: {
                     FATHOM_API_KEY: "FATHOM_API_KEY"
                 }
-            }
+            },
+            webhookEndpoint: "/api/integrations/fathom/webhook",
+            webhookSetupInstructions:
+                "Paste this URL into your Fathom account under Settings > Integrations > Webhooks."
         }
     },
     {

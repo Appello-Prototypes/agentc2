@@ -27,6 +27,8 @@ import {
     ArrowLeftIcon,
     CheckCircle2Icon,
     AlertTriangleIcon,
+    CopyIcon,
+    CheckIcon,
     Loader2Icon,
     RefreshCwIcon,
     SearchIcon,
@@ -35,6 +37,7 @@ import {
     PlugIcon,
     UnplugIcon,
     CodeIcon,
+    LinkIcon,
     WrenchIcon,
     UsersIcon,
     SettingsIcon
@@ -463,6 +466,9 @@ function OverviewTab({
                 </CardContent>
             </Card>
 
+            {/* Webhook Configuration (only for providers with a dedicated webhook endpoint) */}
+            <WebhookEndpointCard provider={provider} />
+
             {/* Integration Info */}
             <Card>
                 <CardHeader>
@@ -490,6 +496,73 @@ function OverviewTab({
                 </CardContent>
             </Card>
         </div>
+    );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Webhook Endpoint Card                                                      */
+/* -------------------------------------------------------------------------- */
+
+function WebhookEndpointCard({ provider }: { provider: IntegrationProvider }) {
+    const [copied, setCopied] = useState(false);
+
+    const webhookEndpoint = (provider.config as Record<string, unknown> | null)?.webhookEndpoint as
+        | string
+        | undefined;
+    const webhookSetupInstructions = (provider.config as Record<string, unknown> | null)
+        ?.webhookSetupInstructions as string | undefined;
+
+    if (!webhookEndpoint || provider.connections.length === 0) return null;
+
+    const connection = provider.connections.find((c) => c.isDefault) || provider.connections[0];
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const fullUrl = `${origin}${webhookEndpoint}?connectionId=${connection.id}`;
+
+    const handleCopy = async () => {
+        await navigator.clipboard.writeText(fullUrl);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    };
+
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                    <LinkIcon className="h-4 w-4" />
+                    Webhook Configuration
+                </CardTitle>
+                <CardDescription>
+                    {webhookSetupInstructions ||
+                        `Configure ${provider.name} to send webhook events to this URL.`}
+                </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+                <div className="space-y-1.5">
+                    <span className="text-muted-foreground text-xs">Webhook URL</span>
+                    <div className="bg-muted flex items-center gap-2 rounded-md border px-3 py-2">
+                        <code className="flex-1 text-xs break-all">{fullUrl}</code>
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0"
+                            onClick={handleCopy}
+                        >
+                            {copied ? (
+                                <CheckIcon className="h-3.5 w-3.5 text-emerald-500" />
+                            ) : (
+                                <CopyIcon className="text-muted-foreground h-3.5 w-3.5" />
+                            )}
+                        </Button>
+                    </div>
+                </div>
+                {provider.connections.length > 1 && (
+                    <p className="text-muted-foreground text-xs">
+                        Showing URL for connection &ldquo;{connection.name}&rdquo;. Each connection
+                        has its own unique webhook URL.
+                    </p>
+                )}
+            </CardContent>
+        </Card>
     );
 }
 

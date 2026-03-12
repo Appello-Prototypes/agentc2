@@ -9,6 +9,7 @@ import { refreshWorkflowMetrics } from "@/lib/metrics";
 import { resolveRunEnvironment, resolveRunTriggerType } from "@/lib/run-metadata";
 import { createTriggerEventRecord } from "@/lib/trigger-events";
 import { authenticateRequest } from "@/lib/api-auth";
+import { inngest } from "@/lib/inngest";
 
 function mapStepStatus(status: "completed" | "failed" | "suspended") {
     if (status === "failed") return "FAILED";
@@ -141,7 +142,67 @@ export async function POST(
         }
 
         const input = body.input ?? body.inputData ?? {};
+        const viaInngest = body.via === "inngest";
         const asyncMode = body.async === true;
+
+        // Inngest mode: durable execution for long-running workflows
+        if (viaInngest) {
+            const run = await prisma.workflowRun.create({
+                data: {
+                    workflowId: workflow.id,
+                    status: "QUEUED",
+                    inputJson: input,
+                    source: body.source || "api",
+                    environment: resolveRunEnvironment(
+                        body.environment,
+                        workflow.workspace?.environment
+                    ),
+                    triggerType: resolveRunTriggerType(
+                        body.triggerType ?? body.trigger,
+                        body.source
+                    )
+                }
+            });
+
+            try {
+                await createTriggerEventRecord({
+                    workflowId: workflow.id,
+                    workflowRunId: run.id,
+                    workspaceId: workflow.workspaceId,
+                    sourceType: body.source || "api",
+                    triggerType: body.triggerType || "manual",
+                    entityType: "workflow",
+                    payload: input,
+                    metadata: {
+                        workflowSlug: workflow.slug,
+                        workflowName: workflow.name,
+                        environment: body.environment
+                    }
+                });
+            } catch (e) {
+                console.warn("[Workflow Execute] Failed to record trigger event:", e);
+            }
+
+            await inngest.send({
+                name: "workflow/execute.async",
+                data: {
+                    workflowRunId: run.id,
+                    workflowId: workflow.id,
+                    workflowSlug: workflow.slug,
+                    input
+                }
+            });
+
+            return NextResponse.json({
+                success: true,
+                status: "queued",
+                runId: run.id,
+                workflowSlug: workflow.slug,
+                message:
+                    "Workflow queued for durable execution via Inngest. Poll workflow_get_run for status."
+            });
+        }
+
         const run = await prisma.workflowRun.create({
             data: {
                 workflowId: workflow.id,
