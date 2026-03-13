@@ -39,7 +39,13 @@ const decrypt = (value: unknown) => {
 /**
  * Refresh an expired OAuth access token using the refresh token.
  */
-const refreshAccessToken = async (refreshToken: string): Promise<string | null> => {
+const refreshAccessToken = async (
+    refreshToken: string
+): Promise<{
+    accessToken: string;
+    expiresIn?: number;
+    scope?: string;
+} | null> => {
     const clientId = process.env.GOOGLE_CLIENT_ID || process.env.GMAIL_OAUTH_CLIENT_ID;
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET || process.env.GMAIL_OAUTH_CLIENT_SECRET;
     if (!clientId || !clientSecret) return null;
@@ -56,8 +62,19 @@ const refreshAccessToken = async (refreshToken: string): Promise<string | null> 
     });
 
     if (!response.ok) return null;
-    const result = (await response.json()) as { access_token?: string };
-    return result.access_token || null;
+    const result = (await response.json()) as {
+        access_token?: string;
+        expires_in?: number;
+        scope?: string;
+    };
+
+    if (!result.access_token) return null;
+
+    return {
+        accessToken: result.access_token,
+        expiresIn: result.expires_in,
+        scope: result.scope
+    };
 };
 
 /**
@@ -108,12 +125,31 @@ const getAccessToken = async (gmailAddress: string) => {
         throw new Error("Gmail access token expired and no refresh token available");
     }
 
-    const newToken = await refreshAccessToken(creds.refreshToken as string);
-    if (!newToken) {
+    const refreshed = await refreshAccessToken(creds.refreshToken as string);
+    if (!refreshed) {
         throw new Error("Failed to refresh Gmail access token");
     }
 
-    return newToken;
+    const newExpiryDate = refreshed.expiresIn
+        ? Date.now() + refreshed.expiresIn * 1000
+        : Date.now() + 3600 * 1000;
+
+    const updatedCreds = {
+        ...creds,
+        accessToken: refreshed.accessToken,
+        expiryDate: newExpiryDate,
+        ...(refreshed.scope && { scope: refreshed.scope })
+    };
+
+    const { encryptCredentials } = await import("../../mcp/client");
+    const encrypted = encryptCredentials(updatedCreds, organizationId) as Record<string, unknown>;
+
+    await prisma.integrationConnection.update({
+        where: { id: connection.id },
+        data: { credentials: encrypted }
+    });
+
+    return refreshed.accessToken;
 };
 
 /**
@@ -158,10 +194,33 @@ const callGmailModify = async (
                 }
             });
             const creds = decrypt(connection?.credentials);
-            if (creds?.refreshToken) {
+            if (creds?.refreshToken && connection) {
                 const refreshed = await refreshAccessToken(creds.refreshToken as string);
                 if (refreshed) {
-                    token = refreshed;
+                    token = refreshed.accessToken;
+
+                    const newExpiryDate = refreshed.expiresIn
+                        ? Date.now() + refreshed.expiresIn * 1000
+                        : Date.now() + 3600 * 1000;
+
+                    const updatedCreds = {
+                        ...creds,
+                        accessToken: refreshed.accessToken,
+                        expiryDate: newExpiryDate,
+                        ...(refreshed.scope && { scope: refreshed.scope })
+                    };
+
+                    const { encryptCredentials } = await import("../../mcp/client");
+                    const encrypted = encryptCredentials(
+                        updatedCreds,
+                        organizationId
+                    ) as Record<string, unknown>;
+
+                    await prisma.integrationConnection.update({
+                        where: { id: connection.id },
+                        data: { credentials: encrypted }
+                    });
+
                     response = await fetch(`${GMAIL_API}/users/me/messages/${messageId}/modify`, {
                         method: "POST",
                         headers: {

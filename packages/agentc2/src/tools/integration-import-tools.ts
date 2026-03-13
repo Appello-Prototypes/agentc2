@@ -9,6 +9,7 @@ import {
     importMcpConfig
 } from "../mcp/client";
 import { callInternalApi } from "./internal-api";
+import { decryptJson } from "../crypto";
 
 type McpServerConfig = {
     command?: string;
@@ -943,6 +944,80 @@ export const integrationConnectionTestTool = createTool({
             const connected = Boolean(
                 credentials.accessToken || credentials.refreshToken || credentials.oauthToken
             );
+            
+            if (!connected) {
+                return { success: false, error: "Missing OAuth credentials" };
+            }
+
+            if (connection.provider.key === "gmail") {
+                try {
+                    const creds = decryptJson(connection.credentials) as {
+                        scope?: string;
+                    } | null;
+                    const scopeString = creds?.scope || "";
+
+                    if (!scopeString) {
+                        return {
+                            success: false,
+                            error: "OAuth credentials missing scope information. Re-authorize to update.",
+                            warning: "Scope validation unavailable"
+                        };
+                    }
+
+                    const grantedScopes = new Set(scopeString.split(/[,\s]+/).filter(Boolean));
+
+                    const basicGoogleScopes = [
+                        "https://www.googleapis.com/auth/userinfo.email",
+                        "https://www.googleapis.com/auth/userinfo.profile"
+                    ];
+                    const missingBasicScopes = basicGoogleScopes.filter(
+                        (s) => !grantedScopes.has(s)
+                    );
+
+                    if (missingBasicScopes.length > 0) {
+                        return {
+                            success: false,
+                            error: `Missing basic Google OAuth scopes: ${missingBasicScopes.join(", ")}. Re-authorize to grant permissions.`,
+                            missingScopes: missingBasicScopes
+                        };
+                    }
+
+                    const warnings: string[] = [];
+                    const optionalScopes = [
+                        {
+                            scopes: ["https://www.googleapis.com/auth/webmasters.readonly"],
+                            feature: "Google Search Console"
+                        },
+                        {
+                            scopes: ["https://www.googleapis.com/auth/gmail.readonly"],
+                            feature: "Gmail"
+                        }
+                    ];
+
+                    for (const { scopes, feature } of optionalScopes) {
+                        const missing = scopes.filter((s: string) => !grantedScopes.has(s));
+                        if (missing.length > 0) {
+                            warnings.push(
+                                `${feature} requires additional scope(s): ${missing.join(", ")}`
+                            );
+                        }
+                    }
+
+                    return {
+                        success: true,
+                        grantedScopes: Array.from(grantedScopes),
+                        warnings: warnings.length > 0 ? warnings : undefined
+                    };
+                } catch (error) {
+                    return {
+                        success: false,
+                        error:
+                            "Failed to validate Google OAuth scopes. " +
+                            (error instanceof Error ? error.message : "Unknown error")
+                    };
+                }
+            }
+
             return { success: connected };
         }
 
