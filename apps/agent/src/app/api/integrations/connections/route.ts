@@ -229,6 +229,38 @@ export async function POST(request: NextRequest) {
                             `agent=${provisionResult.agentId || "none"}, ` +
                             `tools=${provisionResult.toolsDiscovered.length}`
                     );
+
+                    // Sync tools to onboarding agent if it exists
+                    if (provisionResult.success && provisionResult.toolsDiscovered.length > 0) {
+                        try {
+                            const onboardingAgent = await prisma.agent.findFirst({
+                                where: {
+                                    workspaceId: workspace.id,
+                                    isOnboardingAgent: true
+                                }
+                            });
+
+                            if (onboardingAgent) {
+                                await prisma.agentTool.createMany({
+                                    data: provisionResult.toolsDiscovered.map((toolId) => ({
+                                        agentId: onboardingAgent.id,
+                                        toolId
+                                    })),
+                                    skipDuplicates: true
+                                });
+
+                                console.log(
+                                    `[Integrations] Synced ${provisionResult.toolsDiscovered.length} ` +
+                                        `tools from ${provider.key} to onboarding agent ${onboardingAgent.slug}`
+                                );
+                            }
+                        } catch (syncError) {
+                            console.error(
+                                `[Integrations] Failed to sync tools to onboarding agent:`,
+                                syncError
+                            );
+                        }
+                    }
                 }
             } catch (provisionError) {
                 console.error(
