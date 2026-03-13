@@ -1047,7 +1047,8 @@ async function main() {
                                                             prompt: "CI validation failed on branch {{steps['implement-wait'].branchName}}.\n\n## Failures\n{{helpers.json(steps['verify-branch'].results)}}\n\nFix the failing commands. The branch is already checked out. Fix the code, run the failing command to verify, then commit and push.\n\nDo NOT create a new branch. Push fixes to the existing branch.",
                                                             repository:
                                                                 "https://github.com/{{input.repository}}",
-                                                            branch: "{{steps['implement-wait'].branchName}}"
+                                                            branch: "{{steps['implement-wait'].branchName}}",
+                                                            model: "claude-4.6-opus-high-thinking"
                                                         }
                                                     }
                                                 },
@@ -1352,7 +1353,8 @@ async function main() {
                                                 prompt: "CI validation failed on branch {{steps['implement-wait'].branchName}}.\n\n## Failures\n{{helpers.json(steps['verify-branch'].results)}}\n\nFix the failing commands. The branch is already checked out. Fix the code, run the failing command to verify, then commit and push.\n\nDo NOT create a new branch. Push fixes to the existing branch.",
                                                 repository:
                                                     "https://github.com/{{input.repository}}",
-                                                branch: "{{steps['implement-wait'].branchName}}"
+                                                branch: "{{steps['implement-wait'].branchName}}",
+                                                model: "claude-4.6-opus-high-thinking"
                                             }
                                         }
                                     },
@@ -1718,7 +1720,8 @@ async function main() {
                                                 prompt: "CI validation failed on branch {{steps['implement-wait'].branchName}}.\n\n## Failures\n{{helpers.json(steps['verify-branch'].results)}}\n\nFix the failing commands. The branch is already checked out. Fix the code, run the failing command to verify, then commit and push.\n\nDo NOT create a new branch. Push fixes to the existing branch.",
                                                 repository:
                                                     "https://github.com/{{input.repository}}",
-                                                branch: "{{steps['implement-wait'].branchName}}"
+                                                branch: "{{steps['implement-wait'].branchName}}",
+                                                model: "claude-4.6-opus-high-thinking"
                                             }
                                         }
                                     },
