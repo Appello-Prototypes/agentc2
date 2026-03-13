@@ -3349,7 +3349,7 @@ model Skill {
 
     // Marketplace fields
     isPublic     Boolean @default(false)
-    installCount Int     @default(0)
+    installCount Int     @default(0) // Auto-incremented when skill is attached to agent via attachToAgent(), decremented on detachFromAgent()
     rating       Float?
 
     @@unique([organizationId, slug])

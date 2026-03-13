@@ -517,6 +517,12 @@ export async function attachToAgent(
         data: { agentId, skillId, pinned: pinned ?? true }
     });
 
+    // Increment install count on the skill
+    await prisma.skill.update({
+        where: { id: skillId },
+        data: { installCount: { increment: 1 } }
+    });
+
     const newVersion = await createAgentVersionForSkillChange(
         agentId,
         `Attached skill: ${skill.slug}${pinned ? " (pinned)" : ""}`
@@ -546,6 +552,12 @@ export async function detachFromAgent(
         where: {
             agentId_skillId: { agentId, skillId }
         }
+    });
+
+    // Decrement install count on the skill
+    await prisma.skill.update({
+        where: { id: skillId },
+        data: { installCount: { decrement: 1 } }
     });
 
     // Create agent version after the skill is detached
