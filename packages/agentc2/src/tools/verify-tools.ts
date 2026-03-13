@@ -143,8 +143,10 @@ export const verifyBranchTool = createTool({
         const cloneScript = [
             `cd /workspace`,
             `rm -rf repo`,
-            `git clone --depth 1 --branch ${branch} "${cloneUrl}" repo`,
+            `git clone --branch ${branch} "${cloneUrl}" repo`,
             `cd repo`,
+            `git fetch origin main`,
+            `git rebase origin/main || (echo "REBASE_CONFLICT: branch has conflicts with main" && exit 1)`,
             `bun install --frozen-lockfile 2>/dev/null || bun install`
         ].join(" && ");
 

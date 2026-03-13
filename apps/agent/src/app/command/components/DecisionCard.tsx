@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
     Badge,
     Button,
@@ -25,6 +26,7 @@ import {
 } from "../types";
 import { FeedbackForm } from "./FeedbackForm";
 import { CodeDiffCard } from "./CodeDiffCard";
+import { WorkflowStepsCard } from "./WorkflowStepsCard";
 
 export interface DecisionCardProps {
     review: ReviewItem;
@@ -48,6 +50,9 @@ export interface DecisionCardProps {
     onFeedback: (review: ReviewItem) => void;
     onFeedbackTextChange: (text: string) => void;
     onOpenConditional: (review: ReviewItem) => void;
+    onCancelRun?: (review: ReviewItem) => void;
+    onRetryStep?: (reviewId: string, stepId: string) => void;
+    onSkipStep?: (reviewId: string, stepId: string, reason?: string) => void;
     feedbackInputRef: React.RefObject<HTMLTextAreaElement | null>;
     cardRef: (el: HTMLDivElement | null) => void;
 }
@@ -88,11 +93,18 @@ export function DecisionCard({
     onFeedback,
     onFeedbackTextChange,
     onOpenConditional,
+    onCancelRun,
+    onRetryStep,
+    onSkipStep,
     feedbackInputRef,
     cardRef
 }: DecisionCardProps) {
-    const isPending = review.status === "pending" || review.status === "conditional";
-    const isConditional = review.status === "conditional";
+    const [cancellingRun, setCancellingRun] = useState(false);
+    const [runCancelled, setRunCancelled] = useState(false);
+
+    const isPending =
+        (review.status === "pending" || review.status === "conditional") && !runCancelled;
+    const isConditional = review.status === "conditional" && !runCancelled;
     const risk = getRiskLevel(review);
     const prompt = getDecisionPrompt(review);
     const severity = getSeverity(risk);
@@ -312,6 +324,38 @@ export function DecisionCard({
                                         </div>
                                         <p className="text-sm italic">{review.feedbackText}</p>
                                     </div>
+                                )}
+
+                                {review.runId && (
+                                    <WorkflowStepsCard
+                                        reviewId={review.id}
+                                        onCancelRun={
+                                            onCancelRun
+                                                ? async () => {
+                                                      setCancellingRun(true);
+                                                      try {
+                                                          await onCancelRun(review);
+                                                          setRunCancelled(true);
+                                                      } finally {
+                                                          setCancellingRun(false);
+                                                      }
+                                                  }
+                                                : undefined
+                                        }
+                                        cancellingRun={cancellingRun}
+                                        runCancelled={runCancelled}
+                                        onRetryStep={
+                                            onRetryStep
+                                                ? (stepId) => onRetryStep(review.id, stepId)
+                                                : undefined
+                                        }
+                                        onSkipStep={
+                                            onSkipStep
+                                                ? (stepId, reason) =>
+                                                      onSkipStep(review.id, stepId, reason)
+                                                : undefined
+                                        }
+                                    />
                                 )}
 
                                 {/* Code diff (C.2) */}

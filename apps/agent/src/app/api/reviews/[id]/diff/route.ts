@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
 import { authenticateRequest } from "@/lib/api-auth";
+import { resolveGitHubToken, githubFetch } from "@repo/agentc2/tools/github-helpers";
 
 /**
  * GET /api/reviews/[id]/diff
@@ -44,28 +45,22 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             );
         }
 
-        const githubToken = process.env.GITHUB_PERSONAL_ACCESS_TOKEN;
-        if (!githubToken) {
+        let githubToken: string;
+        try {
+            githubToken = await resolveGitHubToken(authContext.organizationId);
+        } catch {
             return NextResponse.json(
                 { success: false, error: "GitHub token not configured" },
                 { status: 500 }
             );
         }
 
-        const apiUrl = `https://api.github.com/repos/${repo}/pulls/${prNumber}`;
+        const prPath = `/repos/${repo}/pulls/${prNumber}`;
 
         const [prResponse, diffResponse] = await Promise.all([
-            fetch(apiUrl, {
-                headers: {
-                    Authorization: `Bearer ${githubToken}`,
-                    Accept: "application/vnd.github.v3+json"
-                }
-            }),
-            fetch(apiUrl, {
-                headers: {
-                    Authorization: `Bearer ${githubToken}`,
-                    Accept: "application/vnd.github.v3.diff"
-                }
+            githubFetch(prPath, githubToken),
+            githubFetch(prPath, githubToken, {
+                headers: { Accept: "application/vnd.github.v3.diff" }
             })
         ]);
 

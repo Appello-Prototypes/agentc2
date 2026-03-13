@@ -55,7 +55,10 @@ function ReviewCardList({
     onCancelFeedback,
     onFeedback,
     onFeedbackTextChange,
-    onOpenConditional
+    onOpenConditional,
+    onCancelRun,
+    onRetryStep,
+    onSkipStep
 }: {
     filteredReviews: ReturnType<typeof useReviews>["filteredReviews"];
     loading: boolean;
@@ -84,6 +87,9 @@ function ReviewCardList({
     onFeedback: (review: (typeof filteredReviews)[0]) => void;
     onFeedbackTextChange: (text: string) => void;
     onOpenConditional: (review: (typeof filteredReviews)[0]) => void;
+    onCancelRun?: (review: (typeof filteredReviews)[0]) => void;
+    onRetryStep?: (reviewId: string, stepId: string) => void;
+    onSkipStep?: (reviewId: string, stepId: string, reason?: string) => void;
 }) {
     if (loading) {
         return (
@@ -136,6 +142,9 @@ function ReviewCardList({
                     onFeedback={onFeedback}
                     onFeedbackTextChange={onFeedbackTextChange}
                     onOpenConditional={onOpenConditional}
+                    onCancelRun={onCancelRun}
+                    onRetryStep={onRetryStep}
+                    onSkipStep={onSkipStep}
                     feedbackInputRef={feedbackInputRef}
                     cardRef={(el) => {
                         if (el) cardRefs.current.set(index, el);
@@ -193,6 +202,9 @@ export default function CommandPage() {
         handleFeedback,
         handleConditional,
         handleBatchApprove,
+        handleCancelRun,
+        handleRetryStep,
+        handleSkipStep,
         handleLearningApprove,
         handleLearningReject,
         toggleSelect,
@@ -344,7 +356,10 @@ export default function CommandPage() {
         onCancelFeedback: () => setFeedbackForId(null),
         onFeedback: handleFeedback,
         onFeedbackTextChange: setFeedbackText,
-        onOpenConditional: (review: ReviewItem) => setConditionalReview(review)
+        onOpenConditional: (review: ReviewItem) => setConditionalReview(review),
+        onCancelRun: handleCancelRun,
+        onRetryStep: handleRetryStep,
+        onSkipStep: handleSkipStep
     };
 
     const filterBarProps = {

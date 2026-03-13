@@ -1292,6 +1292,21 @@ async function main() {
                 }
             },
             {
+                id: "create-pr",
+                type: "tool",
+                name: "Create Pull Request",
+                config: {
+                    toolId: "github-create-pull-request",
+                    parameters: {
+                        base: "main",
+                        head: "{{steps['implement-wait'].branchName}}",
+                        title: "fix: {{input.title}}",
+                        body: "## Summary\n\nFixes #{{steps.intake.issueNumber}}\n\n## Analysis\n\n{{steps['analyze-wait'].summary}}\n\n## Implementation\n\n{{steps['implement-wait'].summary}}\n\n---\n_Automated via AgentC2 SDLC Bugfix Pipeline_",
+                        repository: "{{input.repository}}"
+                    }
+                }
+            },
+            {
                 id: "heal-cycle",
                 type: "dowhile",
                 name: "Validation & Self-Heal Cycle",
@@ -1407,7 +1422,7 @@ async function main() {
                                     config: {
                                         toolId: "merge-pull-request",
                                         parameters: {
-                                            prNumber: "{{steps['implement-wait'].prNumber}}",
+                                            prNumber: "{{steps['create-pr'].prNumber}}",
                                             repository: "{{input.repository}}",
                                             mergeMethod: "squash"
                                         }
@@ -1450,8 +1465,8 @@ async function main() {
                     implementationBranch: "{{steps['implement-wait'].branchName}}",
                     implementationAgentId: "{{steps['implement-launch'].agentId}}",
                     implementationDurationMs: "{{steps['implement-wait'].durationMs}}",
-                    prUrl: "{{steps['implement-wait'].prUrl}}",
-                    prNumber: "{{steps['implement-wait'].prNumber}}",
+                    prUrl: "{{steps['create-pr'].prUrl}}",
+                    prNumber: "{{steps['create-pr'].prNumber}}",
                     mergeCommitSha: "{{steps.merge.sha}}",
                     repository: "{{input.repository}}"
                 }
@@ -1659,6 +1674,21 @@ async function main() {
                 }
             },
             {
+                id: "create-pr",
+                type: "tool",
+                name: "Create Pull Request",
+                config: {
+                    toolId: "github-create-pull-request",
+                    parameters: {
+                        base: "main",
+                        head: "{{steps['implement-wait'].branchName}}",
+                        title: "feat: {{input.title}}",
+                        body: "## Summary\n\nFixes #{{steps.intake.issueNumber}}\n\n## Plan\n\n{{steps['feature-plan'].text}}\n\n## Implementation\n\n{{steps['implement-wait'].summary}}\n\n---\n_Automated via AgentC2 SDLC Triage→Feature Pipeline_",
+                        repository: "{{input.repository}}"
+                    }
+                }
+            },
+            {
                 id: "heal-cycle",
                 type: "dowhile",
                 name: "Validation & Self-Heal Cycle",
@@ -1774,7 +1804,7 @@ async function main() {
                                     config: {
                                         toolId: "merge-pull-request",
                                         parameters: {
-                                            prNumber: "{{steps['implement-wait'].prNumber}}",
+                                            prNumber: "{{steps['create-pr'].prNumber}}",
                                             repository: "{{input.repository}}",
                                             mergeMethod: "squash"
                                         }

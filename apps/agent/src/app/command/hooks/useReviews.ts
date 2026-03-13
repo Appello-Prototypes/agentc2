@@ -466,6 +466,87 @@ export function useReviews() {
         }
     }
 
+    /* ─── Cancel run ─────────────────────────────────────────────────── */
+
+    async function handleCancelRun(review: ReviewItem) {
+        setActingId(review.id);
+        try {
+            const res = await fetch(`${getApiBase()}/api/reviews/${review.id}/cancel`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" }
+            });
+            const data = await res.json();
+            if (data.success) {
+                addToast(
+                    `Run cancelled — ${data.workflowName || review.workflowName || review.workflowSlug || "workflow"}`
+                );
+                setReviews((prev) => prev.filter((r) => r.id !== review.id));
+                setSelectedIds((prev) => {
+                    const next = new Set(prev);
+                    next.delete(review.id);
+                    return next;
+                });
+                fetchMetrics();
+            } else {
+                addToast(data.error || "Cancel failed", "error");
+            }
+        } catch {
+            addToast("Network error", "error");
+        } finally {
+            setActingId(null);
+        }
+    }
+
+    /* ─── Retry step ────────────────────────────────────────────────── */
+
+    async function handleRetryStep(reviewId: string, stepId: string) {
+        setActingId(reviewId);
+        try {
+            const res = await fetch(`${getApiBase()}/api/reviews/${reviewId}/retry`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ stepId })
+            });
+            const data = await res.json();
+            if (data.success) {
+                addToast("Step retried successfully");
+                fetchReviews(tab === "audit" ? "all" : tab);
+                fetchMetrics();
+            } else {
+                addToast(data.error || "Retry failed", "error");
+            }
+        } catch {
+            addToast("Network error", "error");
+        } finally {
+            setActingId(null);
+        }
+    }
+
+    /* ─── Skip step ─────────────────────────────────────────────────── */
+
+    async function handleSkipStep(reviewId: string, stepId: string, reason?: string) {
+        setActingId(reviewId);
+        try {
+            const res = await fetch(`${getApiBase()}/api/reviews/${reviewId}/skip`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ stepId, reason })
+            });
+            const data = await res.json();
+            if (data.success) {
+                addToast("Step skipped — workflow continuing");
+                fetchReviews(tab === "audit" ? "all" : tab);
+                fetchMetrics();
+            } else {
+                addToast(data.error || "Skip failed", "error");
+            }
+        } catch {
+            addToast("Network error", "error");
+        } finally {
+            setActingId(null);
+        }
+    }
+
     /* ─── Misc helpers ───────────────────────────────────────────────── */
 
     function dismissNewReviews() {
@@ -533,6 +614,9 @@ export function useReviews() {
         handleFeedback,
         handleConditional,
         handleBatchApprove,
+        handleCancelRun,
+        handleRetryStep,
+        handleSkipStep,
         handleLearningApprove,
         handleLearningReject,
         toggleSelect,
