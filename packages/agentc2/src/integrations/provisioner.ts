@@ -16,6 +16,7 @@ import { prisma, Prisma } from "@repo/database";
 import type { IntegrationBlueprint, ProvisionResult } from "./blueprints/types";
 import { getBlueprint } from "./blueprints";
 import { listMcpToolDefinitions } from "../mcp/client";
+import { toolRegistry } from "../tools/registry";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -766,10 +767,12 @@ function buildStaticToolDefinitions(toolIds: string[]): DiscoveredToolDef[] {
     const defs: DiscoveredToolDef[] = [];
     for (const id of toolIds) {
         const humanName = id.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+        const tool = toolRegistry[id];
+        const description = tool?.description ?? "";
         defs.push({
             toolId: id,
             name: humanName,
-            description: "",
+            description,
             inputSchema: null
         });
     }
