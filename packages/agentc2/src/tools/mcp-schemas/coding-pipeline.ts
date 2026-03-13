@@ -22,6 +22,12 @@ export const codingPipelineToolDefinitions: McpToolDefinition[] = [
                     type: "string",
                     description: "Base branch or ref to work from (default: 'main')"
                 },
+                model: {
+                    type: "string",
+                    description:
+                        "Explicit model ID (e.g., 'claude-4.6-opus-high-thinking'). " +
+                        "When omitted, Cursor resolves your user/team/system default."
+                },
                 autoCreatePr: {
                     type: "boolean",
                     description:
