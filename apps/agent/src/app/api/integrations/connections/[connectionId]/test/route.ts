@@ -203,6 +203,40 @@ async function testCredentialOnlyProvider(
                 };
             }
         }
+        case "claude-code": {
+            const apiKey =
+                (credentials.ANTHROPIC_API_KEY as string) || (credentials.apiKey as string);
+            if (!apiKey) {
+                return { success: false, error: "ANTHROPIC_API_KEY not found in credentials" };
+            }
+            try {
+                const resp = await fetch("https://api.anthropic.com/v1/models", {
+                    method: "GET",
+                    headers: {
+                        "x-api-key": apiKey,
+                        "anthropic-version": "2023-06-01",
+                        "Content-Type": "application/json"
+                    },
+                    signal: AbortSignal.timeout(10_000)
+                });
+                if (resp.ok || resp.status === 200) {
+                    return {
+                        success: true,
+                        detail: `Claude Code API key valid (HTTP ${resp.status})`
+                    };
+                }
+                const body = await resp.text().catch(() => "");
+                return {
+                    success: false,
+                    error: `Claude Code API returned HTTP ${resp.status}: ${body.slice(0, 200)}`
+                };
+            } catch (err) {
+                return {
+                    success: false,
+                    error: `Claude Code API unreachable: ${err instanceof Error ? err.message : String(err)}`
+                };
+            }
+        }
         default:
             return null;
     }
