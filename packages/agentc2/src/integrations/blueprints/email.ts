@@ -99,7 +99,7 @@ Best practices:
     },
     {
         providerKey: "google-calendar",
-        version: 2,
+        version: 3,
         skill: {
             slug: "google-calendar-expert",
             name: "Google Calendar Expert",
@@ -116,7 +116,7 @@ Best practices:
 - Check availability before scheduling
 - Include location and description in events
 - Use recurring events for regular meetings`,
-            category: "Email",
+            category: "Scheduling",
             tags: ["calendar", "google", "scheduling", "events"],
             toolDiscovery: "static",
             staticTools: [
