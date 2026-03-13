@@ -1,0 +1,2053 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Concept 2: Mission Control Grid — UIS</title>
+        <link
+            href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=Overpass+Mono:wght@400;500;600;700&display=swap"
+            rel="stylesheet"
+        />
+        <style>
+            :root {
+                --bg-primary: #06070a;
+                --bg-surface: #0c0d12;
+                --bg-elevated: #121318;
+                --bg-muted: #181920;
+                --bg-accent: #1f2029;
+                --border-subtle: #232535;
+                --border-default: #2c2e40;
+                --text-primary: #e6e7ee;
+                --text-secondary: #9092a8;
+                --text-muted: #5f6180;
+                --green-500: #22c55e;
+                --green-bg: rgba(34, 197, 94, 0.1);
+                --green-border: rgba(34, 197, 94, 0.2);
+                --amber-500: #eab308;
+                --amber-bg: rgba(234, 179, 8, 0.1);
+                --amber-border: rgba(234, 179, 8, 0.2);
+                --blue-500: #3b82f6;
+                --blue-bg: rgba(59, 130, 246, 0.08);
+                --blue-border: rgba(59, 130, 246, 0.2);
+                --red-500: #ef4444;
+                --red-bg: rgba(239, 68, 68, 0.08);
+                --red-border: rgba(239, 68, 68, 0.2);
+                --cyan-500: #06b6d4;
+                --cyan-bg: rgba(6, 182, 212, 0.08);
+                --cyan-border: rgba(6, 182, 212, 0.2);
+                --purple-500: #a78bfa;
+                --orange-500: #f97316;
+                --orange-bg: rgba(249, 115, 22, 0.1);
+                --orange-border: rgba(249, 115, 22, 0.2);
+            }
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+            body {
+                font-family:
+                    "Sora",
+                    -apple-system,
+                    sans-serif;
+                background: var(--bg-primary);
+                color: var(--text-primary);
+                padding: 48px 40px;
+                line-height: 1.6;
+            }
+            code,
+            .mono {
+                font-family: "Overpass Mono", monospace;
+            }
+            .hidden {
+                display: none;
+            }
+
+            .header {
+                max-width: 1100px;
+                margin: 0 auto 64px;
+                text-align: center;
+            }
+            .phase-tag {
+                display: inline-block;
+                padding: 5px 16px;
+                border-radius: 20px;
+                font-size: 11px;
+                font-weight: 600;
+                letter-spacing: 2px;
+                text-transform: uppercase;
+                font-family: "Overpass Mono", monospace;
+                margin-bottom: 16px;
+                background: var(--orange-bg);
+                border: 1px solid var(--orange-border);
+                color: var(--orange-500);
+            }
+            .header h1 {
+                font-size: 38px;
+                font-weight: 700;
+                letter-spacing: -0.8px;
+                margin-bottom: 14px;
+                background: linear-gradient(135deg, #e6e7ee 0%, #9092a8 100%);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+            }
+            .header p {
+                color: var(--text-secondary);
+                font-size: 16px;
+                max-width: 750px;
+                margin: 0 auto;
+            }
+
+            .section {
+                max-width: 1100px;
+                margin: 0 auto 60px;
+            }
+            .section-eyebrow {
+                font-family: "Overpass Mono", monospace;
+                font-size: 10px;
+                font-weight: 600;
+                letter-spacing: 2.5px;
+                text-transform: uppercase;
+                color: var(--text-muted);
+                margin-bottom: 8px;
+            }
+            .section-title {
+                font-size: 24px;
+                font-weight: 700;
+                margin-bottom: 12px;
+                letter-spacing: -0.3px;
+            }
+            .section-desc {
+                color: var(--text-secondary);
+                font-size: 14px;
+                margin-bottom: 28px;
+                line-height: 1.7;
+            }
+            .divider {
+                height: 1px;
+                background: var(--border-subtle);
+                margin: 56px auto;
+                max-width: 1100px;
+            }
+
+            .chrome {
+                background: var(--bg-surface);
+                border: 1px solid var(--border-subtle);
+                border-radius: 14px;
+                overflow: hidden;
+                box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+            }
+            .chrome-bar {
+                background: var(--bg-muted);
+                padding: 9px 16px;
+                font-family: "Overpass Mono", monospace;
+                font-size: 11px;
+                color: var(--text-muted);
+                border-bottom: 1px solid var(--border-subtle);
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            }
+            .chrome-dots {
+                display: flex;
+                gap: 5px;
+            }
+            .dot {
+                width: 8px;
+                height: 8px;
+                border-radius: 50%;
+            }
+            .dot-r {
+                background: #ff5f57;
+            }
+            .dot-y {
+                background: #febc2e;
+            }
+            .dot-g {
+                background: #28c840;
+            }
+            .chrome-body {
+                padding: 24px;
+            }
+
+            .spec-table {
+                width: 100%;
+                border-collapse: collapse;
+                font-size: 13px;
+            }
+            .spec-table th {
+                text-align: left;
+                padding: 10px 14px;
+                border-bottom: 1px solid var(--border-subtle);
+                color: var(--text-muted);
+                font-size: 10px;
+                font-weight: 600;
+                text-transform: uppercase;
+                letter-spacing: 1.5px;
+                font-family: "Overpass Mono", monospace;
+            }
+            .spec-table td {
+                padding: 10px 14px;
+                border-bottom: 1px solid var(--border-subtle);
+                color: var(--text-secondary);
+                vertical-align: top;
+            }
+            .spec-table td:first-child {
+                color: var(--text-primary);
+                font-weight: 500;
+            }
+            .spec-table code {
+                font-family: "Overpass Mono", monospace;
+                background: var(--bg-muted);
+                padding: 2px 6px;
+                border-radius: 4px;
+                font-size: 11px;
+                color: var(--purple-500);
+            }
+
+            .badge {
+                display: inline-flex;
+                align-items: center;
+                padding: 2px 10px;
+                border-radius: 6px;
+                font-size: 10px;
+                font-weight: 600;
+            }
+            .badge-green {
+                background: var(--green-bg);
+                color: var(--green-500);
+                border: 1px solid var(--green-border);
+            }
+            .badge-amber {
+                background: var(--amber-bg);
+                color: var(--amber-500);
+                border: 1px solid var(--amber-border);
+            }
+            .badge-red {
+                background: var(--red-bg);
+                color: var(--red-500);
+                border: 1px solid var(--red-border);
+            }
+            .badge-blue {
+                background: var(--blue-bg);
+                color: var(--blue-500);
+                border: 1px solid var(--blue-border);
+            }
+            .badge-cyan {
+                background: var(--cyan-bg);
+                color: var(--cyan-500);
+                border: 1px solid var(--cyan-border);
+            }
+            .badge-muted {
+                background: var(--bg-accent);
+                color: var(--text-muted);
+                border: 1px solid var(--border-default);
+            }
+
+            .toggle-group {
+                display: flex;
+                gap: 4px;
+                margin-bottom: 24px;
+                background: var(--bg-muted);
+                border-radius: 10px;
+                padding: 4px;
+                width: fit-content;
+            }
+            .toggle-btn {
+                padding: 8px 20px;
+                border-radius: 8px;
+                font-size: 13px;
+                font-weight: 600;
+                cursor: pointer;
+                border: none;
+                background: transparent;
+                color: var(--text-muted);
+                transition: all 0.2s;
+                font-family: "Sora", sans-serif;
+            }
+            .toggle-btn.active {
+                background: var(--bg-accent);
+                color: var(--text-primary);
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            }
+            .toggle-btn:hover:not(.active) {
+                color: var(--text-secondary);
+            }
+
+            .raw-pre {
+                background: var(--bg-muted);
+                border: 1px solid var(--border-subtle);
+                border-radius: 8px;
+                padding: 14px;
+                font-family: "Overpass Mono", monospace;
+                font-size: 11px;
+                color: var(--text-secondary);
+                line-height: 1.6;
+                max-height: 260px;
+                overflow: auto;
+                white-space: pre-wrap;
+            }
+
+            .impl-step {
+                background: var(--bg-surface);
+                border: 1px solid var(--border-subtle);
+                border-radius: 12px;
+                padding: 20px;
+                margin-bottom: 20px;
+            }
+            .impl-step h3 {
+                font-size: 16px;
+                margin-bottom: 12px;
+            }
+            .impl-meta {
+                display: flex;
+                gap: 24px;
+                font-size: 12px;
+                color: var(--text-secondary);
+                margin-bottom: 16px;
+                flex-wrap: wrap;
+            }
+            .detail-section {
+                margin-bottom: 14px;
+            }
+            .detail-section-label {
+                font-size: 10px;
+                font-weight: 600;
+                letter-spacing: 1.5px;
+                text-transform: uppercase;
+                color: var(--text-muted);
+                margin-bottom: 6px;
+                font-family: "Overpass Mono", monospace;
+            }
+
+            .flow-container {
+                display: flex;
+                align-items: center;
+                padding: 20px 0;
+                overflow-x: auto;
+                gap: 6px;
+            }
+            .flow-node {
+                background: var(--bg-elevated);
+                border: 1px solid var(--border-subtle);
+                border-radius: 10px;
+                padding: 14px 18px;
+                min-width: 130px;
+                text-align: center;
+                flex-shrink: 0;
+            }
+            .flow-node-title {
+                font-size: 12px;
+                font-weight: 600;
+                margin-bottom: 4px;
+            }
+            .flow-node-desc {
+                font-size: 10px;
+                color: var(--text-muted);
+            }
+            .flow-node.active {
+                border-color: var(--orange-500);
+                box-shadow: 0 0 0 2px var(--orange-bg);
+            }
+            .flow-arrow {
+                color: var(--text-muted);
+                font-size: 18px;
+                padding: 0 4px;
+                flex-shrink: 0;
+            }
+
+            .type-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+                gap: 12px;
+                margin-bottom: 28px;
+            }
+            .type-card {
+                background: var(--bg-elevated);
+                border: 1px solid var(--border-subtle);
+                border-radius: 10px;
+                padding: 14px;
+                text-align: center;
+                cursor: pointer;
+                transition: all 0.15s;
+            }
+            .type-card:hover {
+                border-color: var(--border-default);
+            }
+            .type-card.active {
+                border-color: var(--green-500);
+                box-shadow: 0 0 0 1px var(--green-border);
+            }
+            .type-card-icon {
+                font-size: 22px;
+                margin-bottom: 6px;
+            }
+            .type-card-name {
+                font-size: 13px;
+                font-weight: 600;
+                margin-bottom: 3px;
+            }
+
+            /* === MISSION CONTROL GRID === */
+            .mc-toolbar {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                padding: 14px 20px;
+                border-bottom: 1px solid var(--border-subtle);
+                background: var(--bg-elevated);
+                flex-wrap: wrap;
+            }
+            .mc-toolbar-label {
+                font-size: 10px;
+                font-weight: 600;
+                letter-spacing: 1.5px;
+                text-transform: uppercase;
+                color: var(--text-muted);
+                font-family: "Overpass Mono", monospace;
+            }
+            .mc-filter-pill {
+                padding: 4px 12px;
+                border-radius: 6px;
+                font-size: 11px;
+                font-weight: 500;
+                cursor: pointer;
+                border: 1px solid var(--border-subtle);
+                background: var(--bg-muted);
+                color: var(--text-secondary);
+                transition: all 0.15s;
+            }
+            .mc-filter-pill:hover {
+                border-color: var(--border-default);
+                color: var(--text-primary);
+            }
+            .mc-filter-pill.active {
+                border-color: var(--orange-500);
+                color: var(--orange-500);
+                background: var(--orange-bg);
+            }
+
+            .mc-section-label {
+                padding: 10px 20px;
+                font-size: 10px;
+                font-weight: 700;
+                letter-spacing: 2px;
+                text-transform: uppercase;
+                font-family: "Overpass Mono", monospace;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+            .mc-section-label.attention {
+                color: var(--amber-500);
+            }
+            .mc-section-label.active {
+                color: var(--blue-500);
+            }
+            .mc-section-label.done {
+                color: var(--green-500);
+            }
+
+            .mc-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+                gap: 12px;
+                padding: 12px 20px;
+            }
+
+            .mc-tile {
+                background: var(--bg-elevated);
+                border: 1px solid var(--border-subtle);
+                border-radius: 12px;
+                padding: 14px 16px;
+                cursor: pointer;
+                transition: all 0.15s;
+                position: relative;
+                overflow: hidden;
+            }
+            .mc-tile:hover {
+                border-color: var(--border-default);
+                transform: translateY(-1px);
+                box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+            }
+            .mc-tile.selected {
+                border-color: var(--orange-500);
+                box-shadow: 0 0 0 1px var(--orange-bg);
+            }
+            .mc-tile.urgent {
+                border-left: 3px solid var(--red-500);
+            }
+            .mc-tile.waiting {
+                border-left: 3px solid var(--amber-500);
+            }
+            .mc-tile.running {
+                border-left: 3px solid var(--blue-500);
+            }
+            .mc-tile.complete {
+                border-left: 3px solid var(--green-500);
+                opacity: 0.7;
+            }
+
+            .mc-tile-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-start;
+                margin-bottom: 10px;
+            }
+            .mc-tile-id {
+                font-size: 12px;
+                font-weight: 700;
+                font-family: "Overpass Mono", monospace;
+            }
+            .mc-tile-source {
+                display: flex;
+                align-items: center;
+                gap: 4px;
+                font-size: 10px;
+                color: var(--text-muted);
+            }
+            .mc-tile-title {
+                font-size: 13px;
+                font-weight: 500;
+                margin-bottom: 10px;
+                line-height: 1.4;
+                display: -webkit-box;
+                -webkit-line-clamp: 2;
+                -webkit-box-orient: vertical;
+                overflow: hidden;
+            }
+
+            .mc-progress-bar {
+                width: 100%;
+                height: 4px;
+                background: var(--bg-accent);
+                border-radius: 2px;
+                margin-bottom: 8px;
+                overflow: hidden;
+                position: relative;
+            }
+            .mc-progress-fill {
+                height: 100%;
+                border-radius: 2px;
+                transition: width 0.3s ease;
+            }
+            .mc-progress-fill.green {
+                background: var(--green-500);
+            }
+            .mc-progress-fill.blue {
+                background: var(--blue-500);
+            }
+            .mc-progress-fill.amber {
+                background: var(--amber-500);
+            }
+            .mc-progress-fill.red {
+                background: var(--red-500);
+            }
+
+            .mc-tile-meta {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                font-size: 10px;
+                color: var(--text-muted);
+                margin-bottom: 10px;
+                font-family: "Overpass Mono", monospace;
+            }
+            .mc-tile-step {
+                font-size: 11px;
+                color: var(--text-secondary);
+                display: flex;
+                align-items: center;
+                gap: 4px;
+            }
+            .mc-tile-step .step-dot {
+                width: 5px;
+                height: 5px;
+                border-radius: 50%;
+            }
+
+            .mc-tile-actions {
+                display: flex;
+                gap: 6px;
+            }
+            .mc-action-btn {
+                padding: 5px 10px;
+                border-radius: 5px;
+                font-size: 10px;
+                font-weight: 600;
+                cursor: pointer;
+                border: none;
+                transition: all 0.12s;
+                font-family: "Sora", sans-serif;
+            }
+            .mc-action-btn.approve {
+                background: var(--green-bg);
+                color: var(--green-500);
+                border: 1px solid var(--green-border);
+            }
+            .mc-action-btn.approve:hover {
+                background: rgba(34, 197, 94, 0.2);
+            }
+            .mc-action-btn.reject {
+                background: var(--red-bg);
+                color: var(--red-500);
+                border: 1px solid var(--red-border);
+            }
+            .mc-action-btn.reject:hover {
+                background: rgba(239, 68, 68, 0.15);
+            }
+            .mc-action-btn.feedback {
+                background: var(--bg-accent);
+                color: var(--text-muted);
+                border: 1px solid var(--border-default);
+            }
+            .mc-action-btn.feedback:hover {
+                color: var(--text-secondary);
+            }
+            .mc-action-btn.skip {
+                background: var(--cyan-bg);
+                color: var(--cyan-500);
+                border: 1px solid var(--cyan-border);
+            }
+            .mc-action-btn.retry {
+                background: var(--amber-bg);
+                color: var(--amber-500);
+                border: 1px solid var(--amber-border);
+            }
+
+            .mc-tile-age {
+                font-size: 10px;
+                font-family: "Overpass Mono", monospace;
+                position: absolute;
+                top: 8px;
+                right: 10px;
+            }
+            .mc-tile-age.stale {
+                color: var(--red-500);
+            }
+            .mc-tile-age.recent {
+                color: var(--text-muted);
+            }
+
+            @keyframes shimmer {
+                0% {
+                    background-position: -200% 0;
+                }
+                100% {
+                    background-position: 200% 0;
+                }
+            }
+            .mc-progress-fill.running-anim {
+                background: linear-gradient(
+                    90deg,
+                    var(--blue-500) 25%,
+                    rgba(59, 130, 246, 0.4) 50%,
+                    var(--blue-500) 75%
+                );
+                background-size: 200% 100%;
+                animation: shimmer 1.5s infinite linear;
+            }
+
+            @keyframes pulse-glow {
+                0%,
+                100% {
+                    box-shadow: 0 0 0 0 rgba(234, 179, 8, 0);
+                }
+                50% {
+                    box-shadow: 0 0 0 4px rgba(234, 179, 8, 0.15);
+                }
+            }
+            .mc-tile.waiting {
+                animation: pulse-glow 2.5s infinite;
+            }
+
+            /* Slide-out for tile detail */
+            .mc-slideout-overlay {
+                position: fixed;
+                inset: 0;
+                background: rgba(0, 0, 0, 0.5);
+                z-index: 100;
+                opacity: 0;
+                pointer-events: none;
+                transition: opacity 0.2s;
+            }
+            .mc-slideout-overlay.open {
+                opacity: 1;
+                pointer-events: all;
+            }
+            .mc-slideout {
+                position: fixed;
+                top: 0;
+                right: -500px;
+                width: 500px;
+                height: 100vh;
+                background: var(--bg-surface);
+                border-left: 1px solid var(--border-subtle);
+                z-index: 101;
+                transition: right 0.25s ease;
+                overflow-y: auto;
+                box-shadow: -20px 0 60px rgba(0, 0, 0, 0.5);
+            }
+            .mc-slideout.open {
+                right: 0;
+            }
+            .mc-slideout-header {
+                padding: 20px 24px;
+                border-bottom: 1px solid var(--border-subtle);
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-start;
+            }
+            .mc-slideout-close {
+                background: var(--bg-accent);
+                border: 1px solid var(--border-default);
+                color: var(--text-secondary);
+                width: 28px;
+                height: 28px;
+                border-radius: 6px;
+                cursor: pointer;
+                font-size: 14px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            .mc-slideout-body {
+                padding: 20px 24px;
+            }
+            .mc-slideout-section {
+                margin-bottom: 20px;
+            }
+            .mc-slideout-section-label {
+                font-size: 10px;
+                font-weight: 600;
+                letter-spacing: 1.5px;
+                text-transform: uppercase;
+                color: var(--text-muted);
+                margin-bottom: 8px;
+                font-family: "Overpass Mono", monospace;
+            }
+            .mc-slideout-actions {
+                display: flex;
+                gap: 8px;
+                padding: 16px 24px;
+                border-top: 1px solid var(--border-subtle);
+                background: var(--bg-muted);
+                position: sticky;
+                bottom: 0;
+            }
+            .mc-slideout-actions .action-btn {
+                flex: 1;
+                padding: 10px;
+                border-radius: 8px;
+                font-size: 12px;
+                font-weight: 600;
+                cursor: pointer;
+                border: none;
+                font-family: "Sora", sans-serif;
+            }
+            .btn-approve {
+                background: var(--green-500);
+                color: #000;
+            }
+            .btn-reject {
+                background: var(--red-bg);
+                color: var(--red-500);
+                border: 1px solid var(--red-border);
+            }
+            .btn-feedback {
+                background: var(--bg-accent);
+                color: var(--text-secondary);
+                border: 1px solid var(--border-default);
+            }
+        </style>
+    </head>
+    <body>
+        <!-- HEADER -->
+        <div class="header">
+            <div class="phase-tag">Concept 2 of 5</div>
+            <h1>Mission Control Grid</h1>
+            <p>
+                A dense monitoring dashboard inspired by mission control rooms. Every active
+                workflow run is a compact tile showing progress, current step, risk, and age at a
+                glance. Primary actions (approve/reject) are inline on each tile -- zero clicks to
+                take action. Click for deep detail in a side panel.
+            </p>
+        </div>
+
+        <!-- ARCHITECTURE -->
+        <div class="section">
+            <div class="section-eyebrow">Architecture</div>
+            <div class="section-title">Data Flow</div>
+            <div class="section-desc">
+                No new API routes. Tiles are rendered from existing ReviewItem data. Step data is
+                prefetched to compute progress bars. Tiles auto-sort by urgency (risk x age).
+            </div>
+            <div class="chrome">
+                <div class="chrome-bar">
+                    <div class="chrome-dots">
+                        <span class="dot dot-r"></span><span class="dot dot-y"></span
+                        ><span class="dot dot-g"></span>
+                    </div>
+                    data-flow.tsx
+                </div>
+                <div class="chrome-body">
+                    <div class="flow-container">
+                        <div class="flow-node">
+                            <div class="flow-node-title">useReviews()</div>
+                            <div class="flow-node-desc">All reviews</div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-node">
+                            <div class="flow-node-title">useStepPrefetch()</div>
+                            <div class="flow-node-desc">Batch step data</div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-node active">
+                            <div class="flow-node-title">useUrgencySort()</div>
+                            <div class="flow-node-desc">Risk x Age ranking</div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-node">
+                            <div class="flow-node-title">MissionControlGrid</div>
+                            <div class="flow-node-desc">Tile layout</div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-node">
+                            <div class="flow-node-title">TileSlideout</div>
+                            <div class="flow-node-desc">Deep detail</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- INTERACTIVE MOCKUP -->
+        <div class="section">
+            <div class="section-eyebrow">UI Mockup</div>
+            <div class="section-title">The Control Room</div>
+            <div class="section-desc">
+                Tiles are grouped into urgency bands: "Needs Attention" (waiting for human, oldest
+                first), "Running" (active runs), and "Recently Completed." Inline action buttons on
+                waiting tiles let you approve or reject without opening anything.
+            </div>
+
+            <div class="toggle-group">
+                <button class="toggle-btn active" onclick="showMcState('default', this)">
+                    Default
+                </button>
+                <button class="toggle-btn" onclick="showMcState('hover', this)">Tile Hover</button>
+                <button class="toggle-btn" onclick="showMcState('empty', this)">Empty State</button>
+            </div>
+
+            <div id="mc-state-default" class="chrome">
+                <div class="chrome-bar">
+                    <div class="chrome-dots">
+                        <span class="dot dot-r"></span><span class="dot dot-y"></span
+                        ><span class="dot dot-g"></span>
+                    </div>
+                    command / mission-control
+                </div>
+
+                <!-- Toolbar -->
+                <div class="mc-toolbar">
+                    <div class="mc-toolbar-label">Filter:</div>
+                    <button class="mc-filter-pill active" onclick="toggleFilter(this)">
+                        All (14)
+                    </button>
+                    <button class="mc-filter-pill" onclick="toggleFilter(this)">
+                        Needs Attention (7)
+                    </button>
+                    <button class="mc-filter-pill" onclick="toggleFilter(this)">Running (4)</button>
+                    <button class="mc-filter-pill" onclick="toggleFilter(this)">Failed (1)</button>
+                    <span style="flex: 1"></span>
+                    <div
+                        style="
+                            font-size: 10px;
+                            color: var(--text-muted);
+                            font-family: &quot;Overpass Mono&quot;, monospace;
+                        "
+                    >
+                        <kbd
+                            style="
+                                background: var(--bg-accent);
+                                padding: 2px 5px;
+                                border-radius: 3px;
+                                font-size: 10px;
+                            "
+                            >1-9</kbd
+                        >
+                        select tile &nbsp;
+                        <kbd
+                            style="
+                                background: var(--bg-accent);
+                                padding: 2px 5px;
+                                border-radius: 3px;
+                                font-size: 10px;
+                            "
+                            >a</kbd
+                        >
+                        approve &nbsp;
+                        <kbd
+                            style="
+                                background: var(--bg-accent);
+                                padding: 2px 5px;
+                                border-radius: 3px;
+                                font-size: 10px;
+                            "
+                            >r</kbd
+                        >
+                        reject
+                    </div>
+                </div>
+
+                <!-- Needs Attention Section -->
+                <div class="mc-section-label attention">
+                    &#9888; Needs Attention &mdash; 7 items
+                </div>
+                <div class="mc-grid">
+                    <!-- Tile 1: Urgent, long wait -->
+                    <div class="mc-tile urgent" onclick="openMcSlideout(this)">
+                        <div class="mc-tile-age stale">4h 12m</div>
+                        <div class="mc-tile-header">
+                            <div class="mc-tile-id">#187</div>
+                            <div class="mc-tile-source">
+                                <span
+                                    class="badge badge-red"
+                                    style="font-size: 8px; padding: 1px 6px"
+                                    >high risk</span
+                                >
+                            </div>
+                        </div>
+                        <div class="mc-tile-title">
+                            RAG chunk overlap causing duplicate search results in agent memory
+                        </div>
+                        <div class="mc-progress-bar">
+                            <div class="mc-progress-fill amber" style="width: 75%"></div>
+                        </div>
+                        <div class="mc-tile-meta">
+                            <span>15/20 steps</span><span>SDLC Bugfix</span>
+                        </div>
+                        <div class="mc-tile-step">
+                            <span class="step-dot" style="background: var(--amber-500)"></span>
+                            merge-review (awaiting)
+                        </div>
+                        <div class="mc-tile-actions" style="margin-top: 8px">
+                            <button
+                                class="mc-action-btn approve"
+                                onclick="
+                                    event.stopPropagation();
+                                    tileAction('approve', '#187');
+                                "
+                            >
+                                Approve
+                            </button>
+                            <button
+                                class="mc-action-btn reject"
+                                onclick="
+                                    event.stopPropagation();
+                                    tileAction('reject', '#187');
+                                "
+                            >
+                                Reject
+                            </button>
+                            <button
+                                class="mc-action-btn feedback"
+                                onclick="
+                                    event.stopPropagation();
+                                    tileAction('feedback', '#187');
+                                "
+                            >
+                                Feedback
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Tile 2 -->
+                    <div class="mc-tile waiting" onclick="openMcSlideout(this)">
+                        <div class="mc-tile-age stale">2h 45m</div>
+                        <div class="mc-tile-header">
+                            <div class="mc-tile-id">#202</div>
+                            <div class="mc-tile-source">
+                                <span
+                                    class="badge badge-amber"
+                                    style="font-size: 8px; padding: 1px 6px"
+                                    >medium</span
+                                >
+                            </div>
+                        </div>
+                        <div class="mc-tile-title">
+                            cursor-launch-agent model parameter missing from MCP schema
+                        </div>
+                        <div class="mc-progress-bar">
+                            <div class="mc-progress-fill amber" style="width: 80%"></div>
+                        </div>
+                        <div class="mc-tile-meta">
+                            <span>16/20 steps</span><span>SDLC Bugfix</span>
+                        </div>
+                        <div class="mc-tile-step">
+                            <span class="step-dot" style="background: var(--amber-500)"></span>
+                            merge-review (awaiting)
+                        </div>
+                        <div class="mc-tile-actions" style="margin-top: 8px">
+                            <button
+                                class="mc-action-btn approve"
+                                onclick="
+                                    event.stopPropagation();
+                                    tileAction('approve', '#202');
+                                "
+                            >
+                                Approve
+                            </button>
+                            <button
+                                class="mc-action-btn reject"
+                                onclick="
+                                    event.stopPropagation();
+                                    tileAction('reject', '#202');
+                                "
+                            >
+                                Reject
+                            </button>
+                            <button
+                                class="mc-action-btn feedback"
+                                onclick="
+                                    event.stopPropagation();
+                                    tileAction('feedback', '#202');
+                                "
+                            >
+                                Feedback
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Tile 3 -->
+                    <div class="mc-tile waiting" onclick="openMcSlideout(this)">
+                        <div class="mc-tile-age recent">45m</div>
+                        <div class="mc-tile-header">
+                            <div class="mc-tile-id">#190</div>
+                            <div class="mc-tile-source">
+                                <span
+                                    class="badge badge-green"
+                                    style="font-size: 8px; padding: 1px 6px"
+                                    >low</span
+                                >
+                            </div>
+                        </div>
+                        <div class="mc-tile-title">
+                            Slack thread mapping breaks on multi-workspace deployments
+                        </div>
+                        <div class="mc-progress-bar">
+                            <div class="mc-progress-fill amber" style="width: 70%"></div>
+                        </div>
+                        <div class="mc-tile-meta">
+                            <span>14/20 steps</span><span>SDLC Bugfix</span>
+                        </div>
+                        <div class="mc-tile-step">
+                            <span class="step-dot" style="background: var(--amber-500)"></span>
+                            merge-review (awaiting)
+                        </div>
+                        <div class="mc-tile-actions" style="margin-top: 8px">
+                            <button class="mc-action-btn approve" onclick="event.stopPropagation()">
+                                Approve
+                            </button>
+                            <button class="mc-action-btn reject" onclick="event.stopPropagation()">
+                                Reject
+                            </button>
+                            <button
+                                class="mc-action-btn feedback"
+                                onclick="event.stopPropagation()"
+                            >
+                                Feedback
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Tile 4: Suspended -->
+                    <div class="mc-tile waiting" onclick="openMcSlideout(this)">
+                        <div class="mc-tile-age recent">1h 10m</div>
+                        <div class="mc-tile-header">
+                            <div class="mc-tile-id">#183</div>
+                            <div class="mc-tile-source">
+                                <span
+                                    class="badge badge-green"
+                                    style="font-size: 8px; padding: 1px 6px"
+                                    >low</span
+                                >
+                            </div>
+                        </div>
+                        <div class="mc-tile-title">CI pipeline fix for Node 20 compatibility</div>
+                        <div class="mc-progress-bar">
+                            <div class="mc-progress-fill cyan" style="width: 90%"></div>
+                        </div>
+                        <div class="mc-tile-meta">
+                            <span>18/20 steps</span><span>SDLC Bugfix</span>
+                        </div>
+                        <div class="mc-tile-step">
+                            <span class="step-dot" style="background: var(--cyan-500)"></span>
+                            final-merge (suspended)
+                        </div>
+                        <div class="mc-tile-actions" style="margin-top: 8px">
+                            <button class="mc-action-btn approve" onclick="event.stopPropagation()">
+                                Approve
+                            </button>
+                            <button class="mc-action-btn skip" onclick="event.stopPropagation()">
+                                Skip
+                            </button>
+                            <button
+                                class="mc-action-btn feedback"
+                                onclick="event.stopPropagation()"
+                            >
+                                Feedback
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Tile 5: Content review -->
+                    <div class="mc-tile waiting" onclick="openMcSlideout(this)">
+                        <div class="mc-tile-age recent">30m</div>
+                        <div class="mc-tile-header">
+                            <div class="mc-tile-id">Blog</div>
+                            <div class="mc-tile-source">
+                                <span
+                                    class="badge badge-green"
+                                    style="font-size: 8px; padding: 1px 6px"
+                                    >low</span
+                                >
+                            </div>
+                        </div>
+                        <div class="mc-tile-title">
+                            MCP Integrations Guide: review draft for publication
+                        </div>
+                        <div class="mc-progress-bar">
+                            <div class="mc-progress-fill amber" style="width: 60%"></div>
+                        </div>
+                        <div class="mc-tile-meta">
+                            <span>3/5 steps</span><span>Content Pipeline</span>
+                        </div>
+                        <div class="mc-tile-step">
+                            <span class="step-dot" style="background: var(--amber-500)"></span>
+                            editorial-review (awaiting)
+                        </div>
+                        <div class="mc-tile-actions" style="margin-top: 8px">
+                            <button class="mc-action-btn approve" onclick="event.stopPropagation()">
+                                Approve
+                            </button>
+                            <button class="mc-action-btn reject" onclick="event.stopPropagation()">
+                                Reject
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Tile 6: Failed -->
+                    <div class="mc-tile urgent" onclick="openMcSlideout(this)">
+                        <div class="mc-tile-age stale">3h 20m</div>
+                        <div class="mc-tile-header">
+                            <div class="mc-tile-id">Acme</div>
+                            <div class="mc-tile-source">
+                                <span
+                                    class="badge badge-red"
+                                    style="font-size: 8px; padding: 1px 6px"
+                                    >failed</span
+                                >
+                            </div>
+                        </div>
+                        <div class="mc-tile-title">
+                            Acme Corp onboarding: API key validation step failed
+                        </div>
+                        <div class="mc-progress-bar">
+                            <div class="mc-progress-fill red" style="width: 40%"></div>
+                        </div>
+                        <div class="mc-tile-meta">
+                            <span>2/5 steps</span><span>Onboarding</span>
+                        </div>
+                        <div class="mc-tile-step">
+                            <span class="step-dot" style="background: var(--red-500)"></span>
+                            validate-api-key (FAILED)
+                        </div>
+                        <div class="mc-tile-actions" style="margin-top: 8px">
+                            <button class="mc-action-btn retry" onclick="event.stopPropagation()">
+                                Retry
+                            </button>
+                            <button class="mc-action-btn skip" onclick="event.stopPropagation()">
+                                Skip
+                            </button>
+                            <button
+                                class="mc-action-btn feedback"
+                                onclick="event.stopPropagation()"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Tile 7 -->
+                    <div class="mc-tile waiting" onclick="openMcSlideout(this)">
+                        <div class="mc-tile-age recent">15m</div>
+                        <div class="mc-tile-header">
+                            <div class="mc-tile-id">#209</div>
+                            <div class="mc-tile-source">
+                                <span
+                                    class="badge badge-amber"
+                                    style="font-size: 8px; padding: 1px 6px"
+                                    >medium</span
+                                >
+                            </div>
+                        </div>
+                        <div class="mc-tile-title">
+                            Login redirect loop on Safari with strict cookie policy
+                        </div>
+                        <div class="mc-progress-bar">
+                            <div class="mc-progress-fill amber" style="width: 30%"></div>
+                        </div>
+                        <div class="mc-tile-meta">
+                            <span>2/7 steps</span><span>SDLC Triage</span>
+                        </div>
+                        <div class="mc-tile-step">
+                            <span class="step-dot" style="background: var(--amber-500)"></span>
+                            classify-severity (awaiting)
+                        </div>
+                        <div class="mc-tile-actions" style="margin-top: 8px">
+                            <button class="mc-action-btn approve" onclick="event.stopPropagation()">
+                                Approve
+                            </button>
+                            <button class="mc-action-btn reject" onclick="event.stopPropagation()">
+                                Reject
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Running Section -->
+                <div class="mc-section-label active" style="margin-top: 8px">
+                    &#9654; Running &mdash; 4 items
+                </div>
+                <div class="mc-grid">
+                    <div class="mc-tile running" onclick="openMcSlideout(this)">
+                        <div class="mc-tile-age recent">8m</div>
+                        <div class="mc-tile-header">
+                            <div class="mc-tile-id">#204</div>
+                            <div class="mc-tile-source">
+                                <span
+                                    class="badge badge-amber"
+                                    style="font-size: 8px; padding: 1px 6px"
+                                    >medium</span
+                                >
+                            </div>
+                        </div>
+                        <div class="mc-tile-title">
+                            MCP schema model parameter missing from zod definition
+                        </div>
+                        <div class="mc-progress-bar">
+                            <div class="mc-progress-fill running-anim" style="width: 15%"></div>
+                        </div>
+                        <div class="mc-tile-meta">
+                            <span>3/20 steps</span><span>SDLC Bugfix</span>
+                        </div>
+                        <div class="mc-tile-step">
+                            <span class="step-dot" style="background: var(--blue-500)"></span>
+                            launch-code-analysis (running)
+                        </div>
+                    </div>
+
+                    <div class="mc-tile running" onclick="openMcSlideout(this)">
+                        <div class="mc-tile-age recent">3m</div>
+                        <div class="mc-tile-header">
+                            <div class="mc-tile-id">#198</div>
+                            <div class="mc-tile-source">
+                                <span
+                                    class="badge badge-red"
+                                    style="font-size: 8px; padding: 1px 6px"
+                                    >high</span
+                                >
+                            </div>
+                        </div>
+                        <div class="mc-tile-title">Dashboard memory leak in useEffect cleanup</div>
+                        <div class="mc-progress-bar">
+                            <div class="mc-progress-fill running-anim" style="width: 25%"></div>
+                        </div>
+                        <div class="mc-tile-meta">
+                            <span>5/20 steps</span><span>SDLC Bugfix</span>
+                        </div>
+                        <div class="mc-tile-step">
+                            <span class="step-dot" style="background: var(--blue-500)"></span>
+                            get-analysis-results (running)
+                        </div>
+                    </div>
+
+                    <div class="mc-tile running" onclick="openMcSlideout(this)">
+                        <div class="mc-tile-age recent">1m</div>
+                        <div class="mc-tile-header">
+                            <div class="mc-tile-id">#210</div>
+                            <div class="mc-tile-source">
+                                <span
+                                    class="badge badge-muted"
+                                    style="font-size: 8px; padding: 1px 6px"
+                                    >unknown</span
+                                >
+                            </div>
+                        </div>
+                        <div class="mc-tile-title">
+                            Button click unresponsive on mobile viewport
+                        </div>
+                        <div class="mc-progress-bar">
+                            <div class="mc-progress-fill running-anim" style="width: 5%"></div>
+                        </div>
+                        <div class="mc-tile-meta">
+                            <span>1/7 steps</span><span>SDLC Triage</span>
+                        </div>
+                        <div class="mc-tile-step">
+                            <span class="step-dot" style="background: var(--blue-500)"></span>
+                            create-github-issue (running)
+                        </div>
+                    </div>
+
+                    <div class="mc-tile running" onclick="openMcSlideout(this)">
+                        <div class="mc-tile-age recent">12m</div>
+                        <div class="mc-tile-header">
+                            <div class="mc-tile-id">Blog</div>
+                            <div class="mc-tile-source">
+                                <span
+                                    class="badge badge-green"
+                                    style="font-size: 8px; padding: 1px 6px"
+                                    >low</span
+                                >
+                            </div>
+                        </div>
+                        <div class="mc-tile-title">
+                            AI Agent Best Practices: generating first draft
+                        </div>
+                        <div class="mc-progress-bar">
+                            <div class="mc-progress-fill running-anim" style="width: 35%"></div>
+                        </div>
+                        <div class="mc-tile-meta">
+                            <span>2/5 steps</span><span>Content Pipeline</span>
+                        </div>
+                        <div class="mc-tile-step">
+                            <span class="step-dot" style="background: var(--blue-500)"></span>
+                            generate-draft (running)
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recently completed -->
+                <div class="mc-section-label done" style="margin-top: 8px">
+                    &#10003; Completed Today &mdash; 3 items
+                </div>
+                <div class="mc-grid" style="padding-bottom: 20px">
+                    <div class="mc-tile complete" onclick="openMcSlideout(this)">
+                        <div class="mc-tile-age recent" style="color: var(--text-muted)">done</div>
+                        <div class="mc-tile-header">
+                            <div class="mc-tile-id">#179</div>
+                            <div class="mc-tile-source">
+                                <span
+                                    class="badge badge-green"
+                                    style="font-size: 8px; padding: 1px 6px"
+                                    >approved</span
+                                >
+                            </div>
+                        </div>
+                        <div class="mc-tile-title">Rate limiter bypass on batch endpoints</div>
+                        <div class="mc-progress-bar">
+                            <div class="mc-progress-fill green" style="width: 100%"></div>
+                        </div>
+                        <div class="mc-tile-meta">
+                            <span>20/20 steps</span><span>SDLC Bugfix</span>
+                        </div>
+                    </div>
+
+                    <div class="mc-tile complete" onclick="openMcSlideout(this)">
+                        <div class="mc-tile-age recent" style="color: var(--text-muted)">done</div>
+                        <div class="mc-tile-header">
+                            <div class="mc-tile-id">#175</div>
+                            <div class="mc-tile-source">
+                                <span
+                                    class="badge badge-green"
+                                    style="font-size: 8px; padding: 1px 6px"
+                                    >approved</span
+                                >
+                            </div>
+                        </div>
+                        <div class="mc-tile-title">Prisma connection pooling on Supabase</div>
+                        <div class="mc-progress-bar">
+                            <div class="mc-progress-fill green" style="width: 100%"></div>
+                        </div>
+                        <div class="mc-tile-meta">
+                            <span>20/20 steps</span><span>SDLC Bugfix</span>
+                        </div>
+                    </div>
+
+                    <div class="mc-tile complete" onclick="openMcSlideout(this)">
+                        <div class="mc-tile-age recent" style="color: var(--text-muted)">done</div>
+                        <div class="mc-tile-header">
+                            <div class="mc-tile-id">#181</div>
+                            <div class="mc-tile-source">
+                                <span
+                                    class="badge badge-red"
+                                    style="font-size: 8px; padding: 1px 6px"
+                                    >rejected</span
+                                >
+                            </div>
+                        </div>
+                        <div class="mc-tile-title">
+                            Incorrect timezone handling in cron scheduler
+                        </div>
+                        <div class="mc-progress-bar">
+                            <div class="mc-progress-fill red" style="width: 65%"></div>
+                        </div>
+                        <div class="mc-tile-meta">
+                            <span>13/20 steps</span><span>SDLC Bugfix</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Hover state -->
+            <div id="mc-state-hover" class="chrome hidden">
+                <div class="chrome-bar">
+                    <div class="chrome-dots">
+                        <span class="dot dot-r"></span><span class="dot dot-y"></span
+                        ><span class="dot dot-g"></span>
+                    </div>
+                    command / mission-control (hover state)
+                </div>
+                <div class="chrome-body" style="padding: 40px">
+                    <div style="max-width: 280px">
+                        <div
+                            class="mc-tile waiting"
+                            style="
+                                border-color: var(--border-default);
+                                transform: translateY(-2px);
+                                box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+                            "
+                        >
+                            <div class="mc-tile-age stale">2h 45m</div>
+                            <div class="mc-tile-header">
+                                <div class="mc-tile-id">#202</div>
+                                <div class="mc-tile-source">
+                                    <span
+                                        class="badge badge-amber"
+                                        style="font-size: 8px; padding: 1px 6px"
+                                        >medium</span
+                                    >
+                                </div>
+                            </div>
+                            <div class="mc-tile-title">
+                                cursor-launch-agent model parameter missing from MCP schema
+                            </div>
+                            <div class="mc-progress-bar">
+                                <div class="mc-progress-fill amber" style="width: 80%"></div>
+                            </div>
+                            <div class="mc-tile-meta">
+                                <span>16/20 steps</span><span>SDLC Bugfix</span>
+                            </div>
+                            <div class="mc-tile-step">
+                                <span class="step-dot" style="background: var(--amber-500)"></span>
+                                merge-review (awaiting)
+                            </div>
+                            <div class="mc-tile-actions" style="margin-top: 10px">
+                                <button class="mc-action-btn approve">Approve</button>
+                                <button class="mc-action-btn reject">Reject</button>
+                                <button class="mc-action-btn feedback">Feedback</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div style="margin-top: 20px; font-size: 12px; color: var(--text-muted)">
+                        Tile shows: risk indicator (left border), progress bar, current step, age,
+                        inline action buttons. Hover lifts tile. Click opens full detail panel.
+                    </div>
+                </div>
+            </div>
+
+            <!-- Empty state -->
+            <div id="mc-state-empty" class="chrome hidden">
+                <div class="chrome-bar">
+                    <div class="chrome-dots">
+                        <span class="dot dot-r"></span><span class="dot dot-y"></span
+                        ><span class="dot dot-g"></span>
+                    </div>
+                    command / mission-control
+                </div>
+                <div class="chrome-body" style="padding: 60px; text-align: center">
+                    <div style="font-size: 48px; margin-bottom: 16px; opacity: 0.3">&#128640;</div>
+                    <div
+                        style="
+                            font-size: 16px;
+                            font-weight: 600;
+                            margin-bottom: 8px;
+                            color: var(--text-secondary);
+                        "
+                    >
+                        All systems nominal
+                    </div>
+                    <div style="font-size: 13px; color: var(--text-muted)">
+                        No active workflow runs. The control room will populate as new runs start.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slideout -->
+        <div class="mc-slideout-overlay" id="mc-slideout-overlay" onclick="closeMcSlideout()"></div>
+        <div class="mc-slideout" id="mc-slideout-panel">
+            <div class="mc-slideout-header">
+                <div>
+                    <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px">
+                        <span class="badge badge-amber">Awaiting Review</span
+                        ><span
+                            class="badge badge-muted"
+                            style="font-family: &quot;Overpass Mono&quot;, monospace"
+                            >#202</span
+                        >
+                    </div>
+                    <div style="font-size: 16px; font-weight: 600">
+                        cursor-launch-agent model parameter bug
+                    </div>
+                </div>
+                <button class="mc-slideout-close" onclick="closeMcSlideout()">&times;</button>
+            </div>
+            <div class="mc-slideout-body">
+                <div class="mc-slideout-section">
+                    <div class="mc-slideout-section-label">Summary</div>
+                    <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.6">
+                        Schema mismatch between three layers introduced in commit 7252f5de. The MCP
+                        Schema in coding-pipeline.ts is missing the model parameter. Fix committed
+                        to branch.
+                    </div>
+                </div>
+                <div class="mc-slideout-section">
+                    <div class="mc-slideout-section-label">Progress</div>
+                    <div class="mc-progress-bar" style="height: 6px; margin-bottom: 4px">
+                        <div class="mc-progress-fill amber" style="width: 80%"></div>
+                    </div>
+                    <div
+                        style="
+                            font-size: 10px;
+                            color: var(--text-muted);
+                            font-family: &quot;Overpass Mono&quot;, monospace;
+                        "
+                    >
+                        16 of 20 steps completed &middot; Current: merge-review
+                    </div>
+                </div>
+                <div class="mc-slideout-section">
+                    <div class="mc-slideout-section-label">Links</div>
+                    <a
+                        href="#"
+                        style="
+                            color: var(--blue-500);
+                            text-decoration: none;
+                            font-size: 12px;
+                            display: block;
+                            margin-bottom: 4px;
+                        "
+                        >GitHub Issue #202</a
+                    >
+                    <a
+                        href="#"
+                        style="
+                            color: var(--blue-500);
+                            text-decoration: none;
+                            font-size: 12px;
+                            display: block;
+                            margin-bottom: 4px;
+                        "
+                        >Pull Request #247</a
+                    >
+                </div>
+            </div>
+            <div class="mc-slideout-actions">
+                <button class="action-btn btn-approve" onclick="closeMcSlideout()">Approve</button>
+                <button class="action-btn btn-reject">Reject</button>
+                <button class="action-btn btn-feedback">Feedback</button>
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- FILES CHANGED -->
+        <div class="section">
+            <div class="section-eyebrow">Manifest</div>
+            <div class="section-title">Files Changed</div>
+            <table class="spec-table">
+                <thead>
+                    <tr>
+                        <th>Action</th>
+                        <th>File</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>New</td>
+                        <td>
+                            <code
+                                >apps/agent/src/app/command/components/MissionControlGrid.tsx</code
+                            >
+                        </td>
+                        <td>Grid layout with urgency sections and tile rendering</td>
+                    </tr>
+                    <tr>
+                        <td>New</td>
+                        <td><code>apps/agent/src/app/command/components/ControlTile.tsx</code></td>
+                        <td>Individual tile with progress bar, meta, inline actions</td>
+                    </tr>
+                    <tr>
+                        <td>New</td>
+                        <td><code>apps/agent/src/app/command/components/TileSlideout.tsx</code></td>
+                        <td>Detail side panel with full step info</td>
+                    </tr>
+                    <tr>
+                        <td>New</td>
+                        <td><code>apps/agent/src/app/command/hooks/useUrgencySort.ts</code></td>
+                        <td>Ranks items by risk*age, groups into urgency bands</td>
+                    </tr>
+                    <tr>
+                        <td>Modify</td>
+                        <td><code>apps/agent/src/app/command/page.tsx</code></td>
+                        <td>Add "Grid" view toggle</td>
+                    </tr>
+                    <tr>
+                        <td>Modify</td>
+                        <td><code>apps/agent/src/app/command/hooks/useReviews.ts</code></td>
+                        <td>Step prefetch for progress computation</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- IMPLEMENTATION -->
+        <div class="section">
+            <div class="section-eyebrow">Implementation</div>
+            <div class="section-title">Step-by-Step</div>
+
+            <div class="impl-step">
+                <h3>Step 1: useUrgencySort Hook</h3>
+                <div class="impl-meta">
+                    <span
+                        ><strong>File:</strong>
+                        <code>apps/agent/src/app/command/hooks/useUrgencySort.ts</code></span
+                    >
+                </div>
+                <div class="detail-section">
+                    <div class="detail-section-label">Interface</div>
+                    <pre class="raw-pre">
+interface UrgencySorted {
+  attention: TileData[]  // waiting + failed, sorted by age desc
+  running: TileData[]    // RUNNING status
+  completed: TileData[]  // COMPLETED/CANCELLED today
+}
+
+interface TileData {
+  review: ReviewItem
+  steps: StepData[]
+  progress: { completed: number; total: number; percent: number }
+  urgencyScore: number  // riskWeight * ageMinutes
+  currentStep: { name: string; status: string } | null
+}</pre
+                    >
+                </div>
+                <div class="detail-section">
+                    <div class="detail-section-label">Logic</div>
+                    <ol
+                        style="
+                            font-size: 12px;
+                            color: var(--text-secondary);
+                            padding-left: 20px;
+                            line-height: 2;
+                        "
+                    >
+                        <li>Compute progress for each review from step data (completed / total)</li>
+                        <li>
+                            Calculate urgency score: riskWeight (high=3, medium=2, low=1) *
+                            ageMinutes
+                        </li>
+                        <li>
+                            Group into three bands: attention (status=pending/failed), running
+                            (RUNNING), completed (today)
+                        </li>
+                        <li>Sort attention band by urgency score descending (most urgent first)</li>
+                    </ol>
+                </div>
+            </div>
+
+            <div class="impl-step">
+                <h3>Step 2: ControlTile Component</h3>
+                <div class="impl-meta">
+                    <span
+                        ><strong>File:</strong>
+                        <code>apps/agent/src/app/command/components/ControlTile.tsx</code></span
+                    >
+                </div>
+                <div class="detail-section">
+                    <div class="detail-section-label">Props</div>
+                    <pre class="raw-pre">
+interface ControlTileProps {
+  tile: TileData
+  onApprove: (reviewId: string) => void
+  onReject: (reviewId: string) => void
+  onFeedback: (reviewId: string) => void
+  onRetryStep: (reviewId: string, stepId: string) => void
+  onSkipStep: (reviewId: string, stepId: string) => void
+  onClick: (tile: TileData) => void
+}</pre
+                    >
+                </div>
+                <div class="detail-section">
+                    <div class="detail-section-label">Logic</div>
+                    <ol
+                        style="
+                            font-size: 12px;
+                            color: var(--text-secondary);
+                            padding-left: 20px;
+                            line-height: 2;
+                        "
+                    >
+                        <li>
+                            Left border color indicates urgency: red=urgent/failed, amber=waiting,
+                            blue=running, green=done
+                        </li>
+                        <li>
+                            Progress bar with percentage fill and animated shimmer for running items
+                        </li>
+                        <li>
+                            Inline action buttons for attention items
+                            (approve/reject/feedback/retry/skip)
+                        </li>
+                        <li>Running tiles have no action buttons (read-only monitoring)</li>
+                        <li>Age badge in top-right, colored red if >2h, muted if recent</li>
+                        <li>Click anywhere (except action buttons) opens TileSlideout</li>
+                    </ol>
+                </div>
+            </div>
+
+            <div class="impl-step">
+                <h3>Step 3: MissionControlGrid Component</h3>
+                <div class="impl-meta">
+                    <span
+                        ><strong>File:</strong>
+                        <code
+                            >apps/agent/src/app/command/components/MissionControlGrid.tsx</code
+                        ></span
+                    >
+                </div>
+                <div class="detail-section">
+                    <div class="detail-section-label">Logic</div>
+                    <ol
+                        style="
+                            font-size: 12px;
+                            color: var(--text-secondary);
+                            padding-left: 20px;
+                            line-height: 2;
+                        "
+                    >
+                        <li>Toolbar with filter pills: All, Needs Attention, Running, Failed</li>
+                        <li>Three collapsible sections with urgency-band headers</li>
+                        <li>
+                            CSS Grid with <code>auto-fill, minmax(260px, 1fr)</code> for responsive
+                            tile layout
+                        </li>
+                        <li>
+                            Keyboard shortcuts: number keys (1-9) select tile, a/r/f for
+                            approve/reject/feedback
+                        </li>
+                        <li>Waiting tiles have subtle pulse animation on border</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- EDGE CASES -->
+        <div class="section">
+            <div class="section-eyebrow">Edge Cases</div>
+            <div class="section-title">Boundary Conditions</div>
+            <table class="spec-table">
+                <thead>
+                    <tr>
+                        <th>Scenario</th>
+                        <th>Backend</th>
+                        <th>Frontend</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>0 items</td>
+                        <td>Empty array</td>
+                        <td>Rocket icon with "All systems nominal" message</td>
+                    </tr>
+                    <tr>
+                        <td>50+ tiles</td>
+                        <td>Paginated reviews</td>
+                        <td>Grid scrolls; sections collapse independently; virtualize if >100</td>
+                    </tr>
+                    <tr>
+                        <td>Step data loading</td>
+                        <td>Steps API pending</td>
+                        <td>Tile shows shimmer progress bar and "Loading..." step text</td>
+                    </tr>
+                    <tr>
+                        <td>Approve removes tile</td>
+                        <td>Review status changes</td>
+                        <td>Tile fades out, grid re-flows, section count decrements</td>
+                    </tr>
+                    <tr>
+                        <td>All items completed</td>
+                        <td>No pending reviews</td>
+                        <td>
+                            Only "Completed Today" section visible; attention/running sections
+                            hidden
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Narrow viewport (&lt;768px)</td>
+                        <td>No change</td>
+                        <td>Grid collapses to 1 tile per row; actions stack vertically</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- COMPONENT ARCHITECTURE -->
+        <div class="section">
+            <div class="section-eyebrow">Components</div>
+            <div class="section-title">Component Architecture</div>
+            <table class="spec-table">
+                <thead>
+                    <tr>
+                        <th>Component / Hook</th>
+                        <th>Purpose</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>MissionControlGrid</code></td>
+                        <td>
+                            Main grid layout with urgency sections, toolbar, and keyboard handling
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><code>ControlTile</code></td>
+                        <td>Individual monitoring tile with progress, meta, and inline actions</td>
+                    </tr>
+                    <tr>
+                        <td><code>TileSlideout</code></td>
+                        <td>Full detail panel with step timeline and advanced actions</td>
+                    </tr>
+                    <tr>
+                        <td><code>useUrgencySort</code></td>
+                        <td>Groups and ranks items into urgency bands by risk*age</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- DATA FLOW -->
+        <div class="section">
+            <div class="section-eyebrow">Data Flow</div>
+            <div class="section-title">Call Chain</div>
+            <pre class="raw-pre" style="font-size: 12px; line-height: 1.8">
+User opens Command with "Grid" view
+    &boxur;&HorizontalLine; page.tsx: viewMode === "grid"
+        &boxur;&HorizontalLine; useReviews() &rarr; all reviews
+            &boxur;&HorizontalLine; useStepPrefetch(reviews) &rarr; step data per review
+        &boxur;&HorizontalLine; useUrgencySort(reviews, stepCache)
+            &boxur;&HorizontalLine; Computes progress, urgency scores, groups into bands
+        &boxur;&HorizontalLine; &lt;MissionControlGrid sorted={...} /&gt;
+            &boxur;&HorizontalLine; Renders urgency sections with ControlTile grid
+
+User clicks "Approve" on tile #202
+    &boxur;&HorizontalLine; ControlTile: onApprove("review-id")
+        &boxur;&HorizontalLine; useReviews().handleApprove(id)
+            &boxur;&HorizontalLine; POST /api/reviews/[id]/approve
+            &boxur;&HorizontalLine; Tile fades out, grid re-flows
+  </pre
+            >
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- PLAYWRIGHT TESTS -->
+        <div class="section">
+            <div class="section-eyebrow">Testing</div>
+            <div class="section-title">Playwright Test Plan</div>
+            <table class="spec-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Step</th>
+                        <th>Assertion</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>1</td>
+                        <td>Navigate to /command, switch to "Grid" view</td>
+                        <td>Mission control grid renders with urgency sections</td>
+                    </tr>
+                    <tr>
+                        <td>2</td>
+                        <td>Verify "Needs Attention" section has tiles</td>
+                        <td>Tiles show with amber/red left borders and action buttons</td>
+                    </tr>
+                    <tr>
+                        <td>3</td>
+                        <td>Verify progress bars reflect step completion</td>
+                        <td>Progress fill width matches step/total ratio</td>
+                    </tr>
+                    <tr>
+                        <td>4</td>
+                        <td>Click "Approve" inline on a tile</td>
+                        <td>Toast shows, tile fades out, section count decrements</td>
+                    </tr>
+                    <tr>
+                        <td>5</td>
+                        <td>Click a tile body to open slideout</td>
+                        <td>Slideout panel opens with review details</td>
+                    </tr>
+                    <tr>
+                        <td>6</td>
+                        <td>Use filter pills to show only "Running"</td>
+                        <td>Only running section visible; attention and completed hidden</td>
+                    </tr>
+                    <tr>
+                        <td>7</td>
+                        <td>Verify keyboard navigation (press 1, then a)</td>
+                        <td>First tile selected, then approved</td>
+                    </tr>
+                    <tr>
+                        <td>8</td>
+                        <td>Verify empty state with 0 reviews</td>
+                        <td>"All systems nominal" message with rocket icon</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- ACCEPTANCE CRITERIA -->
+        <div class="section">
+            <div class="section-eyebrow">Acceptance</div>
+            <div class="section-title">Criteria</div>
+            <div style="font-size: 13px; color: var(--text-secondary); line-height: 2.2">
+                &#9744; Tiles render in a responsive grid with urgency band grouping<br />
+                &#9744; Each tile shows: progress bar, current step, risk level, age, workflow
+                name<br />
+                &#9744; Inline approve/reject buttons on "Needs Attention" tiles work without
+                opening detail<br />
+                &#9744; Tiles sort by urgency score (risk weight * age minutes) within each band<br />
+                &#9744; Waiting tiles have subtle pulse animation; running tiles have shimmer
+                progress bar<br />
+                &#9744; Failed tiles show retry and skip actions inline<br />
+                &#9744; Click tile body opens slideout with full step timeline and detail<br />
+                &#9744; Filter pills correctly show/hide urgency sections<br />
+                &#9744; Keyboard shortcuts (1-9 select, a/r/f act) functional<br />
+                &#9744; Tile count in section headers updates after actions<br />
+                &#9744; Empty state shows "All systems nominal" when no active runs<br />
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- EFFORT -->
+        <div class="section">
+            <div class="section-eyebrow">Effort</div>
+            <div class="section-title">Estimate</div>
+            <table class="spec-table">
+                <thead>
+                    <tr>
+                        <th>Task</th>
+                        <th>Estimate</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>useUrgencySort hook with scoring algorithm</td>
+                        <td>45 min</td>
+                    </tr>
+                    <tr>
+                        <td>ControlTile component with all states</td>
+                        <td>60 min</td>
+                    </tr>
+                    <tr>
+                        <td>MissionControlGrid layout + urgency sections</td>
+                        <td>60 min</td>
+                    </tr>
+                    <tr>
+                        <td>TileSlideout detail panel</td>
+                        <td>45 min</td>
+                    </tr>
+                    <tr>
+                        <td>Filter pills + keyboard shortcuts</td>
+                        <td>45 min</td>
+                    </tr>
+                    <tr>
+                        <td>Animations (pulse, shimmer, fade-out)</td>
+                        <td>30 min</td>
+                    </tr>
+                    <tr>
+                        <td>Page integration + view toggle</td>
+                        <td>20 min</td>
+                    </tr>
+                    <tr>
+                        <td>Playwright tests</td>
+                        <td>45 min</td>
+                    </tr>
+                    <tr>
+                        <td style="font-weight: 700; color: var(--text-primary)">Total</td>
+                        <td style="font-weight: 700; color: var(--text-primary)">5.8 hours</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <script>
+            function showMcState(state, btn) {
+                document
+                    .querySelectorAll('[id^="mc-state-"]')
+                    .forEach((el) => el.classList.add("hidden"));
+                document.getElementById("mc-state-" + state)?.classList.remove("hidden");
+                btn.parentElement
+                    .querySelectorAll(".toggle-btn")
+                    .forEach((b) => b.classList.remove("active"));
+                btn.classList.add("active");
+            }
+
+            function toggleFilter(btn) {
+                btn.parentElement
+                    .querySelectorAll(".mc-filter-pill")
+                    .forEach((b) => b.classList.remove("active"));
+                btn.classList.add("active");
+            }
+
+            function openMcSlideout(el) {
+                document.getElementById("mc-slideout-overlay").classList.add("open");
+                document.getElementById("mc-slideout-panel").classList.add("open");
+                document
+                    .querySelectorAll(".mc-tile")
+                    .forEach((t) => t.classList.remove("selected"));
+                el.classList.add("selected");
+            }
+
+            function closeMcSlideout() {
+                document.getElementById("mc-slideout-overlay").classList.remove("open");
+                document.getElementById("mc-slideout-panel").classList.remove("open");
+                document
+                    .querySelectorAll(".mc-tile")
+                    .forEach((t) => t.classList.remove("selected"));
+            }
+
+            function tileAction(action, id) {
+                alert(action.charAt(0).toUpperCase() + action.slice(1) + " " + id);
+            }
+        </script>
+    </body>
+</html>

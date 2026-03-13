@@ -39,14 +39,12 @@ async function main() {
         where: { email },
         update: {
             name,
-            emailVerified: true,
-            onboardingCompleted: true
+            emailVerified: true
         },
         create: {
             name,
             email,
-            emailVerified: true,
-            onboardingCompleted: true
+            emailVerified: true
         }
     });
 
@@ -78,11 +76,11 @@ async function main() {
     let added = 0;
 
     for (const org of allOrgs) {
-        const exists = await prisma.member.findFirst({
+        const exists = await prisma.membership.findFirst({
             where: { userId: user.id, organizationId: org.id }
         });
         if (!exists) {
-            await prisma.member.create({
+            await prisma.membership.create({
                 data: {
                     userId: user.id,
                     organizationId: org.id,

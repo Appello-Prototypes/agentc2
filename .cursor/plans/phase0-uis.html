@@ -1,0 +1,1953 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Phase 0: Rich Step Detail View — UIS</title>
+        <link
+            href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Fira+Code:wght@400;500;600&display=swap"
+            rel="stylesheet"
+        />
+        <style>
+            :root {
+                --bg-primary: #08090b;
+                --bg-surface: #0e1015;
+                --bg-elevated: #14161c;
+                --bg-muted: #1a1c24;
+                --bg-accent: #22242e;
+                --border-subtle: #252836;
+                --border-default: #2e3142;
+                --text-primary: #e4e5eb;
+                --text-secondary: #9295a5;
+                --text-muted: #626580;
+                --green-500: #10b981;
+                --green-bg: rgba(16, 185, 129, 0.1);
+                --green-border: rgba(16, 185, 129, 0.2);
+                --amber-500: #f59e0b;
+                --amber-bg: rgba(245, 158, 11, 0.1);
+                --amber-border: rgba(245, 158, 11, 0.2);
+                --blue-500: #3b82f6;
+                --blue-bg: rgba(59, 130, 246, 0.08);
+                --blue-border: rgba(59, 130, 246, 0.2);
+                --red-500: #ef4444;
+                --red-bg: rgba(239, 68, 68, 0.08);
+                --red-border: rgba(239, 68, 68, 0.2);
+                --purple-500: #8b5cf6;
+            }
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+            body {
+                font-family:
+                    "Outfit",
+                    -apple-system,
+                    sans-serif;
+                background: var(--bg-primary);
+                color: var(--text-primary);
+                padding: 48px 40px;
+                line-height: 1.6;
+            }
+            code,
+            .mono {
+                font-family: "Fira Code", monospace;
+            }
+            .hidden {
+                display: none;
+            }
+
+            /* Header */
+            .header {
+                max-width: 940px;
+                margin: 0 auto 64px;
+                text-align: center;
+            }
+            .phase-tag {
+                display: inline-block;
+                background: var(--green-bg);
+                border: 1px solid var(--green-border);
+                color: var(--green-500);
+                padding: 5px 16px;
+                border-radius: 20px;
+                font-size: 11px;
+                font-weight: 600;
+                letter-spacing: 2px;
+                text-transform: uppercase;
+                font-family: "Fira Code", monospace;
+                margin-bottom: 16px;
+            }
+            .header h1 {
+                font-size: 38px;
+                font-weight: 700;
+                letter-spacing: -0.8px;
+                margin-bottom: 14px;
+                background: linear-gradient(135deg, #e4e5eb 0%, #9295a5 100%);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+            }
+            .header p {
+                color: var(--text-secondary);
+                font-size: 16px;
+                max-width: 680px;
+                margin: 0 auto;
+            }
+
+            /* Sections */
+            .section {
+                max-width: 940px;
+                margin: 0 auto 60px;
+            }
+            .section-eyebrow {
+                font-family: "Fira Code", monospace;
+                font-size: 10px;
+                font-weight: 600;
+                letter-spacing: 2.5px;
+                text-transform: uppercase;
+                color: var(--text-muted);
+                margin-bottom: 8px;
+            }
+            .section-title {
+                font-size: 24px;
+                font-weight: 700;
+                margin-bottom: 12px;
+                letter-spacing: -0.3px;
+            }
+            .section-desc {
+                color: var(--text-secondary);
+                font-size: 14px;
+                margin-bottom: 28px;
+                line-height: 1.7;
+            }
+            .divider {
+                height: 1px;
+                background: var(--border-subtle);
+                margin: 56px 0;
+            }
+
+            /* Chrome frame */
+            .chrome {
+                background: var(--bg-surface);
+                border: 1px solid var(--border-subtle);
+                border-radius: 14px;
+                overflow: hidden;
+                box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+            }
+            .chrome-bar {
+                background: var(--bg-muted);
+                padding: 9px 16px;
+                font-family: "Fira Code", monospace;
+                font-size: 11px;
+                color: var(--text-muted);
+                border-bottom: 1px solid var(--border-subtle);
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            }
+            .chrome-dots {
+                display: flex;
+                gap: 5px;
+            }
+            .dot {
+                width: 8px;
+                height: 8px;
+                border-radius: 50%;
+            }
+            .dot-r {
+                background: #ff5f57;
+            }
+            .dot-y {
+                background: #febc2e;
+            }
+            .dot-g {
+                background: #28c840;
+            }
+            .chrome-body {
+                padding: 24px;
+            }
+
+            /* Stepper */
+            .stepper {
+                display: flex;
+                flex-direction: column;
+            }
+            .step-row {
+                display: flex;
+                gap: 12px;
+            }
+            .step-ind {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                min-width: 32px;
+            }
+            .step-dot {
+                width: 32px;
+                height: 32px;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 12px;
+                font-weight: 700;
+                z-index: 1;
+                border: 1px solid transparent;
+                flex-shrink: 0;
+            }
+            .step-dot.completed {
+                background: var(--bg-elevated);
+                border-color: var(--green-border);
+                color: var(--green-500);
+            }
+            .step-dot.suspended {
+                background: var(--bg-elevated);
+                border-color: var(--amber-border);
+                color: var(--amber-500);
+                animation: pulse 2s infinite;
+            }
+            .step-dot.pending {
+                background: var(--bg-elevated);
+                border-color: var(--border-default);
+                color: var(--text-muted);
+            }
+            .step-dot.failed {
+                background: var(--bg-elevated);
+                border-color: var(--red-border);
+                color: var(--red-500);
+            }
+            .step-line {
+                width: 2px;
+                flex: 1;
+                min-height: 16px;
+            }
+            .step-line.green {
+                background: var(--green-border);
+            }
+            .step-line.default {
+                background: var(--border-subtle);
+            }
+            @keyframes pulse {
+                0%,
+                100% {
+                    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.3);
+                }
+                50% {
+                    box-shadow: 0 0 0 5px rgba(245, 158, 11, 0);
+                }
+            }
+
+            .step-body {
+                flex: 1;
+                padding-bottom: 20px;
+            }
+            .step-hdr {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                min-height: 32px;
+                cursor: pointer;
+                padding: 0 8px;
+                border-radius: 6px;
+                margin: 0 -8px;
+                transition: background 0.1s;
+            }
+            .step-hdr:hover {
+                background: var(--bg-muted);
+            }
+            .step-lbl {
+                font-size: 13px;
+                font-weight: 600;
+                flex: 1;
+            }
+            .step-desc {
+                font-size: 11px;
+                color: var(--text-muted);
+            }
+            .step-chev {
+                width: 16px;
+                height: 16px;
+                color: var(--text-muted);
+                transition: transform 0.2s;
+                flex-shrink: 0;
+            }
+            .step-chev.open {
+                transform: rotate(180deg);
+            }
+
+            /* Badges */
+            .badge {
+                display: inline-flex;
+                align-items: center;
+                padding: 2px 8px;
+                border-radius: 5px;
+                font-size: 10px;
+                font-weight: 600;
+            }
+            .badge-green {
+                background: var(--green-bg);
+                color: var(--green-500);
+                border: 1px solid var(--green-border);
+            }
+            .badge-amber {
+                background: var(--amber-bg);
+                color: var(--amber-500);
+                border: 1px solid var(--amber-border);
+            }
+            .badge-red {
+                background: var(--red-bg);
+                color: var(--red-500);
+                border: 1px solid var(--red-border);
+            }
+            .badge-muted {
+                background: var(--bg-accent);
+                color: var(--text-muted);
+                border: 1px solid var(--border-default);
+            }
+
+            /* Inline detail (expanded inside step) */
+            .inline-detail {
+                margin-top: 10px;
+                background: var(--bg-elevated);
+                border: 1px solid var(--border-subtle);
+                border-radius: 10px;
+                overflow: hidden;
+                animation: slideDown 0.2s ease-out;
+            }
+            @keyframes slideDown {
+                from {
+                    opacity: 0;
+                    max-height: 0;
+                }
+                to {
+                    opacity: 1;
+                    max-height: 800px;
+                }
+            }
+            .id-meta {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 14px;
+                padding: 10px 14px;
+                border-bottom: 1px solid var(--border-subtle);
+                font-size: 11px;
+                color: var(--text-muted);
+            }
+            .meta-item {
+                display: flex;
+                align-items: center;
+                gap: 4px;
+            }
+            .meta-val {
+                color: var(--text-secondary);
+                font-family: "Fira Code", monospace;
+                font-size: 11px;
+            }
+            .id-body {
+                padding: 14px;
+            }
+            .det-sec {
+                margin-bottom: 14px;
+            }
+            .det-sec:last-child {
+                margin-bottom: 0;
+            }
+            .det-lbl {
+                font-size: 10px;
+                font-weight: 600;
+                letter-spacing: 1.5px;
+                text-transform: uppercase;
+                color: var(--text-muted);
+                margin-bottom: 6px;
+                font-family: "Fira Code", monospace;
+            }
+            .links-grid {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 6px;
+            }
+            .link-chip {
+                display: inline-flex;
+                align-items: center;
+                gap: 5px;
+                padding: 5px 10px;
+                border-radius: 6px;
+                background: var(--bg-muted);
+                border: 1px solid var(--border-subtle);
+                font-size: 11px;
+                color: var(--blue-500);
+                text-decoration: none;
+                cursor: pointer;
+                transition: all 0.15s;
+            }
+            .link-chip:hover {
+                background: var(--blue-bg);
+                border-color: var(--blue-border);
+            }
+            .summary-text {
+                font-size: 12px;
+                line-height: 1.7;
+                color: var(--text-secondary);
+                background: var(--bg-muted);
+                border-radius: 6px;
+                padding: 10px 12px;
+                border: 1px solid var(--border-subtle);
+                white-space: pre-wrap;
+            }
+            .summary-text strong {
+                color: var(--text-primary);
+            }
+            .error-block {
+                background: var(--red-bg);
+                border: 1px solid var(--red-border);
+                border-radius: 6px;
+                padding: 10px 12px;
+            }
+            .error-title {
+                font-size: 11px;
+                font-weight: 600;
+                color: var(--red-500);
+                margin-bottom: 4px;
+                display: flex;
+                align-items: center;
+                gap: 5px;
+            }
+            .error-msg {
+                font-size: 11px;
+                font-family: "Fira Code", monospace;
+                color: var(--text-secondary);
+            }
+            .error-field {
+                font-size: 10px;
+                color: var(--text-muted);
+                display: flex;
+                align-items: center;
+                gap: 5px;
+                margin-top: 6px;
+                padding-top: 6px;
+                border-top: 1px solid var(--red-border);
+            }
+            .error-field code {
+                color: var(--red-500);
+                background: rgba(239, 68, 68, 0.12);
+                padding: 1px 5px;
+                border-radius: 3px;
+                font-size: 10px;
+            }
+            .raw-toggle {
+                display: inline-flex;
+                align-items: center;
+                gap: 4px;
+                font-size: 10px;
+                color: var(--text-muted);
+                cursor: pointer;
+                border: none;
+                background: none;
+                font-family: "Fira Code", monospace;
+            }
+            .raw-toggle:hover {
+                color: var(--text-secondary);
+            }
+            .raw-block {
+                margin-top: 6px;
+                background: var(--bg-muted);
+                border: 1px solid var(--border-subtle);
+                border-radius: 6px;
+                padding: 10px;
+                font-family: "Fira Code", monospace;
+                font-size: 10px;
+                color: var(--text-secondary);
+                max-height: 160px;
+                overflow: auto;
+                white-space: pre-wrap;
+            }
+            .decision-chip {
+                display: inline-flex;
+                align-items: center;
+                gap: 5px;
+                padding: 5px 12px;
+                border-radius: 6px;
+                font-size: 11px;
+                font-weight: 600;
+            }
+            .decision-approved {
+                background: var(--green-bg);
+                border: 1px solid var(--green-border);
+                color: var(--green-500);
+            }
+            .kv-grid {
+                display: grid;
+                grid-template-columns: auto 1fr;
+                gap: 3px 12px;
+                font-size: 11px;
+            }
+            .kv-key {
+                color: var(--text-muted);
+                font-family: "Fira Code", monospace;
+                font-size: 10px;
+            }
+            .kv-val {
+                color: var(--text-secondary);
+            }
+
+            /* Spec tables */
+            .spec-table {
+                width: 100%;
+                border-collapse: collapse;
+                font-size: 13px;
+            }
+            .spec-table th {
+                text-align: left;
+                padding: 10px 14px;
+                border-bottom: 1px solid var(--border-subtle);
+                color: var(--text-muted);
+                font-size: 10px;
+                font-weight: 600;
+                text-transform: uppercase;
+                letter-spacing: 1.5px;
+                font-family: "Fira Code", monospace;
+            }
+            .spec-table td {
+                padding: 10px 14px;
+                border-bottom: 1px solid var(--border-subtle);
+                color: var(--text-secondary);
+                vertical-align: top;
+            }
+            .spec-table td:first-child {
+                color: var(--text-primary);
+                font-weight: 500;
+            }
+            .spec-table code {
+                font-family: "Fira Code", monospace;
+                background: var(--bg-muted);
+                padding: 2px 6px;
+                border-radius: 4px;
+                font-size: 11px;
+                color: var(--purple-500);
+            }
+
+            /* Callout */
+            .callout {
+                background: var(--blue-bg);
+                border: 1px solid var(--blue-border);
+                border-left: 3px solid var(--blue-500);
+                border-radius: 8px;
+                padding: 12px 16px;
+                font-size: 12px;
+                color: var(--text-secondary);
+                line-height: 1.6;
+            }
+            .callout strong {
+                color: var(--blue-500);
+            }
+
+            /* Type cards */
+            .type-grid {
+                display: grid;
+                grid-template-columns: repeat(4, 1fr);
+                gap: 12px;
+                margin-bottom: 28px;
+            }
+            .type-card {
+                background: var(--bg-elevated);
+                border: 1px solid var(--border-subtle);
+                border-radius: 10px;
+                padding: 14px;
+                text-align: center;
+                cursor: pointer;
+                transition: all 0.15s;
+            }
+            .type-card:hover {
+                border-color: var(--border-default);
+            }
+            .type-card.active {
+                border-color: var(--green-500);
+                box-shadow: 0 0 0 1px var(--green-border);
+            }
+            .tc-icon {
+                font-size: 22px;
+                margin-bottom: 6px;
+            }
+            .tc-name {
+                font-size: 13px;
+                font-weight: 600;
+                margin-bottom: 3px;
+            }
+            .tc-desc {
+                font-size: 10px;
+                color: var(--text-muted);
+            }
+
+            /* Impl step */
+            .impl-step {
+                background: var(--bg-surface);
+                border: 1px solid var(--border-subtle);
+                border-radius: 12px;
+                padding: 20px;
+                margin-bottom: 20px;
+            }
+            .impl-step h3 {
+                font-size: 16px;
+                margin-bottom: 12px;
+            }
+            .impl-meta {
+                display: flex;
+                gap: 24px;
+                font-size: 12px;
+                color: var(--text-secondary);
+                margin-bottom: 16px;
+                flex-wrap: wrap;
+            }
+            .raw-pre {
+                background: var(--bg-muted);
+                border: 1px solid var(--border-subtle);
+                border-radius: 8px;
+                padding: 14px;
+                font-family: "Fira Code", monospace;
+                font-size: 11px;
+                color: var(--text-secondary);
+                line-height: 1.6;
+                max-height: 260px;
+                overflow: auto;
+                white-space: pre-wrap;
+            }
+            .impl-step ol {
+                padding-left: 20px;
+                font-size: 13px;
+                color: var(--text-secondary);
+                line-height: 1.8;
+            }
+            .impl-step ol code {
+                font-family: "Fira Code", monospace;
+                background: var(--bg-muted);
+                padding: 1px 5px;
+                border-radius: 3px;
+                font-size: 11px;
+                color: var(--purple-500);
+            }
+
+            .check-list {
+                font-size: 13px;
+                color: var(--text-secondary);
+                line-height: 2.2;
+            }
+        </style>
+    </head>
+    <body>
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <!-- SECTION 1: HEADER                                                 -->
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <div class="header">
+            <div class="phase-tag">Phase 0</div>
+            <h1>Rich Step Detail View</h1>
+            <p>
+                Replace raw JSON step output with structured, human-readable inline detail panels.
+                Each workflow step in the stepper is individually expandable, revealing
+                auto-detected links, metadata, summaries, decisions, and errors. Frontend-only
+                change -- no API or database modifications.
+            </p>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <!-- SECTION 3: INTERACTIVE UI MOCKUP                                  -->
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <div class="section">
+            <div class="section-eyebrow">UI Mockup</div>
+            <div class="section-title">Inline Step Expansion</div>
+            <div class="section-desc">
+                Click any completed step to expand its rich detail panel inline. The stepper's green
+                checkmarks and connector lines remain visible throughout. Steps 3 and 4 are expanded
+                by default to demonstrate the agent and transform step types.
+            </div>
+
+            <div class="chrome">
+                <div class="chrome-bar">
+                    <div class="chrome-dots">
+                        <span class="dot dot-r"></span><span class="dot dot-y"></span
+                        ><span class="dot dot-g"></span>
+                    </div>
+                    /command -- WorkflowStepsCard with inline expansion
+                </div>
+                <div class="chrome-body">
+                    <div
+                        style="
+                            font-size: 11px;
+                            color: var(--text-muted);
+                            font-weight: 500;
+                            margin-bottom: 14px;
+                        "
+                    >
+                        Workflow Steps (8)
+                    </div>
+                    <div class="stepper">
+                        <!-- Step 1: Collapsed -->
+                        <div class="step-row">
+                            <div class="step-ind">
+                                <div class="step-dot completed">
+                                    <svg
+                                        width="14"
+                                        height="14"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        stroke-width="2.5"
+                                        stroke-linecap="round"
+                                    >
+                                        <polyline points="20 6 9 17 4 12" />
+                                    </svg>
+                                </div>
+                                <div class="step-line green"></div>
+                            </div>
+                            <div class="step-body">
+                                <div class="step-hdr" onclick="toggleStep('s1')">
+                                    <span class="step-lbl" style="color: var(--text-primary)"
+                                        >Create GitHub Issue</span
+                                    >
+                                    <span class="step-desc">tool &middot; 1ms</span>
+                                    <svg
+                                        class="step-chev"
+                                        id="chev-s1"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        stroke-width="2"
+                                        stroke-linecap="round"
+                                    >
+                                        <polyline points="6 9 12 15 18 9" />
+                                    </svg>
+                                </div>
+                                <div id="detail-s1" class="inline-detail hidden">
+                                    <div class="id-meta">
+                                        <div class="meta-item">
+                                            <span>Duration</span> <span class="meta-val">1ms</span>
+                                        </div>
+                                    </div>
+                                    <div class="id-body">
+                                        <div class="det-sec">
+                                            <div class="det-lbl">Output</div>
+                                            <div class="summary-text">
+                                                GitHub Issue #202 created in
+                                                Appello-Prototypes/agentc2
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Step 2: Collapsed -->
+                        <div class="step-row">
+                            <div class="step-ind">
+                                <div class="step-dot completed">
+                                    <svg
+                                        width="14"
+                                        height="14"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        stroke-width="2.5"
+                                        stroke-linecap="round"
+                                    >
+                                        <polyline points="20 6 9 17 4 12" />
+                                    </svg>
+                                </div>
+                                <div class="step-line green"></div>
+                            </div>
+                            <div class="step-body">
+                                <div class="step-hdr" onclick="toggleStep('s2')">
+                                    <span class="step-lbl" style="color: var(--text-primary)"
+                                        >Launch Code Analysis</span
+                                    >
+                                    <span class="step-desc">tool &middot; 1ms</span>
+                                    <svg
+                                        class="step-chev"
+                                        id="chev-s2"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        stroke-width="2"
+                                        stroke-linecap="round"
+                                    >
+                                        <polyline points="6 9 12 15 18 9" />
+                                    </svg>
+                                </div>
+                                <div id="detail-s2" class="inline-detail hidden">
+                                    <div class="id-meta">
+                                        <div class="meta-item">
+                                            <span>Duration</span> <span class="meta-val">1ms</span>
+                                        </div>
+                                        <div class="meta-item">
+                                            <span>Agent</span>
+                                            <span class="meta-val">bc-b6b22da2</span>
+                                        </div>
+                                    </div>
+                                    <div class="id-body">
+                                        <div class="det-sec">
+                                            <div class="det-lbl">Links</div>
+                                            <div class="links-grid">
+                                                <a class="link-chip" href="#"
+                                                    >&#x1f527; Analysis Agent Session</a
+                                                >
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Step 3: EXPANDED -- agent type -->
+                        <div class="step-row">
+                            <div class="step-ind">
+                                <div class="step-dot completed">
+                                    <svg
+                                        width="14"
+                                        height="14"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        stroke-width="2.5"
+                                        stroke-linecap="round"
+                                    >
+                                        <polyline points="20 6 9 17 4 12" />
+                                    </svg>
+                                </div>
+                                <div class="step-line green"></div>
+                            </div>
+                            <div class="step-body">
+                                <div
+                                    class="step-hdr"
+                                    onclick="toggleStep('s3')"
+                                    style="background: var(--bg-muted)"
+                                >
+                                    <span class="step-lbl" style="color: var(--text-primary)"
+                                        >Audit Fix Plan</span
+                                    >
+                                    <span class="badge badge-muted">agent</span>
+                                    <span class="step-desc">2.3s</span>
+                                    <span class="badge badge-green" style="margin-left: auto"
+                                        >completed</span
+                                    >
+                                    <svg
+                                        class="step-chev open"
+                                        id="chev-s3"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        stroke-width="2"
+                                        stroke-linecap="round"
+                                    >
+                                        <polyline points="6 9 12 15 18 9" />
+                                    </svg>
+                                </div>
+                                <div id="detail-s3" class="inline-detail">
+                                    <div class="id-meta">
+                                        <div class="meta-item">
+                                            <span>Duration</span> <span class="meta-val">2.3s</span>
+                                        </div>
+                                        <div class="meta-item">
+                                            <span>Iterations</span> <span class="meta-val">3x</span>
+                                        </div>
+                                    </div>
+                                    <div class="id-body">
+                                        <div class="det-sec">
+                                            <div class="det-lbl">Agent Response</div>
+                                            <div class="summary-text">
+                                                The proposed fix plan addresses the root cause
+                                                correctly. The schema change to add the
+                                                <code>model</code> property aligns with the existing
+                                                pattern used by other tools in the pipeline.
+
+                                                <strong>Verdict:</strong> Approved for
+                                                implementation. No architectural concerns.
+                                            </div>
+                                        </div>
+                                        <div class="det-sec">
+                                            <button
+                                                class="raw-toggle"
+                                                onclick="
+                                                    event.stopPropagation();
+                                                    this.nextElementSibling.classList.toggle(
+                                                        'hidden'
+                                                    );
+                                                "
+                                            >
+                                                &#9654; View raw output
+                                            </button>
+                                            <div class="raw-block hidden">
+                                                { "text": "The proposed fix plan...", "verdict":
+                                                "approved" }
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Step 4: EXPANDED -- transform type (Output Summary) -->
+                        <div class="step-row">
+                            <div class="step-ind">
+                                <div class="step-dot completed">
+                                    <svg
+                                        width="14"
+                                        height="14"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        stroke-width="2.5"
+                                        stroke-linecap="round"
+                                    >
+                                        <polyline points="20 6 9 17 4 12" />
+                                    </svg>
+                                </div>
+                                <div class="step-line green"></div>
+                            </div>
+                            <div class="step-body">
+                                <div
+                                    class="step-hdr"
+                                    onclick="toggleStep('s4')"
+                                    style="background: var(--bg-muted)"
+                                >
+                                    <span class="step-lbl" style="color: var(--text-primary)"
+                                        >Output Summary</span
+                                    >
+                                    <span class="badge badge-muted">transform</span>
+                                    <span class="badge badge-green" style="margin-left: auto"
+                                        >completed</span
+                                    >
+                                    <svg
+                                        class="step-chev open"
+                                        id="chev-s4"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        stroke-width="2"
+                                        stroke-linecap="round"
+                                    >
+                                        <polyline points="6 9 12 15 18 9" />
+                                    </svg>
+                                </div>
+                                <div id="detail-s4" class="inline-detail">
+                                    <div class="id-meta">
+                                        <div class="meta-item">
+                                            <span>Repo</span>
+                                            <span class="meta-val">Appello-Prototypes/agentc2</span>
+                                        </div>
+                                        <div class="meta-item">
+                                            <span>Issue</span> <span class="meta-val">#202</span>
+                                        </div>
+                                        <div class="meta-item">
+                                            <span>Branch</span>
+                                            <span class="meta-val"
+                                                >cursor/mcp-schema-model-parameter-005c</span
+                                            >
+                                        </div>
+                                        <div class="meta-item">
+                                            <span>Analysis</span>
+                                            <span class="meta-val">4m 0s</span>
+                                        </div>
+                                        <div class="meta-item">
+                                            <span>Implementation</span>
+                                            <span class="meta-val">5m 45s</span>
+                                        </div>
+                                    </div>
+                                    <div class="id-body">
+                                        <div class="det-sec">
+                                            <div class="det-lbl">Links</div>
+                                            <div class="links-grid">
+                                                <a class="link-chip" href="#"
+                                                    >&#x1f419; GitHub Issue #202</a
+                                                ><a class="link-chip" href="#"
+                                                    >&#x1f527; Analysis Agent Session</a
+                                                ><a class="link-chip" href="#"
+                                                    >&#x1f527; Implementation Agent Session</a
+                                                >
+                                            </div>
+                                        </div>
+                                        <div class="det-sec">
+                                            <div class="det-lbl">Analysis Summary</div>
+                                            <div class="summary-text">
+                                                <strong>Root Cause Analysis Complete</strong>
+
+                                                Comprehensive root cause analysis for the
+                                                cursor-launch-agent model parameter bug (Issue
+                                                #202). Analysis committed and pushed to branch
+                                                <code>cursor/mcp-schema-model-parameter-684c</code>.
+
+                                                <strong>Key Findings:</strong> Schema mismatch
+                                                between MCP tool definition and agent parameters.
+                                            </div>
+                                        </div>
+                                        <div class="det-sec">
+                                            <div class="det-lbl">Implementation Summary</div>
+                                            <div class="summary-text">
+                                                Successfully implemented the bugfix for the
+                                                cursor-launch-agent model parameter issue.
+
+                                                <strong>Changes:</strong> Fixed MCP Schema -- added
+                                                <code>model</code> property to the
+                                                cursor-launch-agent tool definition in
+                                                <code>coding-pipeline.ts</code>.
+                                            </div>
+                                        </div>
+                                        <div class="det-sec">
+                                            <button
+                                                class="raw-toggle"
+                                                onclick="
+                                                    event.stopPropagation();
+                                                    this.nextElementSibling.classList.toggle(
+                                                        'hidden'
+                                                    );
+                                                "
+                                            >
+                                                &#9654; View raw output (12 fields)
+                                            </button>
+                                            <div class="raw-block hidden">
+                                                { "prUrl": "https://cursor.com/agents/bc-7dac...",
+                                                "issueUrl": "https://github.com/...", "repository":
+                                                "Appello-Prototypes/agentc2", "issueNumber": 202,
+                                                "prNumber": null, ... }
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Step 5: Human -- collapsed -->
+                        <div class="step-row">
+                            <div class="step-ind">
+                                <div class="step-dot completed">
+                                    <svg
+                                        width="14"
+                                        height="14"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        stroke-width="2.5"
+                                        stroke-linecap="round"
+                                    >
+                                        <polyline points="20 6 9 17 4 12" />
+                                    </svg>
+                                </div>
+                                <div class="step-line green"></div>
+                            </div>
+                            <div class="step-body">
+                                <div class="step-hdr" onclick="toggleStep('s5')">
+                                    <span class="step-lbl" style="color: var(--text-primary)"
+                                        >Review PR on GitHub</span
+                                    >
+                                    <span class="step-desc">human</span>
+                                    <svg
+                                        class="step-chev"
+                                        id="chev-s5"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        stroke-width="2"
+                                        stroke-linecap="round"
+                                    >
+                                        <polyline points="6 9 12 15 18 9" />
+                                    </svg>
+                                </div>
+                                <div id="detail-s5" class="inline-detail hidden">
+                                    <div class="id-meta">
+                                        <div class="meta-item">
+                                            <span>Channel</span>
+                                            <span class="meta-val">platform</span>
+                                        </div>
+                                        <div class="meta-item">
+                                            <span>Decided by</span>
+                                            <span class="meta-val">cursor-agent</span>
+                                        </div>
+                                    </div>
+                                    <div class="id-body">
+                                        <div class="det-sec">
+                                            <div class="det-lbl">Decision</div>
+                                            <div class="decision-chip decision-approved">
+                                                <svg
+                                                    width="12"
+                                                    height="12"
+                                                    viewBox="0 0 24 24"
+                                                    fill="none"
+                                                    stroke="currentColor"
+                                                    stroke-width="2.5"
+                                                    stroke-linecap="round"
+                                                >
+                                                    <polyline points="20 6 9 17 4 12" />
+                                                </svg>
+                                                Approved
+                                            </div>
+                                        </div>
+                                        <div class="det-sec">
+                                            <div class="det-lbl">Audit Trail</div>
+                                            <div class="kv-grid">
+                                                <span class="kv-key">channel</span
+                                                ><span class="kv-val">platform</span
+                                                ><span class="kv-key">decision</span
+                                                ><span class="kv-val">approved</span
+                                                ><span class="kv-key">decidedBy</span
+                                                ><span class="kv-val">cursor-agent</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Step 6: Tool error -- collapsed -->
+                        <div class="step-row">
+                            <div class="step-ind">
+                                <div class="step-dot failed">
+                                    <svg
+                                        width="14"
+                                        height="14"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        stroke-width="2"
+                                        stroke-linecap="round"
+                                    >
+                                        <circle cx="12" cy="12" r="10" />
+                                        <path d="M15 9l-6 6M9 9l6 6" />
+                                    </svg>
+                                </div>
+                                <div class="step-line default"></div>
+                            </div>
+                            <div class="step-body">
+                                <div class="step-hdr" onclick="toggleStep('s6')">
+                                    <span class="step-lbl" style="color: var(--red-500)"
+                                        >Merge PR</span
+                                    >
+                                    <span class="step-desc">tool &middot; 1ms</span>
+                                    <svg
+                                        class="step-chev"
+                                        id="chev-s6"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        stroke-width="2"
+                                        stroke-linecap="round"
+                                    >
+                                        <polyline points="6 9 12 15 18 9" />
+                                    </svg>
+                                </div>
+                                <div id="detail-s6" class="inline-detail hidden">
+                                    <div class="id-meta">
+                                        <div class="meta-item">
+                                            <span>Tool</span>
+                                            <span class="meta-val">merge-pull-request</span>
+                                        </div>
+                                        <div class="meta-item">
+                                            <span>Duration</span> <span class="meta-val">1ms</span>
+                                        </div>
+                                    </div>
+                                    <div class="id-body">
+                                        <div class="det-sec">
+                                            <div class="det-lbl">Error</div>
+                                            <div class="error-block">
+                                                <div class="error-title">
+                                                    <svg
+                                                        width="12"
+                                                        height="12"
+                                                        viewBox="0 0 24 24"
+                                                        fill="none"
+                                                        stroke="currentColor"
+                                                        stroke-width="2"
+                                                        stroke-linecap="round"
+                                                    >
+                                                        <circle cx="12" cy="12" r="10" />
+                                                        <path d="M15 9l-6 6M9 9l6 6" />
+                                                    </svg>
+                                                    Tool input validation failed
+                                                </div>
+                                                <div class="error-msg">
+                                                    merge-pull-request: Expected number, received
+                                                    null
+                                                </div>
+                                                <div class="error-field">
+                                                    <code>prNumber</code>
+                                                    <span>Expected number, received null</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Step 7: Suspended -->
+                        <div class="step-row">
+                            <div class="step-ind">
+                                <div class="step-dot suspended">7</div>
+                                <div class="step-line default"></div>
+                            </div>
+                            <div class="step-body">
+                                <div class="step-hdr" style="cursor: default">
+                                    <span class="step-lbl" style="color: var(--amber-500)"
+                                        >Merge Review</span
+                                    ><span class="step-desc">human &middot; suspended</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Step 8: Pending -->
+                        <div class="step-row">
+                            <div class="step-ind"><div class="step-dot pending">8</div></div>
+                            <div class="step-body" style="padding-bottom: 0">
+                                <div class="step-hdr" style="cursor: default">
+                                    <span class="step-lbl" style="color: var(--text-muted)"
+                                        >Post Audit Summary</span
+                                    ><span class="step-desc">tool &middot; pending</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="callout" style="margin-top: 24px">
+                <strong>Key design decision:</strong> The detail panel renders as
+                <code>children</code> of the <code>StepItem</code> component using its existing
+                <code>expandable</code> prop. The connector line stretches to accommodate expanded
+                content. No changes to <code>stepper.tsx</code> needed.
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <!-- SECTION 4: FILES CHANGED                                          -->
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <div class="section">
+            <div class="section-eyebrow">Manifest</div>
+            <div class="section-title">Files Changed</div>
+            <table class="spec-table">
+                <thead>
+                    <tr>
+                        <th>Action</th>
+                        <th>File</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Modify</td>
+                        <td>
+                            <code>apps/agent/src/app/command/components/WorkflowStepsCard.tsx</code>
+                        </td>
+                        <td>
+                            Replace raw JSON block with <code>StepDetailPanel</code> + extraction
+                            helpers; switch <code>StepItem</code> to <code>expandable</code> with
+                            children
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+            <div class="callout" style="margin-top: 16px">
+                <strong>Single file change.</strong> No new files, no API changes, no schema
+                changes. The existing <code>/api/reviews/[id]/steps</code> route already returns
+                <code>outputJson</code>.
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <!-- SECTION 5: REAL DATA SHAPES                                       -->
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <div class="section">
+            <div class="section-eyebrow">Data</div>
+            <div class="section-title">Production Data Shapes</div>
+            <div class="section-desc">
+                Actual <code>outputJson</code> shapes from the <code>WorkflowRunStep</code> table.
+                These are the payloads the extractor functions must handle.
+            </div>
+
+            <div class="type-grid">
+                <div class="type-card active" onclick="showData('transform', this)">
+                    <div class="tc-icon">&#x1f504;</div>
+                    <div class="tc-name">transform</div>
+                    <div class="tc-desc">Output Summary</div>
+                </div>
+                <div class="type-card" onclick="showData('human', this)">
+                    <div class="tc-icon">&#x1f464;</div>
+                    <div class="tc-name">human</div>
+                    <div class="tc-desc">HITL Decision</div>
+                </div>
+                <div class="type-card" onclick="showData('tool', this)">
+                    <div class="tc-icon">&#x2699;&#xfe0f;</div>
+                    <div class="tc-name">tool (error)</div>
+                    <div class="tc-desc">Validation Error</div>
+                </div>
+                <div class="type-card" onclick="showData('agent', this)">
+                    <div class="tc-icon">&#x1f916;</div>
+                    <div class="tc-name">agent</div>
+                    <div class="tc-desc">Agent Response</div>
+                </div>
+            </div>
+
+            <div id="data-transform" class="chrome">
+                <div class="chrome-bar">
+                    <div class="chrome-dots">
+                        <span class="dot dot-r"></span><span class="dot dot-y"></span
+                        ><span class="dot dot-g"></span>
+                    </div>
+                    outputJson -- stepType: "transform"
+                </div>
+                <div class="chrome-body">
+                    <pre class="raw-pre">
+{
+  "prUrl": "https://cursor.com/agents/bc-7dacbb42...",
+  "issueUrl": "https://github.com/Appello-Prototypes/agentc2/issues/202",
+  "prNumber": null,
+  "repository": "Appello-Prototypes/agentc2",
+  "issueNumber": 202,
+  "analysisAgentId": "bc-b6b22da2-8d65...",
+  "analysisSummary": "## Root Cause Analysis Complete ✅\n\nComprehensive root cause analysis...",
+  "analysisDurationMs": 240000,
+  "implementationBranch": "cursor/mcp-schema-model-parameter-005c",
+  "implementationAgentId": "bc-7dacbb42...",
+  "implementationSummary": "Successfully implemented the bugfix...",
+  "implementationDurationMs": 345000
+}</pre
+                    >
+                </div>
+            </div>
+            <div id="data-human" class="chrome hidden">
+                <div class="chrome-bar">
+                    <div class="chrome-dots">
+                        <span class="dot dot-r"></span><span class="dot dot-y"></span
+                        ><span class="dot dot-g"></span>
+                    </div>
+                    outputJson -- stepType: "human"
+                </div>
+                <div class="chrome-body">
+                    <pre class="raw-pre">
+{
+  "channel": "platform",
+  "approved": true,
+  "decision": "approved",
+  "decidedBy": "cursor-agent"
+}</pre
+                    >
+                </div>
+            </div>
+            <div id="data-tool" class="chrome hidden">
+                <div class="chrome-bar">
+                    <div class="chrome-dots">
+                        <span class="dot dot-r"></span><span class="dot dot-y"></span
+                        ><span class="dot dot-g"></span>
+                    </div>
+                    outputJson -- stepType: "tool" (error)
+                </div>
+                <div class="chrome-body">
+                    <pre class="raw-pre">
+{
+  "error": true,
+  "message": "Tool input validation failed for merge-pull-request...",
+  "validationErrors": {
+    "_errors": [],
+    "prNumber": { "_errors": ["Expected number, received null"] }
+  }
+}</pre
+                    >
+                </div>
+            </div>
+            <div id="data-agent" class="chrome hidden">
+                <div class="chrome-bar">
+                    <div class="chrome-dots">
+                        <span class="dot dot-r"></span><span class="dot dot-y"></span
+                        ><span class="dot dot-g"></span>
+                    </div>
+                    outputJson -- stepType: "agent"
+                </div>
+                <div class="chrome-body">
+                    <pre class="raw-pre">
+{
+  "text": "The proposed fix plan addresses the root cause correctly...",
+  "verdict": "approved"
+}</pre
+                    >
+                </div>
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <!-- SECTION 6: STEP-BY-STEP IMPLEMENTATION                            -->
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <div class="section">
+            <div class="section-eyebrow">Implementation</div>
+            <div class="section-title">Step-by-Step</div>
+
+            <div class="impl-step">
+                <h3>Step 1: Add Extraction Helper Functions</h3>
+                <div class="impl-meta">
+                    <span
+                        ><strong>File:</strong>
+                        <code
+                            >apps/agent/src/app/command/components/WorkflowStepsCard.tsx</code
+                        ></span
+                    >
+                </div>
+                <div class="det-sec">
+                    <div class="det-lbl">Interfaces</div>
+                    <pre class="raw-pre">
+interface LinkItem { url: string; label: string; icon: string }
+interface MetadataItem { label: string; value: string; mono?: boolean }
+interface SummaryItem { label: string; text: string }
+interface DecisionInfo { decision: string; approved: boolean; decidedBy?: string; channel?: string }
+interface ErrorInfo { message: string; validationErrors?: { field: string; errors: string[] }[] }</pre
+                    >
+                </div>
+                <div class="det-sec">
+                    <div class="det-lbl">Functions to Add (signatures)</div>
+                    <pre class="raw-pre">
+function classifyUrl(url: string): { icon: string; label: string }
+function extractLinks(output: unknown): LinkItem[]
+function extractMetadata(output: unknown): MetadataItem[]
+function extractSummaries(output: unknown): SummaryItem[]
+function extractDecision(output: unknown): DecisionInfo | null
+function extractError(output: unknown, errorJson: unknown): ErrorInfo | null
+function getRemainingFields(output: unknown, handledKeys: Set&lt;string&gt;): Record&lt;string, unknown&gt;</pre
+                    >
+                </div>
+                <div class="det-sec">
+                    <div class="det-lbl">Logic</div>
+                    <ol>
+                        <li>
+                            <code>classifyUrl</code>: map <code>github.com</code> &#x2192;
+                            &#x1f419;, <code>cursor.com/agents</code> &#x2192; &#x1f527;, default
+                            &#x2192; &#x1f517; + hostname
+                        </li>
+                        <li>
+                            <code>extractLinks</code>: scan all fields for
+                            <code>^https?://</code> values; pair
+                            <code>issueUrl</code>+<code>issueNumber</code>,
+                            <code>prUrl</code>+<code>prNumber</code>; skip nulls; keys ending in
+                            <code>AgentId</code> become cursor links
+                        </li>
+                        <li>
+                            <code>extractMetadata</code>: pull <code>repository</code>,
+                            <code>*Branch</code>, <code>*DurationMs</code> (humanize with existing
+                            <code>formatDuration</code>), <code>channel</code>,
+                            <code>decidedBy</code>, <code>issueNumber</code>
+                        </li>
+                        <li>
+                            <code>extractSummaries</code>: keys ending in <code>Summary</code> or
+                            named <code>text</code>/<code>response</code>/<code>result</code>
+                        </li>
+                        <li>
+                            <code>extractDecision</code>: detect <code>decision</code>/<code
+                                >approved</code
+                            >
+                            fields
+                        </li>
+                        <li>
+                            <code>extractError</code>: if <code>output.error</code> truthy, parse
+                            <code>message</code> + <code>validationErrors._errors</code>; also use
+                            <code>errorJson</code> if present
+                        </li>
+                        <li>
+                            Each extractor adds consumed keys to a shared
+                            <code>Set&lt;string&gt;</code>; <code>getRemainingFields</code> returns
+                            unconsumed keys for the raw toggle
+                        </li>
+                    </ol>
+                </div>
+            </div>
+
+            <div class="impl-step">
+                <h3>Step 2: Create StepDetailPanel Component</h3>
+                <div class="impl-meta">
+                    <span
+                        ><strong>File:</strong> <code>WorkflowStepsCard.tsx</code> (inline
+                        component)</span
+                    >
+                </div>
+                <div class="det-sec">
+                    <div class="det-lbl">Interface</div>
+                    <pre class="raw-pre">
+function StepDetailPanel({ step, suspendedStep }: {
+    step: StepData
+    suspendedStep?: string | null
+})</pre
+                    >
+                </div>
+                <div class="det-sec">
+                    <div class="det-lbl">Logic</div>
+                    <ol>
+                        <li>
+                            Call all extractors on <code>step.outputJson</code>, building
+                            <code>handledKeys</code> set
+                        </li>
+                        <li>Render metadata row if any metadata items</li>
+                        <li>Render links section if any links</li>
+                        <li>
+                            Render decision chip if <code>extractDecision</code> returns non-null
+                        </li>
+                        <li>Render error block if <code>extractError</code> returns non-null</li>
+                        <li>Render each summary in its own labeled section</li>
+                        <li>Always render raw JSON toggle at bottom with remaining field count</li>
+                    </ol>
+                </div>
+            </div>
+
+            <div class="impl-step">
+                <h3>Step 3: Switch StepItem to Expandable Pattern</h3>
+                <div class="impl-meta">
+                    <span><strong>File:</strong> <code>WorkflowStepsCard.tsx</code></span
+                    ><span
+                        ><strong>Pattern:</strong>
+                        <code>packages/ui/src/components/stepper.tsx</code> line 70-71 (<code
+                            >expandable</code
+                        >
+                        + <code>children</code>)</span
+                    >
+                </div>
+                <div class="det-sec">
+                    <div class="det-lbl">Changes</div>
+                    <ol>
+                        <li>
+                            Remove <code>selectedStepId</code> state and the
+                            <code>onClick</code> handler that sets it
+                        </li>
+                        <li>
+                            Remove the entire <code>{selected && (...)}</code> block (lines 161-217)
+                        </li>
+                        <li>
+                            Add <code>expandable</code> prop to each <code>StepItem</code> (only for
+                            steps with status <code>COMPLETED</code> or <code>FAILED</code>)
+                        </li>
+                        <li>
+                            Pass
+                            <code
+                                >&lt;StepDetailPanel step={step} suspendedStep={suspendedStep}
+                                /&gt;</code
+                            >
+                            as <code>children</code> of each expandable <code>StepItem</code>
+                        </li>
+                        <li>
+                            The <code>StepItem</code> component handles expand/collapse + chevron
+                            internally -- no extra state needed
+                        </li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <!-- SECTION 7: RENDERING / DETECTION RULES                            -->
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <div class="section">
+            <div class="section-eyebrow">Detection</div>
+            <div class="section-title">Auto-Detection Rules (Priority Order)</div>
+            <div class="section-desc">
+                Extractors run in this order. Each adds consumed keys to a <code>Set</code> to
+                prevent rendering the same field twice.
+            </div>
+
+            <table class="spec-table">
+                <thead>
+                    <tr>
+                        <th>Priority</th>
+                        <th>Detection</th>
+                        <th>Pattern</th>
+                        <th>Rendering</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>1</td>
+                        <td>Links</td>
+                        <td>
+                            Value matches <code>^https?://</code> or key ends in
+                            <code>AgentId</code>
+                        </td>
+                        <td>Clickable link chips with auto-detected icon</td>
+                    </tr>
+                    <tr>
+                        <td>2</td>
+                        <td>Metadata</td>
+                        <td>
+                            <code>repository</code>, <code>*Branch</code>, <code>*DurationMs</code>,
+                            <code>channel</code>, <code>decidedBy</code>, <code>issueNumber</code>,
+                            <code>prNumber</code>
+                        </td>
+                        <td>Key-value pairs in metadata row</td>
+                    </tr>
+                    <tr>
+                        <td>3</td>
+                        <td>Decision</td>
+                        <td><code>decision</code>, <code>approved</code></td>
+                        <td>Decision chip (green/red)</td>
+                    </tr>
+                    <tr>
+                        <td>4</td>
+                        <td>Error</td>
+                        <td>
+                            <code>error</code> truthy, <code>message</code>,
+                            <code>validationErrors</code>
+                        </td>
+                        <td>Red error block with field-level details</td>
+                    </tr>
+                    <tr>
+                        <td>5</td>
+                        <td>Summaries</td>
+                        <td>
+                            Key ends in <code>Summary</code> or is
+                            <code>text</code>/<code>response</code>/<code>result</code>
+                        </td>
+                        <td>Formatted text block, first line bolded</td>
+                    </tr>
+                    <tr>
+                        <td>6</td>
+                        <td>Null values</td>
+                        <td>Value is <code>null</code></td>
+                        <td>Hidden entirely</td>
+                    </tr>
+                    <tr>
+                        <td>7</td>
+                        <td>Remaining</td>
+                        <td>Fallback</td>
+                        <td>Raw JSON toggle at bottom</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <!-- SECTION 8: EDGE CASES                                             -->
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <div class="section">
+            <div class="section-eyebrow">Edge Cases</div>
+            <div class="section-title">Behavioral Details</div>
+            <table class="spec-table">
+                <thead>
+                    <tr>
+                        <th>Scenario</th>
+                        <th>Behavior</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>outputJson</code> is <code>null</code></td>
+                        <td>Show "No output recorded" placeholder</td>
+                    </tr>
+                    <tr>
+                        <td><code>outputJson</code> is a plain string</td>
+                        <td>Render as summary text (not JSON)</td>
+                    </tr>
+                    <tr>
+                        <td><code>outputJson</code> is <code>{}</code></td>
+                        <td>Show "Empty output" placeholder</td>
+                    </tr>
+                    <tr>
+                        <td>All fields consumed by extractors</td>
+                        <td>Raw toggle shows "(all fields rendered above)"</td>
+                    </tr>
+                    <tr>
+                        <td>URL value is <code>null</code> (e.g., <code>prUrl: null</code>)</td>
+                        <td>Skip -- don't render link chip</td>
+                    </tr>
+                    <tr>
+                        <td>
+                            Step has both <code>outputJson</code> error and <code>errorJson</code>
+                        </td>
+                        <td>
+                            Show <code>outputJson</code> error first, then
+                            <code>errorJson</code> below
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Suspended/pending steps</td>
+                        <td>Not expandable -- no chevron, no click handler</td>
+                    </tr>
+                    <tr>
+                        <td>Multiple steps expanded simultaneously</td>
+                        <td>Allowed -- connector lines stretch for each</td>
+                    </tr>
+                    <tr>
+                        <td>Very long summary (>2000 chars)</td>
+                        <td>
+                            Already truncated by API; render with <code>max-height</code> scroll
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <!-- SECTION 9: COMPONENT ARCHITECTURE                                 -->
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <div class="section">
+            <div class="section-eyebrow">Architecture</div>
+            <div class="section-title">Component Structure</div>
+            <table class="spec-table">
+                <thead>
+                    <tr>
+                        <th>Component / Function</th>
+                        <th>Purpose</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>StepItem</code> (existing, <code>@repo/ui</code>)</td>
+                        <td>
+                            Supports <code>expandable</code> + <code>children</code> natively.
+                            Renders chevron, handles expand/collapse. No changes.
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><code>StepDetailPanel</code> (new)</td>
+                        <td>
+                            Inline component in <code>WorkflowStepsCard.tsx</code>. Receives
+                            <code>StepData</code>, renders structured view. Passed as
+                            <code>children</code> to <code>StepItem</code>.
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><code>classifyUrl(url)</code></td>
+                        <td>Maps domains to icons: github.com, cursor.com, etc.</td>
+                    </tr>
+                    <tr>
+                        <td><code>extractLinks(output)</code></td>
+                        <td>Scans for URL values, returns <code>LinkItem[]</code></td>
+                    </tr>
+                    <tr>
+                        <td><code>extractMetadata(output)</code></td>
+                        <td>Pulls repo, branch, duration, channel into metadata row</td>
+                    </tr>
+                    <tr>
+                        <td><code>extractSummaries(output)</code></td>
+                        <td>
+                            Finds <code>*Summary</code> / <code>text</code> /
+                            <code>response</code> fields
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><code>extractDecision(output)</code></td>
+                        <td>Detects <code>decision</code>/<code>approved</code> for human steps</td>
+                    </tr>
+                    <tr>
+                        <td><code>extractError(output, errorJson)</code></td>
+                        <td>Parses error + validation fields</td>
+                    </tr>
+                    <tr>
+                        <td><code>getRemainingFields(output, handled)</code></td>
+                        <td>Returns unconsumed keys for raw JSON fallback</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <!-- SECTION 10: DATA FLOW TRACE                                       -->
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <div class="section">
+            <div class="section-eyebrow">Data Flow</div>
+            <div class="section-title">Call Chain</div>
+            <pre class="raw-pre" style="font-size: 12px; line-height: 1.8">
+User clicks step row (e.g., "Output Summary")
+    &#x2514;&#x2500; StepItem (expandable=true): toggles internal expanded state
+        &#x2514;&#x2500; Renders children when expanded:
+            &#x2514;&#x2500; &lt;StepDetailPanel step={step} suspendedStep={suspendedStep} /&gt;
+                &#x251c;&#x2500; extractLinks(step.outputJson) &#x2192; LinkItem[]
+                &#x251c;&#x2500; extractMetadata(step.outputJson) &#x2192; MetadataItem[]
+                &#x251c;&#x2500; extractSummaries(step.outputJson) &#x2192; SummaryItem[]
+                &#x251c;&#x2500; extractDecision(step.outputJson) &#x2192; DecisionInfo | null
+                &#x251c;&#x2500; extractError(step.outputJson, step.errorJson) &#x2192; ErrorInfo | null
+                &#x2514;&#x2500; getRemainingFields(step.outputJson, handledKeys) &#x2192; raw JSON toggle
+
+User clicks same step row again
+    &#x2514;&#x2500; StepItem: collapses, children unmounted</pre
+            >
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <!-- SECTION 11: PLAYWRIGHT TEST PLAN                                  -->
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <div class="section">
+            <div class="section-eyebrow">Testing</div>
+            <div class="section-title">Playwright Test Plan</div>
+            <div class="section-desc">
+                Login: <code>sdlc-test@agentc2.ai</code> / <code>FlywheelDemo2026!</code> on
+                <code>http://localhost:3001</code>
+            </div>
+            <table class="spec-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Step</th>
+                        <th>Assertion</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td style="color: var(--text-muted)">1</td>
+                        <td>
+                            Navigate to <code>/command</code>, expand a card, click "View workflow
+                            steps"
+                        </td>
+                        <td>
+                            Stepper visible with green checkmarks and chevrons on completed steps
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="color: var(--text-muted)">2</td>
+                        <td>Click "Output Summary" step</td>
+                        <td>Chevron rotates, detail panel expands inline beneath label</td>
+                    </tr>
+                    <tr>
+                        <td style="color: var(--text-muted)">3</td>
+                        <td>Verify links section</td>
+                        <td>GitHub issue link chip present, agent session link present</td>
+                    </tr>
+                    <tr>
+                        <td style="color: var(--text-muted)">4</td>
+                        <td>Verify metadata row</td>
+                        <td>Repository, branch, durations displayed</td>
+                    </tr>
+                    <tr>
+                        <td style="color: var(--text-muted)">5</td>
+                        <td>Verify stepper context preserved</td>
+                        <td>Steps above/below still show green checkmarks and connector lines</td>
+                    </tr>
+                    <tr>
+                        <td style="color: var(--text-muted)">6</td>
+                        <td>Click same step again</td>
+                        <td>Detail collapses, chevron rotates back</td>
+                    </tr>
+                    <tr>
+                        <td style="color: var(--text-muted)">7</td>
+                        <td>Click "Review PR on GitHub" (human)</td>
+                        <td>Decision chip "Approved" in green, audit trail KV grid</td>
+                    </tr>
+                    <tr>
+                        <td style="color: var(--text-muted)">8</td>
+                        <td>Click "Merge PR" (tool error)</td>
+                        <td>Red error block with <code>prNumber</code> validation detail</td>
+                    </tr>
+                    <tr>
+                        <td style="color: var(--text-muted)">9</td>
+                        <td>Expand multiple steps simultaneously</td>
+                        <td>Both panels visible, connector lines stretch</td>
+                    </tr>
+                    <tr>
+                        <td style="color: var(--text-muted)">10</td>
+                        <td>Screenshot for human review</td>
+                        <td>All step types render correctly inline</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <!-- SECTION 12: ACCEPTANCE CRITERIA                                   -->
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <div class="section">
+            <div class="section-eyebrow">Acceptance</div>
+            <div class="section-title">Criteria</div>
+            <div class="check-list">
+                &#x2610; Clicking a completed/failed step expands structured detail inline (not raw
+                JSON)<br />
+                &#x2610; URLs auto-detected and rendered as clickable link chips with domain
+                icons<br />
+                &#x2610; <code>*Summary</code> fields render as formatted text blocks with labels<br />
+                &#x2610; <code>*DurationMs</code> fields display as human-readable time in metadata
+                row<br />
+                &#x2610; Human steps show decision chip (approved/rejected) with audit trail<br />
+                &#x2610; Tool errors show structured error block with validation details<br />
+                &#x2610; Null values hidden (not rendered as "null")<br />
+                &#x2610; Raw JSON toggle always available at bottom of expanded panel<br />
+                &#x2610; Suspended/pending steps are not expandable<br />
+                &#x2610; Multiple steps can be expanded simultaneously<br />
+                &#x2610; Stepper green checkmarks and connector lines preserved during expansion<br />
+                &#x2610; No regressions in step loading, status display, or "View workflow steps"
+                button<br />
+                &#x2610; Playwright test passes all 10 steps
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <!-- SECTION 13: EFFORT ESTIMATE                                       -->
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <div class="section">
+            <div class="section-eyebrow">Estimate</div>
+            <div class="section-title">Effort Breakdown</div>
+            <table class="spec-table">
+                <thead>
+                    <tr>
+                        <th>Task</th>
+                        <th>Estimate</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Extraction helper functions (7 functions)</td>
+                        <td>25 min</td>
+                    </tr>
+                    <tr>
+                        <td><code>StepDetailPanel</code> component</td>
+                        <td>30 min</td>
+                    </tr>
+                    <tr>
+                        <td>
+                            Switch <code>StepItem</code> to expandable + remove old selected block
+                        </td>
+                        <td>10 min</td>
+                    </tr>
+                    <tr>
+                        <td>Edge case handling (null, empty, string outputs)</td>
+                        <td>10 min</td>
+                    </tr>
+                    <tr>
+                        <td>Playwright testing + fixes</td>
+                        <td>20 min</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Total</strong></td>
+                        <td><strong>~95 min</strong></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <script>
+            function toggleStep(id) {
+                const d = document.getElementById("detail-" + id);
+                const c = document.getElementById("chev-" + id);
+                const h = d?.previousElementSibling;
+                if (!d) return;
+                const show = d.classList.contains("hidden");
+                d.classList.toggle("hidden");
+                if (c) c.classList.toggle("open", show);
+                if (h) h.style.background = show ? "var(--bg-muted)" : "";
+            }
+            function showData(type, card) {
+                document
+                    .querySelectorAll(".type-card")
+                    .forEach((c) => c.classList.remove("active"));
+                card.classList.add("active");
+                ["transform", "human", "tool", "agent"].forEach((t) => {
+                    const el = document.getElementById("data-" + t);
+                    if (el) el.classList.toggle("hidden", t !== type);
+                });
+            }
+        </script>
+    </body>
+</html>

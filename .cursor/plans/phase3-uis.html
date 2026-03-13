@@ -1,0 +1,3176 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Phase 3: Skip and Continue — UIS</title>
+        <link
+            href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+            rel="stylesheet"
+        />
+        <style>
+            :root {
+                --bg-primary: #080a0e;
+                --bg-surface: #0d1017;
+                --bg-elevated: #13161e;
+                --bg-muted: #191d27;
+                --bg-accent: #212635;
+                --border-subtle: #262b3a;
+                --border-default: #303648;
+                --text-primary: #e3e5ed;
+                --text-secondary: #9298ab;
+                --text-muted: #5f6580;
+                --green-500: #22c55e;
+                --green-bg: rgba(34, 197, 94, 0.1);
+                --green-border: rgba(34, 197, 94, 0.2);
+                --amber-500: #f59e0b;
+                --amber-bg: rgba(245, 158, 11, 0.1);
+                --amber-border: rgba(245, 158, 11, 0.2);
+                --blue-500: #38bdf8;
+                --blue-600: #0ea5e9;
+                --blue-bg: rgba(56, 189, 248, 0.08);
+                --blue-border: rgba(56, 189, 248, 0.2);
+                --red-500: #ef4444;
+                --red-bg: rgba(239, 68, 68, 0.08);
+                --red-border: rgba(239, 68, 68, 0.2);
+                --purple-500: #a78bfa;
+                --cyan-500: #22d3ee;
+                --cyan-bg: rgba(34, 211, 238, 0.08);
+                --cyan-border: rgba(34, 211, 238, 0.2);
+                --slate-500: #64748b;
+                --slate-bg: rgba(100, 116, 139, 0.1);
+                --slate-border: rgba(100, 116, 139, 0.2);
+            }
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+            body {
+                font-family:
+                    "DM Sans",
+                    -apple-system,
+                    sans-serif;
+                background: var(--bg-primary);
+                color: var(--text-primary);
+                padding: 48px 40px;
+                line-height: 1.6;
+            }
+            code,
+            .mono {
+                font-family: "JetBrains Mono", monospace;
+            }
+            .hidden {
+                display: none;
+            }
+
+            .header {
+                max-width: 940px;
+                margin: 0 auto 64px;
+                text-align: center;
+            }
+            .phase-tag {
+                display: inline-block;
+                background: var(--cyan-bg);
+                border: 1px solid var(--cyan-border);
+                color: var(--cyan-500);
+                padding: 5px 16px;
+                border-radius: 20px;
+                font-size: 11px;
+                font-weight: 600;
+                letter-spacing: 2px;
+                text-transform: uppercase;
+                font-family: "JetBrains Mono", monospace;
+                margin-bottom: 16px;
+            }
+            .header h1 {
+                font-size: 38px;
+                font-weight: 700;
+                letter-spacing: -0.8px;
+                margin-bottom: 14px;
+                background: linear-gradient(135deg, #e3e5ed 0%, #9298ab 100%);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+            }
+            .header p {
+                color: var(--text-secondary);
+                font-size: 16px;
+                max-width: 720px;
+                margin: 0 auto;
+            }
+
+            .section {
+                max-width: 940px;
+                margin: 0 auto 60px;
+            }
+            .section-eyebrow {
+                font-family: "JetBrains Mono", monospace;
+                font-size: 10px;
+                font-weight: 600;
+                letter-spacing: 2.5px;
+                text-transform: uppercase;
+                color: var(--text-muted);
+                margin-bottom: 8px;
+            }
+            .section-title {
+                font-size: 24px;
+                font-weight: 700;
+                margin-bottom: 12px;
+                letter-spacing: -0.3px;
+            }
+            .section-desc {
+                color: var(--text-secondary);
+                font-size: 14px;
+                margin-bottom: 28px;
+                line-height: 1.7;
+            }
+            .divider {
+                height: 1px;
+                background: var(--border-subtle);
+                margin: 56px 0;
+            }
+
+            .chrome {
+                background: var(--bg-surface);
+                border: 1px solid var(--border-subtle);
+                border-radius: 14px;
+                overflow: hidden;
+                box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+            }
+            .chrome-bar {
+                background: var(--bg-muted);
+                padding: 9px 16px;
+                font-family: "JetBrains Mono", monospace;
+                font-size: 11px;
+                color: var(--text-muted);
+                border-bottom: 1px solid var(--border-subtle);
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            }
+            .chrome-dots {
+                display: flex;
+                gap: 5px;
+            }
+            .dot {
+                width: 8px;
+                height: 8px;
+                border-radius: 50%;
+            }
+            .dot-r {
+                background: #ff5f57;
+            }
+            .dot-y {
+                background: #febc2e;
+            }
+            .dot-g {
+                background: #28c840;
+            }
+            .chrome-body {
+                padding: 24px;
+            }
+
+            .badge {
+                display: inline-flex;
+                align-items: center;
+                padding: 2px 10px;
+                border-radius: 6px;
+                font-size: 10px;
+                font-weight: 600;
+            }
+            .badge-amber {
+                background: var(--amber-bg);
+                color: var(--amber-500);
+                border: 1px solid var(--amber-border);
+            }
+            .badge-blue {
+                background: var(--blue-bg);
+                color: var(--blue-500);
+                border: 1px solid var(--blue-border);
+            }
+            .badge-green {
+                background: var(--green-bg);
+                color: var(--green-500);
+                border: 1px solid var(--green-border);
+            }
+            .badge-red {
+                background: var(--red-bg);
+                color: var(--red-500);
+                border: 1px solid var(--red-border);
+            }
+            .badge-muted {
+                background: var(--bg-accent);
+                color: var(--text-muted);
+                border: 1px solid var(--border-default);
+            }
+            .badge-cyan {
+                background: var(--cyan-bg);
+                color: var(--cyan-500);
+                border: 1px solid var(--cyan-border);
+            }
+            .badge-slate {
+                background: var(--slate-bg);
+                color: var(--slate-500);
+                border: 1px solid var(--slate-border);
+            }
+
+            /* Decision card */
+            .decision-card {
+                background: var(--bg-elevated);
+                border: 1px solid var(--border-subtle);
+                border-left: 3px solid var(--amber-500);
+                border-radius: 12px;
+                padding: 20px;
+            }
+            .card-header {
+                display: flex;
+                align-items: flex-start;
+                justify-content: space-between;
+                gap: 12px;
+                margin-bottom: 12px;
+            }
+            .card-meta {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                flex-wrap: wrap;
+            }
+            .card-title {
+                font-size: 15px;
+                font-weight: 600;
+                margin: 8px 0;
+            }
+            .card-subtitle {
+                color: var(--text-secondary);
+                font-size: 12px;
+                display: flex;
+                gap: 12px;
+                align-items: center;
+            }
+            .card-subtitle code {
+                font-family: "JetBrains Mono", monospace;
+                background: var(--bg-muted);
+                padding: 1px 6px;
+                border-radius: 4px;
+                font-size: 11px;
+            }
+
+            /* Stepper */
+            .workflow-steps {
+                background: var(--bg-muted);
+                border-radius: 10px;
+                padding: 16px;
+                margin-top: 12px;
+            }
+            .steps-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 16px;
+            }
+            .steps-header-left {
+                font-size: 12px;
+                color: var(--text-muted);
+                font-weight: 500;
+            }
+            .stepper {
+                display: flex;
+                flex-direction: column;
+            }
+            .step-row {
+                display: flex;
+                gap: 12px;
+            }
+            .step-ind {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                min-width: 28px;
+            }
+            .step-dot {
+                width: 28px;
+                height: 28px;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 11px;
+                font-weight: 700;
+                z-index: 1;
+                flex-shrink: 0;
+                border: 1px solid transparent;
+            }
+            .step-dot.completed {
+                background: var(--bg-elevated);
+                border-color: var(--green-border);
+                color: var(--green-500);
+            }
+            .step-dot.failed {
+                background: var(--bg-elevated);
+                border-color: var(--red-border);
+                color: var(--red-500);
+            }
+            .step-dot.suspended {
+                background: var(--bg-elevated);
+                border-color: var(--amber-border);
+                color: var(--amber-500);
+                animation: pulse 2s infinite;
+            }
+            .step-dot.skipped {
+                background: var(--bg-elevated);
+                border-color: var(--slate-border);
+                color: var(--slate-500);
+            }
+            .step-dot.pending {
+                background: var(--bg-elevated);
+                border-color: var(--border-default);
+                color: var(--text-muted);
+            }
+            .step-line {
+                width: 2px;
+                flex: 1;
+                min-height: 14px;
+            }
+            .step-line.green {
+                background: var(--green-border);
+            }
+            .step-line.red {
+                background: var(--red-border);
+            }
+            .step-line.slate {
+                background: var(--slate-border);
+            }
+            .step-line.default {
+                background: var(--border-subtle);
+            }
+            @keyframes pulse {
+                0%,
+                100% {
+                    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.3);
+                }
+                50% {
+                    box-shadow: 0 0 0 5px rgba(245, 158, 11, 0);
+                }
+            }
+            @keyframes spin {
+                from {
+                    transform: rotate(0deg);
+                }
+                to {
+                    transform: rotate(360deg);
+                }
+            }
+            .step-body {
+                flex: 1;
+                padding-bottom: 16px;
+            }
+            .step-hdr {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                min-height: 28px;
+                cursor: pointer;
+                padding: 0 6px;
+                border-radius: 6px;
+                margin: 0 -6px;
+                transition: background 0.1s;
+            }
+            .step-hdr:hover {
+                background: rgba(255, 255, 255, 0.03);
+            }
+            .step-lbl {
+                font-size: 13px;
+                font-weight: 600;
+                flex: 1;
+            }
+            .step-desc {
+                font-size: 11px;
+                color: var(--text-muted);
+            }
+            .step-chev {
+                width: 14px;
+                height: 14px;
+                color: var(--text-muted);
+                transition: transform 0.2s;
+                flex-shrink: 0;
+            }
+            .step-chev.open {
+                transform: rotate(180deg);
+            }
+
+            /* Inline detail */
+            .inline-detail {
+                margin-top: 8px;
+                background: var(--bg-elevated);
+                border: 1px solid var(--border-subtle);
+                border-radius: 8px;
+                overflow: hidden;
+                animation: slideDown 0.2s ease-out;
+            }
+            @keyframes slideDown {
+                from {
+                    opacity: 0;
+                    max-height: 0;
+                }
+                to {
+                    opacity: 1;
+                    max-height: 800px;
+                }
+            }
+            .id-meta {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 12px;
+                padding: 8px 12px;
+                border-bottom: 1px solid var(--border-subtle);
+                font-size: 10px;
+                color: var(--text-muted);
+            }
+            .meta-item {
+                display: flex;
+                align-items: center;
+                gap: 4px;
+            }
+            .meta-val {
+                color: var(--text-secondary);
+                font-family: "JetBrains Mono", monospace;
+                font-size: 10px;
+            }
+            .id-body {
+                padding: 12px;
+            }
+            .det-sec {
+                margin-bottom: 12px;
+            }
+            .det-sec:last-child {
+                margin-bottom: 0;
+            }
+            .det-lbl {
+                font-size: 10px;
+                font-weight: 600;
+                letter-spacing: 1.2px;
+                text-transform: uppercase;
+                color: var(--text-muted);
+                margin-bottom: 5px;
+                font-family: "JetBrains Mono", monospace;
+            }
+            .summary-text {
+                font-size: 12px;
+                line-height: 1.6;
+                color: var(--text-secondary);
+                background: var(--bg-muted);
+                border-radius: 6px;
+                padding: 8px 10px;
+                border: 1px solid var(--border-subtle);
+                white-space: pre-wrap;
+            }
+            .summary-text strong {
+                color: var(--text-primary);
+            }
+            .links-grid {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 6px;
+            }
+            .link-chip {
+                display: inline-flex;
+                align-items: center;
+                gap: 5px;
+                padding: 5px 10px;
+                border-radius: 6px;
+                background: var(--bg-muted);
+                border: 1px solid var(--border-subtle);
+                font-size: 11px;
+                color: var(--blue-500);
+                text-decoration: none;
+                cursor: pointer;
+                transition: all 0.15s;
+            }
+            .link-chip:hover {
+                background: var(--blue-bg);
+                border-color: var(--blue-border);
+            }
+            .raw-toggle {
+                display: inline-flex;
+                align-items: center;
+                gap: 4px;
+                font-size: 10px;
+                color: var(--text-muted);
+                cursor: pointer;
+                border: none;
+                background: none;
+                font-family: "JetBrains Mono", monospace;
+            }
+            .raw-toggle:hover {
+                color: var(--text-secondary);
+            }
+            .raw-block {
+                margin-top: 5px;
+                background: var(--bg-muted);
+                border: 1px solid var(--border-subtle);
+                border-radius: 5px;
+                padding: 8px;
+                font-family: "JetBrains Mono", monospace;
+                font-size: 10px;
+                color: var(--text-secondary);
+                max-height: 140px;
+                overflow: auto;
+                white-space: pre-wrap;
+            }
+
+            /* Error block */
+            .error-block {
+                background: var(--red-bg);
+                border: 1px solid var(--red-border);
+                border-radius: 6px;
+                padding: 10px 12px;
+            }
+            .error-title {
+                font-size: 11px;
+                font-weight: 600;
+                color: var(--red-500);
+                margin-bottom: 4px;
+                display: flex;
+                align-items: center;
+                gap: 5px;
+            }
+            .error-msg {
+                font-size: 11px;
+                font-family: "JetBrains Mono", monospace;
+                color: var(--text-secondary);
+            }
+
+            /* Skip button and confirm */
+            .skip-btn {
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                padding: 6px 14px;
+                border-radius: 8px;
+                font-size: 12px;
+                font-weight: 600;
+                cursor: pointer;
+                transition: all 0.15s;
+                border: 1px solid var(--cyan-border);
+                background: var(--cyan-bg);
+                color: var(--cyan-500);
+                font-family: "DM Sans", sans-serif;
+            }
+            .skip-btn:hover {
+                background: rgba(34, 211, 238, 0.15);
+                border-color: var(--cyan-500);
+            }
+            .skip-btn svg {
+                width: 14px;
+                height: 14px;
+            }
+            .skip-confirm {
+                background: var(--cyan-bg);
+                border: 1px solid var(--cyan-border);
+                border-radius: 10px;
+                padding: 14px 18px;
+                margin-top: 12px;
+            }
+            .skip-confirm-top {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+            }
+            .skip-confirm-icon {
+                width: 36px;
+                height: 36px;
+                border-radius: 10px;
+                background: rgba(34, 211, 238, 0.15);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                flex-shrink: 0;
+            }
+            .skip-confirm-text {
+                flex: 1;
+            }
+            .skip-confirm-title {
+                font-size: 13px;
+                font-weight: 600;
+            }
+            .skip-confirm-desc {
+                font-size: 11px;
+                color: var(--text-secondary);
+                margin-top: 2px;
+            }
+            .skip-confirm-actions {
+                display: flex;
+                gap: 8px;
+            }
+            .skip-reason {
+                margin-top: 10px;
+            }
+            .skip-reason label {
+                display: block;
+                font-size: 10px;
+                font-weight: 600;
+                color: var(--text-muted);
+                margin-bottom: 4px;
+                letter-spacing: 1px;
+                text-transform: uppercase;
+                font-family: "JetBrains Mono", monospace;
+            }
+            .skip-reason textarea {
+                width: 100%;
+                height: 56px;
+                background: var(--bg-muted);
+                border: 1px solid var(--border-subtle);
+                border-radius: 6px;
+                padding: 8px 10px;
+                font-size: 12px;
+                color: var(--text-primary);
+                font-family: "DM Sans", sans-serif;
+                resize: vertical;
+                outline: none;
+            }
+            .skip-reason textarea:focus {
+                border-color: var(--cyan-500);
+            }
+            .skip-reason textarea::placeholder {
+                color: var(--text-muted);
+            }
+
+            .btn {
+                padding: 6px 16px;
+                border-radius: 8px;
+                font-size: 12px;
+                font-weight: 600;
+                cursor: pointer;
+                transition: all 0.15s;
+                border: none;
+                font-family: "DM Sans", sans-serif;
+            }
+            .btn-ghost {
+                background: transparent;
+                border: 1px solid var(--border-default);
+                color: var(--text-secondary);
+            }
+            .btn-ghost:hover {
+                background: var(--bg-accent);
+            }
+            .btn-cyan {
+                background: var(--blue-600);
+                color: white;
+            }
+            .btn-cyan:hover {
+                background: var(--blue-500);
+            }
+            .btn-primary {
+                background: var(--blue-500);
+                color: white;
+            }
+            .btn-destructive {
+                background: #dc2626;
+                color: white;
+            }
+            .btn-outline {
+                background: transparent;
+                border: 1px solid var(--border-default);
+                color: var(--text-primary);
+            }
+            .btn-outline:hover {
+                background: var(--bg-accent);
+            }
+            .action-buttons {
+                display: flex;
+                gap: 8px;
+                margin-top: 16px;
+            }
+
+            .skipped-banner {
+                background: var(--slate-bg);
+                border: 1px solid var(--slate-border);
+                border-radius: 10px;
+                padding: 14px 18px;
+                margin-top: 12px;
+                display: flex;
+                align-items: center;
+                gap: 12px;
+            }
+            .skipped-icon {
+                width: 36px;
+                height: 36px;
+                border-radius: 10px;
+                background: rgba(100, 116, 139, 0.15);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                flex-shrink: 0;
+            }
+
+            /* Flow diagram */
+            .flow-container {
+                display: flex;
+                align-items: center;
+                padding: 20px 0;
+                overflow-x: auto;
+                gap: 0;
+                flex-wrap: wrap;
+                row-gap: 12px;
+            }
+            .flow-node {
+                background: var(--bg-elevated);
+                border: 1px solid var(--border-subtle);
+                border-radius: 10px;
+                padding: 14px 18px;
+                min-width: 120px;
+                text-align: center;
+                flex-shrink: 0;
+            }
+            .flow-node-title {
+                font-size: 12px;
+                font-weight: 600;
+                margin-bottom: 4px;
+            }
+            .flow-node-desc {
+                font-size: 10px;
+                color: var(--text-muted);
+                font-family: "JetBrains Mono", monospace;
+            }
+            .flow-node.active {
+                border-color: var(--cyan-500);
+                box-shadow: 0 0 0 2px var(--cyan-bg);
+            }
+            .flow-node.alt {
+                border-color: var(--amber-500);
+                box-shadow: 0 0 0 2px var(--amber-bg);
+            }
+            .flow-arrow {
+                color: var(--text-muted);
+                font-size: 18px;
+                padding: 0 8px;
+                flex-shrink: 0;
+            }
+            .flow-branch {
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+                padding: 10px;
+                background: var(--bg-muted);
+                border-radius: 8px;
+                border: 1px solid var(--border-subtle);
+            }
+            .flow-branch-label {
+                font-size: 9px;
+                font-weight: 600;
+                letter-spacing: 1.5px;
+                text-transform: uppercase;
+                color: var(--text-muted);
+                font-family: "JetBrains Mono", monospace;
+            }
+
+            /* Spec tables */
+            .spec-table {
+                width: 100%;
+                border-collapse: collapse;
+                font-size: 13px;
+            }
+            .spec-table th {
+                text-align: left;
+                padding: 10px 14px;
+                border-bottom: 1px solid var(--border-subtle);
+                color: var(--text-muted);
+                font-size: 10px;
+                font-weight: 600;
+                text-transform: uppercase;
+                letter-spacing: 1.5px;
+                font-family: "JetBrains Mono", monospace;
+            }
+            .spec-table td {
+                padding: 10px 14px;
+                border-bottom: 1px solid var(--border-subtle);
+                color: var(--text-secondary);
+                vertical-align: top;
+            }
+            .spec-table td:first-child {
+                color: var(--text-primary);
+                font-weight: 500;
+            }
+            .spec-table code {
+                font-family: "JetBrains Mono", monospace;
+                background: var(--bg-muted);
+                padding: 2px 6px;
+                border-radius: 4px;
+                font-size: 11px;
+                color: var(--purple-500);
+            }
+
+            .callout {
+                background: var(--blue-bg);
+                border: 1px solid var(--blue-border);
+                border-left: 3px solid var(--blue-500);
+                border-radius: 8px;
+                padding: 12px 16px;
+                font-size: 12px;
+                color: var(--text-secondary);
+                line-height: 1.6;
+            }
+            .callout strong {
+                color: var(--blue-500);
+            }
+            .callout-cyan {
+                background: var(--cyan-bg);
+                border: 1px solid var(--cyan-border);
+                border-left: 3px solid var(--cyan-500);
+            }
+            .callout-cyan strong {
+                color: var(--cyan-500);
+            }
+
+            /* Toggle group */
+            .toggle-group {
+                display: flex;
+                gap: 4px;
+                margin-bottom: 24px;
+                background: var(--bg-muted);
+                border-radius: 10px;
+                padding: 4px;
+                width: fit-content;
+            }
+            .toggle-btn {
+                padding: 8px 20px;
+                border-radius: 8px;
+                font-size: 13px;
+                font-weight: 600;
+                cursor: pointer;
+                border: none;
+                background: transparent;
+                color: var(--text-muted);
+                transition: all 0.2s;
+                font-family: "DM Sans", sans-serif;
+            }
+            .toggle-btn.active {
+                background: var(--bg-accent);
+                color: var(--text-primary);
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            }
+            .toggle-btn:hover:not(.active) {
+                color: var(--text-secondary);
+            }
+
+            /* Scenario tabs */
+            .scenario-tabs {
+                display: flex;
+                gap: 4px;
+                margin-bottom: 16px;
+                background: var(--bg-surface);
+                border: 1px solid var(--border-subtle);
+                border-radius: 10px;
+                padding: 4px;
+                width: fit-content;
+            }
+            .scenario-tab {
+                padding: 6px 16px;
+                border-radius: 7px;
+                font-size: 12px;
+                font-weight: 600;
+                cursor: pointer;
+                border: none;
+                background: transparent;
+                color: var(--text-muted);
+                transition: all 0.2s;
+                font-family: "DM Sans", sans-serif;
+            }
+            .scenario-tab.active {
+                background: var(--bg-accent);
+                color: var(--text-primary);
+            }
+            .scenario-tab:hover:not(.active) {
+                color: var(--text-secondary);
+            }
+
+            /* Type cards */
+            .type-grid {
+                display: grid;
+                grid-template-columns: repeat(3, 1fr);
+                gap: 12px;
+                margin-bottom: 28px;
+            }
+            .type-card {
+                background: var(--bg-elevated);
+                border: 1px solid var(--border-subtle);
+                border-radius: 10px;
+                padding: 14px;
+                text-align: center;
+                cursor: pointer;
+                transition: all 0.15s;
+            }
+            .type-card:hover {
+                border-color: var(--border-default);
+            }
+            .type-card.active {
+                border-color: var(--cyan-500);
+                box-shadow: 0 0 0 1px var(--cyan-border);
+            }
+            .tc-icon {
+                font-size: 22px;
+                margin-bottom: 6px;
+            }
+            .tc-name {
+                font-size: 13px;
+                font-weight: 600;
+                margin-bottom: 3px;
+            }
+            .tc-desc {
+                font-size: 10px;
+                color: var(--text-muted);
+            }
+
+            /* Impl step */
+            .impl-step {
+                background: var(--bg-surface);
+                border: 1px solid var(--border-subtle);
+                border-radius: 12px;
+                padding: 20px;
+                margin-bottom: 20px;
+            }
+            .impl-step h3 {
+                font-size: 16px;
+                margin-bottom: 12px;
+            }
+            .impl-meta {
+                display: flex;
+                gap: 24px;
+                font-size: 12px;
+                color: var(--text-secondary);
+                margin-bottom: 16px;
+                flex-wrap: wrap;
+            }
+            .detail-section {
+                margin-bottom: 14px;
+            }
+            .detail-section-label {
+                font-size: 10px;
+                font-weight: 600;
+                letter-spacing: 1.5px;
+                text-transform: uppercase;
+                color: var(--text-muted);
+                margin-bottom: 6px;
+                font-family: "JetBrains Mono", monospace;
+            }
+            .raw-pre {
+                background: var(--bg-muted);
+                border: 1px solid var(--border-subtle);
+                border-radius: 8px;
+                padding: 14px;
+                font-family: "JetBrains Mono", monospace;
+                font-size: 11px;
+                color: var(--text-secondary);
+                line-height: 1.6;
+                max-height: 280px;
+                overflow: auto;
+                white-space: pre-wrap;
+            }
+            .impl-step ol {
+                padding-left: 20px;
+                font-size: 13px;
+                color: var(--text-secondary);
+                line-height: 1.8;
+            }
+            .impl-step ol code {
+                font-family: "JetBrains Mono", monospace;
+                background: var(--bg-muted);
+                padding: 1px 5px;
+                border-radius: 3px;
+                font-size: 11px;
+                color: var(--purple-500);
+            }
+            .check-list {
+                font-size: 13px;
+                color: var(--text-secondary);
+                line-height: 2.2;
+            }
+        </style>
+    </head>
+    <body>
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <!-- SECTION 1: HEADER                                                 -->
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <div class="header">
+            <div class="phase-tag">Phase 3</div>
+            <h1>Skip and Continue</h1>
+            <p>
+                Give operators an escape hatch for blocked workflows. When a step is suspended
+                (awaiting human approval) or failed, a "Skip &amp; Continue" button bypasses it by
+                injecting a synthetic output and resuming the workflow from the next step. Builds on
+                Phase 0 (expandable step details), Phase 1 (cancel), and Phase 2 (retry).
+            </p>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <!-- SECTION 2: ARCHITECTURE / FLOW                                    -->
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <div class="section">
+            <div class="section-eyebrow">Architecture</div>
+            <div class="section-title">Skip Flow (Dual Path)</div>
+            <div class="section-desc">
+                Skip handles two distinct scenarios: suspended steps (human approval pending) and
+                failed steps. Each follows a different backend path but produces the same
+                user-facing result -- the step is marked as skipped and the workflow continues.
+            </div>
+            <div class="chrome">
+                <div class="chrome-bar">
+                    <div class="chrome-dots">
+                        <span class="dot dot-r"></span><span class="dot dot-y"></span
+                        ><span class="dot dot-g"></span>
+                    </div>
+                    skip-flow
+                </div>
+                <div class="chrome-body">
+                    <div class="flow-container">
+                        <div class="flow-node">
+                            <div class="flow-node-title">User clicks Skip</div>
+                            <div class="flow-node-desc">StepDetailPanel</div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-node">
+                            <div class="flow-node-title">Reason Input</div>
+                            <div class="flow-node-desc">Optional textarea</div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-node active">
+                            <div class="flow-node-title">POST /reviews/[id]/skip</div>
+                            <div class="flow-node-desc">Convenience route</div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-branch">
+                            <div class="flow-branch-label">SUSPENDED PATH</div>
+                            <div class="flow-node alt">
+                                <div class="flow-node-title">Resume with skip data</div>
+                                <div class="flow-node-desc">{ skipped: true }</div>
+                            </div>
+                        </div>
+                        <div
+                            style="
+                                padding: 0 6px;
+                                color: var(--text-muted);
+                                font-size: 10px;
+                                font-weight: 600;
+                                font-family: &quot;JetBrains Mono&quot;, monospace;
+                            "
+                        >
+                            OR
+                        </div>
+                        <div class="flow-branch">
+                            <div class="flow-branch-label">FAILED PATH</div>
+                            <div class="flow-node active">
+                                <div class="flow-node-title">Inject synthetic output</div>
+                                <div class="flow-node-desc">existingSteps[stepId]</div>
+                            </div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-node">
+                            <div class="flow-node-title">Workflow continues</div>
+                            <div class="flow-node-desc">Next step executes</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div style="margin-top: 20px">
+                <div class="callout callout-cyan">
+                    <strong>Two paths, one result:</strong> For <em>suspended</em> steps, skip calls
+                    the existing resume API with <code>{ skipped: true, reason }</code> -- the human
+                    step handler receives this as its output and the workflow continues naturally.
+                    For <em>failed</em> steps, skip injects a synthetic output into
+                    <code>existingSteps</code> and re-executes the workflow, effectively bypassing
+                    the failed step.
+                </div>
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <!-- SECTION 3: INTERACTIVE UI MOCKUP                                  -->
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <div class="section">
+            <div class="section-eyebrow">UI Mockup</div>
+            <div class="section-title">Skip in Expanded Step Detail</div>
+            <div class="section-desc">
+                The skip button appears inside expanded SUSPENDED and FAILED step detail panels.
+                Switch between scenarios to see both contexts, then toggle states within each
+                scenario.
+            </div>
+
+            <div class="scenario-tabs">
+                <button class="scenario-tab active" onclick="showScenario('suspended')">
+                    Suspended Step
+                </button>
+                <button class="scenario-tab" onclick="showScenario('failed')">Failed Step</button>
+            </div>
+
+            <div class="toggle-group" id="state-toggles-suspended">
+                <button class="toggle-btn active" onclick="showState('default', this)">
+                    Default
+                </button>
+                <button class="toggle-btn" onclick="showState('confirm', this)">Confirming</button>
+                <button class="toggle-btn" onclick="showState('skipping', this)">Skipping</button>
+                <button class="toggle-btn" onclick="showState('skipped', this)">Skipped</button>
+            </div>
+
+            <div class="toggle-group hidden" id="state-toggles-failed">
+                <button class="toggle-btn active" onclick="showState('default', this)">
+                    Default
+                </button>
+                <button class="toggle-btn" onclick="showState('confirm', this)">Confirming</button>
+                <button class="toggle-btn" onclick="showState('skipping', this)">Skipping</button>
+                <button class="toggle-btn" onclick="showState('skipped', this)">Skipped</button>
+            </div>
+
+            <!-- ===== SUSPENDED SCENARIO ===== -->
+            <div id="scenario-suspended" class="chrome">
+                <div class="chrome-bar">
+                    <div class="chrome-dots">
+                        <span class="dot dot-r"></span><span class="dot dot-y"></span
+                        ><span class="dot dot-g"></span>
+                    </div>
+                    /command -- Skip on Suspended Step (Phase 0 + 1 + 2 + 3)
+                </div>
+                <div class="chrome-body">
+                    <div class="decision-card">
+                        <div class="card-header">
+                            <div>
+                                <div class="card-meta">
+                                    <span
+                                        style="
+                                            font-family: &quot;JetBrains Mono&quot;, monospace;
+                                            font-size: 13px;
+                                            color: var(--amber-500);
+                                            font-weight: 600;
+                                        "
+                                        >47m ago</span
+                                    >
+                                    <span class="badge badge-amber">medium</span>
+                                    <span class="badge badge-blue">workflow</span>
+                                    <span style="color: var(--text-secondary); font-size: 13px"
+                                        >sdlc-bugfix-pipeline</span
+                                    >
+                                </div>
+                                <div class="card-title">
+                                    Approve merge-review in sdlc-bugfix-pipeline?
+                                </div>
+                                <div class="card-subtitle">
+                                    <span>&#x1f536; medium risk</span
+                                    ><span>Step: <code>merge-review</code></span
+                                    ><span>Run: <code>cmn3p8gl...</code></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="workflow-steps">
+                            <div class="steps-header">
+                                <span class="steps-header-left">Workflow Steps (5)</span>
+                            </div>
+                            <div class="stepper">
+                                <!-- Step 1: Completed -->
+                                <div class="step-row">
+                                    <div class="step-ind">
+                                        <div class="step-dot completed">
+                                            <svg
+                                                width="12"
+                                                height="12"
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                stroke-width="2.5"
+                                                stroke-linecap="round"
+                                            >
+                                                <polyline points="20 6 9 17 4 12" />
+                                            </svg>
+                                        </div>
+                                        <div class="step-line green"></div>
+                                    </div>
+                                    <div class="step-body">
+                                        <div class="step-hdr" onclick="toggleStep('s1')">
+                                            <span
+                                                class="step-lbl"
+                                                style="color: var(--text-primary)"
+                                                >Create GitHub Issue</span
+                                            ><span class="step-desc">tool &middot; 1ms</span
+                                            ><svg
+                                                class="step-chev"
+                                                id="chev-s1"
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                stroke-width="2"
+                                                stroke-linecap="round"
+                                            >
+                                                <polyline points="6 9 12 15 18 9" />
+                                            </svg>
+                                        </div>
+                                        <div id="detail-s1" class="inline-detail hidden">
+                                            <div class="id-meta">
+                                                <div class="meta-item">
+                                                    <span>Duration</span>
+                                                    <span class="meta-val">1ms</span>
+                                                </div>
+                                            </div>
+                                            <div class="id-body">
+                                                <div class="det-sec">
+                                                    <div class="det-lbl">Output</div>
+                                                    <div class="summary-text">
+                                                        GitHub Issue #220 created in
+                                                        Appello-Prototypes/agentc2
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Step 2: Completed -->
+                                <div class="step-row">
+                                    <div class="step-ind">
+                                        <div class="step-dot completed">
+                                            <svg
+                                                width="12"
+                                                height="12"
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                stroke-width="2.5"
+                                                stroke-linecap="round"
+                                            >
+                                                <polyline points="20 6 9 17 4 12" />
+                                            </svg>
+                                        </div>
+                                        <div class="step-line green"></div>
+                                    </div>
+                                    <div class="step-body">
+                                        <div class="step-hdr" onclick="toggleStep('s2')">
+                                            <span
+                                                class="step-lbl"
+                                                style="color: var(--text-primary)"
+                                                >Run Bugfix</span
+                                            ><span class="badge badge-muted">agent</span
+                                            ><span class="step-desc">5m 12s</span
+                                            ><svg
+                                                class="step-chev"
+                                                id="chev-s2"
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                stroke-width="2"
+                                                stroke-linecap="round"
+                                            >
+                                                <polyline points="6 9 12 15 18 9" />
+                                            </svg>
+                                        </div>
+                                        <div id="detail-s2" class="inline-detail hidden">
+                                            <div class="id-meta">
+                                                <div class="meta-item">
+                                                    <span>Duration</span>
+                                                    <span class="meta-val">5m 12s</span>
+                                                </div>
+                                            </div>
+                                            <div class="id-body">
+                                                <div class="det-sec">
+                                                    <div class="det-lbl">Output</div>
+                                                    <div class="summary-text">
+                                                        PR #48 created:
+                                                        cursor/fix-webhook-validation-2f8a
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Step 3: Completed -->
+                                <div class="step-row">
+                                    <div class="step-ind">
+                                        <div class="step-dot completed">
+                                            <svg
+                                                width="12"
+                                                height="12"
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                stroke-width="2.5"
+                                                stroke-linecap="round"
+                                            >
+                                                <polyline points="20 6 9 17 4 12" />
+                                            </svg>
+                                        </div>
+                                        <div class="step-line green"></div>
+                                    </div>
+                                    <div class="step-body">
+                                        <div class="step-hdr" onclick="toggleStep('s3')">
+                                            <span
+                                                class="step-lbl"
+                                                style="color: var(--text-primary)"
+                                                >Audit Fix Plan</span
+                                            ><span class="badge badge-muted">agent</span
+                                            ><span class="step-desc">2.3s</span
+                                            ><svg
+                                                class="step-chev"
+                                                id="chev-s3"
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                stroke-width="2"
+                                                stroke-linecap="round"
+                                            >
+                                                <polyline points="6 9 12 15 18 9" />
+                                            </svg>
+                                        </div>
+                                        <div id="detail-s3" class="inline-detail hidden">
+                                            <div class="id-meta">
+                                                <div class="meta-item">
+                                                    <span>Duration</span>
+                                                    <span class="meta-val">2.3s</span>
+                                                </div>
+                                            </div>
+                                            <div class="id-body">
+                                                <div class="det-sec">
+                                                    <div class="det-lbl">Agent Response</div>
+                                                    <div class="summary-text">
+                                                        <strong>Verdict:</strong> Approved for
+                                                        merge. No architectural concerns.
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Step 4: SUSPENDED -- EXPANDED with skip button -->
+                                <div class="step-row">
+                                    <div class="step-ind">
+                                        <div class="step-dot suspended" id="sus-dot-s">
+                                            <svg
+                                                width="11"
+                                                height="11"
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                stroke-width="2.5"
+                                            >
+                                                <rect x="6" y="4" width="4" height="16" rx="1" />
+                                                <rect x="14" y="4" width="4" height="16" rx="1" />
+                                            </svg>
+                                        </div>
+                                        <div class="step-line default" id="sus-line-s"></div>
+                                    </div>
+                                    <div class="step-body">
+                                        <div
+                                            class="step-hdr"
+                                            style="background: rgba(255, 255, 255, 0.03)"
+                                        >
+                                            <span
+                                                class="step-lbl"
+                                                style="color: var(--amber-500)"
+                                                id="sus-lbl-s"
+                                                >Merge Review</span
+                                            >
+                                            <span class="badge badge-muted">human</span>
+                                            <span class="step-desc">awaiting approval</span>
+                                            <span
+                                                class="badge badge-amber"
+                                                style="margin-left: auto"
+                                                id="sus-badge-s"
+                                                >suspended</span
+                                            >
+                                            <svg
+                                                class="step-chev open"
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                stroke-width="2"
+                                                stroke-linecap="round"
+                                            >
+                                                <polyline points="6 9 12 15 18 9" />
+                                            </svg>
+                                        </div>
+                                        <div class="inline-detail" id="sus-detail-s">
+                                            <div class="id-meta">
+                                                <div class="meta-item">
+                                                    <span>Type</span>
+                                                    <span class="meta-val">human</span>
+                                                </div>
+                                                <div class="meta-item">
+                                                    <span>Waiting</span>
+                                                    <span class="meta-val">47m</span>
+                                                </div>
+                                            </div>
+                                            <div class="id-body">
+                                                <div class="det-sec" id="sus-prompt-s">
+                                                    <div class="det-lbl">Decision Prompt</div>
+                                                    <div class="summary-text">
+                                                        Review and approve the merge of PR #48 into
+                                                        <code>main</code>. Changes affect webhook
+                                                        validation logic in 2 files.
+                                                    </div>
+                                                </div>
+
+                                                <div
+                                                    class="det-sec"
+                                                    id="sus-skipped-output-s"
+                                                    class="hidden"
+                                                    style="display: none"
+                                                >
+                                                    <div class="det-lbl">Skip Output</div>
+                                                    <div
+                                                        class="summary-text"
+                                                        style="border-color: var(--slate-border)"
+                                                    >
+                                                        <strong>Step skipped by operator.</strong>
+
+                                                        Reason: "Low-risk fix, auto-merge is
+                                                        acceptable for this PR." Workflow will
+                                                        continue with remaining steps.
+                                                    </div>
+                                                </div>
+
+                                                <!-- Skip action area -->
+                                                <div class="det-sec">
+                                                    <div id="skip-default-s">
+                                                        <div
+                                                            style="
+                                                                display: flex;
+                                                                gap: 8px;
+                                                                align-items: center;
+                                                            "
+                                                        >
+                                                            <button
+                                                                class="skip-btn"
+                                                                onclick="showState('confirm', null)"
+                                                            >
+                                                                <svg
+                                                                    viewBox="0 0 24 24"
+                                                                    fill="none"
+                                                                    stroke="currentColor"
+                                                                    stroke-width="2"
+                                                                    stroke-linecap="round"
+                                                                >
+                                                                    <polygon
+                                                                        points="5 4 15 12 5 20 5 4"
+                                                                    />
+                                                                    <line
+                                                                        x1="19"
+                                                                        y1="5"
+                                                                        x2="19"
+                                                                        y2="19"
+                                                                    />
+                                                                </svg>
+                                                                Skip &amp; Continue
+                                                            </button>
+                                                            <span
+                                                                style="
+                                                                    font-size: 10px;
+                                                                    color: var(--text-muted);
+                                                                "
+                                                                >Bypass this step and continue the
+                                                                workflow</span
+                                                            >
+                                                        </div>
+                                                    </div>
+                                                    <div
+                                                        id="skip-confirm-s"
+                                                        class="skip-confirm hidden"
+                                                    >
+                                                        <div class="skip-confirm-top">
+                                                            <div class="skip-confirm-icon">
+                                                                <svg
+                                                                    width="18"
+                                                                    height="18"
+                                                                    viewBox="0 0 24 24"
+                                                                    fill="none"
+                                                                    stroke="var(--cyan-500)"
+                                                                    stroke-width="2"
+                                                                    stroke-linecap="round"
+                                                                >
+                                                                    <polygon
+                                                                        points="5 4 15 12 5 20 5 4"
+                                                                    />
+                                                                    <line
+                                                                        x1="19"
+                                                                        y1="5"
+                                                                        x2="19"
+                                                                        y2="19"
+                                                                    />
+                                                                </svg>
+                                                            </div>
+                                                            <div class="skip-confirm-text">
+                                                                <div class="skip-confirm-title">
+                                                                    Skip this step?
+                                                                </div>
+                                                                <div class="skip-confirm-desc">
+                                                                    The step
+                                                                    <code>merge-review</code> will
+                                                                    be bypassed with a synthetic
+                                                                    output. The workflow will
+                                                                    continue from the next step.
+                                                                    This is recorded in the audit
+                                                                    trail.
+                                                                </div>
+                                                            </div>
+                                                            <div class="skip-confirm-actions">
+                                                                <button
+                                                                    class="btn btn-ghost"
+                                                                    onclick="
+                                                                        showState('default', null)
+                                                                    "
+                                                                >
+                                                                    Cancel
+                                                                </button>
+                                                                <button
+                                                                    class="btn btn-cyan"
+                                                                    onclick="
+                                                                        showState('skipping', null);
+                                                                        setTimeout(
+                                                                            () =>
+                                                                                showState(
+                                                                                    'skipped',
+                                                                                    null
+                                                                                ),
+                                                                            1500
+                                                                        );
+                                                                    "
+                                                                >
+                                                                    Yes, Skip
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                        <div class="skip-reason">
+                                                            <label>Reason (optional)</label>
+                                                            <textarea
+                                                                placeholder="Why are you skipping this step? e.g., 'Low-risk change, auto-merge acceptable'"
+                                                            ></textarea>
+                                                        </div>
+                                                    </div>
+                                                    <div id="skip-loading-s" class="hidden">
+                                                        <button
+                                                            class="skip-btn"
+                                                            style="opacity: 0.7; cursor: wait"
+                                                        >
+                                                            <svg
+                                                                viewBox="0 0 24 24"
+                                                                fill="none"
+                                                                stroke="currentColor"
+                                                                stroke-width="2"
+                                                                stroke-linecap="round"
+                                                                style="
+                                                                    animation: spin 1s linear
+                                                                        infinite;
+                                                                "
+                                                            >
+                                                                <circle
+                                                                    cx="12"
+                                                                    cy="12"
+                                                                    r="10"
+                                                                    stroke-dasharray="30 70"
+                                                                />
+                                                            </svg>
+                                                            Skipping...
+                                                        </button>
+                                                    </div>
+                                                    <div
+                                                        id="skip-done-s"
+                                                        class="skipped-banner hidden"
+                                                    >
+                                                        <div class="skipped-icon">
+                                                            <svg
+                                                                width="18"
+                                                                height="18"
+                                                                viewBox="0 0 24 24"
+                                                                fill="none"
+                                                                stroke="var(--slate-500)"
+                                                                stroke-width="2"
+                                                                stroke-linecap="round"
+                                                            >
+                                                                <polygon
+                                                                    points="5 4 15 12 5 20 5 4"
+                                                                />
+                                                                <line
+                                                                    x1="19"
+                                                                    y1="5"
+                                                                    x2="19"
+                                                                    y2="19"
+                                                                />
+                                                            </svg>
+                                                        </div>
+                                                        <div class="skip-confirm-text">
+                                                            <div
+                                                                class="skip-confirm-title"
+                                                                style="color: var(--slate-500)"
+                                                            >
+                                                                Step skipped
+                                                            </div>
+                                                            <div class="skip-confirm-desc">
+                                                                merge-review was skipped. The
+                                                                workflow is continuing from the next
+                                                                step.
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Step 5: Pending -->
+                                <div class="step-row">
+                                    <div class="step-ind">
+                                        <div class="step-dot pending" id="pend-dot-s">5</div>
+                                    </div>
+                                    <div class="step-body" style="padding-bottom: 0">
+                                        <div class="step-hdr" style="cursor: default">
+                                            <span
+                                                class="step-lbl"
+                                                style="color: var(--text-muted)"
+                                                id="pend-lbl-s"
+                                                >Post Audit Summary</span
+                                            ><span class="step-desc" id="pend-desc-s"
+                                                >tool &middot; pending</span
+                                            >
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="action-buttons" id="action-btns-s">
+                            <button class="btn btn-primary">Approve</button>
+                            <button class="btn btn-destructive">Reject</button>
+                            <button class="btn btn-outline">Feedback</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ===== FAILED SCENARIO ===== -->
+            <div id="scenario-failed" class="chrome hidden">
+                <div class="chrome-bar">
+                    <div class="chrome-dots">
+                        <span class="dot dot-r"></span><span class="dot dot-y"></span
+                        ><span class="dot dot-g"></span>
+                    </div>
+                    /command -- Skip on Failed Step (Phase 0 + 1 + 2 + 3)
+                </div>
+                <div class="chrome-body">
+                    <div class="decision-card" style="border-left-color: var(--red-500)">
+                        <div class="card-header">
+                            <div>
+                                <div class="card-meta">
+                                    <span
+                                        style="
+                                            font-family: &quot;JetBrains Mono&quot;, monospace;
+                                            font-size: 13px;
+                                            color: var(--red-500);
+                                            font-weight: 600;
+                                        "
+                                        >12m ago</span
+                                    >
+                                    <span class="badge badge-red">high</span>
+                                    <span class="badge badge-blue">workflow</span>
+                                    <span style="color: var(--text-secondary); font-size: 13px"
+                                        >sdlc-bugfix-pipeline</span
+                                    >
+                                </div>
+                                <div class="card-title">
+                                    Workflow run failed at step ci-validation
+                                </div>
+                                <div class="card-subtitle">
+                                    <span>&#x1f534; high risk</span
+                                    ><span>Step: <code>ci-validation</code></span
+                                    ><span>Run: <code>cmn4r7jk...</code></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="workflow-steps">
+                            <div class="steps-header">
+                                <span class="steps-header-left">Workflow Steps (5)</span>
+                            </div>
+                            <div class="stepper">
+                                <!-- Steps 1-3: Completed -->
+                                <div class="step-row">
+                                    <div class="step-ind">
+                                        <div class="step-dot completed">
+                                            <svg
+                                                width="12"
+                                                height="12"
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                stroke-width="2.5"
+                                                stroke-linecap="round"
+                                            >
+                                                <polyline points="20 6 9 17 4 12" />
+                                            </svg>
+                                        </div>
+                                        <div class="step-line green"></div>
+                                    </div>
+                                    <div class="step-body">
+                                        <div class="step-hdr">
+                                            <span
+                                                class="step-lbl"
+                                                style="color: var(--text-primary)"
+                                                >Create Issue</span
+                                            ><span class="step-desc">tool &middot; 1ms</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="step-row">
+                                    <div class="step-ind">
+                                        <div class="step-dot completed">
+                                            <svg
+                                                width="12"
+                                                height="12"
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                stroke-width="2.5"
+                                                stroke-linecap="round"
+                                            >
+                                                <polyline points="20 6 9 17 4 12" />
+                                            </svg>
+                                        </div>
+                                        <div class="step-line green"></div>
+                                    </div>
+                                    <div class="step-body">
+                                        <div class="step-hdr">
+                                            <span
+                                                class="step-lbl"
+                                                style="color: var(--text-primary)"
+                                                >Run Bugfix</span
+                                            ><span class="badge badge-muted">agent</span
+                                            ><span class="step-desc">5m 12s</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="step-row">
+                                    <div class="step-ind">
+                                        <div class="step-dot completed">
+                                            <svg
+                                                width="12"
+                                                height="12"
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                stroke-width="2.5"
+                                                stroke-linecap="round"
+                                            >
+                                                <polyline points="20 6 9 17 4 12" />
+                                            </svg>
+                                        </div>
+                                        <div class="step-line green"></div>
+                                    </div>
+                                    <div class="step-body">
+                                        <div class="step-hdr">
+                                            <span
+                                                class="step-lbl"
+                                                style="color: var(--text-primary)"
+                                                >Merge Review</span
+                                            ><span class="badge badge-muted">human</span
+                                            ><span class="step-desc">approved</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Step 4: FAILED -- CI Validation -->
+                                <div class="step-row">
+                                    <div class="step-ind">
+                                        <div class="step-dot failed" id="fail-dot-f">
+                                            <svg
+                                                width="12"
+                                                height="12"
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                stroke-width="2.5"
+                                                stroke-linecap="round"
+                                            >
+                                                <path d="M18 6L6 18M6 6l12 12" />
+                                            </svg>
+                                        </div>
+                                        <div class="step-line red" id="fail-line-f"></div>
+                                    </div>
+                                    <div class="step-body">
+                                        <div
+                                            class="step-hdr"
+                                            style="background: rgba(255, 255, 255, 0.03)"
+                                        >
+                                            <span
+                                                class="step-lbl"
+                                                style="color: var(--red-500)"
+                                                id="fail-lbl-f"
+                                                >CI Validation</span
+                                            >
+                                            <span class="badge badge-muted">tool</span>
+                                            <span class="step-desc">45s</span>
+                                            <span
+                                                class="badge badge-red"
+                                                style="margin-left: auto"
+                                                id="fail-badge-f"
+                                                >failed</span
+                                            >
+                                            <svg
+                                                class="step-chev open"
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                stroke-width="2"
+                                                stroke-linecap="round"
+                                            >
+                                                <polyline points="6 9 12 15 18 9" />
+                                            </svg>
+                                        </div>
+                                        <div class="inline-detail">
+                                            <div class="id-meta">
+                                                <div class="meta-item">
+                                                    <span>Duration</span>
+                                                    <span class="meta-val">45s</span>
+                                                </div>
+                                                <div class="meta-item">
+                                                    <span>Type</span>
+                                                    <span class="meta-val">tool</span>
+                                                </div>
+                                            </div>
+                                            <div class="id-body">
+                                                <div class="det-sec" id="fail-error-f">
+                                                    <div class="det-lbl">Error</div>
+                                                    <div class="error-block">
+                                                        <div class="error-title">
+                                                            <svg
+                                                                width="12"
+                                                                height="12"
+                                                                viewBox="0 0 24 24"
+                                                                fill="none"
+                                                                stroke="currentColor"
+                                                                stroke-width="2"
+                                                            >
+                                                                <circle cx="12" cy="12" r="10" />
+                                                                <line
+                                                                    x1="15"
+                                                                    y1="9"
+                                                                    x2="9"
+                                                                    y2="15"
+                                                                />
+                                                                <line
+                                                                    x1="9"
+                                                                    y1="9"
+                                                                    x2="15"
+                                                                    y2="15"
+                                                                />
+                                                            </svg>
+                                                            CI Check Failed
+                                                        </div>
+                                                        <div class="error-msg">
+                                                            ESLint found 2 errors in
+                                                            packages/agentc2/src/tools/verify-tools.ts.
+                                                            Build failed with exit code 1.
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div
+                                                    class="det-sec"
+                                                    id="fail-skipped-f"
+                                                    style="display: none"
+                                                >
+                                                    <div class="det-lbl">Skip Output</div>
+                                                    <div
+                                                        class="summary-text"
+                                                        style="border-color: var(--slate-border)"
+                                                    >
+                                                        <strong>Step skipped by operator.</strong>
+
+                                                        Reason: "CI failure is a known flaky test.
+                                                        Will fix separately." A synthetic output was
+                                                        injected and the workflow continued.
+                                                    </div>
+                                                </div>
+
+                                                <!-- Skip + Retry buttons -->
+                                                <div class="det-sec">
+                                                    <div
+                                                        id="skip-default-f"
+                                                        style="
+                                                            display: flex;
+                                                            gap: 8px;
+                                                            flex-wrap: wrap;
+                                                        "
+                                                    >
+                                                        <button
+                                                            class="retry-btn-f"
+                                                            onclick="event.stopPropagation()"
+                                                            style="
+                                                                display: inline-flex;
+                                                                align-items: center;
+                                                                gap: 6px;
+                                                                padding: 6px 14px;
+                                                                border-radius: 8px;
+                                                                font-size: 12px;
+                                                                font-weight: 600;
+                                                                cursor: pointer;
+                                                                border: 1px solid
+                                                                    var(--amber-border);
+                                                                background: var(--amber-bg);
+                                                                color: var(--amber-500);
+                                                                font-family:
+                                                                    &quot;DM Sans&quot;, sans-serif;
+                                                                transition: all 0.15s;
+                                                            "
+                                                        >
+                                                            <svg
+                                                                width="14"
+                                                                height="14"
+                                                                viewBox="0 0 24 24"
+                                                                fill="none"
+                                                                stroke="currentColor"
+                                                                stroke-width="2"
+                                                                stroke-linecap="round"
+                                                            >
+                                                                <polyline
+                                                                    points="23 4 23 10 17 10"
+                                                                />
+                                                                <path
+                                                                    d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"
+                                                                />
+                                                            </svg>
+                                                            Retry Step
+                                                        </button>
+                                                        <button
+                                                            class="skip-btn"
+                                                            onclick="showState('confirm', null)"
+                                                        >
+                                                            <svg
+                                                                viewBox="0 0 24 24"
+                                                                fill="none"
+                                                                stroke="currentColor"
+                                                                stroke-width="2"
+                                                                stroke-linecap="round"
+                                                            >
+                                                                <polygon
+                                                                    points="5 4 15 12 5 20 5 4"
+                                                                />
+                                                                <line
+                                                                    x1="19"
+                                                                    y1="5"
+                                                                    x2="19"
+                                                                    y2="19"
+                                                                />
+                                                            </svg>
+                                                            Skip &amp; Continue
+                                                        </button>
+                                                    </div>
+                                                    <div
+                                                        id="skip-confirm-f"
+                                                        class="skip-confirm hidden"
+                                                    >
+                                                        <div class="skip-confirm-top">
+                                                            <div class="skip-confirm-icon">
+                                                                <svg
+                                                                    width="18"
+                                                                    height="18"
+                                                                    viewBox="0 0 24 24"
+                                                                    fill="none"
+                                                                    stroke="var(--cyan-500)"
+                                                                    stroke-width="2"
+                                                                    stroke-linecap="round"
+                                                                >
+                                                                    <polygon
+                                                                        points="5 4 15 12 5 20 5 4"
+                                                                    />
+                                                                    <line
+                                                                        x1="19"
+                                                                        y1="5"
+                                                                        x2="19"
+                                                                        y2="19"
+                                                                    />
+                                                                </svg>
+                                                            </div>
+                                                            <div class="skip-confirm-text">
+                                                                <div class="skip-confirm-title">
+                                                                    Skip this failed step?
+                                                                </div>
+                                                                <div class="skip-confirm-desc">
+                                                                    The step
+                                                                    <code>ci-validation</code> will
+                                                                    be marked as skipped. A
+                                                                    synthetic output will be
+                                                                    injected and the workflow will
+                                                                    continue. Downstream steps may
+                                                                    receive incomplete data.
+                                                                </div>
+                                                            </div>
+                                                            <div class="skip-confirm-actions">
+                                                                <button
+                                                                    class="btn btn-ghost"
+                                                                    onclick="
+                                                                        showState('default', null)
+                                                                    "
+                                                                >
+                                                                    Cancel
+                                                                </button>
+                                                                <button
+                                                                    class="btn btn-cyan"
+                                                                    onclick="
+                                                                        showState('skipping', null);
+                                                                        setTimeout(
+                                                                            () =>
+                                                                                showState(
+                                                                                    'skipped',
+                                                                                    null
+                                                                                ),
+                                                                            1500
+                                                                        );
+                                                                    "
+                                                                >
+                                                                    Yes, Skip
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                        <div class="skip-reason">
+                                                            <label>Reason (optional)</label>
+                                                            <textarea
+                                                                placeholder="Why are you skipping this step? e.g., 'Known flaky test, will fix separately'"
+                                                            ></textarea>
+                                                        </div>
+                                                    </div>
+                                                    <div id="skip-loading-f" class="hidden">
+                                                        <button
+                                                            class="skip-btn"
+                                                            style="opacity: 0.7; cursor: wait"
+                                                        >
+                                                            <svg
+                                                                viewBox="0 0 24 24"
+                                                                fill="none"
+                                                                stroke="currentColor"
+                                                                stroke-width="2"
+                                                                stroke-linecap="round"
+                                                                style="
+                                                                    animation: spin 1s linear
+                                                                        infinite;
+                                                                "
+                                                            >
+                                                                <circle
+                                                                    cx="12"
+                                                                    cy="12"
+                                                                    r="10"
+                                                                    stroke-dasharray="30 70"
+                                                                />
+                                                            </svg>
+                                                            Skipping...
+                                                        </button>
+                                                    </div>
+                                                    <div
+                                                        id="skip-done-f"
+                                                        class="skipped-banner hidden"
+                                                    >
+                                                        <div class="skipped-icon">
+                                                            <svg
+                                                                width="18"
+                                                                height="18"
+                                                                viewBox="0 0 24 24"
+                                                                fill="none"
+                                                                stroke="var(--slate-500)"
+                                                                stroke-width="2"
+                                                                stroke-linecap="round"
+                                                            >
+                                                                <polygon
+                                                                    points="5 4 15 12 5 20 5 4"
+                                                                />
+                                                                <line
+                                                                    x1="19"
+                                                                    y1="5"
+                                                                    x2="19"
+                                                                    y2="19"
+                                                                />
+                                                            </svg>
+                                                        </div>
+                                                        <div class="skip-confirm-text">
+                                                            <div
+                                                                class="skip-confirm-title"
+                                                                style="color: var(--slate-500)"
+                                                            >
+                                                                Step skipped
+                                                            </div>
+                                                            <div class="skip-confirm-desc">
+                                                                ci-validation was skipped. The
+                                                                workflow is continuing from Post
+                                                                Audit Summary.
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Step 5: Pending -->
+                                <div class="step-row">
+                                    <div class="step-ind">
+                                        <div class="step-dot pending" id="pend-dot-f">5</div>
+                                    </div>
+                                    <div class="step-body" style="padding-bottom: 0">
+                                        <div class="step-hdr" style="cursor: default">
+                                            <span
+                                                class="step-lbl"
+                                                style="color: var(--text-muted)"
+                                                id="pend-lbl-f"
+                                                >Post Audit Summary</span
+                                            ><span class="step-desc" id="pend-desc-f"
+                                                >tool &middot; pending</span
+                                            >
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <!-- SECTION 4: FILES CHANGED                                          -->
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <div class="section">
+            <div class="section-eyebrow">Manifest</div>
+            <div class="section-title">Files Changed</div>
+            <table class="spec-table">
+                <thead>
+                    <tr>
+                        <th>Action</th>
+                        <th>File</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="badge badge-green">New</span></td>
+                        <td><code>apps/agent/src/app/api/reviews/[id]/skip/route.ts</code></td>
+                        <td>
+                            POST route: determines suspended vs. failed path, calls resume or
+                            injects synthetic output + re-executes
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-amber">Modify</span></td>
+                        <td>
+                            <code>apps/agent/src/app/command/components/WorkflowStepsCard.tsx</code>
+                        </td>
+                        <td>
+                            Add "Skip &amp; Continue" button with reason input for SUSPENDED and
+                            FAILED steps
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-amber">Modify</span></td>
+                        <td><code>apps/agent/src/app/command/hooks/useReviews.ts</code></td>
+                        <td>
+                            Add <code>handleSkipStep(reviewId, stepId, reason?)</code> handler and
+                            export
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-amber">Modify</span></td>
+                        <td><code>apps/agent/src/app/command/components/DecisionCard.tsx</code></td>
+                        <td>
+                            Thread <code>onSkipStep</code> callback through to WorkflowStepsCard
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-amber">Modify</span></td>
+                        <td><code>apps/agent/src/app/command/page.tsx</code></td>
+                        <td>Pass <code>handleSkipStep</code> from useReviews to DecisionCard</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <!-- SECTION 5: REAL DATA SHAPES                                       -->
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <div class="section">
+            <div class="section-eyebrow">Data</div>
+            <div class="section-title">Production Data Shapes</div>
+            <div class="section-desc">
+                The request body, synthetic output injected for skipped steps, and the two API
+                response variants.
+            </div>
+
+            <div class="type-grid">
+                <div class="type-card active" onclick="showDataType('req')">
+                    <div class="tc-icon">&#x1f4e4;</div>
+                    <div class="tc-name">Request Body</div>
+                    <div class="tc-desc">POST payload</div>
+                </div>
+                <div class="type-card" onclick="showDataType('synth')">
+                    <div class="tc-icon">&#x1f3ed;</div>
+                    <div class="tc-name">Synthetic Output</div>
+                    <div class="tc-desc">Injected for skipped step</div>
+                </div>
+                <div class="type-card" onclick="showDataType('resp')">
+                    <div class="tc-icon">&#x2705;</div>
+                    <div class="tc-name">API Response</div>
+                    <div class="tc-desc">Success / error</div>
+                </div>
+            </div>
+
+            <div id="data-req" class="chrome">
+                <div class="chrome-bar">
+                    <div class="chrome-dots">
+                        <span class="dot dot-r"></span><span class="dot dot-y"></span
+                        ><span class="dot dot-g"></span>
+                    </div>
+                    POST /api/reviews/{id}/skip
+                </div>
+                <div class="chrome-body">
+                    <pre class="raw-pre">
+{
+  "stepId": "merge-review",
+  "reason": "Low-risk fix, auto-merge is acceptable for this PR."
+}
+
+// reason is optional -- if omitted, defaults to "User skipped"</pre
+                    >
+                </div>
+            </div>
+
+            <div id="data-synth" class="chrome hidden">
+                <div class="chrome-bar">
+                    <div class="chrome-dots">
+                        <span class="dot dot-r"></span><span class="dot dot-y"></span
+                        ><span class="dot dot-g"></span>
+                    </div>
+                    Synthetic Output (injected into existingSteps or resume data)
+                </div>
+                <div class="chrome-body">
+                    <pre class="raw-pre">
+// For SUSPENDED steps (resume data):
+{
+  "decision": "skipped",
+  "skipped": true,
+  "approved": false,
+  "reason": "Low-risk fix, auto-merge is acceptable for this PR.",
+  "skippedBy": "user_2x8kN...",
+  "skippedAt": "2026-03-13T15:32:00.000Z",
+  "channel": "command-ui"
+}
+
+// For FAILED steps (injected into existingSteps):
+{
+  "skipped": true,
+  "reason": "Known flaky test, will fix separately.",
+  "skippedBy": "user_2x8kN...",
+  "skippedAt": "2026-03-13T15:32:00.000Z",
+  "originalError": {
+    "message": "ESLint found 2 errors",
+    "code": "CI_FAILED"
+  }
+}</pre
+                    >
+                </div>
+            </div>
+
+            <div id="data-resp" class="chrome hidden">
+                <div class="chrome-bar">
+                    <div class="chrome-dots">
+                        <span class="dot dot-r"></span><span class="dot dot-y"></span
+                        ><span class="dot dot-g"></span>
+                    </div>
+                    Response (200 OK)
+                </div>
+                <div class="chrome-body">
+                    <pre class="raw-pre">
+// Success (workflow continues)
+{
+  "success": true,
+  "status": "completed",  // or "suspended" if next human step
+  "runId": "cmn3p8gl...",
+  "skippedStepId": "merge-review",
+  "path": "suspended"  // or "failed"
+}
+
+// Error -- step not skippable
+{
+  "success": false,
+  "error": "Step 'create-issue' is COMPLETED and cannot be skipped"
+}
+
+// Error -- no workflow run
+{
+  "success": false,
+  "error": "No workflow run linked to this review"
+}</pre
+                    >
+                </div>
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <!-- SECTION 6: STEP-BY-STEP IMPLEMENTATION                            -->
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <div class="section">
+            <div class="section-eyebrow">Implementation</div>
+            <div class="section-title">Step-by-Step</div>
+
+            <!-- Step 1: API Route -->
+            <div class="impl-step">
+                <h3>Step 1: Skip API Route</h3>
+                <div class="impl-meta">
+                    <span
+                        ><strong>File:</strong>
+                        <code>apps/agent/src/app/api/reviews/[id]/skip/route.ts</code></span
+                    >
+                    <span
+                        ><strong>Pattern:</strong>
+                        <code>apps/agent/src/app/api/reviews/[id]/retry/route.ts</code> (Phase
+                        2)</span
+                    >
+                </div>
+
+                <div class="detail-section">
+                    <div class="detail-section-label">Key Imports</div>
+                    <pre class="raw-pre">
+import { prisma, Prisma } from "@repo/database"
+import { executeWorkflowDefinition, type WorkflowDefinition } from "@repo/agentc2/workflows"
+import { refreshWorkflowMetrics } from "@/lib/metrics"
+import { authenticateRequest } from "@/lib/api-auth"</pre
+                    >
+                </div>
+
+                <div class="detail-section">
+                    <div class="detail-section-label">Logic</div>
+                    <ol>
+                        <li>Authenticate request via <code>authenticateRequest()</code></li>
+                        <li>Parse <code>{ stepId, reason? }</code> from request body</li>
+                        <li>
+                            Look up <code>ApprovalRequest</code> by <code>id</code>, include
+                            <code>workflowRun</code> with <code>steps</code> and
+                            <code>workflow</code>
+                        </li>
+                        <li>Validate: approval exists, has a linked <code>workflowRun</code></li>
+                        <li>
+                            Find the target step -- confirm its status is <code>FAILED</code> or the
+                            run's <code>suspendedStep</code> matches <code>stepId</code>
+                        </li>
+                        <li>
+                            <strong>SUSPENDED PATH</strong> (run.suspendedStep === stepId):
+                            <ol type="a">
+                                <li>
+                                    Build resume data:
+                                    <code
+                                        >{ decision: "skipped", skipped: true, approved: false,
+                                        reason, skippedBy, skippedAt, channel: "command-ui" }</code
+                                    >
+                                </li>
+                                <li>
+                                    Call the resume API internally:
+                                    <code>POST /api/workflows/{slug}/runs/{runId}/resume</code> with
+                                    the skip resume data
+                                </li>
+                                <li>
+                                    Update the <code>ApprovalRequest</code> status to
+                                    <code>"skipped"</code> with <code>decisionReason</code>
+                                </li>
+                            </ol>
+                        </li>
+                        <li>
+                            <strong>FAILED PATH</strong> (step.status === "FAILED"):
+                            <ol type="a">
+                                <li>Build <code>existingSteps</code> from all COMPLETED steps</li>
+                                <li>
+                                    Inject synthetic output for the failed step:
+                                    <code
+                                        >existingSteps[stepId] = { skipped: true, reason, skippedBy,
+                                        skippedAt, originalError }</code
+                                    >
+                                </li>
+                                <li>Set run status to <code>RUNNING</code></li>
+                                <li>
+                                    Call
+                                    <code
+                                        >executeWorkflowDefinition({ definition, input,
+                                        existingSteps })</code
+                                    >
+                                    (no resume -- all steps including the skipped one are in
+                                    existingSteps)
+                                </li>
+                                <li>
+                                    Update the failed step's DB record: status
+                                    <code>COMPLETED</code>, outputJson = synthetic output
+                                </li>
+                            </ol>
+                        </li>
+                        <li>
+                            Update remaining <code>WorkflowRunStep</code> records with execution
+                            results
+                        </li>
+                        <li>Update <code>WorkflowRun</code> final status</li>
+                        <li>Call <code>refreshWorkflowMetrics()</code></li>
+                        <li>
+                            Return
+                            <code>{ success: true, status, runId, skippedStepId, path }</code>
+                        </li>
+                    </ol>
+                </div>
+
+                <div class="detail-section">
+                    <div class="detail-section-label">Error Responses</div>
+                    <table class="spec-table">
+                        <thead>
+                            <tr>
+                                <th>Code</th>
+                                <th>Condition</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>401</td>
+                                <td>Unauthenticated</td>
+                            </tr>
+                            <tr>
+                                <td>404</td>
+                                <td>Approval request not found</td>
+                            </tr>
+                            <tr>
+                                <td>400</td>
+                                <td>No workflow run linked to this review</td>
+                            </tr>
+                            <tr>
+                                <td>400</td>
+                                <td><code>stepId</code> not provided</td>
+                            </tr>
+                            <tr>
+                                <td>409</td>
+                                <td>Step is COMPLETED -- cannot skip a completed step</td>
+                            </tr>
+                            <tr>
+                                <td>409</td>
+                                <td>Step is PENDING -- not yet reached, cannot skip</td>
+                            </tr>
+                            <tr>
+                                <td>409</td>
+                                <td>Run is in terminal state (COMPLETED, CANCELLED)</td>
+                            </tr>
+                            <tr>
+                                <td>500</td>
+                                <td>Resume or executeWorkflowDefinition failed</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Step 2: useReviews handler -->
+            <div class="impl-step">
+                <h3>Step 2: useReviews Handler</h3>
+                <div class="impl-meta">
+                    <span
+                        ><strong>File:</strong>
+                        <code>apps/agent/src/app/command/hooks/useReviews.ts</code></span
+                    >
+                </div>
+
+                <div class="detail-section">
+                    <div class="detail-section-label">Interface</div>
+                    <pre class="raw-pre">
+async function handleSkipStep(
+  reviewId: string,
+  stepId: string,
+  reason?: string
+): Promise&lt;void&gt;</pre
+                    >
+                </div>
+
+                <div class="detail-section">
+                    <div class="detail-section-label">Logic</div>
+                    <ol>
+                        <li>Set <code>actingId</code> to <code>reviewId</code></li>
+                        <li>
+                            POST to <code>${getApiBase()}/api/reviews/${reviewId}/skip</code> with
+                            <code>{ stepId, reason }</code>
+                        </li>
+                        <li>
+                            On success: <code>addToast("Step skipped, workflow continuing")</code>,
+                            re-fetch reviews and metrics
+                        </li>
+                        <li>On failure: <code>addToast(data.error, "error")</code></li>
+                        <li>Finally: clear <code>actingId</code></li>
+                    </ol>
+                </div>
+
+                <div class="detail-section">
+                    <div class="detail-section-label">Export</div>
+                    <pre class="raw-pre">
+return {
+  ...existingExports,
+  handleRetryStep,   // Phase 2
+  handleSkipStep     // Phase 3
+}</pre
+                    >
+                </div>
+            </div>
+
+            <!-- Step 3: Prop threading -->
+            <div class="impl-step">
+                <h3>Step 3: Prop Threading</h3>
+                <div class="impl-meta">
+                    <span
+                        ><strong>File:</strong>
+                        <code>apps/agent/src/app/command/components/DecisionCard.tsx</code></span
+                    >
+                    <span
+                        ><strong>File:</strong>
+                        <code>apps/agent/src/app/command/page.tsx</code></span
+                    >
+                </div>
+
+                <div class="detail-section">
+                    <div class="detail-section-label">Interface</div>
+                    <pre class="raw-pre">
+// Add to DecisionCardProps
+interface DecisionCardProps {
+  ...existing,
+  onRetryStep?: (reviewId: string, stepId: string) => void  // Phase 2
+  onSkipStep?: (reviewId: string, stepId: string, reason?: string) => void
+}
+
+// Add to WorkflowStepsCard props
+interface WorkflowStepsCardProps {
+  reviewId: string
+  onRetryStep?: (stepId: string) => void         // Phase 2
+  onSkipStep?: (stepId: string, reason?: string) => void
+}</pre
+                    >
+                </div>
+
+                <div class="detail-section">
+                    <div class="detail-section-label">Logic</div>
+                    <ol>
+                        <li>
+                            <code>page.tsx</code>: pass <code>handleSkipStep</code> to
+                            <code>DecisionCard</code> as <code>onSkipStep</code>
+                        </li>
+                        <li>
+                            <code>DecisionCard</code>: pass
+                            <code>(stepId, reason) => onSkipStep?.(review.id, stepId, reason)</code>
+                            to <code>WorkflowStepsCard</code>
+                        </li>
+                        <li>
+                            <code>WorkflowStepsCard</code>: render skip button for SUSPENDED and
+                            FAILED steps, calls <code>onSkipStep?.(step.stepId, reason)</code>
+                        </li>
+                    </ol>
+                </div>
+            </div>
+
+            <!-- Step 4: WorkflowStepsCard UI -->
+            <div class="impl-step">
+                <h3>Step 4: Skip UI in WorkflowStepsCard</h3>
+                <div class="impl-meta">
+                    <span
+                        ><strong>File:</strong>
+                        <code
+                            >apps/agent/src/app/command/components/WorkflowStepsCard.tsx</code
+                        ></span
+                    >
+                </div>
+
+                <div class="detail-section">
+                    <div class="detail-section-label">New State</div>
+                    <pre class="raw-pre">
+const [skipStepId, setSkipStepId] = useState&lt;string | null&gt;(null)
+const [confirmSkipStepId, setConfirmSkipStepId] = useState&lt;string | null&gt;(null)
+const [skipReason, setSkipReason] = useState("")</pre
+                    >
+                </div>
+
+                <div class="detail-section">
+                    <div class="detail-section-label">Logic</div>
+                    <ol>
+                        <li>
+                            Inside the expanded step detail, check if step is FAILED or SUSPENDED
+                        </li>
+                        <li>
+                            If skippable and <code>onSkipStep</code> is provided, render "Skip &amp;
+                            Continue" button
+                        </li>
+                        <li>
+                            For FAILED steps: render alongside the Retry button (Phase 2) as a
+                            secondary action
+                        </li>
+                        <li>
+                            For SUSPENDED steps: render as a standalone button below the decision
+                            prompt
+                        </li>
+                        <li>
+                            On click: set <code>confirmSkipStepId</code> to show confirmation with
+                            optional reason textarea
+                        </li>
+                        <li>
+                            Confirmation includes a warning that downstream steps may receive
+                            incomplete data (for failed path)
+                        </li>
+                        <li>
+                            On confirm: set <code>skipStepId</code>, call
+                            <code>onSkipStep(step.stepId, skipReason || undefined)</code>
+                        </li>
+                        <li>On success: clear states, re-fetch steps</li>
+                        <li>
+                            After skip: the step visually transitions to a "skipped" state with a
+                            slate-colored dot and skip icon
+                        </li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <!-- SECTION 8: EDGE CASES                                             -->
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <div class="section">
+            <div class="section-eyebrow">Edge Cases</div>
+            <div class="section-title">Failure Scenarios</div>
+            <table class="spec-table">
+                <thead>
+                    <tr>
+                        <th>Scenario</th>
+                        <th>Backend</th>
+                        <th>Frontend</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Step is COMPLETED (race condition)</td>
+                        <td>Return 409: "Cannot skip a completed step"</td>
+                        <td>Show error toast, re-fetch steps</td>
+                    </tr>
+                    <tr>
+                        <td>Step is PENDING (not yet reached)</td>
+                        <td>Return 409: "Step not yet reached"</td>
+                        <td>Skip button not rendered for PENDING steps (pre-validated)</td>
+                    </tr>
+                    <tr>
+                        <td>Run was cancelled while skip in progress</td>
+                        <td>Return 409: "Run is cancelled"</td>
+                        <td>Show error toast, re-fetch to update stepper</td>
+                    </tr>
+                    <tr>
+                        <td>Skip succeeds but next step also fails</td>
+                        <td>Return <code>{ status: "failed" }</code></td>
+                        <td>
+                            Re-fetch: skipped step shows as completed/skipped, next step shows
+                            failed with its own retry/skip
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Skip succeeds and next step suspends</td>
+                        <td>Return <code>{ status: "suspended" }</code></td>
+                        <td>Stepper updates: skipped step completed, next step suspended</td>
+                    </tr>
+                    <tr>
+                        <td>Downstream step relies on skipped step's output</td>
+                        <td>
+                            Step receives synthetic <code>{ skipped: true }</code> as input; may
+                            fail if it expects specific fields
+                        </td>
+                        <td>
+                            Warning in confirmation: "Downstream steps may receive incomplete data"
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>User provides very long reason text</td>
+                        <td>Stored in DB as-is (text field)</td>
+                        <td>
+                            Textarea has <code>resize: vertical</code>; no character limit enforced
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Empty reason</td>
+                        <td>Defaults to "User skipped"</td>
+                        <td>Reason field is optional; placeholder hints at expected content</td>
+                    </tr>
+                    <tr>
+                        <td>Skip on last step in workflow</td>
+                        <td>Workflow completes immediately after skip</td>
+                        <td>Stepper shows all steps complete (last one as skipped)</td>
+                    </tr>
+                    <tr>
+                        <td>Network timeout during skip</td>
+                        <td>N/A (client-side)</td>
+                        <td>Show error toast "Network error", clear loading state</td>
+                    </tr>
+                    <tr>
+                        <td>
+                            Approval already resolved (e.g., approved in Slack while skipping in UI)
+                        </td>
+                        <td>Return 400 via existing status check</td>
+                        <td>Show error toast, card may be removed from list</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <!-- SECTION 9: COMPONENT ARCHITECTURE                                 -->
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <div class="section">
+            <div class="section-eyebrow">Architecture</div>
+            <div class="section-title">Component Architecture</div>
+            <table class="spec-table">
+                <thead>
+                    <tr>
+                        <th>Component / Function</th>
+                        <th>Purpose</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>POST /api/reviews/[id]/skip</code></td>
+                        <td>
+                            Convenience route: resolves approval &rarr; determines suspended vs.
+                            failed path &rarr; resumes with skip data or injects synthetic output
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><code>handleSkipStep()</code></td>
+                        <td>
+                            Hook handler: POST to skip API with optional reason, toast, re-fetch
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><code>WorkflowStepsCard</code></td>
+                        <td>
+                            Renders skip button for SUSPENDED/FAILED steps, manages
+                            confirm/loading/reason state
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><code>DecisionCard</code></td>
+                        <td>Passes <code>onSkipStep</code> callback to WorkflowStepsCard</td>
+                    </tr>
+                    <tr>
+                        <td><code>page.tsx</code></td>
+                        <td>
+                            Sources <code>handleSkipStep</code> from useReviews, passes to
+                            DecisionCard
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <!-- SECTION 10: DATA FLOW TRACE                                       -->
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <div class="section">
+            <div class="section-eyebrow">Data Flow</div>
+            <div class="section-title">Call Chain</div>
+            <pre class="raw-pre" style="font-size: 12px; line-height: 1.8">
+User clicks "Skip &amp; Continue" on suspended/failed step
+    └─ WorkflowStepsCard: setConfirmSkipStepId(stepId)
+User enters optional reason, clicks "Yes, Skip"
+    └─ WorkflowStepsCard: setSkipStepId(stepId)
+        └─ WorkflowStepsCard: onSkipStep(stepId, reason)
+            └─ DecisionCard: onSkipStep(review.id, stepId, reason)
+                └─ page.tsx: handleSkipStep(reviewId, stepId, reason)
+                    └─ useReviews.handleSkipStep()
+                        └─ POST /api/reviews/{id}/skip { stepId, reason }
+                            └─ authenticateRequest()
+                            └─ prisma.approvalRequest.findUnique(...)
+                            └─ Determine path: suspended vs. failed
+                            ├─ SUSPENDED:
+                            │   └─ POST /api/workflows/{slug}/runs/{runId}/resume
+                            │       └─ resumeData: { skipped: true, reason, ... }
+                            │   └─ prisma.approvalRequest.update({ status: "skipped" })
+                            └─ FAILED:
+                                └─ Build existingSteps from COMPLETED + synthetic for failed
+                                └─ executeWorkflowDefinition({ existingSteps })
+                                └─ prisma.workflowRunStep.update (failed → COMPLETED)
+                            └─ Upsert new step records
+                            └─ Update WorkflowRun status
+                            └─ refreshWorkflowMetrics()
+                        └─ On success: addToast("Step skipped, workflow continuing")
+                        └─ fetchReviews() + fetchMetrics()
+  </pre
+            >
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <!-- SECTION 11: PLAYWRIGHT TEST PLAN                                  -->
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <div class="section">
+            <div class="section-eyebrow">Testing</div>
+            <div class="section-title">Playwright Test Plan</div>
+            <table class="spec-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Step</th>
+                        <th>Assertion</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>1</td>
+                        <td>Navigate to <code>/command</code> and log in</td>
+                        <td>Page loads, decision cards visible</td>
+                    </tr>
+                    <tr>
+                        <td>2</td>
+                        <td>Find a card with a SUSPENDED workflow step</td>
+                        <td>Card shows amber badge and "suspended" indicator</td>
+                    </tr>
+                    <tr>
+                        <td>3</td>
+                        <td>Expand card and load workflow steps</td>
+                        <td>Stepper shows suspended step with pulsing amber dot</td>
+                    </tr>
+                    <tr>
+                        <td>4</td>
+                        <td>Click the suspended step to expand it</td>
+                        <td>Detail panel shows decision prompt and "Skip &amp; Continue" button</td>
+                    </tr>
+                    <tr>
+                        <td>5</td>
+                        <td>Click "Skip &amp; Continue"</td>
+                        <td>Confirmation bar with optional reason textarea appears</td>
+                    </tr>
+                    <tr>
+                        <td>6</td>
+                        <td>Type a reason and click "Yes, Skip"</td>
+                        <td>
+                            Button changes to "Skipping..." spinner. On success: step shows as
+                            skipped, toast displayed
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>7</td>
+                        <td>Find a card with a FAILED workflow step</td>
+                        <td>Card shows red badge</td>
+                    </tr>
+                    <tr>
+                        <td>8</td>
+                        <td>Expand the card and click the failed step</td>
+                        <td>
+                            Detail shows error block, "Retry Step" button (Phase 2), and "Skip &amp;
+                            Continue" button
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>9</td>
+                        <td>Click "Skip &amp; Continue" on the failed step</td>
+                        <td>
+                            Confirmation bar warns about downstream steps receiving incomplete data
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>10</td>
+                        <td>Click "Cancel" in confirmation</td>
+                        <td>Confirmation disappears, buttons return to default</td>
+                    </tr>
+                    <tr>
+                        <td>11</td>
+                        <td>
+                            Click "Skip &amp; Continue" again, skip the reason, click "Yes, Skip"
+                        </td>
+                        <td>
+                            Step transitions to skipped. If workflow completes, success toast shown
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>12</td>
+                        <td>Verify audit: expand the skipped step again</td>
+                        <td>
+                            Shows "Step skipped by operator" with reason (or "User skipped" if no
+                            reason given)
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <!-- SECTION 12: ACCEPTANCE CRITERIA                                   -->
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <div class="section">
+            <div class="section-eyebrow">Acceptance</div>
+            <div class="section-title">Criteria</div>
+            <div class="check-list">
+                &#x2610; SUSPENDED steps show "Skip &amp; Continue" button inside expanded detail
+                panel<br />
+                &#x2610; FAILED steps show "Skip &amp; Continue" button alongside "Retry Step"
+                (Phase 2)<br />
+                &#x2610; COMPLETED and PENDING steps do not show skip button<br />
+                &#x2610; Clicking skip shows confirmation bar with optional reason textarea<br />
+                &#x2610; Failed-step confirmation includes downstream impact warning<br />
+                &#x2610; During skip, button shows "Skipping..." with spinner<br />
+                &#x2610; On success: step visually transitions to skipped state (slate dot + skip
+                icon), toast displayed<br />
+                &#x2610; Skipped step's expanded detail shows audit info (who skipped, when,
+                reason)<br />
+                &#x2610; <code>POST /api/reviews/[id]/skip</code> correctly handles suspended path
+                (resume API)<br />
+                &#x2610; <code>POST /api/reviews/[id]/skip</code> correctly handles failed path
+                (synthetic output injection)<br />
+                &#x2610; Synthetic output includes <code>skipped: true</code>, <code>reason</code>,
+                <code>skippedBy</code>, <code>skippedAt</code><br />
+                &#x2610; For failed path, synthetic output preserves <code>originalError</code> for
+                audit<br />
+                &#x2610; Workflow continues from the next step after skip<br />
+                &#x2610; Workflow metrics refresh after successful skip<br />
+                &#x2610; No type-check or lint errors introduced<br />
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <!-- SECTION 13: EFFORT ESTIMATE                                       -->
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <div class="section">
+            <div class="section-eyebrow">Estimate</div>
+            <div class="section-title">Effort Breakdown</div>
+            <table class="spec-table">
+                <thead>
+                    <tr>
+                        <th>Task</th>
+                        <th>Estimate</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Skip API route -- suspended path (resume with skip data)</td>
+                        <td>25 min</td>
+                    </tr>
+                    <tr>
+                        <td>Skip API route -- failed path (synthetic output injection)</td>
+                        <td>35 min</td>
+                    </tr>
+                    <tr>
+                        <td>useReviews handler + export</td>
+                        <td>10 min</td>
+                    </tr>
+                    <tr>
+                        <td>
+                            Prop threading (page.tsx &rarr; DecisionCard &rarr; WorkflowStepsCard)
+                        </td>
+                        <td>10 min</td>
+                    </tr>
+                    <tr>
+                        <td>
+                            Skip UI in WorkflowStepsCard (button, reason input, confirm, loading,
+                            skipped state)
+                        </td>
+                        <td>35 min</td>
+                    </tr>
+                    <tr>
+                        <td>
+                            Visual "skipped" state in stepper (slate dot, skip icon, muted label)
+                        </td>
+                        <td>10 min</td>
+                    </tr>
+                    <tr>
+                        <td>Type-check, lint, manual testing</td>
+                        <td>15 min</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Total</strong></td>
+                        <td><strong>~140 min</strong></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <script>
+            let currentScenario = "suspended";
+
+            function toggleStep(id) {
+                const detail = document.getElementById("detail-" + id);
+                const chev = document.getElementById("chev-" + id);
+                if (detail) detail.classList.toggle("hidden");
+                if (chev) chev.classList.toggle("open");
+            }
+
+            function showScenario(scenario) {
+                currentScenario = scenario;
+                document
+                    .querySelectorAll(".scenario-tab")
+                    .forEach((t) => t.classList.remove("active"));
+                event.currentTarget.classList.add("active");
+
+                document
+                    .getElementById("scenario-suspended")
+                    .classList.toggle("hidden", scenario !== "suspended");
+                document
+                    .getElementById("scenario-failed")
+                    .classList.toggle("hidden", scenario !== "failed");
+                document
+                    .getElementById("state-toggles-suspended")
+                    .classList.toggle("hidden", scenario !== "suspended");
+                document
+                    .getElementById("state-toggles-failed")
+                    .classList.toggle("hidden", scenario !== "failed");
+
+                // Reset state toggles
+                const toggles = document.getElementById("state-toggles-" + scenario);
+                toggles.querySelectorAll(".toggle-btn").forEach((b, i) => {
+                    b.classList.toggle("active", i === 0);
+                });
+                showState("default", null);
+            }
+
+            function showState(state, btn) {
+                if (btn) {
+                    const parent = btn.parentElement;
+                    parent
+                        .querySelectorAll(".toggle-btn")
+                        .forEach((b) => b.classList.remove("active"));
+                    btn.classList.add("active");
+                }
+
+                const suffix = currentScenario === "suspended" ? "s" : "f";
+
+                // Hide all state elements
+                ["skip-default-", "skip-confirm-", "skip-loading-", "skip-done-"].forEach(
+                    (prefix) => {
+                        const el = document.getElementById(prefix + suffix);
+                        if (el) el.classList.add("hidden");
+                        if (el) el.style.display = "none";
+                    }
+                );
+
+                if (currentScenario === "suspended") {
+                    const dot = document.getElementById("sus-dot-s");
+                    const line = document.getElementById("sus-line-s");
+                    const lbl = document.getElementById("sus-lbl-s");
+                    const badge = document.getElementById("sus-badge-s");
+                    const prompt = document.getElementById("sus-prompt-s");
+                    const skippedOut = document.getElementById("sus-skipped-output-s");
+
+                    switch (state) {
+                        case "default":
+                            showEl("skip-default-s");
+                            dot.className = "step-dot suspended";
+                            dot.innerHTML =
+                                '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>';
+                            lbl.style.color = "var(--amber-500)";
+                            badge.className = "badge badge-amber";
+                            badge.style.marginLeft = "auto";
+                            badge.textContent = "suspended";
+                            prompt.style.display = "";
+                            skippedOut.style.display = "none";
+                            break;
+                        case "confirm":
+                            showEl("skip-confirm-s");
+                            break;
+                        case "skipping":
+                            showEl("skip-loading-s");
+                            dot.className = "step-dot suspended";
+                            dot.innerHTML =
+                                '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="animation:spin 1s linear infinite"><circle cx="12" cy="12" r="10" stroke-dasharray="30 70"/></svg>';
+                            break;
+                        case "skipped":
+                            showEl("skip-done-s");
+                            dot.className = "step-dot skipped";
+                            dot.innerHTML =
+                                '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>';
+                            line.className = "step-line slate";
+                            lbl.style.color = "var(--slate-500)";
+                            badge.className = "badge badge-slate";
+                            badge.style.marginLeft = "auto";
+                            badge.textContent = "skipped";
+                            prompt.style.display = "none";
+                            skippedOut.style.display = "";
+                            break;
+                    }
+                } else {
+                    const dot = document.getElementById("fail-dot-f");
+                    const line = document.getElementById("fail-line-f");
+                    const lbl = document.getElementById("fail-lbl-f");
+                    const badge = document.getElementById("fail-badge-f");
+                    const errorSec = document.getElementById("fail-error-f");
+                    const skippedOut = document.getElementById("fail-skipped-f");
+
+                    switch (state) {
+                        case "default":
+                            showEl("skip-default-f");
+                            dot.className = "step-dot failed";
+                            dot.innerHTML =
+                                '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>';
+                            line.className = "step-line red";
+                            lbl.style.color = "var(--red-500)";
+                            badge.className = "badge badge-red";
+                            badge.style.marginLeft = "auto";
+                            badge.textContent = "failed";
+                            errorSec.style.display = "";
+                            skippedOut.style.display = "none";
+                            break;
+                        case "confirm":
+                            showEl("skip-confirm-f");
+                            break;
+                        case "skipping":
+                            showEl("skip-loading-f");
+                            dot.className = "step-dot skipped";
+                            dot.innerHTML =
+                                '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="animation:spin 1s linear infinite"><circle cx="12" cy="12" r="10" stroke-dasharray="30 70"/></svg>';
+                            break;
+                        case "skipped":
+                            showEl("skip-done-f");
+                            dot.className = "step-dot skipped";
+                            dot.innerHTML =
+                                '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>';
+                            line.className = "step-line slate";
+                            lbl.style.color = "var(--slate-500)";
+                            badge.className = "badge badge-slate";
+                            badge.style.marginLeft = "auto";
+                            badge.textContent = "skipped";
+                            errorSec.style.display = "none";
+                            skippedOut.style.display = "";
+                            break;
+                    }
+                }
+            }
+
+            function showEl(id) {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.classList.remove("hidden");
+                    el.style.display = "";
+                }
+            }
+
+            function showDataType(type) {
+                document
+                    .querySelectorAll(".type-card")
+                    .forEach((c) => c.classList.remove("active"));
+                event.currentTarget.classList.add("active");
+                ["data-req", "data-synth", "data-resp"].forEach((id) => {
+                    document.getElementById(id).classList.add("hidden");
+                });
+                document.getElementById("data-" + type).classList.remove("hidden");
+            }
+        </script>
+    </body>
+</html>

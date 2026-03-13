@@ -235,10 +235,10 @@ export const callGmailApi = async (
                     };
 
                     const { encryptCredentials } = await import("../../mcp/client");
-                    const encrypted = encryptCredentials(
-                        updatedCreds,
-                        organizationId
-                    ) as Record<string, unknown>;
+                    const encrypted = encryptCredentials(updatedCreds, organizationId) as Record<
+                        string,
+                        unknown
+                    >;
 
                     await prisma.integrationConnection.update({
                         where: { id: connection.id },

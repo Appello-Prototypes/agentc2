@@ -21,7 +21,14 @@
 import { toolRegistry } from "../packages/agentc2/src/tools/registry.ts";
 import { getBlueprint } from "../packages/agentc2/src/integrations/blueprints/index.ts";
 
-const PROVIDERS_TO_CHECK = ["gmail", "google-drive", "cursor", "claude-code", "google-calendar", "google-search-console"];
+const PROVIDERS_TO_CHECK = [
+    "gmail",
+    "google-drive",
+    "cursor",
+    "claude-code",
+    "google-calendar",
+    "google-search-console"
+];
 
 console.log("🔍 Verifying integration tool descriptions (bug #180 fix)\n");
 

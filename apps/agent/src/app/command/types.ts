@@ -1,3 +1,59 @@
+/* ─── View Mode ───────────────────────────────────────────────────────── */
+
+export type ViewMode = "pipeline" | "grid" | "timeline" | "inbox" | "topology" | "legacy";
+
+export const VIEW_MODE_LABELS: Record<ViewMode, string> = {
+    pipeline: "Pipeline",
+    grid: "Grid",
+    timeline: "Timeline",
+    inbox: "Inbox",
+    topology: "Topology",
+    legacy: "Legacy"
+};
+
+/* ─── Step Data (shared across views) ─────────────────────────────────── */
+
+export interface StepData {
+    id: string;
+    stepId: string;
+    stepType: string;
+    stepName?: string | null;
+    status: string;
+    outputJson?: unknown;
+    errorJson?: unknown;
+    durationMs?: number | null;
+    startedAt?: string | null;
+    completedAt?: string | null;
+    iterationIndex?: number | null;
+}
+
+/* ─── Command View Props (shared contract for all 5 views) ────────────── */
+
+export interface CommandViewProps {
+    reviews: ReviewItem[];
+    filteredReviews: ReviewItem[];
+    loading: boolean;
+    metrics: MetricsData | null;
+    stepCache: Map<string, StepData[]>;
+    stepCacheLoading: boolean;
+    filterWorkflow: string;
+    filterRisk: string;
+    sortBy: SortOption;
+    workflowSlugs: string[];
+    riskLevels: string[];
+    onFilterWorkflowChange: (v: string) => void;
+    onFilterRiskChange: (v: string) => void;
+    onSortByChange: (v: SortOption) => void;
+    onApprove: (review: ReviewItem) => Promise<void>;
+    onReject: (review: ReviewItem) => Promise<void>;
+    onFeedback: (review: ReviewItem) => Promise<void>;
+    onCancelRun: (review: ReviewItem) => Promise<void>;
+    onRetryStep: (reviewId: string, stepId: string) => Promise<void>;
+    onSkipStep: (reviewId: string, stepId: string, reason?: string) => Promise<void>;
+    onBatchApprove: (reviewIds: string[]) => Promise<void>;
+    toasts: ToastItem[];
+}
+
 /* ─── Types ───────────────────────────────────────────────────────────── */
 
 export interface ReviewContext {

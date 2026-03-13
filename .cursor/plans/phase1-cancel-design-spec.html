@@ -1,0 +1,1685 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Phase 1: Cancel Workflow Run — Design Spec (Unified)</title>
+        <link
+            href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=DM+Sans:wght@400;500;600;700&display=swap"
+            rel="stylesheet"
+        />
+        <style>
+            :root {
+                --bg-primary: #0a0a0c;
+                --bg-surface: #111114;
+                --bg-elevated: #18181c;
+                --bg-muted: #1e1e24;
+                --bg-accent: #252530;
+                --border-subtle: #2a2a35;
+                --border-default: #333340;
+                --text-primary: #e8e8ed;
+                --text-secondary: #9898a5;
+                --text-muted: #6b6b78;
+                --red-500: #ef4444;
+                --red-600: #dc2626;
+                --red-bg: rgba(239, 68, 68, 0.08);
+                --red-border: rgba(239, 68, 68, 0.2);
+                --green-500: #22c55e;
+                --green-bg: rgba(34, 197, 94, 0.12);
+                --green-border: rgba(34, 197, 94, 0.2);
+                --amber-500: #f59e0b;
+                --amber-bg: rgba(245, 158, 11, 0.12);
+                --amber-border: rgba(245, 158, 11, 0.2);
+                --blue-500: #3b82f6;
+                --blue-bg: rgba(59, 130, 246, 0.12);
+                --blue-border: rgba(59, 130, 246, 0.2);
+                --purple-500: #a855f7;
+            }
+
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+            body {
+                font-family:
+                    "DM Sans",
+                    -apple-system,
+                    sans-serif;
+                background: var(--bg-primary);
+                color: var(--text-primary);
+                padding: 40px;
+                line-height: 1.6;
+            }
+            code,
+            .mono {
+                font-family: "JetBrains Mono", monospace;
+            }
+
+            .design-header {
+                max-width: 900px;
+                margin: 0 auto 60px;
+                text-align: center;
+            }
+            .phase-badge {
+                display: inline-block;
+                background: var(--red-bg);
+                border: 1px solid var(--red-border);
+                color: var(--red-500);
+                padding: 4px 14px;
+                border-radius: 20px;
+                font-size: 12px;
+                font-weight: 600;
+                letter-spacing: 1.5px;
+                text-transform: uppercase;
+                font-family: "JetBrains Mono", monospace;
+                margin-bottom: 16px;
+            }
+            .design-header h1 {
+                font-size: 36px;
+                font-weight: 700;
+                letter-spacing: -0.5px;
+                margin-bottom: 12px;
+            }
+            .design-header p {
+                color: var(--text-secondary);
+                font-size: 16px;
+                max-width: 640px;
+                margin: 0 auto;
+            }
+
+            .section {
+                max-width: 900px;
+                margin: 0 auto 56px;
+            }
+            .section-label {
+                font-family: "JetBrains Mono", monospace;
+                font-size: 11px;
+                font-weight: 600;
+                letter-spacing: 2px;
+                text-transform: uppercase;
+                color: var(--text-muted);
+                margin-bottom: 8px;
+            }
+            .section-title {
+                font-size: 22px;
+                font-weight: 700;
+                margin-bottom: 16px;
+            }
+            .section-desc {
+                color: var(--text-secondary);
+                font-size: 14px;
+                margin-bottom: 24px;
+                line-height: 1.7;
+            }
+            .divider {
+                height: 1px;
+                background: var(--border-subtle);
+                margin: 48px 0;
+            }
+            .hidden {
+                display: none;
+            }
+
+            .mockup-container {
+                background: var(--bg-surface);
+                border: 1px solid var(--border-subtle);
+                border-radius: 16px;
+                overflow: hidden;
+                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            }
+            .mockup-label {
+                background: var(--bg-muted);
+                padding: 8px 16px;
+                font-family: "JetBrains Mono", monospace;
+                font-size: 11px;
+                color: var(--text-muted);
+                border-bottom: 1px solid var(--border-subtle);
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+            .mockup-dot {
+                width: 6px;
+                height: 6px;
+                border-radius: 50%;
+            }
+            .dot-red {
+                background: #ff5f57;
+            }
+            .dot-amber {
+                background: #febc2e;
+            }
+            .dot-green {
+                background: #28c840;
+            }
+            .mockup-body {
+                padding: 24px;
+            }
+
+            .decision-card {
+                background: var(--bg-elevated);
+                border: 1px solid var(--border-subtle);
+                border-left: 3px solid var(--amber-500);
+                border-radius: 12px;
+                padding: 20px;
+            }
+            .card-header {
+                display: flex;
+                align-items: flex-start;
+                justify-content: space-between;
+                gap: 12px;
+                margin-bottom: 12px;
+            }
+            .card-meta {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                flex-wrap: wrap;
+            }
+            .card-title {
+                font-size: 15px;
+                font-weight: 600;
+                margin: 8px 0;
+            }
+            .card-subtitle {
+                color: var(--text-secondary);
+                font-size: 12px;
+                display: flex;
+                gap: 12px;
+                align-items: center;
+            }
+            .card-subtitle code {
+                font-family: "JetBrains Mono", monospace;
+                background: var(--bg-muted);
+                padding: 1px 6px;
+                border-radius: 4px;
+                font-size: 11px;
+            }
+
+            .badge {
+                display: inline-flex;
+                align-items: center;
+                padding: 2px 10px;
+                border-radius: 6px;
+                font-size: 11px;
+                font-weight: 600;
+            }
+            .badge-amber {
+                background: var(--amber-bg);
+                color: var(--amber-500);
+            }
+            .badge-blue {
+                background: var(--blue-bg);
+                color: var(--blue-500);
+            }
+            .badge-green {
+                background: var(--green-bg);
+                color: var(--green-500);
+                border: 1px solid var(--green-border);
+            }
+            .badge-red {
+                background: var(--red-bg);
+                color: var(--red-500);
+            }
+            .badge-muted {
+                background: var(--bg-accent);
+                color: var(--text-muted);
+                border: 1px solid var(--border-default);
+            }
+
+            /* Stepper */
+            .workflow-steps {
+                background: var(--bg-muted);
+                border-radius: 10px;
+                padding: 16px;
+                margin-top: 12px;
+            }
+            .steps-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 16px;
+            }
+            .steps-header-left {
+                font-size: 12px;
+                color: var(--text-muted);
+                font-weight: 500;
+            }
+            .stepper {
+                display: flex;
+                flex-direction: column;
+            }
+            .step-row {
+                display: flex;
+                gap: 12px;
+            }
+            .step-indicator-col {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                min-width: 28px;
+            }
+            .step-dot {
+                width: 28px;
+                height: 28px;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 11px;
+                font-weight: 700;
+                z-index: 1;
+                flex-shrink: 0;
+                border: 1px solid transparent;
+            }
+            .step-dot.completed {
+                background: var(--bg-elevated);
+                border-color: var(--green-border);
+                color: var(--green-500);
+            }
+            .step-dot.suspended {
+                background: var(--bg-elevated);
+                border-color: var(--amber-border);
+                color: var(--amber-500);
+                animation: pulse 2s infinite;
+            }
+            .step-dot.pending {
+                background: var(--bg-elevated);
+                border-color: var(--border-default);
+                color: var(--text-muted);
+            }
+            .step-dot.cancelled {
+                background: var(--bg-elevated);
+                border-color: var(--red-border);
+                color: var(--red-500);
+            }
+            .step-line {
+                width: 2px;
+                flex: 1;
+                min-height: 14px;
+            }
+            .step-line.green {
+                background: var(--green-border);
+            }
+            .step-line.default {
+                background: var(--border-subtle);
+            }
+            @keyframes pulse {
+                0%,
+                100% {
+                    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.3);
+                }
+                50% {
+                    box-shadow: 0 0 0 5px rgba(245, 158, 11, 0);
+                }
+            }
+
+            .step-content-col {
+                flex: 1;
+                padding-bottom: 16px;
+            }
+            .step-header {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                min-height: 28px;
+                cursor: pointer;
+                padding: 0 6px;
+                border-radius: 6px;
+                margin: 0 -6px;
+                transition: background 0.1s;
+            }
+            .step-header:hover {
+                background: rgba(255, 255, 255, 0.03);
+            }
+            .step-label {
+                font-size: 13px;
+                font-weight: 600;
+                flex: 1;
+            }
+            .step-desc {
+                font-size: 11px;
+                color: var(--text-muted);
+            }
+            .step-chevron {
+                width: 14px;
+                height: 14px;
+                color: var(--text-muted);
+                transition: transform 0.2s;
+                flex-shrink: 0;
+            }
+            .step-chevron.open {
+                transform: rotate(180deg);
+            }
+
+            /* Inline detail panel (Phase 0 expansion inside stepper) */
+            .inline-detail {
+                margin-top: 8px;
+                background: var(--bg-elevated);
+                border: 1px solid var(--border-subtle);
+                border-radius: 8px;
+                overflow: hidden;
+                animation: slideDown 0.2s ease-out;
+            }
+            @keyframes slideDown {
+                from {
+                    opacity: 0;
+                    max-height: 0;
+                }
+                to {
+                    opacity: 1;
+                    max-height: 600px;
+                }
+            }
+            .inline-detail-meta {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 12px;
+                padding: 8px 12px;
+                border-bottom: 1px solid var(--border-subtle);
+                font-size: 10px;
+                color: var(--text-muted);
+            }
+            .meta-item {
+                display: flex;
+                align-items: center;
+                gap: 4px;
+            }
+            .meta-value {
+                color: var(--text-secondary);
+                font-family: "JetBrains Mono", monospace;
+                font-size: 10px;
+            }
+            .inline-detail-body {
+                padding: 12px;
+            }
+            .detail-section {
+                margin-bottom: 12px;
+            }
+            .detail-section:last-child {
+                margin-bottom: 0;
+            }
+            .detail-section-label {
+                font-size: 10px;
+                font-weight: 600;
+                letter-spacing: 1.2px;
+                text-transform: uppercase;
+                color: var(--text-muted);
+                margin-bottom: 5px;
+                font-family: "JetBrains Mono", monospace;
+            }
+            .summary-text {
+                font-size: 12px;
+                line-height: 1.6;
+                color: var(--text-secondary);
+                background: var(--bg-muted);
+                border-radius: 6px;
+                padding: 8px 10px;
+                border: 1px solid var(--border-subtle);
+                white-space: pre-wrap;
+            }
+            .summary-text strong {
+                color: var(--text-primary);
+            }
+            .links-grid {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 6px;
+            }
+            .link-chip {
+                display: inline-flex;
+                align-items: center;
+                gap: 4px;
+                padding: 4px 8px;
+                border-radius: 5px;
+                background: var(--bg-muted);
+                border: 1px solid var(--border-subtle);
+                font-size: 10px;
+                color: var(--blue-500);
+                text-decoration: none;
+                cursor: pointer;
+            }
+            .link-chip:hover {
+                background: rgba(59, 130, 246, 0.08);
+                border-color: rgba(59, 130, 246, 0.2);
+            }
+            .raw-toggle {
+                display: inline-flex;
+                align-items: center;
+                gap: 4px;
+                font-size: 10px;
+                color: var(--text-muted);
+                cursor: pointer;
+                border: none;
+                background: none;
+                font-family: "JetBrains Mono", monospace;
+            }
+            .raw-toggle:hover {
+                color: var(--text-secondary);
+            }
+            .raw-block {
+                margin-top: 5px;
+                background: var(--bg-muted);
+                border: 1px solid var(--border-subtle);
+                border-radius: 5px;
+                padding: 8px;
+                font-family: "JetBrains Mono", monospace;
+                font-size: 10px;
+                color: var(--text-secondary);
+                max-height: 140px;
+                overflow: auto;
+                white-space: pre-wrap;
+            }
+
+            /* Cancel button and confirm */
+            .cancel-btn {
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                padding: 6px 14px;
+                border-radius: 8px;
+                font-size: 12px;
+                font-weight: 600;
+                cursor: pointer;
+                transition: all 0.15s;
+                border: 1px solid var(--red-border);
+                background: var(--red-bg);
+                color: var(--red-500);
+                font-family: "DM Sans", sans-serif;
+            }
+            .cancel-btn:hover {
+                background: rgba(239, 68, 68, 0.15);
+                border-color: var(--red-500);
+            }
+            .cancel-btn svg {
+                width: 14px;
+                height: 14px;
+            }
+            .cancel-confirm {
+                background: var(--red-bg);
+                border: 1px solid var(--red-border);
+                border-radius: 10px;
+                padding: 14px 18px;
+                margin-top: 12px;
+                display: flex;
+                align-items: center;
+                gap: 12px;
+            }
+            .cancel-confirm-icon {
+                width: 36px;
+                height: 36px;
+                border-radius: 10px;
+                background: rgba(239, 68, 68, 0.15);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                flex-shrink: 0;
+            }
+            .cancel-confirm-text {
+                flex: 1;
+            }
+            .cancel-confirm-title {
+                font-size: 13px;
+                font-weight: 600;
+            }
+            .cancel-confirm-desc {
+                font-size: 11px;
+                color: var(--text-secondary);
+                margin-top: 2px;
+            }
+            .cancel-confirm-actions {
+                display: flex;
+                gap: 8px;
+            }
+
+            .btn {
+                padding: 6px 16px;
+                border-radius: 8px;
+                font-size: 12px;
+                font-weight: 600;
+                cursor: pointer;
+                transition: all 0.15s;
+                border: none;
+                font-family: "DM Sans", sans-serif;
+            }
+            .btn-ghost {
+                background: transparent;
+                border: 1px solid var(--border-default);
+                color: var(--text-secondary);
+            }
+            .btn-ghost:hover {
+                background: var(--bg-accent);
+            }
+            .btn-destructive {
+                background: var(--red-600);
+                color: white;
+            }
+            .btn-destructive:hover {
+                background: var(--red-500);
+            }
+            .btn-primary {
+                background: var(--blue-500);
+                color: white;
+            }
+            .btn-outline {
+                background: transparent;
+                border: 1px solid var(--border-default);
+                color: var(--text-primary);
+            }
+            .btn-outline:hover {
+                background: var(--bg-accent);
+            }
+            .action-buttons {
+                display: flex;
+                gap: 8px;
+                margin-top: 16px;
+            }
+
+            .cancelled-overlay {
+                background: var(--bg-muted);
+                border: 1px solid var(--border-subtle);
+                border-radius: 10px;
+                padding: 14px 18px;
+                margin-top: 12px;
+                display: flex;
+                align-items: center;
+                gap: 12px;
+            }
+            .cancelled-badge {
+                background: rgba(239, 68, 68, 0.12);
+                color: var(--red-500);
+                font-weight: 600;
+                font-size: 12px;
+                padding: 4px 12px;
+                border-radius: 6px;
+            }
+
+            /* Flow diagram */
+            .flow-container {
+                display: flex;
+                align-items: center;
+                gap: 0;
+                padding: 20px 0;
+                overflow-x: auto;
+            }
+            .flow-node {
+                background: var(--bg-elevated);
+                border: 1px solid var(--border-subtle);
+                border-radius: 10px;
+                padding: 14px 18px;
+                min-width: 140px;
+                text-align: center;
+                flex-shrink: 0;
+            }
+            .flow-node-title {
+                font-size: 12px;
+                font-weight: 600;
+                margin-bottom: 4px;
+            }
+            .flow-node-desc {
+                font-size: 10px;
+                color: var(--text-muted);
+            }
+            .flow-node.active {
+                border-color: var(--red-500);
+                box-shadow: 0 0 0 2px var(--red-bg);
+            }
+            .flow-arrow {
+                color: var(--text-muted);
+                font-size: 18px;
+                padding: 0 8px;
+                flex-shrink: 0;
+            }
+
+            .spec-table {
+                width: 100%;
+                border-collapse: collapse;
+                font-size: 13px;
+            }
+            .spec-table th {
+                text-align: left;
+                padding: 10px 14px;
+                border-bottom: 1px solid var(--border-subtle);
+                color: var(--text-muted);
+                font-size: 11px;
+                font-weight: 600;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+                font-family: "JetBrains Mono", monospace;
+            }
+            .spec-table td {
+                padding: 10px 14px;
+                border-bottom: 1px solid var(--border-subtle);
+                color: var(--text-secondary);
+                vertical-align: top;
+            }
+            .spec-table td:first-child {
+                color: var(--text-primary);
+                font-weight: 500;
+            }
+            .spec-table code {
+                font-family: "JetBrains Mono", monospace;
+                background: var(--bg-muted);
+                padding: 2px 6px;
+                border-radius: 4px;
+                font-size: 11px;
+                color: var(--purple-500);
+            }
+
+            .state-grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 24px;
+            }
+            .state-card {
+                background: var(--bg-elevated);
+                border: 1px solid var(--border-subtle);
+                border-radius: 12px;
+                overflow: hidden;
+            }
+            .state-card-header {
+                padding: 12px 16px;
+                border-bottom: 1px solid var(--border-subtle);
+                font-size: 13px;
+                font-weight: 600;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+            .state-card-body {
+                padding: 16px;
+            }
+            .state-indicator {
+                width: 8px;
+                height: 8px;
+                border-radius: 50%;
+            }
+
+            .toggle-group {
+                display: flex;
+                gap: 8px;
+                margin-bottom: 24px;
+            }
+            .toggle-btn {
+                padding: 8px 16px;
+                border-radius: 8px;
+                font-size: 13px;
+                font-weight: 500;
+                cursor: pointer;
+                border: 1px solid var(--border-default);
+                background: transparent;
+                color: var(--text-secondary);
+                transition: all 0.15s;
+                font-family: "DM Sans", sans-serif;
+            }
+            .toggle-btn.active {
+                background: var(--bg-accent);
+                border-color: var(--text-muted);
+                color: var(--text-primary);
+            }
+            .toggle-btn:hover {
+                background: var(--bg-muted);
+            }
+
+            .callout {
+                background: var(--blue-bg);
+                border: 1px solid var(--blue-border);
+                border-left: 3px solid var(--blue-500);
+                border-radius: 8px;
+                padding: 12px 16px;
+                font-size: 12px;
+                color: var(--text-secondary);
+                line-height: 1.6;
+            }
+            .callout strong {
+                color: var(--blue-500);
+            }
+
+            @keyframes spin {
+                from {
+                    transform: rotate(0deg);
+                }
+                to {
+                    transform: rotate(360deg);
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="design-header">
+            <div class="phase-badge">Phase 1 -- Updated</div>
+            <h1>Cancel Workflow Run</h1>
+            <p>
+                Cancel active or suspended workflow runs from the Command interface, with inline
+                confirmation. Builds on Phase 0's expandable step detail -- steps with rich detail
+                panels remain visible alongside the cancel flow.
+            </p>
+        </div>
+
+        <!-- ─── FLOW DIAGRAM ─── -->
+        <div class="section">
+            <div class="section-label">Architecture</div>
+            <div class="section-title">Cancellation Flow</div>
+            <div class="section-desc">
+                The cancel action flows through two API routes. The UI uses the same inline stepper
+                with expandable steps from Phase 0.
+            </div>
+
+            <div class="mockup-container">
+                <div class="mockup-label">
+                    <span class="mockup-dot dot-red"></span>
+                    <span class="mockup-dot dot-amber"></span>
+                    <span class="mockup-dot dot-green"></span>
+                    flow.tsx
+                </div>
+                <div class="mockup-body">
+                    <div class="flow-container">
+                        <div class="flow-node">
+                            <div class="flow-node-title">User clicks Cancel</div>
+                            <div class="flow-node-desc">WorkflowStepsCard.tsx</div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-node">
+                            <div class="flow-node-title">Confirm Dialog</div>
+                            <div class="flow-node-desc">Inline confirmation</div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-node active">
+                            <div class="flow-node-title">POST /api/reviews/[id]/cancel</div>
+                            <div class="flow-node-desc">Convenience route</div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-node active">
+                            <div class="flow-node-title">POST /api/workflows/.../cancel</div>
+                            <div class="flow-node-desc">Core cancel logic</div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-node">
+                            <div class="flow-node-title">DB Update</div>
+                            <div class="flow-node-desc">status &rarr; CANCELLED</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ─── INTERACTIVE MOCKUP ─── -->
+        <div class="section">
+            <div class="section-label">UI Mockup</div>
+            <div class="section-title">Cancel + Expandable Steps (Unified)</div>
+            <div class="section-desc">
+                This mockup shows both Phase 0 (expandable steps with rich detail) and Phase 1
+                (cancel button) working together. Click the step rows to expand their inline detail
+                panels, and use the state toggle to see the cancel flow.
+            </div>
+
+            <div class="toggle-group">
+                <button class="toggle-btn active" onclick="showState('default', this)">
+                    Default
+                </button>
+                <button class="toggle-btn" onclick="showState('confirm', this)">Confirming</button>
+                <button class="toggle-btn" onclick="showState('cancelling', this)">
+                    Cancelling
+                </button>
+                <button class="toggle-btn" onclick="showState('cancelled', this)">Cancelled</button>
+            </div>
+
+            <div class="mockup-container">
+                <div class="mockup-label">
+                    <span class="mockup-dot dot-red"></span>
+                    <span class="mockup-dot dot-amber"></span>
+                    <span class="mockup-dot dot-green"></span>
+                    /command -- DecisionCard + WorkflowStepsCard (Phase 0 + Phase 1)
+                </div>
+                <div class="mockup-body">
+                    <div class="decision-card">
+                        <div class="card-header">
+                            <div>
+                                <div class="card-meta">
+                                    <span
+                                        style="
+                                            font-family: &quot;JetBrains Mono&quot;, monospace;
+                                            font-size: 13px;
+                                            color: var(--amber-500);
+                                            font-weight: 600;
+                                        "
+                                        >23m ago</span
+                                    >
+                                    <span class="badge badge-amber">medium</span>
+                                    <span class="badge badge-blue">workflow</span>
+                                    <span style="color: var(--text-secondary); font-size: 13px"
+                                        >sdlc-bugfix-pipeline</span
+                                    >
+                                </div>
+                                <div class="card-title">
+                                    Approve merge-review in sdlc-bugfix-pipeline?
+                                </div>
+                                <div class="card-subtitle">
+                                    <span>&#x1f536; medium risk</span>
+                                    <span>3 files changed</span>
+                                    <span>Step: <code>merge-review</code></span>
+                                    <span>Run: <code>cmmo5fgl4…</code></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Workflow Steps Area -->
+                        <div class="workflow-steps">
+                            <div class="steps-header">
+                                <span class="steps-header-left">Workflow Steps (5)</span>
+                                <div id="cancel-area">
+                                    <div id="state-default">
+                                        <button
+                                            class="cancel-btn"
+                                            onclick="showState('confirm', null)"
+                                        >
+                                            <svg
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                stroke-width="2"
+                                                stroke-linecap="round"
+                                            >
+                                                <circle cx="12" cy="12" r="10" />
+                                                <path d="M15 9l-6 6M9 9l6 6" />
+                                            </svg>
+                                            Cancel Run
+                                        </button>
+                                    </div>
+                                    <div id="state-confirm" class="hidden">
+                                        <button
+                                            class="cancel-btn"
+                                            style="opacity: 0.5; cursor: default"
+                                        >
+                                            <svg
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                stroke-width="2"
+                                                stroke-linecap="round"
+                                            >
+                                                <circle cx="12" cy="12" r="10" />
+                                                <path d="M15 9l-6 6M9 9l6 6" />
+                                            </svg>
+                                            Cancel Run
+                                        </button>
+                                    </div>
+                                    <div id="state-cancelling" class="hidden">
+                                        <button
+                                            class="cancel-btn"
+                                            style="opacity: 0.7; cursor: wait"
+                                        >
+                                            <svg
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                stroke-width="2"
+                                                stroke-linecap="round"
+                                                style="animation: spin 1s linear infinite"
+                                            >
+                                                <circle
+                                                    cx="12"
+                                                    cy="12"
+                                                    r="10"
+                                                    stroke-dasharray="30 70"
+                                                />
+                                            </svg>
+                                            Cancelling...
+                                        </button>
+                                    </div>
+                                    <div id="state-cancelled" class="hidden">
+                                        <span class="cancelled-badge">&#x2715; Cancelled</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="stepper">
+                                <!-- Step 1: Completed, collapsed -->
+                                <div class="step-row">
+                                    <div class="step-indicator-col">
+                                        <div class="step-dot completed">
+                                            <svg
+                                                width="12"
+                                                height="12"
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                stroke-width="2.5"
+                                                stroke-linecap="round"
+                                            >
+                                                <polyline points="20 6 9 17 4 12" />
+                                            </svg>
+                                        </div>
+                                        <div class="step-line green"></div>
+                                    </div>
+                                    <div class="step-content-col">
+                                        <div class="step-header" onclick="toggleStep('p1s1')">
+                                            <span
+                                                class="step-label"
+                                                style="color: var(--text-primary)"
+                                                >Create GitHub Issue</span
+                                            >
+                                            <span class="step-desc">tool &middot; 1ms</span>
+                                            <svg
+                                                class="step-chevron"
+                                                id="chev-p1s1"
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                stroke-width="2"
+                                                stroke-linecap="round"
+                                            >
+                                                <polyline points="6 9 12 15 18 9" />
+                                            </svg>
+                                        </div>
+                                        <div id="detail-p1s1" class="inline-detail hidden">
+                                            <div class="inline-detail-meta">
+                                                <div class="meta-item">
+                                                    <span>Duration</span>
+                                                    <span class="meta-value">1ms</span>
+                                                </div>
+                                            </div>
+                                            <div class="inline-detail-body">
+                                                <div class="detail-section">
+                                                    <div class="detail-section-label">Output</div>
+                                                    <div class="summary-text">
+                                                        GitHub Issue #202 created in
+                                                        Appello-Prototypes/agentc2
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Step 2: Completed, collapsed -->
+                                <div class="step-row">
+                                    <div class="step-indicator-col">
+                                        <div class="step-dot completed">
+                                            <svg
+                                                width="12"
+                                                height="12"
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                stroke-width="2.5"
+                                                stroke-linecap="round"
+                                            >
+                                                <polyline points="20 6 9 17 4 12" />
+                                            </svg>
+                                        </div>
+                                        <div class="step-line green"></div>
+                                    </div>
+                                    <div class="step-content-col">
+                                        <div class="step-header" onclick="toggleStep('p1s2')">
+                                            <span
+                                                class="step-label"
+                                                style="color: var(--text-primary)"
+                                                >Launch Code Analysis</span
+                                            >
+                                            <span class="step-desc">tool &middot; 1ms</span>
+                                            <svg
+                                                class="step-chevron"
+                                                id="chev-p1s2"
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                stroke-width="2"
+                                                stroke-linecap="round"
+                                            >
+                                                <polyline points="6 9 12 15 18 9" />
+                                            </svg>
+                                        </div>
+                                        <div id="detail-p1s2" class="inline-detail hidden">
+                                            <div class="inline-detail-meta">
+                                                <div class="meta-item">
+                                                    <span>Duration</span>
+                                                    <span class="meta-value">1ms</span>
+                                                </div>
+                                                <div class="meta-item">
+                                                    <span>Agent</span>
+                                                    <span class="meta-value">bc-b6b22da2</span>
+                                                </div>
+                                            </div>
+                                            <div class="inline-detail-body">
+                                                <div class="detail-section">
+                                                    <div class="detail-section-label">Links</div>
+                                                    <div class="links-grid">
+                                                        <a class="link-chip" href="#"
+                                                            >&#x1f527; Analysis Agent Session</a
+                                                        >
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Step 3: Completed, EXPANDED to show Phase 0 detail -->
+                                <div class="step-row">
+                                    <div class="step-indicator-col">
+                                        <div class="step-dot completed">
+                                            <svg
+                                                width="12"
+                                                height="12"
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                stroke-width="2.5"
+                                                stroke-linecap="round"
+                                            >
+                                                <polyline points="20 6 9 17 4 12" />
+                                            </svg>
+                                        </div>
+                                        <div class="step-line green"></div>
+                                    </div>
+                                    <div class="step-content-col">
+                                        <div
+                                            class="step-header"
+                                            onclick="toggleStep('p1s3')"
+                                            style="background: rgba(255, 255, 255, 0.03)"
+                                        >
+                                            <span
+                                                class="step-label"
+                                                style="color: var(--text-primary)"
+                                                >Audit Fix Plan</span
+                                            >
+                                            <span class="badge badge-muted">agent</span>
+                                            <span class="step-desc">2.3s</span>
+                                            <span
+                                                class="badge badge-green"
+                                                style="margin-left: auto"
+                                                >completed</span
+                                            >
+                                            <svg
+                                                class="step-chevron open"
+                                                id="chev-p1s3"
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                stroke-width="2"
+                                                stroke-linecap="round"
+                                            >
+                                                <polyline points="6 9 12 15 18 9" />
+                                            </svg>
+                                        </div>
+                                        <div id="detail-p1s3" class="inline-detail">
+                                            <div class="inline-detail-meta">
+                                                <div class="meta-item">
+                                                    <span>Duration</span>
+                                                    <span class="meta-value">2.3s</span>
+                                                </div>
+                                                <div class="meta-item">
+                                                    <span>Iterations</span>
+                                                    <span class="meta-value">3x</span>
+                                                </div>
+                                            </div>
+                                            <div class="inline-detail-body">
+                                                <div class="detail-section">
+                                                    <div class="detail-section-label">
+                                                        Agent Response
+                                                    </div>
+                                                    <div class="summary-text">
+                                                        The proposed fix plan addresses the root
+                                                        cause correctly. Schema change to add
+                                                        <code>model</code> property aligns with
+                                                        existing patterns.
+
+                                                        <strong>Verdict:</strong> Approved for
+                                                        implementation.
+                                                    </div>
+                                                </div>
+                                                <div class="detail-section">
+                                                    <button
+                                                        class="raw-toggle"
+                                                        onclick="
+                                                            event.stopPropagation();
+                                                            this.nextElementSibling.classList.toggle(
+                                                                'hidden'
+                                                            );
+                                                        "
+                                                    >
+                                                        &#9654; View raw output
+                                                    </button>
+                                                    <div class="raw-block hidden">
+                                                        { "text": "The proposed fix plan...",
+                                                        "verdict": "approved" }
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Step 4: Suspended (or cancelled) -->
+                                <div class="step-row">
+                                    <div class="step-indicator-col">
+                                        <div class="step-dot suspended" id="suspended-dot">4</div>
+                                        <div class="step-line default"></div>
+                                    </div>
+                                    <div class="step-content-col">
+                                        <div class="step-header" style="cursor: default">
+                                            <span
+                                                class="step-label"
+                                                id="step4-label"
+                                                style="color: var(--amber-500)"
+                                                >Merge Review</span
+                                            >
+                                            <span class="step-desc" id="step4-desc"
+                                                >human &middot; suspended</span
+                                            >
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Step 5: Pending -->
+                                <div class="step-row">
+                                    <div class="step-indicator-col">
+                                        <div class="step-dot pending" id="pending-dot-5">5</div>
+                                    </div>
+                                    <div class="step-content-col" style="padding-bottom: 0">
+                                        <div class="step-header" style="cursor: default">
+                                            <span
+                                                class="step-label"
+                                                style="color: var(--text-muted)"
+                                                >Post Audit Summary</span
+                                            >
+                                            <span class="step-desc">tool &middot; pending</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Confirm bar -->
+                            <div id="confirm-bar" class="cancel-confirm hidden">
+                                <div class="cancel-confirm-icon">
+                                    <svg
+                                        width="18"
+                                        height="18"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="var(--red-500)"
+                                        stroke-width="2"
+                                        stroke-linecap="round"
+                                    >
+                                        <path
+                                            d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
+                                        />
+                                        <line x1="12" y1="9" x2="12" y2="13" />
+                                        <line x1="12" y1="17" x2="12.01" y2="17" />
+                                    </svg>
+                                </div>
+                                <div class="cancel-confirm-text">
+                                    <div class="cancel-confirm-title">
+                                        Cancel this workflow run?
+                                    </div>
+                                    <div class="cancel-confirm-desc">
+                                        The run will be marked as CANCELLED. The linked review will
+                                        be rejected. This cannot be undone.
+                                    </div>
+                                </div>
+                                <div class="cancel-confirm-actions">
+                                    <button
+                                        class="btn btn-ghost"
+                                        onclick="showState('default', null)"
+                                    >
+                                        Keep Running
+                                    </button>
+                                    <button
+                                        class="btn btn-destructive"
+                                        onclick="
+                                            showState('cancelling', null);
+                                            setTimeout(() => showState('cancelled', null), 1200);
+                                        "
+                                    >
+                                        Yes, Cancel Run
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Cancelled banner -->
+                            <div id="cancelled-banner" class="cancelled-overlay hidden">
+                                <div class="cancel-confirm-icon">
+                                    <svg
+                                        width="18"
+                                        height="18"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="var(--red-500)"
+                                        stroke-width="2"
+                                        stroke-linecap="round"
+                                    >
+                                        <circle cx="12" cy="12" r="10" />
+                                        <path d="M15 9l-6 6M9 9l6 6" />
+                                    </svg>
+                                </div>
+                                <div class="cancel-confirm-text">
+                                    <div class="cancel-confirm-title" style="color: var(--red-500)">
+                                        Workflow run cancelled
+                                    </div>
+                                    <div class="cancel-confirm-desc">
+                                        Run cmmo5fgl4011 was cancelled. The review has been
+                                        rejected.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="action-buttons" id="action-btns">
+                            <button class="btn btn-primary">Approve</button>
+                            <button class="btn btn-destructive">Reject</button>
+                            <button class="btn btn-outline">Feedback</button>
+                            <button class="btn btn-outline">Conditional</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="callout" style="margin-top: 24px">
+                <strong>Phase 0 + Phase 1 unified:</strong> The stepper shows the step-by-step
+                progression with green checkmarks (Phase 1 design). Each completed step has a
+                chevron that expands to show rich detail with links, summaries, and audit data
+                (Phase 0 design). The Cancel Run button sits in the steps header. Both features
+                coexist naturally within the same <code>WorkflowStepsCard</code> component.
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- ─── API SPEC ─── -->
+        <div class="section">
+            <div class="section-label">Backend</div>
+            <div class="section-title">API Routes</div>
+
+            <div style="margin-bottom: 32px">
+                <h3 style="font-size: 16px; margin-bottom: 12px">
+                    Route 1:
+                    <code
+                        style="
+                            font-family: &quot;JetBrains Mono&quot;, monospace;
+                            background: var(--bg-muted);
+                            padding: 2px 8px;
+                            border-radius: 4px;
+                            color: var(--purple-500);
+                        "
+                        >POST /api/workflows/[slug]/runs/[runId]/cancel</code
+                    >
+                </h3>
+                <table class="spec-table">
+                    <thead>
+                        <tr>
+                            <th>Aspect</th>
+                            <th>Detail</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Auth</td>
+                            <td><code>authenticateRequest()</code> -- session or API key</td>
+                        </tr>
+                        <tr>
+                            <td>Guard</td>
+                            <td>
+                                Verify workflow belongs to org. Verify run status is
+                                <code>QUEUED</code>, <code>RUNNING</code>, or has
+                                <code>suspendedStep</code>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Mutation</td>
+                            <td>
+                                Set <code>status &rarr; CANCELLED</code>,
+                                <code>completedAt &rarr; now()</code>, clear
+                                <code>suspendedStep</code>, <code>suspendedAt</code>,
+                                <code>suspendDataJson</code>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Side effects</td>
+                            <td>
+                                Reject all linked <code>ApprovalRequest</code> records
+                                (status=pending &rarr; rejected). Refresh workflow metrics.
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Response 200</td>
+                            <td>
+                                <code
+                                    >{ success: true, cancelled: true, run: { id, status,
+                                    completedAt } }</code
+                                >
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Response 409</td>
+                            <td>
+                                <code
+                                    >{ success: false, error: "Run is not in a cancellable state"
+                                    }</code
+                                >
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div>
+                <h3 style="font-size: 16px; margin-bottom: 12px">
+                    Route 2:
+                    <code
+                        style="
+                            font-family: &quot;JetBrains Mono&quot;, monospace;
+                            background: var(--bg-muted);
+                            padding: 2px 8px;
+                            border-radius: 4px;
+                            color: var(--purple-500);
+                        "
+                        >POST /api/reviews/[id]/cancel</code
+                    >
+                </h3>
+                <table class="spec-table">
+                    <thead>
+                        <tr>
+                            <th>Aspect</th>
+                            <th>Detail</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Purpose</td>
+                            <td>
+                                Convenience wrapper -- resolves review &rarr; workflow slug + run ID
+                                &rarr; performs cancel inline
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Auth</td>
+                            <td><code>authenticateRequest()</code></td>
+                        </tr>
+                        <tr>
+                            <td>Guard</td>
+                            <td>
+                                Verify review exists and belongs to org, has
+                                <code>workflowRunId</code>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Logic</td>
+                            <td>
+                                Looks up
+                                <code>ApprovalRequest &rarr; WorkflowRun &rarr; Workflow</code>.
+                                Performs same cancel mutations inline.
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Response</td>
+                            <td>Same shape as Route 1</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- ─── COMPONENT CHANGES ─── -->
+        <div class="section">
+            <div class="section-label">Frontend</div>
+            <div class="section-title">Component Changes (Phase 1 on top of Phase 0)</div>
+
+            <div class="state-grid">
+                <div class="state-card">
+                    <div class="state-card-header">
+                        <div class="state-indicator" style="background: var(--amber-500)"></div>
+                        WorkflowStepsCard.tsx
+                    </div>
+                    <div
+                        class="state-card-body"
+                        style="font-size: 13px; color: var(--text-secondary); line-height: 1.7"
+                    >
+                        <strong style="color: var(--text-primary)"
+                            >Phase 0 (already in place):</strong
+                        ><br />
+                        Each <code>StepItem</code> uses <code>expandable</code> prop +
+                        <code>&lt;StepDetailPanel&gt;</code> as children for inline expansion.<br /><br />
+                        <strong style="color: var(--text-primary)">Phase 1 additions:</strong><br />
+                        <code>onCancelRun?: () =&gt; void</code><br />
+                        <code>cancellingRun?: boolean</code><br />
+                        <code>runStatus?: string</code><br />
+                        <code>confirmingCancel: boolean</code> (local state)<br /><br />
+                        &bull; "Cancel Run" button in steps header (right side)<br />
+                        &bull; Button visible only when <code>runStatus</code> is
+                        active/suspended<br />
+                        &bull; Inline confirmation bar below stepper<br />
+                        &bull; Spinner state during API call<br />
+                        &bull; Cancelled banner after success
+                    </div>
+                </div>
+                <div class="state-card">
+                    <div class="state-card-header">
+                        <div class="state-indicator" style="background: var(--blue-500)"></div>
+                        DecisionCard.tsx
+                    </div>
+                    <div
+                        class="state-card-body"
+                        style="font-size: 13px; color: var(--text-secondary); line-height: 1.7"
+                    >
+                        <strong style="color: var(--text-primary)">Phase 1 additions:</strong><br />
+                        <code>cancellingRun: boolean</code> (local useState)<br /><br />
+                        <strong>Cancel handler:</strong><br />
+                        <code>POST /api/reviews/{id}/cancel</code><br />
+                        On success &rarr; <code>addToast("Run cancelled")</code><br />
+                        On success &rarr; remove from reviews list<br /><br />
+                        <strong>Prop threading:</strong><br />
+                        Pass <code>onCancelRun</code> + <code>cancellingRun</code> +
+                        <code>runStatus</code> to <code>WorkflowStepsCard</code>.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- ─── EDGE CASES ─── -->
+        <div class="section">
+            <div class="section-label">Edge Cases</div>
+            <div class="section-title">Behavioral Details</div>
+
+            <table class="spec-table">
+                <thead>
+                    <tr>
+                        <th>Scenario</th>
+                        <th>Behavior</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Run already completed/failed</td>
+                        <td>
+                            API returns <code>409 Conflict</code>. Toast: "Run has already finished"
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Run already cancelled</td>
+                        <td>API returns <code>409</code>. Toast: "Run was already cancelled"</td>
+                    </tr>
+                    <tr>
+                        <td>No linked workflow run</td>
+                        <td>Cancel button not rendered (guarded by <code>review.runId</code>)</td>
+                    </tr>
+                    <tr>
+                        <td>Race with approve/reject</td>
+                        <td>API rejects gracefully if review already resolved</td>
+                    </tr>
+                    <tr>
+                        <td>Network error</td>
+                        <td>
+                            Toast: "Failed to cancel run". Button re-enabled, confirmation
+                            dismissed.
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Cancel after partial execution</td>
+                        <td>Completed steps preserved. Expanded detail panels remain viewable.</td>
+                    </tr>
+                    <tr>
+                        <td>Expand step while confirming cancel</td>
+                        <td>
+                            Step detail expands normally -- cancel confirmation stays visible below
+                            stepper
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Card after cancel</td>
+                        <td>Card removed from pending list</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- ─── TEST PLAN ─── -->
+        <div class="section">
+            <div class="section-label">Testing</div>
+            <div class="section-title">Playwright Test Plan</div>
+            <div class="section-desc">
+                Login: <code>sdlc-test@agentc2.ai</code> / <code>FlywheelDemo2026!</code> on
+                <code>http://localhost:3001</code>
+            </div>
+
+            <table class="spec-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Step</th>
+                        <th>Assertion</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td style="color: var(--text-muted)">1</td>
+                        <td>
+                            Navigate to <code>/command</code>, expand a card with a workflow run
+                        </td>
+                        <td>Steps stepper with green checkmarks and expandable chevrons visible</td>
+                    </tr>
+                    <tr>
+                        <td style="color: var(--text-muted)">2</td>
+                        <td>Click a completed step to expand it</td>
+                        <td>Rich detail panel expands inline (Phase 0 working)</td>
+                    </tr>
+                    <tr>
+                        <td style="color: var(--text-muted)">3</td>
+                        <td>Verify "Cancel Run" button in steps header</td>
+                        <td>Button present with red destructive styling</td>
+                    </tr>
+                    <tr>
+                        <td style="color: var(--text-muted)">4</td>
+                        <td>Expand a step, then click "Cancel Run"</td>
+                        <td>
+                            Expanded step detail remains visible; confirmation bar appears below
+                            stepper
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="color: var(--text-muted)">5</td>
+                        <td>Click "Keep Running"</td>
+                        <td>
+                            Confirmation bar hides, button returns to default. Expanded step still
+                            open.
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="color: var(--text-muted)">6</td>
+                        <td>Click "Cancel Run" again, then "Yes, Cancel Run"</td>
+                        <td>
+                            Spinner state, then cancelled banner. Expanded steps still readable.
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="color: var(--text-muted)">7</td>
+                        <td>Verify toast notification</td>
+                        <td>Toast shows "Run cancelled"</td>
+                    </tr>
+                    <tr>
+                        <td style="color: var(--text-muted)">8</td>
+                        <td>Screenshot final state</td>
+                        <td>
+                            Cancelled banner visible, action buttons hidden, expanded step detail
+                            preserved
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <script>
+            function toggleStep(id) {
+                const detail = document.getElementById("detail-" + id);
+                const chevron = document.getElementById("chev-" + id);
+                const header = detail?.previousElementSibling;
+                if (!detail) return;
+                const isHidden = detail.classList.contains("hidden");
+                detail.classList.toggle("hidden");
+                if (chevron) chevron.classList.toggle("open", isHidden);
+                if (header) {
+                    if (isHidden) header.style.background = "rgba(255,255,255,0.03)";
+                    else header.style.background = "";
+                }
+            }
+
+            function showState(state, btn) {
+                document
+                    .querySelectorAll(".toggle-btn")
+                    .forEach((b) => b.classList.remove("active"));
+                if (btn) btn.classList.add("active");
+                else
+                    document.querySelectorAll(".toggle-btn").forEach((b) => {
+                        if (
+                            b.textContent
+                                .toLowerCase()
+                                .includes(state === "default" ? "default" : state)
+                        )
+                            b.classList.add("active");
+                    });
+
+                ["state-default", "state-confirm", "state-cancelling", "state-cancelled"].forEach(
+                    (id) => {
+                        document.getElementById(id).classList.add("hidden");
+                    }
+                );
+                document.getElementById("state-" + state)?.classList.remove("hidden");
+                document
+                    .getElementById("confirm-bar")
+                    .classList.toggle("hidden", state !== "confirm");
+                document
+                    .getElementById("cancelled-banner")
+                    .classList.toggle("hidden", state !== "cancelled");
+                document
+                    .getElementById("action-btns")
+                    .classList.toggle("hidden", state === "cancelled");
+
+                const suspendedDot = document.getElementById("suspended-dot");
+                const pendingDot = document.getElementById("pending-dot-5");
+                const step4Label = document.getElementById("step4-label");
+                const step4Desc = document.getElementById("step4-desc");
+                if (state === "cancelled") {
+                    suspendedDot.className = "step-dot cancelled";
+                    suspendedDot.innerHTML =
+                        '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6M9 9l6 6"/></svg>';
+                    if (step4Label) step4Label.style.color = "var(--red-500)";
+                    if (step4Desc) step4Desc.textContent = "human \u00b7 cancelled";
+                    pendingDot.style.opacity = "0.4";
+                } else {
+                    suspendedDot.className = "step-dot suspended";
+                    suspendedDot.textContent = "4";
+                    if (step4Label) step4Label.style.color = "var(--amber-500)";
+                    if (step4Desc) step4Desc.textContent = "human \u00b7 suspended";
+                    pendingDot.style.opacity = "1";
+                }
+            }
+        </script>
+    </body>
+</html>

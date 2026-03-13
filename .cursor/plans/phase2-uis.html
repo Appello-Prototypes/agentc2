@@ -1,0 +1,2398 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Phase 2: Retry Failed Step — UIS</title>
+        <link
+            href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap"
+            rel="stylesheet"
+        />
+        <style>
+            :root {
+                --bg-primary: #09090c;
+                --bg-surface: #0f1013;
+                --bg-elevated: #15161b;
+                --bg-muted: #1b1c22;
+                --bg-accent: #232530;
+                --border-subtle: #282a36;
+                --border-default: #31343f;
+                --text-primary: #e6e6ec;
+                --text-secondary: #9596a4;
+                --text-muted: #64667a;
+                --green-500: #22c55e;
+                --green-bg: rgba(34, 197, 94, 0.1);
+                --green-border: rgba(34, 197, 94, 0.2);
+                --amber-500: #f59e0b;
+                --amber-600: #d97706;
+                --amber-bg: rgba(245, 158, 11, 0.1);
+                --amber-border: rgba(245, 158, 11, 0.2);
+                --blue-500: #3b82f6;
+                --blue-bg: rgba(59, 130, 246, 0.08);
+                --blue-border: rgba(59, 130, 246, 0.2);
+                --red-500: #ef4444;
+                --red-600: #dc2626;
+                --red-bg: rgba(239, 68, 68, 0.08);
+                --red-border: rgba(239, 68, 68, 0.2);
+                --purple-500: #a855f7;
+                --orange-500: #f97316;
+                --orange-bg: rgba(249, 115, 22, 0.1);
+                --orange-border: rgba(249, 115, 22, 0.2);
+            }
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+            body {
+                font-family:
+                    "Space Grotesk",
+                    -apple-system,
+                    sans-serif;
+                background: var(--bg-primary);
+                color: var(--text-primary);
+                padding: 48px 40px;
+                line-height: 1.6;
+            }
+            code,
+            .mono {
+                font-family: "IBM Plex Mono", monospace;
+            }
+            .hidden {
+                display: none;
+            }
+
+            .header {
+                max-width: 940px;
+                margin: 0 auto 64px;
+                text-align: center;
+            }
+            .phase-tag {
+                display: inline-block;
+                background: var(--amber-bg);
+                border: 1px solid var(--amber-border);
+                color: var(--amber-500);
+                padding: 5px 16px;
+                border-radius: 20px;
+                font-size: 11px;
+                font-weight: 600;
+                letter-spacing: 2px;
+                text-transform: uppercase;
+                font-family: "IBM Plex Mono", monospace;
+                margin-bottom: 16px;
+            }
+            .header h1 {
+                font-size: 38px;
+                font-weight: 700;
+                letter-spacing: -0.8px;
+                margin-bottom: 14px;
+                background: linear-gradient(135deg, #e6e6ec 0%, #9596a4 100%);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+            }
+            .header p {
+                color: var(--text-secondary);
+                font-size: 16px;
+                max-width: 680px;
+                margin: 0 auto;
+            }
+
+            .section {
+                max-width: 940px;
+                margin: 0 auto 60px;
+            }
+            .section-eyebrow {
+                font-family: "IBM Plex Mono", monospace;
+                font-size: 10px;
+                font-weight: 600;
+                letter-spacing: 2.5px;
+                text-transform: uppercase;
+                color: var(--text-muted);
+                margin-bottom: 8px;
+            }
+            .section-title {
+                font-size: 24px;
+                font-weight: 700;
+                margin-bottom: 12px;
+                letter-spacing: -0.3px;
+            }
+            .section-desc {
+                color: var(--text-secondary);
+                font-size: 14px;
+                margin-bottom: 28px;
+                line-height: 1.7;
+            }
+            .divider {
+                height: 1px;
+                background: var(--border-subtle);
+                margin: 56px 0;
+            }
+
+            .chrome {
+                background: var(--bg-surface);
+                border: 1px solid var(--border-subtle);
+                border-radius: 14px;
+                overflow: hidden;
+                box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+            }
+            .chrome-bar {
+                background: var(--bg-muted);
+                padding: 9px 16px;
+                font-family: "IBM Plex Mono", monospace;
+                font-size: 11px;
+                color: var(--text-muted);
+                border-bottom: 1px solid var(--border-subtle);
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            }
+            .chrome-dots {
+                display: flex;
+                gap: 5px;
+            }
+            .dot {
+                width: 8px;
+                height: 8px;
+                border-radius: 50%;
+            }
+            .dot-r {
+                background: #ff5f57;
+            }
+            .dot-y {
+                background: #febc2e;
+            }
+            .dot-g {
+                background: #28c840;
+            }
+            .chrome-body {
+                padding: 24px;
+            }
+
+            .badge {
+                display: inline-flex;
+                align-items: center;
+                padding: 2px 10px;
+                border-radius: 6px;
+                font-size: 10px;
+                font-weight: 600;
+            }
+            .badge-amber {
+                background: var(--amber-bg);
+                color: var(--amber-500);
+                border: 1px solid var(--amber-border);
+            }
+            .badge-blue {
+                background: var(--blue-bg);
+                color: var(--blue-500);
+                border: 1px solid var(--blue-border);
+            }
+            .badge-green {
+                background: var(--green-bg);
+                color: var(--green-500);
+                border: 1px solid var(--green-border);
+            }
+            .badge-red {
+                background: var(--red-bg);
+                color: var(--red-500);
+                border: 1px solid var(--red-border);
+            }
+            .badge-muted {
+                background: var(--bg-accent);
+                color: var(--text-muted);
+                border: 1px solid var(--border-default);
+            }
+            .badge-orange {
+                background: var(--orange-bg);
+                color: var(--orange-500);
+                border: 1px solid var(--orange-border);
+            }
+
+            /* Decision card */
+            .decision-card {
+                background: var(--bg-elevated);
+                border: 1px solid var(--border-subtle);
+                border-left: 3px solid var(--red-500);
+                border-radius: 12px;
+                padding: 20px;
+            }
+            .card-header {
+                display: flex;
+                align-items: flex-start;
+                justify-content: space-between;
+                gap: 12px;
+                margin-bottom: 12px;
+            }
+            .card-meta {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                flex-wrap: wrap;
+            }
+            .card-title {
+                font-size: 15px;
+                font-weight: 600;
+                margin: 8px 0;
+            }
+            .card-subtitle {
+                color: var(--text-secondary);
+                font-size: 12px;
+                display: flex;
+                gap: 12px;
+                align-items: center;
+            }
+            .card-subtitle code {
+                font-family: "IBM Plex Mono", monospace;
+                background: var(--bg-muted);
+                padding: 1px 6px;
+                border-radius: 4px;
+                font-size: 11px;
+            }
+
+            /* Stepper */
+            .workflow-steps {
+                background: var(--bg-muted);
+                border-radius: 10px;
+                padding: 16px;
+                margin-top: 12px;
+            }
+            .steps-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 16px;
+            }
+            .steps-header-left {
+                font-size: 12px;
+                color: var(--text-muted);
+                font-weight: 500;
+            }
+            .stepper {
+                display: flex;
+                flex-direction: column;
+            }
+            .step-row {
+                display: flex;
+                gap: 12px;
+            }
+            .step-ind {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                min-width: 28px;
+            }
+            .step-dot {
+                width: 28px;
+                height: 28px;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 11px;
+                font-weight: 700;
+                z-index: 1;
+                flex-shrink: 0;
+                border: 1px solid transparent;
+            }
+            .step-dot.completed {
+                background: var(--bg-elevated);
+                border-color: var(--green-border);
+                color: var(--green-500);
+            }
+            .step-dot.failed {
+                background: var(--bg-elevated);
+                border-color: var(--red-border);
+                color: var(--red-500);
+            }
+            .step-dot.suspended {
+                background: var(--bg-elevated);
+                border-color: var(--amber-border);
+                color: var(--amber-500);
+                animation: pulse 2s infinite;
+            }
+            .step-dot.pending {
+                background: var(--bg-elevated);
+                border-color: var(--border-default);
+                color: var(--text-muted);
+            }
+            .step-dot.retrying {
+                background: var(--bg-elevated);
+                border-color: var(--amber-border);
+                color: var(--amber-500);
+                animation: spin 1s linear infinite;
+            }
+            .step-line {
+                width: 2px;
+                flex: 1;
+                min-height: 14px;
+            }
+            .step-line.green {
+                background: var(--green-border);
+            }
+            .step-line.red {
+                background: var(--red-border);
+            }
+            .step-line.default {
+                background: var(--border-subtle);
+            }
+            @keyframes pulse {
+                0%,
+                100% {
+                    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.3);
+                }
+                50% {
+                    box-shadow: 0 0 0 5px rgba(245, 158, 11, 0);
+                }
+            }
+            @keyframes spin {
+                from {
+                    transform: rotate(0deg);
+                }
+                to {
+                    transform: rotate(360deg);
+                }
+            }
+            .step-body {
+                flex: 1;
+                padding-bottom: 16px;
+            }
+            .step-hdr {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                min-height: 28px;
+                cursor: pointer;
+                padding: 0 6px;
+                border-radius: 6px;
+                margin: 0 -6px;
+                transition: background 0.1s;
+            }
+            .step-hdr:hover {
+                background: rgba(255, 255, 255, 0.03);
+            }
+            .step-lbl {
+                font-size: 13px;
+                font-weight: 600;
+                flex: 1;
+            }
+            .step-desc {
+                font-size: 11px;
+                color: var(--text-muted);
+            }
+            .step-chev {
+                width: 14px;
+                height: 14px;
+                color: var(--text-muted);
+                transition: transform 0.2s;
+                flex-shrink: 0;
+            }
+            .step-chev.open {
+                transform: rotate(180deg);
+            }
+
+            /* Inline detail (Phase 0 pattern) */
+            .inline-detail {
+                margin-top: 8px;
+                background: var(--bg-elevated);
+                border: 1px solid var(--border-subtle);
+                border-radius: 8px;
+                overflow: hidden;
+                animation: slideDown 0.2s ease-out;
+            }
+            @keyframes slideDown {
+                from {
+                    opacity: 0;
+                    max-height: 0;
+                }
+                to {
+                    opacity: 1;
+                    max-height: 800px;
+                }
+            }
+            .id-meta {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 12px;
+                padding: 8px 12px;
+                border-bottom: 1px solid var(--border-subtle);
+                font-size: 10px;
+                color: var(--text-muted);
+            }
+            .meta-item {
+                display: flex;
+                align-items: center;
+                gap: 4px;
+            }
+            .meta-val {
+                color: var(--text-secondary);
+                font-family: "IBM Plex Mono", monospace;
+                font-size: 10px;
+            }
+            .id-body {
+                padding: 12px;
+            }
+            .det-sec {
+                margin-bottom: 12px;
+            }
+            .det-sec:last-child {
+                margin-bottom: 0;
+            }
+            .det-lbl {
+                font-size: 10px;
+                font-weight: 600;
+                letter-spacing: 1.2px;
+                text-transform: uppercase;
+                color: var(--text-muted);
+                margin-bottom: 5px;
+                font-family: "IBM Plex Mono", monospace;
+            }
+            .summary-text {
+                font-size: 12px;
+                line-height: 1.6;
+                color: var(--text-secondary);
+                background: var(--bg-muted);
+                border-radius: 6px;
+                padding: 8px 10px;
+                border: 1px solid var(--border-subtle);
+                white-space: pre-wrap;
+            }
+            .summary-text strong {
+                color: var(--text-primary);
+            }
+            .links-grid {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 6px;
+            }
+            .link-chip {
+                display: inline-flex;
+                align-items: center;
+                gap: 5px;
+                padding: 5px 10px;
+                border-radius: 6px;
+                background: var(--bg-muted);
+                border: 1px solid var(--border-subtle);
+                font-size: 11px;
+                color: var(--blue-500);
+                text-decoration: none;
+                cursor: pointer;
+                transition: all 0.15s;
+            }
+            .link-chip:hover {
+                background: var(--blue-bg);
+                border-color: var(--blue-border);
+            }
+            .raw-toggle {
+                display: inline-flex;
+                align-items: center;
+                gap: 4px;
+                font-size: 10px;
+                color: var(--text-muted);
+                cursor: pointer;
+                border: none;
+                background: none;
+                font-family: "IBM Plex Mono", monospace;
+            }
+            .raw-toggle:hover {
+                color: var(--text-secondary);
+            }
+            .raw-block {
+                margin-top: 5px;
+                background: var(--bg-muted);
+                border: 1px solid var(--border-subtle);
+                border-radius: 5px;
+                padding: 8px;
+                font-family: "IBM Plex Mono", monospace;
+                font-size: 10px;
+                color: var(--text-secondary);
+                max-height: 140px;
+                overflow: auto;
+                white-space: pre-wrap;
+            }
+
+            /* Error block */
+            .error-block {
+                background: var(--red-bg);
+                border: 1px solid var(--red-border);
+                border-radius: 6px;
+                padding: 10px 12px;
+            }
+            .error-title {
+                font-size: 11px;
+                font-weight: 600;
+                color: var(--red-500);
+                margin-bottom: 4px;
+                display: flex;
+                align-items: center;
+                gap: 5px;
+            }
+            .error-msg {
+                font-size: 11px;
+                font-family: "IBM Plex Mono", monospace;
+                color: var(--text-secondary);
+            }
+            .error-field {
+                font-size: 10px;
+                color: var(--text-muted);
+                display: flex;
+                align-items: center;
+                gap: 5px;
+                margin-top: 6px;
+                padding-top: 6px;
+                border-top: 1px solid var(--red-border);
+            }
+            .error-field code {
+                color: var(--red-500);
+                background: rgba(239, 68, 68, 0.12);
+                padding: 1px 5px;
+                border-radius: 3px;
+                font-size: 10px;
+            }
+
+            /* Retry button and confirm */
+            .retry-btn {
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                padding: 6px 14px;
+                border-radius: 8px;
+                font-size: 12px;
+                font-weight: 600;
+                cursor: pointer;
+                transition: all 0.15s;
+                border: 1px solid var(--amber-border);
+                background: var(--amber-bg);
+                color: var(--amber-500);
+                font-family: "Space Grotesk", sans-serif;
+            }
+            .retry-btn:hover {
+                background: rgba(245, 158, 11, 0.15);
+                border-color: var(--amber-500);
+            }
+            .retry-btn svg {
+                width: 14px;
+                height: 14px;
+            }
+            .retry-confirm {
+                background: var(--amber-bg);
+                border: 1px solid var(--amber-border);
+                border-radius: 10px;
+                padding: 14px 18px;
+                margin-top: 12px;
+                display: flex;
+                align-items: center;
+                gap: 12px;
+            }
+            .retry-confirm-icon {
+                width: 36px;
+                height: 36px;
+                border-radius: 10px;
+                background: rgba(245, 158, 11, 0.15);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                flex-shrink: 0;
+            }
+            .retry-confirm-text {
+                flex: 1;
+            }
+            .retry-confirm-title {
+                font-size: 13px;
+                font-weight: 600;
+            }
+            .retry-confirm-desc {
+                font-size: 11px;
+                color: var(--text-secondary);
+                margin-top: 2px;
+            }
+            .retry-confirm-actions {
+                display: flex;
+                gap: 8px;
+            }
+
+            .btn {
+                padding: 6px 16px;
+                border-radius: 8px;
+                font-size: 12px;
+                font-weight: 600;
+                cursor: pointer;
+                transition: all 0.15s;
+                border: none;
+                font-family: "Space Grotesk", sans-serif;
+            }
+            .btn-ghost {
+                background: transparent;
+                border: 1px solid var(--border-default);
+                color: var(--text-secondary);
+            }
+            .btn-ghost:hover {
+                background: var(--bg-accent);
+            }
+            .btn-amber {
+                background: var(--amber-600);
+                color: white;
+            }
+            .btn-amber:hover {
+                background: var(--amber-500);
+            }
+            .btn-primary {
+                background: var(--blue-500);
+                color: white;
+            }
+            .btn-destructive {
+                background: var(--red-600);
+                color: white;
+            }
+            .btn-outline {
+                background: transparent;
+                border: 1px solid var(--border-default);
+                color: var(--text-primary);
+            }
+            .btn-outline:hover {
+                background: var(--bg-accent);
+            }
+            .action-buttons {
+                display: flex;
+                gap: 8px;
+                margin-top: 16px;
+            }
+
+            .success-banner {
+                background: var(--green-bg);
+                border: 1px solid var(--green-border);
+                border-radius: 10px;
+                padding: 14px 18px;
+                margin-top: 12px;
+                display: flex;
+                align-items: center;
+                gap: 12px;
+            }
+            .success-icon {
+                width: 36px;
+                height: 36px;
+                border-radius: 10px;
+                background: rgba(34, 197, 94, 0.15);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                flex-shrink: 0;
+            }
+
+            /* Flow diagram */
+            .flow-container {
+                display: flex;
+                align-items: center;
+                padding: 20px 0;
+                overflow-x: auto;
+                gap: 0;
+            }
+            .flow-node {
+                background: var(--bg-elevated);
+                border: 1px solid var(--border-subtle);
+                border-radius: 10px;
+                padding: 14px 18px;
+                min-width: 130px;
+                text-align: center;
+                flex-shrink: 0;
+            }
+            .flow-node-title {
+                font-size: 12px;
+                font-weight: 600;
+                margin-bottom: 4px;
+            }
+            .flow-node-desc {
+                font-size: 10px;
+                color: var(--text-muted);
+                font-family: "IBM Plex Mono", monospace;
+            }
+            .flow-node.active {
+                border-color: var(--amber-500);
+                box-shadow: 0 0 0 2px var(--amber-bg);
+            }
+            .flow-arrow {
+                color: var(--text-muted);
+                font-size: 18px;
+                padding: 0 8px;
+                flex-shrink: 0;
+            }
+
+            /* Spec tables */
+            .spec-table {
+                width: 100%;
+                border-collapse: collapse;
+                font-size: 13px;
+            }
+            .spec-table th {
+                text-align: left;
+                padding: 10px 14px;
+                border-bottom: 1px solid var(--border-subtle);
+                color: var(--text-muted);
+                font-size: 10px;
+                font-weight: 600;
+                text-transform: uppercase;
+                letter-spacing: 1.5px;
+                font-family: "IBM Plex Mono", monospace;
+            }
+            .spec-table td {
+                padding: 10px 14px;
+                border-bottom: 1px solid var(--border-subtle);
+                color: var(--text-secondary);
+                vertical-align: top;
+            }
+            .spec-table td:first-child {
+                color: var(--text-primary);
+                font-weight: 500;
+            }
+            .spec-table code {
+                font-family: "IBM Plex Mono", monospace;
+                background: var(--bg-muted);
+                padding: 2px 6px;
+                border-radius: 4px;
+                font-size: 11px;
+                color: var(--purple-500);
+            }
+
+            .callout {
+                background: var(--blue-bg);
+                border: 1px solid var(--blue-border);
+                border-left: 3px solid var(--blue-500);
+                border-radius: 8px;
+                padding: 12px 16px;
+                font-size: 12px;
+                color: var(--text-secondary);
+                line-height: 1.6;
+            }
+            .callout strong {
+                color: var(--blue-500);
+            }
+
+            /* Toggle group */
+            .toggle-group {
+                display: flex;
+                gap: 4px;
+                margin-bottom: 24px;
+                background: var(--bg-muted);
+                border-radius: 10px;
+                padding: 4px;
+                width: fit-content;
+            }
+            .toggle-btn {
+                padding: 8px 20px;
+                border-radius: 8px;
+                font-size: 13px;
+                font-weight: 600;
+                cursor: pointer;
+                border: none;
+                background: transparent;
+                color: var(--text-muted);
+                transition: all 0.2s;
+                font-family: "Space Grotesk", sans-serif;
+            }
+            .toggle-btn.active {
+                background: var(--bg-accent);
+                color: var(--text-primary);
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            }
+            .toggle-btn:hover:not(.active) {
+                color: var(--text-secondary);
+            }
+
+            /* Type cards */
+            .type-grid {
+                display: grid;
+                grid-template-columns: repeat(3, 1fr);
+                gap: 12px;
+                margin-bottom: 28px;
+            }
+            .type-card {
+                background: var(--bg-elevated);
+                border: 1px solid var(--border-subtle);
+                border-radius: 10px;
+                padding: 14px;
+                text-align: center;
+                cursor: pointer;
+                transition: all 0.15s;
+            }
+            .type-card:hover {
+                border-color: var(--border-default);
+            }
+            .type-card.active {
+                border-color: var(--amber-500);
+                box-shadow: 0 0 0 1px var(--amber-border);
+            }
+            .tc-icon {
+                font-size: 22px;
+                margin-bottom: 6px;
+            }
+            .tc-name {
+                font-size: 13px;
+                font-weight: 600;
+                margin-bottom: 3px;
+            }
+            .tc-desc {
+                font-size: 10px;
+                color: var(--text-muted);
+            }
+
+            /* Impl step */
+            .impl-step {
+                background: var(--bg-surface);
+                border: 1px solid var(--border-subtle);
+                border-radius: 12px;
+                padding: 20px;
+                margin-bottom: 20px;
+            }
+            .impl-step h3 {
+                font-size: 16px;
+                margin-bottom: 12px;
+            }
+            .impl-meta {
+                display: flex;
+                gap: 24px;
+                font-size: 12px;
+                color: var(--text-secondary);
+                margin-bottom: 16px;
+                flex-wrap: wrap;
+            }
+            .detail-section {
+                margin-bottom: 14px;
+            }
+            .detail-section-label {
+                font-size: 10px;
+                font-weight: 600;
+                letter-spacing: 1.5px;
+                text-transform: uppercase;
+                color: var(--text-muted);
+                margin-bottom: 6px;
+                font-family: "IBM Plex Mono", monospace;
+            }
+            .raw-pre {
+                background: var(--bg-muted);
+                border: 1px solid var(--border-subtle);
+                border-radius: 8px;
+                padding: 14px;
+                font-family: "IBM Plex Mono", monospace;
+                font-size: 11px;
+                color: var(--text-secondary);
+                line-height: 1.6;
+                max-height: 260px;
+                overflow: auto;
+                white-space: pre-wrap;
+            }
+            .impl-step ol {
+                padding-left: 20px;
+                font-size: 13px;
+                color: var(--text-secondary);
+                line-height: 1.8;
+            }
+            .impl-step ol code {
+                font-family: "IBM Plex Mono", monospace;
+                background: var(--bg-muted);
+                padding: 1px 5px;
+                border-radius: 3px;
+                font-size: 11px;
+                color: var(--purple-500);
+            }
+            .check-list {
+                font-size: 13px;
+                color: var(--text-secondary);
+                line-height: 2.2;
+            }
+        </style>
+    </head>
+    <body>
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <!-- SECTION 1: HEADER                                                 -->
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <div class="header">
+            <div class="phase-tag">Phase 2</div>
+            <h1>Retry Failed Step</h1>
+            <p>
+                When a workflow step fails (e.g., GitHub API 401, agent timeout), let operators
+                retry that specific step without re-running the entire workflow. Preserves all
+                completed step outputs via <code>existingSteps</code> and re-invokes
+                <code>executeWorkflowDefinition</code> targeting the failed step. Builds on Phase 0
+                (expandable step details) and Phase 1 (stepper + cancel).
+            </p>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <!-- SECTION 2: ARCHITECTURE / FLOW                                    -->
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <div class="section">
+            <div class="section-eyebrow">Architecture</div>
+            <div class="section-title">Retry Flow</div>
+            <div class="section-desc">
+                The retry action follows the same pattern as the existing resume route -- it
+                collects completed step outputs, then re-executes from the failed step. A
+                convenience route scoped to the review ID delegates to the workflow resume API.
+            </div>
+            <div class="chrome">
+                <div class="chrome-bar">
+                    <div class="chrome-dots">
+                        <span class="dot dot-r"></span><span class="dot dot-y"></span
+                        ><span class="dot dot-g"></span>
+                    </div>
+                    retry-flow
+                </div>
+                <div class="chrome-body">
+                    <div class="flow-container">
+                        <div class="flow-node">
+                            <div class="flow-node-title">User clicks Retry</div>
+                            <div class="flow-node-desc">StepDetailPanel</div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-node">
+                            <div class="flow-node-title">Confirm Dialog</div>
+                            <div class="flow-node-desc">Inline bar</div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-node active">
+                            <div class="flow-node-title">POST /reviews/[id]/retry</div>
+                            <div class="flow-node-desc">Convenience route</div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-node active">
+                            <div class="flow-node-title">Build existingSteps</div>
+                            <div class="flow-node-desc">Completed outputs only</div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-node">
+                            <div class="flow-node-title">executeWorkflowDefinition</div>
+                            <div class="flow-node-desc">resume: { stepId }</div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-node">
+                            <div class="flow-node-title">DB Update</div>
+                            <div class="flow-node-desc">Step + Run records</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div style="margin-top: 20px">
+                <div class="callout">
+                    <strong>Key insight:</strong> Retry reuses the same
+                    <code>executeWorkflowDefinition</code> resume mechanism that the human approval
+                    flow uses. The only difference is that instead of resuming a
+                    <em>suspended</em> step with approval data, we target a <em>failed</em> step
+                    with an empty data payload to trigger re-execution.
+                </div>
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <!-- SECTION 3: INTERACTIVE UI MOCKUP                                  -->
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <div class="section">
+            <div class="section-eyebrow">UI Mockup</div>
+            <div class="section-title">Retry in Expanded Step Detail</div>
+            <div class="section-desc">
+                The retry button appears inside a FAILED step's expanded detail panel (Phase 0).
+                Toggle between states to see the full retry flow. Step 4 (Run Bugfix) is the failed
+                step -- click to expand.
+            </div>
+
+            <div class="toggle-group">
+                <button class="toggle-btn active" onclick="showState('default', this)">
+                    Failed
+                </button>
+                <button class="toggle-btn" onclick="showState('confirm', this)">Confirming</button>
+                <button class="toggle-btn" onclick="showState('retrying', this)">Retrying</button>
+                <button class="toggle-btn" onclick="showState('success', this)">Success</button>
+            </div>
+
+            <div class="chrome">
+                <div class="chrome-bar">
+                    <div class="chrome-dots">
+                        <span class="dot dot-r"></span><span class="dot dot-y"></span
+                        ><span class="dot dot-g"></span>
+                    </div>
+                    /command -- DecisionCard + WorkflowStepsCard (Phase 0 + 1 + 2)
+                </div>
+                <div class="chrome-body">
+                    <div class="decision-card">
+                        <div class="card-header">
+                            <div>
+                                <div class="card-meta">
+                                    <span
+                                        style="
+                                            font-family: &quot;IBM Plex Mono&quot;, monospace;
+                                            font-size: 13px;
+                                            color: var(--red-500);
+                                            font-weight: 600;
+                                        "
+                                        >8m ago</span
+                                    >
+                                    <span class="badge badge-red">high</span>
+                                    <span class="badge badge-blue">workflow</span>
+                                    <span style="color: var(--text-secondary); font-size: 13px"
+                                        >sdlc-bugfix-pipeline</span
+                                    >
+                                </div>
+                                <div class="card-title">Workflow run failed at step run-bugfix</div>
+                                <div class="card-subtitle">
+                                    <span>&#x1f534; high risk</span
+                                    ><span>Step: <code>run-bugfix</code></span
+                                    ><span>Run: <code>cmn2kf9r...</code></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="workflow-steps">
+                            <div class="steps-header">
+                                <span class="steps-header-left">Workflow Steps (5)</span>
+                            </div>
+
+                            <div class="stepper">
+                                <!-- Step 1: Completed -->
+                                <div class="step-row">
+                                    <div class="step-ind">
+                                        <div class="step-dot completed">
+                                            <svg
+                                                width="12"
+                                                height="12"
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                stroke-width="2.5"
+                                                stroke-linecap="round"
+                                            >
+                                                <polyline points="20 6 9 17 4 12" />
+                                            </svg>
+                                        </div>
+                                        <div class="step-line green"></div>
+                                    </div>
+                                    <div class="step-body">
+                                        <div class="step-hdr" onclick="toggleStep('r1')">
+                                            <span
+                                                class="step-lbl"
+                                                style="color: var(--text-primary)"
+                                                >Create GitHub Issue</span
+                                            ><span class="step-desc">tool &middot; 1ms</span
+                                            ><svg
+                                                class="step-chev"
+                                                id="chev-r1"
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                stroke-width="2"
+                                                stroke-linecap="round"
+                                            >
+                                                <polyline points="6 9 12 15 18 9" />
+                                            </svg>
+                                        </div>
+                                        <div id="detail-r1" class="inline-detail hidden">
+                                            <div class="id-meta">
+                                                <div class="meta-item">
+                                                    <span>Duration</span>
+                                                    <span class="meta-val">1ms</span>
+                                                </div>
+                                            </div>
+                                            <div class="id-body">
+                                                <div class="det-sec">
+                                                    <div class="det-lbl">Output</div>
+                                                    <div class="summary-text">
+                                                        GitHub Issue #215 created in
+                                                        Appello-Prototypes/agentc2
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Step 2: Completed -->
+                                <div class="step-row">
+                                    <div class="step-ind">
+                                        <div class="step-dot completed">
+                                            <svg
+                                                width="12"
+                                                height="12"
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                stroke-width="2.5"
+                                                stroke-linecap="round"
+                                            >
+                                                <polyline points="20 6 9 17 4 12" />
+                                            </svg>
+                                        </div>
+                                        <div class="step-line green"></div>
+                                    </div>
+                                    <div class="step-body">
+                                        <div class="step-hdr" onclick="toggleStep('r2')">
+                                            <span
+                                                class="step-lbl"
+                                                style="color: var(--text-primary)"
+                                                >Launch Code Analysis</span
+                                            ><span class="step-desc">tool &middot; 1ms</span
+                                            ><svg
+                                                class="step-chev"
+                                                id="chev-r2"
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                stroke-width="2"
+                                                stroke-linecap="round"
+                                            >
+                                                <polyline points="6 9 12 15 18 9" />
+                                            </svg>
+                                        </div>
+                                        <div id="detail-r2" class="inline-detail hidden">
+                                            <div class="id-meta">
+                                                <div class="meta-item">
+                                                    <span>Agent</span>
+                                                    <span class="meta-val">bc-f3a21c8e</span>
+                                                </div>
+                                            </div>
+                                            <div class="id-body">
+                                                <div class="det-sec">
+                                                    <div class="det-lbl">Links</div>
+                                                    <div class="links-grid">
+                                                        <a class="link-chip" href="#"
+                                                            >&#x1f527; Analysis Agent Session</a
+                                                        >
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Step 3: Completed -->
+                                <div class="step-row">
+                                    <div class="step-ind">
+                                        <div class="step-dot completed">
+                                            <svg
+                                                width="12"
+                                                height="12"
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                stroke-width="2.5"
+                                                stroke-linecap="round"
+                                            >
+                                                <polyline points="20 6 9 17 4 12" />
+                                            </svg>
+                                        </div>
+                                        <div class="step-line green"></div>
+                                    </div>
+                                    <div class="step-body">
+                                        <div class="step-hdr" onclick="toggleStep('r3')">
+                                            <span
+                                                class="step-lbl"
+                                                style="color: var(--text-primary)"
+                                                >Audit Fix Plan</span
+                                            ><span class="badge badge-muted">agent</span
+                                            ><span class="step-desc">2.3s</span
+                                            ><svg
+                                                class="step-chev"
+                                                id="chev-r3"
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                stroke-width="2"
+                                                stroke-linecap="round"
+                                            >
+                                                <polyline points="6 9 12 15 18 9" />
+                                            </svg>
+                                        </div>
+                                        <div id="detail-r3" class="inline-detail hidden">
+                                            <div class="id-meta">
+                                                <div class="meta-item">
+                                                    <span>Duration</span>
+                                                    <span class="meta-val">2.3s</span>
+                                                </div>
+                                            </div>
+                                            <div class="id-body">
+                                                <div class="det-sec">
+                                                    <div class="det-lbl">Agent Response</div>
+                                                    <div class="summary-text">
+                                                        <strong>Verdict:</strong> Approved for
+                                                        implementation. No architectural concerns.
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Step 4: FAILED -- EXPANDED with retry button -->
+                                <div class="step-row">
+                                    <div class="step-ind">
+                                        <div class="step-dot failed" id="step4-dot">
+                                            <svg
+                                                width="12"
+                                                height="12"
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                stroke-width="2.5"
+                                                stroke-linecap="round"
+                                            >
+                                                <path d="M18 6L6 18M6 6l12 12" />
+                                            </svg>
+                                        </div>
+                                        <div class="step-line red" id="step4-line"></div>
+                                    </div>
+                                    <div class="step-body">
+                                        <div
+                                            class="step-hdr"
+                                            style="background: rgba(255, 255, 255, 0.03)"
+                                        >
+                                            <span
+                                                class="step-lbl"
+                                                style="color: var(--red-500)"
+                                                id="step4-lbl"
+                                                >Run Bugfix</span
+                                            >
+                                            <span class="badge badge-muted">agent</span>
+                                            <span class="step-desc" id="step4-timing">4m 12s</span>
+                                            <span
+                                                class="badge badge-red"
+                                                style="margin-left: auto"
+                                                id="step4-badge"
+                                                >failed</span
+                                            >
+                                            <svg
+                                                class="step-chev open"
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                stroke-width="2"
+                                                stroke-linecap="round"
+                                            >
+                                                <polyline points="6 9 12 15 18 9" />
+                                            </svg>
+                                        </div>
+                                        <div class="inline-detail" id="step4-detail">
+                                            <div class="id-meta">
+                                                <div class="meta-item">
+                                                    <span>Duration</span>
+                                                    <span class="meta-val" id="step4-dur"
+                                                        >4m 12s</span
+                                                    >
+                                                </div>
+                                                <div class="meta-item">
+                                                    <span>Started</span>
+                                                    <span class="meta-val">2:14:33 PM</span>
+                                                </div>
+                                                <div class="meta-item">
+                                                    <span>Iterations</span>
+                                                    <span class="meta-val">1x</span>
+                                                </div>
+                                            </div>
+                                            <div class="id-body">
+                                                <!-- Error display -->
+                                                <div class="det-sec" id="error-section">
+                                                    <div class="det-lbl">Error</div>
+                                                    <div class="error-block">
+                                                        <div class="error-title">
+                                                            <svg
+                                                                width="12"
+                                                                height="12"
+                                                                viewBox="0 0 24 24"
+                                                                fill="none"
+                                                                stroke="currentColor"
+                                                                stroke-width="2"
+                                                            >
+                                                                <circle cx="12" cy="12" r="10" />
+                                                                <line
+                                                                    x1="15"
+                                                                    y1="9"
+                                                                    x2="9"
+                                                                    y2="15"
+                                                                />
+                                                                <line
+                                                                    x1="9"
+                                                                    y1="9"
+                                                                    x2="15"
+                                                                    y2="15"
+                                                                />
+                                                            </svg>
+                                                            GitHub API Error
+                                                        </div>
+                                                        <div class="error-msg">
+                                                            401 Unauthorized -- Bad credentials. The
+                                                            GitHub personal access token has expired
+                                                            or been revoked.
+                                                        </div>
+                                                        <div class="error-field">
+                                                            Source: <code>run-bugfix</code> &middot;
+                                                            HTTP 401 &middot; github.com/api/v3
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <!-- Success display (hidden by default) -->
+                                                <div class="det-sec hidden" id="success-section">
+                                                    <div class="det-lbl">Output</div>
+                                                    <div class="summary-text">
+                                                        <strong
+                                                            >Bugfix implemented
+                                                            successfully.</strong
+                                                        >
+
+                                                        PR #47 created:
+                                                        cursor/fix-mcp-schema-model-parameter-005c
+                                                        Changes: 2 files modified in
+                                                        packages/agentc2/src/workflows/coding-pipeline.ts
+
+                                                        <strong>All CI checks passed.</strong>
+                                                    </div>
+                                                </div>
+
+                                                <!-- Retry action area -->
+                                                <div class="det-sec">
+                                                    <div id="retry-default">
+                                                        <button
+                                                            class="retry-btn"
+                                                            onclick="showState('confirm', null)"
+                                                        >
+                                                            <svg
+                                                                viewBox="0 0 24 24"
+                                                                fill="none"
+                                                                stroke="currentColor"
+                                                                stroke-width="2"
+                                                                stroke-linecap="round"
+                                                            >
+                                                                <polyline
+                                                                    points="23 4 23 10 17 10"
+                                                                />
+                                                                <path
+                                                                    d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"
+                                                                />
+                                                            </svg>
+                                                            Retry Step
+                                                        </button>
+                                                    </div>
+                                                    <div
+                                                        id="retry-confirm"
+                                                        class="retry-confirm hidden"
+                                                    >
+                                                        <div class="retry-confirm-icon">
+                                                            <svg
+                                                                width="18"
+                                                                height="18"
+                                                                viewBox="0 0 24 24"
+                                                                fill="none"
+                                                                stroke="var(--amber-500)"
+                                                                stroke-width="2"
+                                                                stroke-linecap="round"
+                                                            >
+                                                                <polyline
+                                                                    points="23 4 23 10 17 10"
+                                                                />
+                                                                <path
+                                                                    d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"
+                                                                />
+                                                            </svg>
+                                                        </div>
+                                                        <div class="retry-confirm-text">
+                                                            <div class="retry-confirm-title">
+                                                                Retry this step?
+                                                            </div>
+                                                            <div class="retry-confirm-desc">
+                                                                The step
+                                                                <code>run-bugfix</code> will be
+                                                                re-executed. All prior completed
+                                                                steps will be preserved. Make sure
+                                                                the underlying issue (e.g., expired
+                                                                token) has been resolved.
+                                                            </div>
+                                                        </div>
+                                                        <div class="retry-confirm-actions">
+                                                            <button
+                                                                class="btn btn-ghost"
+                                                                onclick="showState('default', null)"
+                                                            >
+                                                                Cancel
+                                                            </button>
+                                                            <button
+                                                                class="btn btn-amber"
+                                                                onclick="
+                                                                    showState('retrying', null);
+                                                                    setTimeout(
+                                                                        () =>
+                                                                            showState(
+                                                                                'success',
+                                                                                null
+                                                                            ),
+                                                                        2000
+                                                                    );
+                                                                "
+                                                            >
+                                                                Yes, Retry
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                    <div id="retry-loading" class="hidden">
+                                                        <button
+                                                            class="retry-btn"
+                                                            style="opacity: 0.7; cursor: wait"
+                                                        >
+                                                            <svg
+                                                                viewBox="0 0 24 24"
+                                                                fill="none"
+                                                                stroke="currentColor"
+                                                                stroke-width="2"
+                                                                stroke-linecap="round"
+                                                                style="
+                                                                    animation: spin 1s linear
+                                                                        infinite;
+                                                                "
+                                                            >
+                                                                <polyline
+                                                                    points="23 4 23 10 17 10"
+                                                                />
+                                                                <path
+                                                                    d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"
+                                                                />
+                                                            </svg>
+                                                            Retrying...
+                                                        </button>
+                                                    </div>
+                                                    <div
+                                                        id="retry-success"
+                                                        class="success-banner hidden"
+                                                    >
+                                                        <div class="success-icon">
+                                                            <svg
+                                                                width="18"
+                                                                height="18"
+                                                                viewBox="0 0 24 24"
+                                                                fill="none"
+                                                                stroke="var(--green-500)"
+                                                                stroke-width="2.5"
+                                                                stroke-linecap="round"
+                                                            >
+                                                                <polyline points="20 6 9 17 4 12" />
+                                                            </svg>
+                                                        </div>
+                                                        <div class="retry-confirm-text">
+                                                            <div
+                                                                class="retry-confirm-title"
+                                                                style="color: var(--green-500)"
+                                                            >
+                                                                Step retried successfully
+                                                            </div>
+                                                            <div class="retry-confirm-desc">
+                                                                run-bugfix completed. The workflow
+                                                                will continue from the next step.
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div class="det-sec">
+                                                    <button
+                                                        class="raw-toggle"
+                                                        onclick="
+                                                            event.stopPropagation();
+                                                            this.nextElementSibling.classList.toggle(
+                                                                'hidden'
+                                                            );
+                                                        "
+                                                    >
+                                                        &#9654; View raw output
+                                                    </button>
+                                                    <div class="raw-block hidden">
+                                                        { "error": { "message": "401 Unauthorized",
+                                                        "source": "github.com/api/v3", "code":
+                                                        "BAD_CREDENTIALS" }, "stepId": "run-bugfix",
+                                                        "durationMs": 252000 }
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Step 5: Pending -->
+                                <div class="step-row">
+                                    <div class="step-ind">
+                                        <div class="step-dot pending">5</div>
+                                    </div>
+                                    <div class="step-body" style="padding-bottom: 0">
+                                        <div class="step-hdr" style="cursor: default">
+                                            <span class="step-lbl" style="color: var(--text-muted)"
+                                                >Post Audit Summary</span
+                                            ><span class="step-desc">tool &middot; pending</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <!-- SECTION 4: FILES CHANGED                                          -->
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <div class="section">
+            <div class="section-eyebrow">Manifest</div>
+            <div class="section-title">Files Changed</div>
+            <table class="spec-table">
+                <thead>
+                    <tr>
+                        <th>Action</th>
+                        <th>File</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="badge badge-green">New</span></td>
+                        <td><code>apps/agent/src/app/api/reviews/[id]/retry/route.ts</code></td>
+                        <td>
+                            POST route: validates failed step, builds existingSteps, calls
+                            executeWorkflowDefinition, updates DB records
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-amber">Modify</span></td>
+                        <td>
+                            <code>apps/agent/src/app/command/components/WorkflowStepsCard.tsx</code>
+                        </td>
+                        <td>
+                            Add "Retry Step" button with confirm dialog inside expanded step detail
+                            for FAILED steps
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-amber">Modify</span></td>
+                        <td><code>apps/agent/src/app/command/hooks/useReviews.ts</code></td>
+                        <td>
+                            Add <code>handleRetryStep(reviewId, stepId)</code> handler and export
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-amber">Modify</span></td>
+                        <td><code>apps/agent/src/app/command/components/DecisionCard.tsx</code></td>
+                        <td>
+                            Thread <code>onRetryStep</code> callback through to WorkflowStepsCard
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-amber">Modify</span></td>
+                        <td><code>apps/agent/src/app/command/page.tsx</code></td>
+                        <td>Pass <code>handleRetryStep</code> from useReviews to DecisionCard</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <!-- SECTION 5: REAL DATA SHAPES                                       -->
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <div class="section">
+            <div class="section-eyebrow">Data</div>
+            <div class="section-title">Production Data Shapes</div>
+            <div class="section-desc">
+                These are the JSON shapes the code must handle -- the request body, a typical failed
+                step record, and the API response.
+            </div>
+
+            <div class="type-grid">
+                <div class="type-card active" onclick="showDataType('req')">
+                    <div class="tc-icon">&#x1f4e4;</div>
+                    <div class="tc-name">Request Body</div>
+                    <div class="tc-desc">POST payload</div>
+                </div>
+                <div class="type-card" onclick="showDataType('step')">
+                    <div class="tc-icon">&#x274c;</div>
+                    <div class="tc-name">Failed Step</div>
+                    <div class="tc-desc">WorkflowRunStep</div>
+                </div>
+                <div class="type-card" onclick="showDataType('resp')">
+                    <div class="tc-icon">&#x2705;</div>
+                    <div class="tc-name">API Response</div>
+                    <div class="tc-desc">Success / error</div>
+                </div>
+            </div>
+
+            <div id="data-req" class="chrome">
+                <div class="chrome-bar">
+                    <div class="chrome-dots">
+                        <span class="dot dot-r"></span><span class="dot dot-y"></span
+                        ><span class="dot dot-g"></span>
+                    </div>
+                    POST /api/reviews/{id}/retry
+                </div>
+                <div class="chrome-body">
+                    <pre class="raw-pre">
+{
+  "stepId": "run-bugfix"
+}</pre
+                    >
+                </div>
+            </div>
+
+            <div id="data-step" class="chrome hidden">
+                <div class="chrome-bar">
+                    <div class="chrome-dots">
+                        <span class="dot dot-r"></span><span class="dot dot-y"></span
+                        ><span class="dot dot-g"></span>
+                    </div>
+                    WorkflowRunStep (status: FAILED)
+                </div>
+                <div class="chrome-body">
+                    <pre class="raw-pre">
+{
+  "id": "cmp5nf8a3001...",
+  "runId": "cmn2kf9r...",
+  "stepId": "run-bugfix",
+  "stepType": "agent",
+  "stepName": "Run Bugfix",
+  "status": "FAILED",
+  "inputJson": {
+    "repository": "Appello-Prototypes/agentc2",
+    "issueNumber": 215,
+    "branch": "cursor/fix-mcp-schema-005c"
+  },
+  "outputJson": null,
+  "errorJson": {
+    "message": "401 Unauthorized",
+    "source": "github.com/api/v3",
+    "code": "BAD_CREDENTIALS"
+  },
+  "durationMs": 252000,
+  "startedAt": "2026-03-13T14:14:33.000Z",
+  "completedAt": "2026-03-13T14:18:45.000Z",
+  "iterationIndex": 0
+}</pre
+                    >
+                </div>
+            </div>
+
+            <div id="data-resp" class="chrome hidden">
+                <div class="chrome-bar">
+                    <div class="chrome-dots">
+                        <span class="dot dot-r"></span><span class="dot dot-y"></span
+                        ><span class="dot dot-g"></span>
+                    </div>
+                    Response (200 OK)
+                </div>
+                <div class="chrome-body">
+                    <pre class="raw-pre">
+// Success
+{
+  "success": true,
+  "status": "completed",  // or "suspended" if next step is human
+  "runId": "cmn2kf9r...",
+  "retriedStepId": "run-bugfix",
+  "output": { ... }
+}
+
+// Error -- step not in failed state
+{
+  "success": false,
+  "error": "Step 'run-bugfix' is not in a failed state (current: COMPLETED)"
+}
+
+// Error -- run not found
+{
+  "success": false,
+  "error": "No workflow run linked to this review"
+}</pre
+                    >
+                </div>
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <!-- SECTION 6: STEP-BY-STEP IMPLEMENTATION                            -->
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <div class="section">
+            <div class="section-eyebrow">Implementation</div>
+            <div class="section-title">Step-by-Step</div>
+
+            <!-- Step 1: API Route -->
+            <div class="impl-step">
+                <h3>Step 1: Retry API Route</h3>
+                <div class="impl-meta">
+                    <span
+                        ><strong>File:</strong>
+                        <code>apps/agent/src/app/api/reviews/[id]/retry/route.ts</code></span
+                    >
+                    <span
+                        ><strong>Pattern:</strong>
+                        <code
+                            >apps/agent/src/app/api/workflows/[slug]/runs/[runId]/resume/route.ts</code
+                        ></span
+                    >
+                </div>
+
+                <div class="detail-section">
+                    <div class="detail-section-label">Key Imports</div>
+                    <pre class="raw-pre">
+import { prisma, Prisma } from "@repo/database"
+import { executeWorkflowDefinition, type WorkflowDefinition } from "@repo/agentc2/workflows"
+import { refreshWorkflowMetrics } from "@/lib/metrics"
+import { authenticateRequest } from "@/lib/api-auth"</pre
+                    >
+                </div>
+
+                <div class="detail-section">
+                    <div class="detail-section-label">Logic</div>
+                    <ol>
+                        <li>Authenticate request via <code>authenticateRequest()</code></li>
+                        <li>Parse <code>{ stepId }</code> from request body</li>
+                        <li>
+                            Look up <code>ApprovalRequest</code> by <code>id</code> param, include
+                            <code>workflowRun.steps</code> and <code>workflowRun.workflow</code>
+                        </li>
+                        <li>
+                            Validate: approval exists, has a linked <code>workflowRun</code>, and
+                            the run is in <code>RUNNING</code> or <code>FAILED</code> status
+                        </li>
+                        <li>
+                            Find the target step in <code>workflowRun.steps</code> -- confirm its
+                            status is <code>FAILED</code>
+                        </li>
+                        <li>
+                            Build <code>existingSteps</code> from all steps with status
+                            <code>COMPLETED</code> (exclude the failed step)
+                        </li>
+                        <li>Set the run status to <code>RUNNING</code> before re-execution</li>
+                        <li>
+                            Call
+                            <code
+                                >executeWorkflowDefinition({ definition, input: run.inputJson,
+                                resume: { stepId, data: {} }, existingSteps, workflowMeta })</code
+                            >
+                        </li>
+                        <li>
+                            Update <code>WorkflowRunStep</code> records with new results (same
+                            upsert logic as resume route)
+                        </li>
+                        <li>
+                            Update <code>WorkflowRun</code> status based on result
+                            (<code>COMPLETED</code>, <code>FAILED</code>, or remain
+                            <code>RUNNING</code> if suspended)
+                        </li>
+                        <li>Call <code>refreshWorkflowMetrics()</code></li>
+                        <li>Return <code>{ success: true, status, runId, retriedStepId }</code></li>
+                    </ol>
+                </div>
+
+                <div class="detail-section">
+                    <div class="detail-section-label">Error Responses</div>
+                    <table class="spec-table">
+                        <thead>
+                            <tr>
+                                <th>Code</th>
+                                <th>Condition</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>401</td>
+                                <td>Unauthenticated</td>
+                            </tr>
+                            <tr>
+                                <td>404</td>
+                                <td>Approval request not found</td>
+                            </tr>
+                            <tr>
+                                <td>400</td>
+                                <td>No workflow run linked to this review</td>
+                            </tr>
+                            <tr>
+                                <td>409</td>
+                                <td>Target step is not in FAILED state</td>
+                            </tr>
+                            <tr>
+                                <td>409</td>
+                                <td>Run is in a terminal state (COMPLETED, CANCELLED)</td>
+                            </tr>
+                            <tr>
+                                <td>500</td>
+                                <td>executeWorkflowDefinition threw</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Step 2: useReviews handler -->
+            <div class="impl-step">
+                <h3>Step 2: useReviews Handler</h3>
+                <div class="impl-meta">
+                    <span
+                        ><strong>File:</strong>
+                        <code>apps/agent/src/app/command/hooks/useReviews.ts</code></span
+                    >
+                </div>
+
+                <div class="detail-section">
+                    <div class="detail-section-label">Interface</div>
+                    <pre class="raw-pre">
+async function handleRetryStep(reviewId: string, stepId: string): Promise&lt;void&gt;</pre
+                    >
+                </div>
+
+                <div class="detail-section">
+                    <div class="detail-section-label">Logic</div>
+                    <ol>
+                        <li>Set <code>actingId</code> to <code>reviewId</code></li>
+                        <li>
+                            POST to <code>${getApiBase()}/api/reviews/${reviewId}/retry</code> with
+                            <code>{ stepId }</code>
+                        </li>
+                        <li>
+                            On success: <code>addToast("Step retried successfully")</code>, re-fetch
+                            reviews and metrics
+                        </li>
+                        <li>On failure: <code>addToast(data.error, "error")</code></li>
+                        <li>Finally: clear <code>actingId</code></li>
+                    </ol>
+                </div>
+
+                <div class="detail-section">
+                    <div class="detail-section-label">Export</div>
+                    <pre class="raw-pre">
+return {
+  ...existingExports,
+  handleRetryStep
+}</pre
+                    >
+                </div>
+            </div>
+
+            <!-- Step 3: DecisionCard prop threading -->
+            <div class="impl-step">
+                <h3>Step 3: Prop Threading</h3>
+                <div class="impl-meta">
+                    <span
+                        ><strong>File:</strong>
+                        <code>apps/agent/src/app/command/components/DecisionCard.tsx</code></span
+                    >
+                    <span
+                        ><strong>File:</strong>
+                        <code>apps/agent/src/app/command/page.tsx</code></span
+                    >
+                </div>
+
+                <div class="detail-section">
+                    <div class="detail-section-label">Interface</div>
+                    <pre class="raw-pre">
+// Add to DecisionCardProps
+interface DecisionCardProps {
+  ...existing,
+  onRetryStep?: (reviewId: string, stepId: string) => void
+}
+
+// Add to WorkflowStepsCard props
+interface WorkflowStepsCardProps {
+  reviewId: string
+  onRetryStep?: (stepId: string) => void
+}</pre
+                    >
+                </div>
+
+                <div class="detail-section">
+                    <div class="detail-section-label">Logic</div>
+                    <ol>
+                        <li>
+                            <code>page.tsx</code>: pass <code>handleRetryStep</code> to
+                            <code>DecisionCard</code> as <code>onRetryStep</code>
+                        </li>
+                        <li>
+                            <code>DecisionCard</code>: pass
+                            <code>(stepId) => onRetryStep?.(review.id, stepId)</code> to
+                            <code>WorkflowStepsCard</code>
+                        </li>
+                        <li>
+                            <code>WorkflowStepsCard</code>: render retry button inside expanded
+                            FAILED step, calls <code>onRetryStep?.(step.stepId)</code>
+                        </li>
+                    </ol>
+                </div>
+            </div>
+
+            <!-- Step 4: WorkflowStepsCard UI -->
+            <div class="impl-step">
+                <h3>Step 4: Retry UI in WorkflowStepsCard</h3>
+                <div class="impl-meta">
+                    <span
+                        ><strong>File:</strong>
+                        <code
+                            >apps/agent/src/app/command/components/WorkflowStepsCard.tsx</code
+                        ></span
+                    >
+                </div>
+
+                <div class="detail-section">
+                    <div class="detail-section-label">New State</div>
+                    <pre class="raw-pre">
+const [retryingStepId, setRetryingStepId] = useState&lt;string | null&gt;(null)
+const [confirmRetryStepId, setConfirmRetryStepId] = useState&lt;string | null&gt;(null)</pre
+                    >
+                </div>
+
+                <div class="detail-section">
+                    <div class="detail-section-label">Logic</div>
+                    <ol>
+                        <li>
+                            Inside the expanded step detail panel (currently showing output/error),
+                            check if <code>step.status === "FAILED"</code>
+                        </li>
+                        <li>
+                            If failed and <code>onRetryStep</code> is provided, render "Retry Step"
+                            button below the error block
+                        </li>
+                        <li>
+                            On click: set <code>confirmRetryStepId</code> to show confirmation bar
+                            (reuse Phase 1 confirm pattern)
+                        </li>
+                        <li>
+                            On confirm: set <code>retryingStepId</code>, call
+                            <code>onRetryStep(step.stepId)</code>, then re-fetch steps
+                        </li>
+                        <li>On success: clear states, show updated step data from re-fetch</li>
+                        <li>
+                            Confirmation bar text: "The step {name} will be re-executed. All prior
+                            completed steps will be preserved."
+                        </li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <!-- SECTION 8: EDGE CASES                                             -->
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <div class="section">
+            <div class="section-eyebrow">Edge Cases</div>
+            <div class="section-title">Failure Scenarios</div>
+            <table class="spec-table">
+                <thead>
+                    <tr>
+                        <th>Scenario</th>
+                        <th>Backend</th>
+                        <th>Frontend</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Step is no longer FAILED (race condition)</td>
+                        <td>Return 409 with current status</td>
+                        <td>Show error toast: "Step is no longer in a failed state"</td>
+                    </tr>
+                    <tr>
+                        <td>Run is CANCELLED while retry in progress</td>
+                        <td>Return 409: "Run is cancelled"</td>
+                        <td>Show error toast, re-fetch to update stepper</td>
+                    </tr>
+                    <tr>
+                        <td>Retry succeeds but next step suspends</td>
+                        <td>Return <code>{ status: "suspended" }</code></td>
+                        <td>
+                            Re-fetch steps; stepper shows retried step as completed, next step as
+                            suspended
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Retry fails again</td>
+                        <td>Return <code>{ status: "failed" }</code></td>
+                        <td>
+                            Re-fetch steps; step still shows FAILED with new error, retry button
+                            reappears
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Network timeout during retry</td>
+                        <td>N/A (client-side)</td>
+                        <td>
+                            Show error toast "Network error", clear loading state, retry button
+                            remains
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>No <code>onRetryStep</code> callback provided</td>
+                        <td>N/A</td>
+                        <td>Retry button not rendered (graceful degradation)</td>
+                    </tr>
+                    <tr>
+                        <td>Multiple failed steps in one run</td>
+                        <td>Only the specified stepId is retried</td>
+                        <td>Each failed step independently shows its own retry button</td>
+                    </tr>
+                    <tr>
+                        <td>Underlying issue not resolved (e.g., token still expired)</td>
+                        <td>executeWorkflowDefinition fails again, same error</td>
+                        <td>Step shows FAILED again with updated error; user can retry again</td>
+                    </tr>
+                    <tr>
+                        <td>Approval request already resolved</td>
+                        <td>Return 400: "Review already resolved"</td>
+                        <td>Show error toast, card may have been removed from list</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <!-- SECTION 9: COMPONENT ARCHITECTURE                                 -->
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <div class="section">
+            <div class="section-eyebrow">Architecture</div>
+            <div class="section-title">Component Architecture</div>
+            <table class="spec-table">
+                <thead>
+                    <tr>
+                        <th>Component / Function</th>
+                        <th>Purpose</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>POST /api/reviews/[id]/retry</code></td>
+                        <td>
+                            Convenience route: resolves approval &rarr; workflowRun &rarr; validates
+                            failed step &rarr; calls executeWorkflowDefinition with existingSteps
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><code>handleRetryStep()</code></td>
+                        <td>Hook handler: POST to retry API, toast, re-fetch reviews + metrics</td>
+                    </tr>
+                    <tr>
+                        <td><code>WorkflowStepsCard</code></td>
+                        <td>
+                            Renders retry button inside FAILED step's expanded detail panel, manages
+                            confirm/loading state
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><code>DecisionCard</code></td>
+                        <td>Passes <code>onRetryStep</code> callback to WorkflowStepsCard</td>
+                    </tr>
+                    <tr>
+                        <td><code>page.tsx</code></td>
+                        <td>
+                            Sources <code>handleRetryStep</code> from useReviews, passes to
+                            DecisionCard
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <!-- SECTION 10: DATA FLOW TRACE                                       -->
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <div class="section">
+            <div class="section-eyebrow">Data Flow</div>
+            <div class="section-title">Call Chain</div>
+            <pre class="raw-pre" style="font-size: 12px; line-height: 1.8">
+User clicks "Retry Step" on failed step
+    └─ WorkflowStepsCard: setConfirmRetryStepId(stepId)
+User clicks "Yes, Retry"
+    └─ WorkflowStepsCard: setRetryingStepId(stepId)
+        └─ WorkflowStepsCard: onRetryStep(stepId)
+            └─ DecisionCard: onRetryStep(review.id, stepId)
+                └─ page.tsx: handleRetryStep(reviewId, stepId)
+                    └─ useReviews.handleRetryStep()
+                        └─ POST /api/reviews/{id}/retry { stepId }
+                            └─ authenticateRequest()
+                            └─ prisma.approvalRequest.findUnique({ include: workflowRun })
+                            └─ Validate: step.status === "FAILED"
+                            └─ Build existingSteps from COMPLETED steps
+                            └─ prisma.workflowRun.update({ status: "RUNNING" })
+                            └─ executeWorkflowDefinition({ resume: { stepId, data: {} }, existingSteps })
+                            └─ Upsert WorkflowRunStep records
+                            └─ Update WorkflowRun final status
+                            └─ refreshWorkflowMetrics()
+                        └─ On success: addToast("Step retried successfully")
+                        └─ fetchReviews() + fetchMetrics()
+  </pre
+            >
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <!-- SECTION 11: PLAYWRIGHT TEST PLAN                                  -->
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <div class="section">
+            <div class="section-eyebrow">Testing</div>
+            <div class="section-title">Playwright Test Plan</div>
+            <table class="spec-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Step</th>
+                        <th>Assertion</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>1</td>
+                        <td>Navigate to <code>/command</code> and log in</td>
+                        <td>Page loads, decision cards visible</td>
+                    </tr>
+                    <tr>
+                        <td>2</td>
+                        <td>Find a card with a FAILED workflow run</td>
+                        <td>Card shows red risk badge and "failed" indicator</td>
+                    </tr>
+                    <tr>
+                        <td>3</td>
+                        <td>Click "Show Details" to expand the card</td>
+                        <td>WorkflowStepsCard becomes visible</td>
+                    </tr>
+                    <tr>
+                        <td>4</td>
+                        <td>Click "View workflow steps" button</td>
+                        <td>Stepper loads with step items</td>
+                    </tr>
+                    <tr>
+                        <td>5</td>
+                        <td>Identify the FAILED step (red X icon, red badge)</td>
+                        <td>Step shows "failed" badge and red styling</td>
+                    </tr>
+                    <tr>
+                        <td>6</td>
+                        <td>Click the failed step to expand it</td>
+                        <td>
+                            Inline detail panel appears with error block and "Retry Step" button
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>7</td>
+                        <td>Click "Retry Step" button</td>
+                        <td>
+                            Confirmation bar appears: "Retry this step?" with Cancel / Yes, Retry
+                            buttons
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>8</td>
+                        <td>Click "Cancel" in confirmation</td>
+                        <td>Confirmation bar disappears, retry button returns to default state</td>
+                    </tr>
+                    <tr>
+                        <td>9</td>
+                        <td>Click "Retry Step" again, then "Yes, Retry"</td>
+                        <td>Button changes to "Retrying..." with spinner</td>
+                    </tr>
+                    <tr>
+                        <td>10</td>
+                        <td>Wait for API response</td>
+                        <td>
+                            If underlying issue fixed: step transitions to completed, success toast
+                            shown. If still broken: step stays failed with updated error, error
+                            toast shown
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <!-- SECTION 12: ACCEPTANCE CRITERIA                                   -->
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <div class="section">
+            <div class="section-eyebrow">Acceptance</div>
+            <div class="section-title">Criteria</div>
+            <div class="check-list">
+                &#x2610; FAILED steps show a "Retry Step" button inside their expanded detail
+                panel<br />
+                &#x2610; Retry button only appears when <code>onRetryStep</code> callback is
+                provided (no broken UI without it)<br />
+                &#x2610; Clicking retry shows an inline confirmation bar with "Cancel" and "Yes,
+                Retry" buttons<br />
+                &#x2610; Confirmation bar warns the user to verify the underlying issue is
+                resolved<br />
+                &#x2610; During retry, button shows "Retrying..." with spinner animation<br />
+                &#x2610; On success: step transitions to completed in the stepper, success toast
+                displayed<br />
+                &#x2610; On failure: step remains failed with updated error, error toast displayed,
+                retry button reappears<br />
+                &#x2610; <code>POST /api/reviews/[id]/retry</code> returns 409 if step is not in
+                FAILED state<br />
+                &#x2610; <code>POST /api/reviews/[id]/retry</code> preserves all COMPLETED step
+                outputs via existingSteps<br />
+                &#x2610; Retry re-executes only the failed step and subsequent steps, not the entire
+                workflow<br />
+                &#x2610; Workflow metrics refresh after successful retry<br />
+                &#x2610; No type-check or lint errors introduced<br />
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <!-- SECTION 13: EFFORT ESTIMATE                                       -->
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <div class="section">
+            <div class="section-eyebrow">Estimate</div>
+            <div class="section-title">Effort Breakdown</div>
+            <table class="spec-table">
+                <thead>
+                    <tr>
+                        <th>Task</th>
+                        <th>Estimate</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Retry API route (<code>/api/reviews/[id]/retry</code>)</td>
+                        <td>40 min</td>
+                    </tr>
+                    <tr>
+                        <td>useReviews handler + export</td>
+                        <td>10 min</td>
+                    </tr>
+                    <tr>
+                        <td>
+                            Prop threading (page.tsx &rarr; DecisionCard &rarr; WorkflowStepsCard)
+                        </td>
+                        <td>10 min</td>
+                    </tr>
+                    <tr>
+                        <td>Retry UI in WorkflowStepsCard (button, confirm, loading, success)</td>
+                        <td>30 min</td>
+                    </tr>
+                    <tr>
+                        <td>Type-check, lint, manual testing</td>
+                        <td>15 min</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Total</strong></td>
+                        <td><strong>~105 min</strong></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <script>
+            function toggleStep(id) {
+                const detail = document.getElementById("detail-" + id);
+                const chev = document.getElementById("chev-" + id);
+                if (detail) detail.classList.toggle("hidden");
+                if (chev) chev.classList.toggle("open");
+            }
+
+            function showState(state, btn) {
+                if (btn) {
+                    document
+                        .querySelectorAll(".toggle-btn")
+                        .forEach((b) => b.classList.remove("active"));
+                    btn.classList.add("active");
+                }
+
+                const allStates = [
+                    "retry-default",
+                    "retry-confirm",
+                    "retry-loading",
+                    "retry-success"
+                ];
+                allStates.forEach((id) => {
+                    const el = document.getElementById(id);
+                    if (el) el.classList.add("hidden");
+                });
+
+                const errorSection = document.getElementById("error-section");
+                const successSection = document.getElementById("success-section");
+                const step4Dot = document.getElementById("step4-dot");
+                const step4Line = document.getElementById("step4-line");
+                const step4Lbl = document.getElementById("step4-lbl");
+                const step4Badge = document.getElementById("step4-badge");
+                const step4Timing = document.getElementById("step4-timing");
+                const step4Dur = document.getElementById("step4-dur");
+
+                switch (state) {
+                    case "default":
+                        document.getElementById("retry-default").classList.remove("hidden");
+                        errorSection.classList.remove("hidden");
+                        successSection.classList.add("hidden");
+                        step4Dot.className = "step-dot failed";
+                        step4Dot.innerHTML =
+                            '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>';
+                        step4Line.className = "step-line red";
+                        step4Lbl.style.color = "var(--red-500)";
+                        step4Badge.className = "badge badge-red";
+                        step4Badge.style.marginLeft = "auto";
+                        step4Badge.textContent = "failed";
+                        step4Timing.textContent = "4m 12s";
+                        step4Dur.textContent = "4m 12s";
+                        break;
+                    case "confirm":
+                        document.getElementById("retry-confirm").classList.remove("hidden");
+                        errorSection.classList.remove("hidden");
+                        successSection.classList.add("hidden");
+                        step4Dot.className = "step-dot failed";
+                        step4Dot.innerHTML =
+                            '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>';
+                        step4Line.className = "step-line red";
+                        step4Lbl.style.color = "var(--red-500)";
+                        step4Badge.className = "badge badge-red";
+                        step4Badge.style.marginLeft = "auto";
+                        step4Badge.textContent = "failed";
+                        break;
+                    case "retrying":
+                        document.getElementById("retry-loading").classList.remove("hidden");
+                        errorSection.classList.remove("hidden");
+                        successSection.classList.add("hidden");
+                        step4Dot.className = "step-dot retrying";
+                        step4Dot.innerHTML =
+                            '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>';
+                        step4Line.className = "step-line default";
+                        step4Lbl.style.color = "var(--amber-500)";
+                        step4Badge.className = "badge badge-amber";
+                        step4Badge.style.marginLeft = "auto";
+                        step4Badge.textContent = "retrying";
+                        step4Timing.textContent = "retrying...";
+                        break;
+                    case "success":
+                        document.getElementById("retry-success").classList.remove("hidden");
+                        errorSection.classList.add("hidden");
+                        successSection.classList.remove("hidden");
+                        step4Dot.className = "step-dot completed";
+                        step4Dot.innerHTML =
+                            '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>';
+                        step4Line.className = "step-line green";
+                        step4Lbl.style.color = "var(--text-primary)";
+                        step4Badge.className = "badge badge-green";
+                        step4Badge.style.marginLeft = "auto";
+                        step4Badge.textContent = "completed";
+                        step4Timing.textContent = "1m 45s";
+                        step4Dur.textContent = "1m 45s";
+                        break;
+                }
+            }
+
+            function showDataType(type) {
+                document
+                    .querySelectorAll(".type-card")
+                    .forEach((c) => c.classList.remove("active"));
+                event.currentTarget.classList.add("active");
+                ["data-req", "data-step", "data-resp"].forEach((id) => {
+                    document.getElementById(id).classList.add("hidden");
+                });
+                document.getElementById("data-" + type).classList.remove("hidden");
+            }
+        </script>
+    </body>
+</html>

@@ -3971,7 +3971,9 @@ async function getMcpClientForOrganization(options?: {
 
     // If we have a cached client that's not stale, ensure it's connected
     if (cached && now - cached.loadedAt < ORG_MCP_CACHE_TTL) {
-        console.log(`[MCP] Using cached client for org ${organizationId} (age: ${Math.round((now - cached.loadedAt) / 1000)}s)`);
+        console.log(
+            `[MCP] Using cached client for org ${organizationId} (age: ${Math.round((now - cached.loadedAt) / 1000)}s)`
+        );
         return ensureClientConnected(cached.client, cacheKey, organizationId, options?.userId);
     }
 
@@ -5269,7 +5271,8 @@ export async function executeMcpTool(
             result: truncateMcpResult(result)
         };
     } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : "Unknown error executing tool";
+        const errorMessage =
+            error instanceof Error ? error.message : "Unknown error executing tool";
         console.error(`[MCP] Tool execution failed for "${resolvedToolName}":`, errorMessage);
         console.error(`[MCP] Error details:`, error);
         return {

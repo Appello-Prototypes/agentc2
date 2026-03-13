@@ -944,7 +944,7 @@ export const integrationConnectionTestTool = createTool({
             const connected = Boolean(
                 credentials.accessToken || credentials.refreshToken || credentials.oauthToken
             );
-            
+
             if (!connected) {
                 return { success: false, error: "Missing OAuth credentials" };
             }

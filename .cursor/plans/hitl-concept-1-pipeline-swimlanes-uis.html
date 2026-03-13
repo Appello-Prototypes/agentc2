@@ -1,0 +1,2255 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Concept 1: Pipeline Swimlanes — UIS</title>
+        <link
+            href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Fira+Code:wght@400;500;600&display=swap"
+            rel="stylesheet"
+        />
+        <style>
+            :root {
+                --bg-primary: #08090b;
+                --bg-surface: #0e1015;
+                --bg-elevated: #14161c;
+                --bg-muted: #1a1c24;
+                --bg-accent: #22242e;
+                --border-subtle: #252836;
+                --border-default: #2e3142;
+                --text-primary: #e4e5eb;
+                --text-secondary: #9295a5;
+                --text-muted: #626580;
+                --green-500: #10b981;
+                --green-bg: rgba(16, 185, 129, 0.1);
+                --green-border: rgba(16, 185, 129, 0.2);
+                --amber-500: #f59e0b;
+                --amber-bg: rgba(245, 158, 11, 0.1);
+                --amber-border: rgba(245, 158, 11, 0.2);
+                --blue-500: #3b82f6;
+                --blue-bg: rgba(59, 130, 246, 0.08);
+                --blue-border: rgba(59, 130, 246, 0.2);
+                --red-500: #ef4444;
+                --red-bg: rgba(239, 68, 68, 0.08);
+                --red-border: rgba(239, 68, 68, 0.2);
+                --cyan-500: #06b6d4;
+                --cyan-bg: rgba(6, 182, 212, 0.08);
+                --cyan-border: rgba(6, 182, 212, 0.2);
+                --purple-500: #8b5cf6;
+                --purple-bg: rgba(139, 92, 246, 0.08);
+                --purple-border: rgba(139, 92, 246, 0.2);
+                --gate-500: #e879f9;
+                --gate-bg: rgba(232, 121, 249, 0.1);
+                --gate-border: rgba(232, 121, 249, 0.25);
+            }
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+            body {
+                font-family:
+                    "Outfit",
+                    -apple-system,
+                    sans-serif;
+                background: var(--bg-primary);
+                color: var(--text-primary);
+                padding: 48px 40px;
+                line-height: 1.6;
+            }
+            code,
+            .mono {
+                font-family: "Fira Code", monospace;
+            }
+            .hidden {
+                display: none;
+            }
+
+            .header {
+                max-width: 1100px;
+                margin: 0 auto 64px;
+                text-align: center;
+            }
+            .phase-tag {
+                display: inline-block;
+                padding: 5px 16px;
+                border-radius: 20px;
+                font-size: 11px;
+                font-weight: 600;
+                letter-spacing: 2px;
+                text-transform: uppercase;
+                font-family: "Fira Code", monospace;
+                margin-bottom: 16px;
+                background: var(--blue-bg);
+                border: 1px solid var(--blue-border);
+                color: var(--blue-500);
+            }
+            .header h1 {
+                font-size: 38px;
+                font-weight: 700;
+                letter-spacing: -0.8px;
+                margin-bottom: 14px;
+                background: linear-gradient(135deg, #e4e5eb 0%, #9295a5 100%);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+            }
+            .header p {
+                color: var(--text-secondary);
+                font-size: 16px;
+                max-width: 750px;
+                margin: 0 auto;
+            }
+
+            .section {
+                max-width: 1100px;
+                margin: 0 auto 60px;
+            }
+            .section-eyebrow {
+                font-family: "Fira Code", monospace;
+                font-size: 10px;
+                font-weight: 600;
+                letter-spacing: 2.5px;
+                text-transform: uppercase;
+                color: var(--text-muted);
+                margin-bottom: 8px;
+            }
+            .section-title {
+                font-size: 24px;
+                font-weight: 700;
+                margin-bottom: 12px;
+                letter-spacing: -0.3px;
+            }
+            .section-desc {
+                color: var(--text-secondary);
+                font-size: 14px;
+                margin-bottom: 28px;
+                line-height: 1.7;
+            }
+            .divider {
+                height: 1px;
+                background: var(--border-subtle);
+                margin: 56px 0;
+                max-width: 1100px;
+                margin-left: auto;
+                margin-right: auto;
+            }
+
+            .chrome {
+                background: var(--bg-surface);
+                border: 1px solid var(--border-subtle);
+                border-radius: 14px;
+                overflow: hidden;
+                box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+            }
+            .chrome-bar {
+                background: var(--bg-muted);
+                padding: 9px 16px;
+                font-family: "Fira Code", monospace;
+                font-size: 11px;
+                color: var(--text-muted);
+                border-bottom: 1px solid var(--border-subtle);
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            }
+            .chrome-dots {
+                display: flex;
+                gap: 5px;
+            }
+            .dot {
+                width: 8px;
+                height: 8px;
+                border-radius: 50%;
+            }
+            .dot-r {
+                background: #ff5f57;
+            }
+            .dot-y {
+                background: #febc2e;
+            }
+            .dot-g {
+                background: #28c840;
+            }
+            .chrome-body {
+                padding: 0;
+            }
+
+            .callout {
+                background: var(--blue-bg);
+                border: 1px solid var(--blue-border);
+                border-left: 3px solid var(--blue-500);
+                border-radius: 8px;
+                padding: 12px 16px;
+                font-size: 12px;
+                color: var(--text-secondary);
+                line-height: 1.6;
+                margin-bottom: 24px;
+            }
+            .callout strong {
+                color: var(--blue-500);
+            }
+
+            .spec-table {
+                width: 100%;
+                border-collapse: collapse;
+                font-size: 13px;
+            }
+            .spec-table th {
+                text-align: left;
+                padding: 10px 14px;
+                border-bottom: 1px solid var(--border-subtle);
+                color: var(--text-muted);
+                font-size: 10px;
+                font-weight: 600;
+                text-transform: uppercase;
+                letter-spacing: 1.5px;
+                font-family: "Fira Code", monospace;
+            }
+            .spec-table td {
+                padding: 10px 14px;
+                border-bottom: 1px solid var(--border-subtle);
+                color: var(--text-secondary);
+                vertical-align: top;
+            }
+            .spec-table td:first-child {
+                color: var(--text-primary);
+                font-weight: 500;
+            }
+            .spec-table code {
+                font-family: "Fira Code", monospace;
+                background: var(--bg-muted);
+                padding: 2px 6px;
+                border-radius: 4px;
+                font-size: 11px;
+                color: var(--purple-500);
+            }
+
+            .badge {
+                display: inline-flex;
+                align-items: center;
+                padding: 2px 10px;
+                border-radius: 6px;
+                font-size: 10px;
+                font-weight: 600;
+            }
+            .badge-green {
+                background: var(--green-bg);
+                color: var(--green-500);
+                border: 1px solid var(--green-border);
+            }
+            .badge-amber {
+                background: var(--amber-bg);
+                color: var(--amber-500);
+                border: 1px solid var(--amber-border);
+            }
+            .badge-red {
+                background: var(--red-bg);
+                color: var(--red-500);
+                border: 1px solid var(--red-border);
+            }
+            .badge-blue {
+                background: var(--blue-bg);
+                color: var(--blue-500);
+                border: 1px solid var(--blue-border);
+            }
+            .badge-cyan {
+                background: var(--cyan-bg);
+                color: var(--cyan-500);
+                border: 1px solid var(--cyan-border);
+            }
+            .badge-purple {
+                background: var(--purple-bg);
+                color: var(--purple-500);
+                border: 1px solid var(--purple-border);
+            }
+            .badge-muted {
+                background: var(--bg-accent);
+                color: var(--text-muted);
+                border: 1px solid var(--border-default);
+            }
+
+            .toggle-group {
+                display: flex;
+                gap: 4px;
+                margin-bottom: 24px;
+                background: var(--bg-muted);
+                border-radius: 10px;
+                padding: 4px;
+                width: fit-content;
+            }
+            .toggle-btn {
+                padding: 8px 20px;
+                border-radius: 8px;
+                font-size: 13px;
+                font-weight: 600;
+                cursor: pointer;
+                border: none;
+                background: transparent;
+                color: var(--text-muted);
+                transition: all 0.2s;
+                font-family: "Outfit", sans-serif;
+            }
+            .toggle-btn.active {
+                background: var(--bg-accent);
+                color: var(--text-primary);
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            }
+            .toggle-btn:hover:not(.active) {
+                color: var(--text-secondary);
+            }
+
+            .raw-pre {
+                background: var(--bg-muted);
+                border: 1px solid var(--border-subtle);
+                border-radius: 8px;
+                padding: 14px;
+                font-family: "Fira Code", monospace;
+                font-size: 11px;
+                color: var(--text-secondary);
+                line-height: 1.6;
+                max-height: 260px;
+                overflow: auto;
+                white-space: pre-wrap;
+            }
+
+            .impl-step {
+                background: var(--bg-surface);
+                border: 1px solid var(--border-subtle);
+                border-radius: 12px;
+                padding: 20px;
+                margin-bottom: 20px;
+            }
+            .impl-step h3 {
+                font-size: 16px;
+                margin-bottom: 12px;
+            }
+            .impl-meta {
+                display: flex;
+                gap: 24px;
+                font-size: 12px;
+                color: var(--text-secondary);
+                margin-bottom: 16px;
+                flex-wrap: wrap;
+            }
+            .detail-section {
+                margin-bottom: 14px;
+            }
+            .detail-section-label {
+                font-size: 10px;
+                font-weight: 600;
+                letter-spacing: 1.5px;
+                text-transform: uppercase;
+                color: var(--text-muted);
+                margin-bottom: 6px;
+                font-family: "Fira Code", monospace;
+            }
+
+            .flow-container {
+                display: flex;
+                align-items: center;
+                padding: 20px 0;
+                overflow-x: auto;
+                gap: 6px;
+            }
+            .flow-node {
+                background: var(--bg-elevated);
+                border: 1px solid var(--border-subtle);
+                border-radius: 10px;
+                padding: 14px 18px;
+                min-width: 130px;
+                text-align: center;
+                flex-shrink: 0;
+            }
+            .flow-node-title {
+                font-size: 12px;
+                font-weight: 600;
+                margin-bottom: 4px;
+            }
+            .flow-node-desc {
+                font-size: 10px;
+                color: var(--text-muted);
+            }
+            .flow-node.active {
+                border-color: var(--blue-500);
+                box-shadow: 0 0 0 2px var(--blue-bg);
+            }
+            .flow-arrow {
+                color: var(--text-muted);
+                font-size: 18px;
+                padding: 0 4px;
+                flex-shrink: 0;
+            }
+
+            /* === SWIMLANE MOCKUP === */
+            .swimlane-board {
+                width: 100%;
+                overflow-x: auto;
+            }
+            .swimlane-header {
+                display: grid;
+                grid-template-columns: 160px repeat(7, 1fr);
+                gap: 0;
+                border-bottom: 2px solid var(--border-default);
+            }
+            .swimlane-header-cell {
+                padding: 12px 10px;
+                font-size: 10px;
+                font-weight: 600;
+                letter-spacing: 1.5px;
+                text-transform: uppercase;
+                font-family: "Fira Code", monospace;
+                color: var(--text-muted);
+                text-align: center;
+            }
+            .swimlane-header-cell:first-child {
+                text-align: left;
+            }
+            .swimlane-header-cell.gate-col {
+                color: var(--gate-500);
+                background: var(--gate-bg);
+                border-radius: 6px 6px 0 0;
+            }
+
+            .swimlane-row {
+                display: grid;
+                grid-template-columns: 160px repeat(7, 1fr);
+                gap: 0;
+                border-bottom: 1px solid var(--border-subtle);
+                min-height: 90px;
+                transition: background 0.15s;
+            }
+            .swimlane-row:hover {
+                background: rgba(255, 255, 255, 0.015);
+            }
+            .swimlane-label {
+                padding: 16px 12px;
+                display: flex;
+                flex-direction: column;
+                gap: 4px;
+                border-right: 1px solid var(--border-subtle);
+            }
+            .swimlane-label-name {
+                font-size: 13px;
+                font-weight: 600;
+            }
+            .swimlane-label-count {
+                font-size: 10px;
+                color: var(--text-muted);
+                font-family: "Fira Code", monospace;
+            }
+
+            .swimlane-cell {
+                padding: 10px 8px;
+                display: flex;
+                flex-wrap: wrap;
+                gap: 6px;
+                align-items: flex-start;
+                align-content: flex-start;
+                border-right: 1px solid rgba(37, 40, 54, 0.5);
+                position: relative;
+                min-height: 80px;
+            }
+            .swimlane-cell.gate-col {
+                background: rgba(232, 121, 249, 0.03);
+            }
+
+            .chip {
+                display: inline-flex;
+                align-items: center;
+                gap: 5px;
+                padding: 5px 10px;
+                border-radius: 8px;
+                font-size: 11px;
+                font-weight: 500;
+                cursor: pointer;
+                transition: all 0.15s;
+                border: 1px solid transparent;
+                white-space: nowrap;
+            }
+            .chip:hover {
+                transform: translateY(-1px);
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            }
+            .chip-green {
+                background: var(--green-bg);
+                color: var(--green-500);
+                border-color: var(--green-border);
+            }
+            .chip-amber {
+                background: var(--amber-bg);
+                color: var(--amber-500);
+                border-color: var(--amber-border);
+            }
+            .chip-red {
+                background: var(--red-bg);
+                color: var(--red-500);
+                border-color: var(--red-border);
+            }
+            .chip-cyan {
+                background: var(--cyan-bg);
+                color: var(--cyan-500);
+                border-color: var(--cyan-border);
+            }
+            .chip-blue {
+                background: var(--blue-bg);
+                color: var(--blue-500);
+                border-color: var(--blue-border);
+            }
+            .chip-purple {
+                background: var(--purple-bg);
+                color: var(--purple-500);
+                border-color: var(--purple-border);
+            }
+            .chip-muted {
+                background: var(--bg-accent);
+                color: var(--text-muted);
+                border-color: var(--border-default);
+            }
+            .chip .chip-dot {
+                width: 6px;
+                height: 6px;
+                border-radius: 50%;
+                flex-shrink: 0;
+            }
+            .chip .chip-dot.risk-high {
+                background: var(--red-500);
+            }
+            .chip .chip-dot.risk-medium {
+                background: var(--amber-500);
+            }
+            .chip .chip-dot.risk-low {
+                background: var(--green-500);
+            }
+            .chip .chip-dot.risk-unknown {
+                background: var(--text-muted);
+            }
+
+            .chip.selected {
+                box-shadow: 0 0 0 2px var(--blue-500);
+                transform: translateY(-1px);
+            }
+
+            .gate-badge {
+                position: absolute;
+                top: 4px;
+                right: 6px;
+                background: var(--gate-bg);
+                color: var(--gate-500);
+                border: 1px solid var(--gate-border);
+                font-size: 9px;
+                font-weight: 700;
+                padding: 1px 6px;
+                border-radius: 8px;
+                font-family: "Fira Code", monospace;
+            }
+
+            .batch-bar {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                padding: 10px 16px;
+                background: var(--bg-muted);
+                border-top: 1px solid var(--border-subtle);
+                font-size: 12px;
+                color: var(--text-secondary);
+            }
+            .batch-btn {
+                padding: 5px 14px;
+                border-radius: 6px;
+                font-size: 11px;
+                font-weight: 600;
+                cursor: pointer;
+                border: none;
+                transition: all 0.15s;
+                font-family: "Outfit", sans-serif;
+            }
+            .batch-btn-approve {
+                background: var(--green-bg);
+                color: var(--green-500);
+                border: 1px solid var(--green-border);
+            }
+            .batch-btn-approve:hover {
+                background: rgba(16, 185, 129, 0.2);
+            }
+            .batch-btn-reject {
+                background: var(--red-bg);
+                color: var(--red-500);
+                border: 1px solid var(--red-border);
+            }
+            .batch-btn-reject:hover {
+                background: rgba(239, 68, 68, 0.15);
+            }
+
+            /* Slide-out panel */
+            .slideout-overlay {
+                position: fixed;
+                inset: 0;
+                background: rgba(0, 0, 0, 0.6);
+                z-index: 100;
+                opacity: 0;
+                pointer-events: none;
+                transition: opacity 0.2s;
+            }
+            .slideout-overlay.open {
+                opacity: 1;
+                pointer-events: all;
+            }
+            .slideout {
+                position: fixed;
+                top: 0;
+                right: -480px;
+                width: 480px;
+                height: 100vh;
+                background: var(--bg-surface);
+                border-left: 1px solid var(--border-subtle);
+                z-index: 101;
+                transition: right 0.25s ease;
+                overflow-y: auto;
+                box-shadow: -20px 0 60px rgba(0, 0, 0, 0.5);
+            }
+            .slideout.open {
+                right: 0;
+            }
+            .slideout-header {
+                padding: 20px 24px;
+                border-bottom: 1px solid var(--border-subtle);
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-start;
+            }
+            .slideout-close {
+                background: var(--bg-accent);
+                border: 1px solid var(--border-default);
+                color: var(--text-secondary);
+                width: 28px;
+                height: 28px;
+                border-radius: 6px;
+                cursor: pointer;
+                font-size: 14px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            .slideout-close:hover {
+                color: var(--text-primary);
+            }
+            .slideout-body {
+                padding: 20px 24px;
+            }
+            .slideout-section {
+                margin-bottom: 20px;
+            }
+            .slideout-section-label {
+                font-size: 10px;
+                font-weight: 600;
+                letter-spacing: 1.5px;
+                text-transform: uppercase;
+                color: var(--text-muted);
+                margin-bottom: 8px;
+                font-family: "Fira Code", monospace;
+            }
+            .slideout-meta-row {
+                display: flex;
+                gap: 16px;
+                flex-wrap: wrap;
+                margin-bottom: 6px;
+                font-size: 12px;
+            }
+            .slideout-meta-key {
+                color: var(--text-muted);
+            }
+            .slideout-meta-val {
+                color: var(--text-primary);
+                font-weight: 500;
+            }
+            .slideout-link {
+                color: var(--blue-500);
+                text-decoration: none;
+                font-size: 12px;
+            }
+            .slideout-link:hover {
+                text-decoration: underline;
+            }
+            .slideout-step {
+                display: flex;
+                gap: 10px;
+                align-items: flex-start;
+                padding: 8px 0;
+                border-bottom: 1px solid var(--border-subtle);
+            }
+            .slideout-step:last-child {
+                border-bottom: none;
+            }
+            .slideout-step-icon {
+                width: 22px;
+                height: 22px;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 10px;
+                flex-shrink: 0;
+                margin-top: 2px;
+            }
+            .slideout-step-icon.complete {
+                background: var(--green-bg);
+                color: var(--green-500);
+                border: 1px solid var(--green-border);
+            }
+            .slideout-step-icon.running {
+                background: var(--blue-bg);
+                color: var(--blue-500);
+                border: 1px solid var(--blue-border);
+            }
+            .slideout-step-icon.failed {
+                background: var(--red-bg);
+                color: var(--red-500);
+                border: 1px solid var(--red-border);
+            }
+            .slideout-step-icon.suspended {
+                background: var(--cyan-bg);
+                color: var(--cyan-500);
+                border: 1px solid var(--cyan-border);
+            }
+            .slideout-step-icon.queued {
+                background: var(--bg-accent);
+                color: var(--text-muted);
+                border: 1px solid var(--border-default);
+            }
+            .slideout-step-info {
+                flex: 1;
+            }
+            .slideout-step-name {
+                font-size: 12px;
+                font-weight: 600;
+            }
+            .slideout-step-meta {
+                font-size: 10px;
+                color: var(--text-muted);
+            }
+            .slideout-actions {
+                display: flex;
+                gap: 8px;
+                padding: 16px 24px;
+                border-top: 1px solid var(--border-subtle);
+                background: var(--bg-muted);
+                position: sticky;
+                bottom: 0;
+            }
+            .slideout-actions .action-btn {
+                flex: 1;
+                padding: 10px;
+                border-radius: 8px;
+                font-size: 12px;
+                font-weight: 600;
+                cursor: pointer;
+                border: none;
+                transition: all 0.15s;
+                font-family: "Outfit", sans-serif;
+            }
+            .btn-approve {
+                background: var(--green-500);
+                color: #000;
+            }
+            .btn-approve:hover {
+                background: #34d399;
+            }
+            .btn-reject {
+                background: var(--red-bg);
+                color: var(--red-500);
+                border: 1px solid var(--red-border);
+            }
+            .btn-reject:hover {
+                background: rgba(239, 68, 68, 0.15);
+            }
+            .btn-feedback {
+                background: var(--bg-accent);
+                color: var(--text-secondary);
+                border: 1px solid var(--border-default);
+            }
+            .btn-feedback:hover {
+                background: var(--bg-elevated);
+            }
+
+            /* Metrics strip */
+            .metrics-strip {
+                display: flex;
+                gap: 24px;
+                padding: 14px 20px;
+                background: var(--bg-elevated);
+                border-bottom: 1px solid var(--border-subtle);
+            }
+            .metric-item {
+                display: flex;
+                flex-direction: column;
+                gap: 2px;
+            }
+            .metric-value {
+                font-size: 18px;
+                font-weight: 700;
+            }
+            .metric-label {
+                font-size: 9px;
+                font-weight: 600;
+                letter-spacing: 1.5px;
+                text-transform: uppercase;
+                color: var(--text-muted);
+                font-family: "Fira Code", monospace;
+            }
+
+            @keyframes pulse {
+                0%,
+                100% {
+                    opacity: 1;
+                }
+                50% {
+                    opacity: 0.5;
+                }
+            }
+            .pulse {
+                animation: pulse 2s ease-in-out infinite;
+            }
+
+            .type-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+                gap: 12px;
+                margin-bottom: 28px;
+            }
+            .type-card {
+                background: var(--bg-elevated);
+                border: 1px solid var(--border-subtle);
+                border-radius: 10px;
+                padding: 14px;
+                text-align: center;
+                cursor: pointer;
+                transition: all 0.15s;
+            }
+            .type-card:hover {
+                border-color: var(--border-default);
+            }
+            .type-card.active {
+                border-color: var(--green-500);
+                box-shadow: 0 0 0 1px var(--green-border);
+            }
+            .type-card-icon {
+                font-size: 22px;
+                margin-bottom: 6px;
+            }
+            .type-card-name {
+                font-size: 13px;
+                font-weight: 600;
+                margin-bottom: 3px;
+            }
+        </style>
+    </head>
+    <body>
+        <!-- HEADER -->
+        <div class="header">
+            <div class="phase-tag">Concept 1 of 5</div>
+            <h1>Pipeline Swimlanes</h1>
+            <p>
+                A factory floor layout where each workflow type is a horizontal conveyor belt. Items
+                flow left-to-right through stage columns, accumulating at human approval gates. The
+                operator sees all workflows simultaneously and can batch-approve items at any gate
+                with a single click.
+            </p>
+        </div>
+
+        <!-- ARCHITECTURE -->
+        <div class="section">
+            <div class="section-eyebrow">Architecture</div>
+            <div class="section-title">Data Flow</div>
+            <div class="section-desc">
+                No new API routes needed. The swimlane board consumes existing endpoints and groups
+                data client-side by workflow slug and current step position.
+            </div>
+            <div class="chrome">
+                <div class="chrome-bar">
+                    <div class="chrome-dots">
+                        <span class="dot dot-r"></span><span class="dot dot-y"></span
+                        ><span class="dot dot-g"></span>
+                    </div>
+                    data-flow.tsx
+                </div>
+                <div class="chrome-body" style="padding: 20px">
+                    <div class="flow-container">
+                        <div class="flow-node">
+                            <div class="flow-node-title">useReviews()</div>
+                            <div class="flow-node-desc">Fetch all reviews</div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-node">
+                            <div class="flow-node-title">GET /steps</div>
+                            <div class="flow-node-desc">Per-review steps</div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-node active">
+                            <div class="flow-node-title">groupByPipeline()</div>
+                            <div class="flow-node-desc">Client-side grouping</div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-node">
+                            <div class="flow-node-title">SwimlaneBoardView</div>
+                            <div class="flow-node-desc">Render grid</div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-node">
+                            <div class="flow-node-title">ChipSlideout</div>
+                            <div class="flow-node-desc">Detail + actions</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- INTERACTIVE MOCKUP -->
+        <div class="section">
+            <div class="section-eyebrow">UI Mockup</div>
+            <div class="section-title">The Factory Floor</div>
+            <div class="section-desc">
+                Each row is a workflow pipeline. Columns are stages. Items (chips) sit in the column
+                of their current step. Pink-highlighted columns are human approval gates where items
+                wait for your decision. Click any chip to open its detail panel.
+            </div>
+
+            <div class="toggle-group">
+                <button class="toggle-btn active" onclick="showState('full', this)">
+                    Full Board
+                </button>
+                <button class="toggle-btn" onclick="showState('gatesonly', this)">
+                    Gates Only
+                </button>
+                <button class="toggle-btn" onclick="showState('empty', this)">Empty State</button>
+            </div>
+
+            <div id="state-full" class="chrome">
+                <div class="chrome-bar">
+                    <div class="chrome-dots">
+                        <span class="dot dot-r"></span><span class="dot dot-y"></span
+                        ><span class="dot dot-g"></span>
+                    </div>
+                    command / pipeline-view
+                </div>
+
+                <!-- Metrics strip -->
+                <div class="metrics-strip">
+                    <div class="metric-item">
+                        <div class="metric-value" style="color: var(--amber-500)">7</div>
+                        <div class="metric-label">Awaiting Review</div>
+                    </div>
+                    <div class="metric-item">
+                        <div class="metric-value" style="color: var(--blue-500)">4</div>
+                        <div class="metric-label">Running</div>
+                    </div>
+                    <div class="metric-item">
+                        <div class="metric-value" style="color: var(--green-500)">12</div>
+                        <div class="metric-label">Completed Today</div>
+                    </div>
+                    <div class="metric-item">
+                        <div class="metric-value">23m</div>
+                        <div class="metric-label">Avg Wait</div>
+                    </div>
+                    <div class="metric-item">
+                        <div class="metric-value">89%</div>
+                        <div class="metric-label">Approval Rate (7d)</div>
+                    </div>
+                </div>
+
+                <div class="chrome-body">
+                    <div class="swimlane-board">
+                        <!-- Header row -->
+                        <div class="swimlane-header">
+                            <div class="swimlane-header-cell">Pipeline</div>
+                            <div class="swimlane-header-cell">Triage</div>
+                            <div class="swimlane-header-cell">Analysis</div>
+                            <div class="swimlane-header-cell">Implementation</div>
+                            <div class="swimlane-header-cell gate-col">Review Gate</div>
+                            <div class="swimlane-header-cell">QA / Verify</div>
+                            <div class="swimlane-header-cell gate-col">Merge Gate</div>
+                            <div class="swimlane-header-cell">Done</div>
+                        </div>
+
+                        <!-- SDLC Bugfix Row -->
+                        <div class="swimlane-row">
+                            <div class="swimlane-label">
+                                <div class="swimlane-label-name">SDLC Bugfix</div>
+                                <div class="swimlane-label-count">8 active</div>
+                            </div>
+                            <div class="swimlane-cell">
+                                <div
+                                    class="chip chip-blue"
+                                    onclick="openSlideout('triage-204')"
+                                    title="#204 MCP schema model parameter"
+                                >
+                                    <span class="chip-dot risk-medium"></span>#204
+                                </div>
+                            </div>
+                            <div class="swimlane-cell">
+                                <div
+                                    class="chip chip-blue"
+                                    onclick="openSlideout('analysis-198')"
+                                    title="#198 Dashboard memory leak"
+                                >
+                                    <span class="chip-dot risk-high"></span>#198
+                                </div>
+                            </div>
+                            <div class="swimlane-cell">
+                                <div
+                                    class="chip chip-green"
+                                    onclick="openSlideout('impl-195')"
+                                    title="#195 Auth token refresh"
+                                >
+                                    <span class="chip-dot risk-low"></span>#195
+                                </div>
+                                <div
+                                    class="chip chip-blue"
+                                    onclick="openSlideout('impl-201')"
+                                    title="#201 Webhook timeout"
+                                >
+                                    <span class="chip-dot risk-medium"></span>#201
+                                </div>
+                            </div>
+                            <div class="swimlane-cell gate-col">
+                                <div class="gate-badge pulse">3</div>
+                                <div
+                                    class="chip chip-amber"
+                                    onclick="openSlideout('review-202')"
+                                    title="#202 cursor-launch-agent model param"
+                                >
+                                    <span class="chip-dot risk-medium"></span>#202
+                                </div>
+                                <div
+                                    class="chip chip-amber"
+                                    onclick="openSlideout('review-190')"
+                                    title="#190 Slack thread mapping"
+                                >
+                                    <span class="chip-dot risk-low"></span>#190
+                                </div>
+                                <div
+                                    class="chip chip-amber"
+                                    onclick="openSlideout('review-187')"
+                                    title="#187 RAG chunk overlap"
+                                >
+                                    <span class="chip-dot risk-high"></span>#187
+                                </div>
+                            </div>
+                            <div class="swimlane-cell">
+                                <div
+                                    class="chip chip-green"
+                                    onclick="openSlideout('qa-185')"
+                                    title="#185 Rate limiter bypass"
+                                >
+                                    <span class="chip-dot risk-low"></span>#185
+                                </div>
+                            </div>
+                            <div class="swimlane-cell gate-col">
+                                <div class="gate-badge">1</div>
+                                <div
+                                    class="chip chip-cyan"
+                                    onclick="openSlideout('merge-183')"
+                                    title="#183 CI pipeline fix"
+                                >
+                                    <span class="chip-dot risk-low"></span>#183
+                                </div>
+                            </div>
+                            <div class="swimlane-cell"></div>
+                        </div>
+
+                        <!-- SDLC Triage Row -->
+                        <div class="swimlane-row">
+                            <div class="swimlane-label">
+                                <div class="swimlane-label-name">SDLC Triage</div>
+                                <div class="swimlane-label-count">3 active</div>
+                            </div>
+                            <div class="swimlane-cell">
+                                <div
+                                    class="chip chip-blue"
+                                    onclick="openSlideout('t-triage-210')"
+                                    title="#210 New: Button click unresponsive"
+                                >
+                                    <span class="chip-dot risk-unknown"></span>#210
+                                </div>
+                                <div
+                                    class="chip chip-blue"
+                                    onclick="openSlideout('t-triage-211')"
+                                    title="#211 New: API rate limit hit"
+                                >
+                                    <span class="chip-dot risk-unknown"></span>#211
+                                </div>
+                            </div>
+                            <div class="swimlane-cell">
+                                <div
+                                    class="chip chip-blue"
+                                    onclick="openSlideout('t-analysis-209')"
+                                    title="#209 Login redirect loop"
+                                >
+                                    <span class="chip-dot risk-medium"></span>#209
+                                </div>
+                            </div>
+                            <div class="swimlane-cell"></div>
+                            <div class="swimlane-cell gate-col"></div>
+                            <div class="swimlane-cell"></div>
+                            <div class="swimlane-cell gate-col"></div>
+                            <div class="swimlane-cell"></div>
+                        </div>
+
+                        <!-- Custom Workflow Row -->
+                        <div class="swimlane-row">
+                            <div class="swimlane-label">
+                                <div class="swimlane-label-name">Content Pipeline</div>
+                                <div class="swimlane-label-count">2 active</div>
+                            </div>
+                            <div class="swimlane-cell"></div>
+                            <div class="swimlane-cell">
+                                <div
+                                    class="chip chip-green"
+                                    onclick="openSlideout('c-draft')"
+                                    title="Blog: AI Agent Best Practices"
+                                >
+                                    <span class="chip-dot risk-low"></span>Draft
+                                </div>
+                            </div>
+                            <div class="swimlane-cell"></div>
+                            <div class="swimlane-cell gate-col">
+                                <div class="gate-badge">1</div>
+                                <div
+                                    class="chip chip-amber"
+                                    onclick="openSlideout('c-review')"
+                                    title="Blog: MCP Integrations Guide"
+                                >
+                                    <span class="chip-dot risk-low"></span>Review
+                                </div>
+                            </div>
+                            <div class="swimlane-cell"></div>
+                            <div class="swimlane-cell gate-col"></div>
+                            <div class="swimlane-cell"></div>
+                        </div>
+
+                        <!-- Failed row -->
+                        <div class="swimlane-row">
+                            <div class="swimlane-label">
+                                <div class="swimlane-label-name">Onboarding</div>
+                                <div class="swimlane-label-count">1 active</div>
+                            </div>
+                            <div class="swimlane-cell"></div>
+                            <div class="swimlane-cell">
+                                <div
+                                    class="chip chip-red"
+                                    onclick="openSlideout('o-failed')"
+                                    title="Customer: Acme Corp setup"
+                                >
+                                    <span class="chip-dot risk-high"></span>Failed
+                                </div>
+                            </div>
+                            <div class="swimlane-cell"></div>
+                            <div class="swimlane-cell gate-col"></div>
+                            <div class="swimlane-cell"></div>
+                            <div class="swimlane-cell gate-col"></div>
+                            <div class="swimlane-cell"></div>
+                        </div>
+                    </div>
+
+                    <!-- Batch action bar -->
+                    <div class="batch-bar">
+                        <span style="font-weight: 600; color: var(--gate-500)"
+                            >4 items at gates</span
+                        >
+                        <span style="color: var(--text-muted)">&mdash;</span>
+                        <button class="batch-btn batch-btn-approve" onclick="batchApprove()">
+                            Approve All at Review Gate
+                        </button>
+                        <button class="batch-btn batch-btn-reject" onclick="batchReject()">
+                            Reject All
+                        </button>
+                        <span style="flex: 1"></span>
+                        <span
+                            style="
+                                font-size: 11px;
+                                color: var(--text-muted);
+                                font-family: &quot;Fira Code&quot;, monospace;
+                            "
+                            >Press
+                            <kbd
+                                style="
+                                    background: var(--bg-accent);
+                                    padding: 2px 5px;
+                                    border-radius: 3px;
+                                    font-size: 10px;
+                                "
+                                >Shift+A</kbd
+                            >
+                            to batch approve</span
+                        >
+                    </div>
+                </div>
+            </div>
+
+            <!-- Gates Only State -->
+            <div id="state-gatesonly" class="chrome hidden">
+                <div class="chrome-bar">
+                    <div class="chrome-dots">
+                        <span class="dot dot-r"></span><span class="dot dot-y"></span
+                        ><span class="dot dot-g"></span>
+                    </div>
+                    command / pipeline-view (gates only)
+                </div>
+                <div class="metrics-strip">
+                    <div class="metric-item">
+                        <div class="metric-value" style="color: var(--gate-500)">4</div>
+                        <div class="metric-label">At Gates</div>
+                    </div>
+                    <div class="metric-item">
+                        <div class="metric-value">23m</div>
+                        <div class="metric-label">Avg Wait</div>
+                    </div>
+                </div>
+                <div class="chrome-body" style="padding: 24px">
+                    <div style="display: grid; grid-template-columns: 160px 1fr 1fr; gap: 0">
+                        <div
+                            style="
+                                padding: 12px;
+                                font-size: 10px;
+                                font-weight: 600;
+                                letter-spacing: 1.5px;
+                                text-transform: uppercase;
+                                font-family: &quot;Fira Code&quot;, monospace;
+                                color: var(--text-muted);
+                            "
+                        >
+                            Pipeline
+                        </div>
+                        <div
+                            style="
+                                padding: 12px;
+                                font-size: 10px;
+                                font-weight: 600;
+                                letter-spacing: 1.5px;
+                                text-transform: uppercase;
+                                font-family: &quot;Fira Code&quot;, monospace;
+                                color: var(--gate-500);
+                                background: var(--gate-bg);
+                                text-align: center;
+                                border-radius: 6px 0 0 0;
+                            "
+                        >
+                            Review Gate
+                        </div>
+                        <div
+                            style="
+                                padding: 12px;
+                                font-size: 10px;
+                                font-weight: 600;
+                                letter-spacing: 1.5px;
+                                text-transform: uppercase;
+                                font-family: &quot;Fira Code&quot;, monospace;
+                                color: var(--gate-500);
+                                background: var(--gate-bg);
+                                text-align: center;
+                                border-radius: 0 6px 0 0;
+                            "
+                        >
+                            Merge Gate
+                        </div>
+                    </div>
+                    <div
+                        style="
+                            display: grid;
+                            grid-template-columns: 160px 1fr 1fr;
+                            gap: 0;
+                            border-top: 1px solid var(--border-subtle);
+                        "
+                    >
+                        <div
+                            style="
+                                padding: 16px 12px;
+                                font-weight: 600;
+                                font-size: 13px;
+                                border-right: 1px solid var(--border-subtle);
+                            "
+                        >
+                            SDLC Bugfix
+                        </div>
+                        <div
+                            style="
+                                padding: 12px;
+                                display: flex;
+                                gap: 6px;
+                                flex-wrap: wrap;
+                                background: rgba(232, 121, 249, 0.03);
+                                border-right: 1px solid var(--border-subtle);
+                            "
+                        >
+                            <div class="chip chip-amber">
+                                <span class="chip-dot risk-medium"></span>#202
+                            </div>
+                            <div class="chip chip-amber">
+                                <span class="chip-dot risk-low"></span>#190
+                            </div>
+                            <div class="chip chip-amber">
+                                <span class="chip-dot risk-high"></span>#187
+                            </div>
+                        </div>
+                        <div
+                            style="
+                                padding: 12px;
+                                display: flex;
+                                gap: 6px;
+                                flex-wrap: wrap;
+                                background: rgba(232, 121, 249, 0.03);
+                            "
+                        >
+                            <div class="chip chip-cyan">
+                                <span class="chip-dot risk-low"></span>#183
+                            </div>
+                        </div>
+                    </div>
+                    <div
+                        style="
+                            display: grid;
+                            grid-template-columns: 160px 1fr 1fr;
+                            gap: 0;
+                            border-top: 1px solid var(--border-subtle);
+                        "
+                    >
+                        <div
+                            style="
+                                padding: 16px 12px;
+                                font-weight: 600;
+                                font-size: 13px;
+                                border-right: 1px solid var(--border-subtle);
+                            "
+                        >
+                            Content Pipeline
+                        </div>
+                        <div
+                            style="
+                                padding: 12px;
+                                display: flex;
+                                gap: 6px;
+                                flex-wrap: wrap;
+                                background: rgba(232, 121, 249, 0.03);
+                                border-right: 1px solid var(--border-subtle);
+                            "
+                        >
+                            <div class="chip chip-amber">
+                                <span class="chip-dot risk-low"></span>Review
+                            </div>
+                        </div>
+                        <div style="padding: 12px; background: rgba(232, 121, 249, 0.03)">
+                            <span style="font-size: 11px; color: var(--text-muted)">&mdash;</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="batch-bar">
+                    <span style="font-weight: 600; color: var(--gate-500)">4 items at gates</span>
+                    <span style="color: var(--text-muted)">&mdash;</span>
+                    <button class="batch-btn batch-btn-approve">Approve All</button>
+                    <button class="batch-btn batch-btn-reject">Reject All</button>
+                </div>
+            </div>
+
+            <!-- Empty State -->
+            <div id="state-empty" class="chrome hidden">
+                <div class="chrome-bar">
+                    <div class="chrome-dots">
+                        <span class="dot dot-r"></span><span class="dot dot-y"></span
+                        ><span class="dot dot-g"></span>
+                    </div>
+                    command / pipeline-view
+                </div>
+                <div class="chrome-body" style="padding: 60px; text-align: center">
+                    <div style="font-size: 48px; margin-bottom: 16px; opacity: 0.3">&#9881;</div>
+                    <div
+                        style="
+                            font-size: 16px;
+                            font-weight: 600;
+                            margin-bottom: 8px;
+                            color: var(--text-secondary);
+                        "
+                    >
+                        All pipelines are clear
+                    </div>
+                    <div style="font-size: 13px; color: var(--text-muted)">
+                        No active workflow runs. Items will appear here as workflows execute.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide-out panel -->
+        <div class="slideout-overlay" id="slideout-overlay" onclick="closeSlideout()"></div>
+        <div class="slideout" id="slideout-panel">
+            <div class="slideout-header">
+                <div>
+                    <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px">
+                        <span class="badge badge-amber">Awaiting Review</span>
+                        <span
+                            class="badge badge-muted"
+                            style="font-family: &quot;Fira Code&quot;, monospace"
+                            >#202</span
+                        >
+                    </div>
+                    <div style="font-size: 16px; font-weight: 600" id="slideout-title">
+                        cursor-launch-agent model parameter bug
+                    </div>
+                </div>
+                <button class="slideout-close" onclick="closeSlideout()">&times;</button>
+            </div>
+            <div class="slideout-body">
+                <div class="slideout-section">
+                    <div class="slideout-section-label">Context</div>
+                    <div class="slideout-meta-row">
+                        <span class="slideout-meta-key">Pipeline:</span
+                        ><span class="slideout-meta-val">SDLC Bugfix</span>
+                    </div>
+                    <div class="slideout-meta-row">
+                        <span class="slideout-meta-key">Risk:</span
+                        ><span class="badge badge-amber" style="font-size: 9px">medium</span>
+                    </div>
+                    <div class="slideout-meta-row">
+                        <span class="slideout-meta-key">Age:</span
+                        ><span class="slideout-meta-val">16h ago</span>
+                    </div>
+                    <div class="slideout-meta-row">
+                        <span class="slideout-meta-key">Current Step:</span
+                        ><span class="slideout-meta-val" style="color: var(--gate-500)"
+                            >merge-review (Gate)</span
+                        >
+                    </div>
+                </div>
+                <div class="slideout-section">
+                    <div class="slideout-section-label">Links</div>
+                    <a href="#" class="slideout-link">GitHub Issue #202</a><br />
+                    <a href="#" class="slideout-link">Pull Request #247</a><br />
+                    <a href="#" class="slideout-link">Analysis Report</a>
+                </div>
+                <div class="slideout-section">
+                    <div class="slideout-section-label">Summary</div>
+                    <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.6">
+                        Schema mismatch between three layers introduced in commit 7252f5de. The MCP
+                        Schema in coding-pipeline.ts is missing the model parameter. Root cause
+                        analysis complete, fix committed to branch
+                        cursor/mcp-schema-model-parameter-684c.
+                    </div>
+                </div>
+                <div class="slideout-section">
+                    <div class="slideout-section-label">Workflow Progress (20 steps)</div>
+                    <div class="slideout-step">
+                        <div class="slideout-step-icon complete">&#10003;</div>
+                        <div class="slideout-step-info">
+                            <div class="slideout-step-name">Create GitHub Issue</div>
+                            <div class="slideout-step-meta">tool &middot; 1ms</div>
+                        </div>
+                    </div>
+                    <div class="slideout-step">
+                        <div class="slideout-step-icon complete">&#10003;</div>
+                        <div class="slideout-step-info">
+                            <div class="slideout-step-name">Launch Code Analysis</div>
+                            <div class="slideout-step-meta">tool &middot; 1ms</div>
+                        </div>
+                    </div>
+                    <div class="slideout-step">
+                        <div class="slideout-step-icon complete">&#10003;</div>
+                        <div class="slideout-step-info">
+                            <div class="slideout-step-name">Wait for Analysis</div>
+                            <div class="slideout-step-meta">tool &middot; 12ms</div>
+                        </div>
+                    </div>
+                    <div class="slideout-step">
+                        <div class="slideout-step-icon complete">&#10003;</div>
+                        <div class="slideout-step-info">
+                            <div class="slideout-step-name">Post Analysis to Issue</div>
+                            <div class="slideout-step-meta">tool &middot; 2ms</div>
+                        </div>
+                    </div>
+                    <div class="slideout-step">
+                        <div class="slideout-step-icon complete">&#10003;</div>
+                        <div class="slideout-step-info">
+                            <div class="slideout-step-name">Audit Fix Plan</div>
+                            <div class="slideout-step-meta">agent &middot; 3x</div>
+                        </div>
+                    </div>
+                    <div class="slideout-step">
+                        <div class="slideout-step-icon complete">&#10003;</div>
+                        <div class="slideout-step-info">
+                            <div class="slideout-step-name">Implement Fix</div>
+                            <div class="slideout-step-meta">tool &middot; 45s</div>
+                        </div>
+                    </div>
+                    <div class="slideout-step">
+                        <div class="slideout-step-icon complete">&#10003;</div>
+                        <div class="slideout-step-info">
+                            <div class="slideout-step-name">Create PR</div>
+                            <div class="slideout-step-meta">tool &middot; 2ms</div>
+                        </div>
+                    </div>
+                    <div class="slideout-step">
+                        <div class="slideout-step-icon suspended">&#9208;</div>
+                        <div class="slideout-step-info">
+                            <div class="slideout-step-name" style="color: var(--gate-500)">
+                                Merge Review (Gate)
+                            </div>
+                            <div class="slideout-step-meta">awaiting human &middot; 16h</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slideout-actions">
+                <button class="action-btn btn-approve" onclick="closeSlideout()">Approve</button>
+                <button class="action-btn btn-reject">Reject</button>
+                <button class="action-btn btn-feedback">Feedback</button>
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- FILES CHANGED -->
+        <div class="section">
+            <div class="section-eyebrow">Manifest</div>
+            <div class="section-title">Files Changed</div>
+            <table class="spec-table">
+                <thead>
+                    <tr>
+                        <th>Action</th>
+                        <th>File</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>New</td>
+                        <td>
+                            <code>apps/agent/src/app/command/components/SwimlaneBoardView.tsx</code>
+                        </td>
+                        <td>Main swimlane grid component with pipeline rows and stage columns</td>
+                    </tr>
+                    <tr>
+                        <td>New</td>
+                        <td><code>apps/agent/src/app/command/components/PipelineChip.tsx</code></td>
+                        <td>Compact chip representing a single workflow run</td>
+                    </tr>
+                    <tr>
+                        <td>New</td>
+                        <td><code>apps/agent/src/app/command/components/ChipSlideout.tsx</code></td>
+                        <td>Slide-out detail panel with step timeline and actions</td>
+                    </tr>
+                    <tr>
+                        <td>New</td>
+                        <td>
+                            <code>apps/agent/src/app/command/hooks/usePipelineGrouping.ts</code>
+                        </td>
+                        <td>Groups reviews by workflowSlug + maps steps to stage columns</td>
+                    </tr>
+                    <tr>
+                        <td>Modify</td>
+                        <td><code>apps/agent/src/app/command/page.tsx</code></td>
+                        <td>Add "Pipeline" view toggle alongside existing tab layout</td>
+                    </tr>
+                    <tr>
+                        <td>Modify</td>
+                        <td><code>apps/agent/src/app/command/hooks/useReviews.ts</code></td>
+                        <td>Batch-fetch steps for all pending reviews (prefetch for swimlane)</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- REAL DATA SHAPES -->
+        <div class="section">
+            <div class="section-eyebrow">Data</div>
+            <div class="section-title">Production Data Shapes</div>
+            <div class="section-desc">
+                The swimlane view groups existing ReviewItem and StepData into pipeline rows. No new
+                API shapes are required.
+            </div>
+
+            <div class="type-grid">
+                <div class="type-card active" onclick="showDataType('grouped')">
+                    <div class="type-card-icon">&#128203;</div>
+                    <div class="type-card-name">PipelineGroup</div>
+                </div>
+                <div class="type-card" onclick="showDataType('chipdata')">
+                    <div class="type-card-icon">&#128204;</div>
+                    <div class="type-card-name">ChipData</div>
+                </div>
+                <div class="type-card" onclick="showDataType('stagedef')">
+                    <div class="type-card-icon">&#128736;</div>
+                    <div class="type-card-name">StageDefinition</div>
+                </div>
+            </div>
+
+            <div id="data-grouped" class="chrome">
+                <div class="chrome-bar">
+                    <div class="chrome-dots">
+                        <span class="dot dot-r"></span><span class="dot dot-y"></span
+                        ><span class="dot dot-g"></span>
+                    </div>
+                    PipelineGroup
+                </div>
+                <div class="chrome-body">
+                    <pre class="raw-pre">
+interface PipelineGroup {
+  workflowSlug: string       // "sdlc-bugfix-agentc2-xx8jnt"
+  workflowName: string       // "SDLC Bugfix"
+  activeCount: number        // 8
+  items: ChipData[]          // grouped review+step combos
+  gateItems: ChipData[]      // subset at human approval gates
+}
+
+// Grouped from existing useReviews() data:
+// reviews.filter(r => r.workflowSlug === slug)
+//   .map(r => ({ ...r, steps: stepCache[r.id], currentStage: deriveStage(r) }))</pre
+                    >
+                </div>
+            </div>
+
+            <div id="data-chipdata" class="chrome hidden">
+                <div class="chrome-bar">
+                    <div class="chrome-dots">
+                        <span class="dot dot-r"></span><span class="dot dot-y"></span
+                        ><span class="dot dot-g"></span>
+                    </div>
+                    ChipData
+                </div>
+                <div class="chrome-body">
+                    <pre class="raw-pre">
+interface ChipData {
+  review: ReviewItem         // existing type
+  steps: StepData[]          // fetched from /api/reviews/[id]/steps
+  currentStage: string       // "triage" | "analysis" | "implementation" | "review-gate" | ...
+  isAtGate: boolean          // true if currentStage includes "gate"
+  riskLevel: string          // from reviewContext.riskLevel
+  label: string              // "#202" or issue title truncated
+  age: string                // "16h ago"
+}
+
+// Example chip:
+{
+  review: { id: "cmmo5sbm701q...", status: "pending", workflowSlug: "sdlc-bugfix-...", ... },
+  steps: [{ stepId: "create-github-issue", status: "COMPLETED", ... }, ...],
+  currentStage: "review-gate",
+  isAtGate: true,
+  riskLevel: "medium",
+  label: "#202",
+  age: "16h ago"
+}</pre
+                    >
+                </div>
+            </div>
+
+            <div id="data-stagedef" class="chrome hidden">
+                <div class="chrome-bar">
+                    <div class="chrome-dots">
+                        <span class="dot dot-r"></span><span class="dot dot-y"></span
+                        ><span class="dot dot-g"></span>
+                    </div>
+                    StageDefinition
+                </div>
+                <div class="chrome-body">
+                    <pre class="raw-pre">
+interface StageDefinition {
+  id: string                 // "review-gate"
+  label: string              // "Review Gate"
+  isGate: boolean            // true
+  stepPatterns: string[]     // ["merge-review", "audit-approval", "human-*"]
+}
+
+// Default stages (can be customized per workflow):
+const DEFAULT_STAGES: StageDefinition[] = [
+  { id: "triage",          label: "Triage",          isGate: false, stepPatterns: ["create-github-issue", "classify-*"] },
+  { id: "analysis",        label: "Analysis",        isGate: false, stepPatterns: ["launch-code-analysis", "wait-for-*", "get-*"] },
+  { id: "implementation",  label: "Implementation",  isGate: false, stepPatterns: ["implement-*", "audit-fix-*"] },
+  { id: "review-gate",     label: "Review Gate",     isGate: true,  stepPatterns: ["merge-review", "audit-approval-*"] },
+  { id: "qa",              label: "QA / Verify",     isGate: false, stepPatterns: ["verify-*", "run-tests"] },
+  { id: "merge-gate",      label: "Merge Gate",      isGate: true,  stepPatterns: ["final-review", "merge-*"] },
+  { id: "done",            label: "Done",            isGate: false, stepPatterns: [] },
+]</pre
+                    >
+                </div>
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- IMPLEMENTATION -->
+        <div class="section">
+            <div class="section-eyebrow">Implementation</div>
+            <div class="section-title">Step-by-Step</div>
+
+            <div class="impl-step">
+                <h3>Step 1: usePipelineGrouping Hook</h3>
+                <div class="impl-meta">
+                    <span
+                        ><strong>File:</strong>
+                        <code>apps/agent/src/app/command/hooks/usePipelineGrouping.ts</code></span
+                    >
+                    <span
+                        ><strong>Pattern:</strong>
+                        <code>apps/agent/src/app/command/hooks/useReviews.ts</code></span
+                    >
+                </div>
+                <div class="detail-section">
+                    <div class="detail-section-label">Interface</div>
+                    <pre class="raw-pre">
+function usePipelineGrouping(
+  reviews: ReviewItem[],
+  stepCache: Map&lt;string, StepData[]&gt;
+): {
+  pipelines: PipelineGroup[]
+  gateCount: number
+  stageColumns: StageDefinition[]
+}</pre
+                    >
+                </div>
+                <div class="detail-section">
+                    <div class="detail-section-label">Logic</div>
+                    <ol
+                        style="
+                            font-size: 12px;
+                            color: var(--text-secondary);
+                            padding-left: 20px;
+                            line-height: 2;
+                        "
+                    >
+                        <li>Accept reviews + prefetched step data from existing useReviews hook</li>
+                        <li>Group reviews by <code>workflowSlug</code> into pipeline buckets</li>
+                        <li>
+                            For each review, find the last non-QUEUED step and map its
+                            <code>stepId</code> to a stage via
+                            <code>StageDefinition.stepPatterns</code> (glob matching)
+                        </li>
+                        <li>Classify items at gate stages as <code>isAtGate: true</code></li>
+                        <li>
+                            Return sorted pipelines (most active first), total gate count, stage
+                            column definitions
+                        </li>
+                        <li>
+                            Memoize with <code>useMemo</code> keyed on review IDs and step cache
+                            size
+                        </li>
+                    </ol>
+                </div>
+            </div>
+
+            <div class="impl-step">
+                <h3>Step 2: PipelineChip Component</h3>
+                <div class="impl-meta">
+                    <span
+                        ><strong>File:</strong>
+                        <code>apps/agent/src/app/command/components/PipelineChip.tsx</code></span
+                    >
+                </div>
+                <div class="detail-section">
+                    <div class="detail-section-label">Props</div>
+                    <pre class="raw-pre">
+interface PipelineChipProps {
+  chip: ChipData
+  isSelected: boolean
+  onClick: (chip: ChipData) => void
+}</pre
+                    >
+                </div>
+                <div class="detail-section">
+                    <div class="detail-section-label">Logic</div>
+                    <ol
+                        style="
+                            font-size: 12px;
+                            color: var(--text-secondary);
+                            padding-left: 20px;
+                            line-height: 2;
+                        "
+                    >
+                        <li>
+                            Render compact chip with risk-colored dot, label (issue number or
+                            title), status color
+                        </li>
+                        <li>
+                            Color mapping: COMPLETED/green, RUNNING/blue, FAILED/red,
+                            SUSPENDED/cyan, gate/amber
+                        </li>
+                        <li>Hover: tooltip with full issue title + age</li>
+                        <li>Click: call onClick to open slideout</li>
+                    </ol>
+                </div>
+            </div>
+
+            <div class="impl-step">
+                <h3>Step 3: SwimlaneBoardView Component</h3>
+                <div class="impl-meta">
+                    <span
+                        ><strong>File:</strong>
+                        <code
+                            >apps/agent/src/app/command/components/SwimlaneBoardView.tsx</code
+                        ></span
+                    >
+                </div>
+                <div class="detail-section">
+                    <div class="detail-section-label">Props</div>
+                    <pre class="raw-pre">
+interface SwimlaneBoardViewProps {
+  pipelines: PipelineGroup[]
+  stageColumns: StageDefinition[]
+  gateCount: number
+  onApprove: (reviewId: string) => void
+  onReject: (reviewId: string) => void
+  onFeedback: (reviewId: string) => void
+  onBatchApprove: (reviewIds: string[]) => void
+  onCancelRun: (review: ReviewItem) => void
+  onRetryStep: (reviewId: string, stepId: string) => void
+  onSkipStep: (reviewId: string, stepId: string, reason?: string) => void
+}</pre
+                    >
+                </div>
+                <div class="detail-section">
+                    <div class="detail-section-label">Logic</div>
+                    <ol
+                        style="
+                            font-size: 12px;
+                            color: var(--text-secondary);
+                            padding-left: 20px;
+                            line-height: 2;
+                        "
+                    >
+                        <li>
+                            Render CSS Grid: first column = pipeline label, remaining = stage
+                            columns
+                        </li>
+                        <li>
+                            Gate columns get pink-highlighted background and badge with item count
+                        </li>
+                        <li>
+                            Toggle between "Full Board" and "Gates Only" view (filter to gate
+                            columns only)
+                        </li>
+                        <li>Bottom batch-action bar with "Approve All at Gate" shortcut</li>
+                        <li>Selected chip state opens ChipSlideout as a side panel</li>
+                    </ol>
+                </div>
+            </div>
+
+            <div class="impl-step">
+                <h3>Step 4: ChipSlideout Component</h3>
+                <div class="impl-meta">
+                    <span
+                        ><strong>File:</strong>
+                        <code>apps/agent/src/app/command/components/ChipSlideout.tsx</code></span
+                    >
+                    <span
+                        ><strong>Pattern:</strong>
+                        <code>packages/ui/src/components/sheet.tsx</code></span
+                    >
+                </div>
+                <div class="detail-section">
+                    <div class="detail-section-label">Logic</div>
+                    <ol
+                        style="
+                            font-size: 12px;
+                            color: var(--text-secondary);
+                            padding-left: 20px;
+                            line-height: 2;
+                        "
+                    >
+                        <li>Render as a right-side sheet (480px) overlaying the board</li>
+                        <li>Header: status badge, issue number, title</li>
+                        <li>
+                            Sections: Context metadata, Links, Summary (from reviewContext), Step
+                            Timeline (compact stepper)
+                        </li>
+                        <li>Sticky bottom action bar: Approve / Reject / Feedback buttons</li>
+                        <li>
+                            Reuse extraction helpers from WorkflowStepsCard for links, metadata,
+                            summaries
+                        </li>
+                        <li>
+                            Support Cancel Run, Retry Step, Skip Step actions via passed callbacks
+                        </li>
+                    </ol>
+                </div>
+            </div>
+
+            <div class="impl-step">
+                <h3>Step 5: Integrate into Command Page</h3>
+                <div class="impl-meta">
+                    <span
+                        ><strong>File:</strong>
+                        <code>apps/agent/src/app/command/page.tsx</code></span
+                    >
+                </div>
+                <div class="detail-section">
+                    <div class="detail-section-label">Logic</div>
+                    <ol
+                        style="
+                            font-size: 12px;
+                            color: var(--text-secondary);
+                            padding-left: 20px;
+                            line-height: 2;
+                        "
+                    >
+                        <li>
+                            Add view toggle: "Cards" (existing) vs "Pipeline" (new
+                            SwimlaneBoardView)
+                        </li>
+                        <li>Persist view preference in localStorage</li>
+                        <li>
+                            When Pipeline view is active, batch-prefetch steps for all visible
+                            reviews
+                        </li>
+                        <li>
+                            Pass all existing action handlers (approve, reject, feedback, cancel,
+                            retry, skip) through
+                        </li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- EDGE CASES -->
+        <div class="section">
+            <div class="section-eyebrow">Edge Cases</div>
+            <div class="section-title">Boundary Conditions</div>
+            <table class="spec-table">
+                <thead>
+                    <tr>
+                        <th>Scenario</th>
+                        <th>Backend</th>
+                        <th>Frontend</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>0 active reviews</td>
+                        <td>Empty array returned</td>
+                        <td>Show "All pipelines are clear" empty state with gear icon</td>
+                    </tr>
+                    <tr>
+                        <td>50+ items in one pipeline</td>
+                        <td>No change (paginated)</td>
+                        <td>
+                            Horizontal scroll within cells; chip count badge replaces individual
+                            chips after 8
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Unknown workflow slug</td>
+                        <td>No change</td>
+                        <td>Group under "Other" pipeline row</td>
+                    </tr>
+                    <tr>
+                        <td>Step data not yet loaded</td>
+                        <td>Returns empty steps array</td>
+                        <td>Show chip in "Triage" column (leftmost) with loading shimmer</td>
+                    </tr>
+                    <tr>
+                        <td>Steps don't match any stage pattern</td>
+                        <td>No change</td>
+                        <td>Place chip in nearest stage by step index position</td>
+                    </tr>
+                    <tr>
+                        <td>Concurrent approve while viewing board</td>
+                        <td>Review removed from pending</td>
+                        <td>Chip animates out of gate column; counter decrements</td>
+                    </tr>
+                    <tr>
+                        <td>Workflow with no gate steps</td>
+                        <td>No change</td>
+                        <td>
+                            Pipeline row has no highlighted columns; items flow through without
+                            stopping
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- COMPONENT ARCHITECTURE -->
+        <div class="section">
+            <div class="section-eyebrow">Components</div>
+            <div class="section-title">Component Architecture</div>
+            <table class="spec-table">
+                <thead>
+                    <tr>
+                        <th>Component / Hook</th>
+                        <th>Purpose</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>SwimlaneBoardView</code></td>
+                        <td>
+                            Grid layout with pipeline rows and stage columns; manages view toggles
+                            and batch actions
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><code>PipelineChip</code></td>
+                        <td>
+                            Compact interactive chip representing a single workflow run in the grid
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><code>ChipSlideout</code></td>
+                        <td>
+                            Right-side sheet panel with full review details, step timeline, and
+                            action buttons
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><code>usePipelineGrouping</code></td>
+                        <td>
+                            Groups reviews into pipeline rows and maps to stage columns via pattern
+                            matching
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><code>useStepPrefetch</code></td>
+                        <td>
+                            Batch-fetches step data for all visible reviews to populate pipeline
+                            positions
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- DATA FLOW -->
+        <div class="section">
+            <div class="section-eyebrow">Data Flow</div>
+            <div class="section-title">Call Chain</div>
+            <pre class="raw-pre" style="font-size: 12px; line-height: 1.8">
+User opens Command page with "Pipeline" view toggle
+    &boxur;&HorizontalLine; page.tsx: viewMode === "pipeline"
+        &boxur;&HorizontalLine; useReviews().reviews &rarr; all pending items
+            &boxur;&HorizontalLine; useStepPrefetch(reviews) &rarr; batch GET /api/reviews/[id]/steps
+                &boxur;&HorizontalLine; Returns Map&lt;reviewId, StepData[]&gt;
+        &boxur;&HorizontalLine; usePipelineGrouping(reviews, stepCache)
+            &boxur;&HorizontalLine; Groups by workflowSlug &rarr; PipelineGroup[]
+            &boxur;&HorizontalLine; Maps last active step to stage column
+        &boxur;&HorizontalLine; &lt;SwimlaneBoardView pipelines={...} /&gt;
+            &boxur;&HorizontalLine; CSS Grid renders rows x columns
+            &boxur;&HorizontalLine; Gate columns highlighted, batch bar at bottom
+
+User clicks chip "#202"
+    &boxur;&HorizontalLine; PipelineChip.onClick(chipData)
+        &boxur;&HorizontalLine; SwimlaneBoardView: setSelectedChip(chipData)
+            &boxur;&HorizontalLine; ChipSlideout opens (Sheet component)
+                &boxur;&HorizontalLine; Renders context, links, summary, step timeline
+                &boxur;&HorizontalLine; Action buttons: Approve / Reject / Feedback
+
+User clicks "Approve All at Review Gate"
+    &boxur;&HorizontalLine; SwimlaneBoardView: batchApprove(gateReviewIds)
+        &boxur;&HorizontalLine; useReviews().handleBatchApprove(ids)
+            &boxur;&HorizontalLine; POST /api/reviews/[id]/approve for each
+            &boxur;&HorizontalLine; Chips animate out; gate counter decrements
+  </pre
+            >
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- PLAYWRIGHT TEST PLAN -->
+        <div class="section">
+            <div class="section-eyebrow">Testing</div>
+            <div class="section-title">Playwright Test Plan</div>
+            <table class="spec-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Step</th>
+                        <th>Assertion</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>1</td>
+                        <td>Navigate to /command, click "Pipeline" view toggle</td>
+                        <td>Swimlane grid renders with pipeline rows and stage columns</td>
+                    </tr>
+                    <tr>
+                        <td>2</td>
+                        <td>Verify pipeline labels match active workflow types</td>
+                        <td>"SDLC Bugfix" row exists with correct active count</td>
+                    </tr>
+                    <tr>
+                        <td>3</td>
+                        <td>Verify gate columns are highlighted pink</td>
+                        <td>Gate column headers have distinct styling and badge counts</td>
+                    </tr>
+                    <tr>
+                        <td>4</td>
+                        <td>Click a chip in the review gate column</td>
+                        <td>Slideout panel opens with correct review details</td>
+                    </tr>
+                    <tr>
+                        <td>5</td>
+                        <td>Verify slideout shows step timeline</td>
+                        <td>Step items render with status icons (checkmark, pause, etc.)</td>
+                    </tr>
+                    <tr>
+                        <td>6</td>
+                        <td>Click "Approve" in slideout</td>
+                        <td>Toast appears, chip removed from gate, gate count decrements</td>
+                    </tr>
+                    <tr>
+                        <td>7</td>
+                        <td>Switch to "Gates Only" view</td>
+                        <td>Only gate columns shown with their items</td>
+                    </tr>
+                    <tr>
+                        <td>8</td>
+                        <td>Click "Approve All at Review Gate"</td>
+                        <td>All gate items approved, gate counter goes to 0</td>
+                    </tr>
+                    <tr>
+                        <td>9</td>
+                        <td>Toggle back to "Cards" view</td>
+                        <td>Original card list renders without errors</td>
+                    </tr>
+                    <tr>
+                        <td>10</td>
+                        <td>With 0 pending reviews, verify empty state</td>
+                        <td>"All pipelines are clear" message shown</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- ACCEPTANCE CRITERIA -->
+        <div class="section">
+            <div class="section-eyebrow">Acceptance</div>
+            <div class="section-title">Criteria</div>
+            <div style="font-size: 13px; color: var(--text-secondary); line-height: 2.2">
+                &#9744; Pipeline view renders all active workflow runs grouped by workflow type in
+                horizontal swimlanes<br />
+                &#9744; Stage columns reflect actual workflow step progression, not static
+                categories<br />
+                &#9744; Human approval gates are visually distinct (pink highlight, pulsing badge
+                with count)<br />
+                &#9744; Clicking a chip opens a slide-out with full context, links, summary, step
+                timeline, and action buttons<br />
+                &#9744; "Gates Only" toggle filters to show only gate columns with pending items<br />
+                &#9744; Batch "Approve All at Gate" operates on all items in a specific gate
+                column<br />
+                &#9744; Chips animate out on approval; counters decrement in real-time<br />
+                &#9744; Empty state renders when no active reviews exist<br />
+                &#9744; View preference persists across page reloads (localStorage)<br />
+                &#9744; All existing Phase 0-3 actions (expand detail, cancel, retry, skip)
+                accessible from slideout<br />
+                &#9744; Keyboard shortcut Shift+A triggers batch approve from any position<br />
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- EFFORT ESTIMATE -->
+        <div class="section">
+            <div class="section-eyebrow">Effort</div>
+            <div class="section-title">Estimate</div>
+            <table class="spec-table">
+                <thead>
+                    <tr>
+                        <th>Task</th>
+                        <th>Estimate</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>usePipelineGrouping hook + stage pattern matching</td>
+                        <td>60 min</td>
+                    </tr>
+                    <tr>
+                        <td>PipelineChip component</td>
+                        <td>30 min</td>
+                    </tr>
+                    <tr>
+                        <td>SwimlaneBoardView grid layout + view toggles</td>
+                        <td>90 min</td>
+                    </tr>
+                    <tr>
+                        <td>ChipSlideout panel (reusing extraction helpers)</td>
+                        <td>60 min</td>
+                    </tr>
+                    <tr>
+                        <td>Batch prefetch + batch approve integration</td>
+                        <td>45 min</td>
+                    </tr>
+                    <tr>
+                        <td>Command page integration + view toggle</td>
+                        <td>30 min</td>
+                    </tr>
+                    <tr>
+                        <td>Animations, polish, keyboard shortcuts</td>
+                        <td>45 min</td>
+                    </tr>
+                    <tr>
+                        <td>Playwright tests</td>
+                        <td>60 min</td>
+                    </tr>
+                    <tr>
+                        <td style="font-weight: 700; color: var(--text-primary)">Total</td>
+                        <td style="font-weight: 700; color: var(--text-primary)">7 hours</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <script>
+            function showState(state, btn) {
+                document
+                    .querySelectorAll('[id^="state-"]')
+                    .forEach((el) => el.classList.add("hidden"));
+                const target = document.getElementById("state-" + state);
+                if (target) target.classList.remove("hidden");
+                document
+                    .querySelectorAll(".toggle-btn")
+                    .forEach((b) => b.classList.remove("active"));
+                if (btn) btn.classList.add("active");
+            }
+
+            function openSlideout(id) {
+                document.getElementById("slideout-overlay").classList.add("open");
+                document.getElementById("slideout-panel").classList.add("open");
+                document.querySelectorAll(".chip").forEach((c) => c.classList.remove("selected"));
+                event.currentTarget.classList.add("selected");
+            }
+
+            function closeSlideout() {
+                document.getElementById("slideout-overlay").classList.remove("open");
+                document.getElementById("slideout-panel").classList.remove("open");
+                document.querySelectorAll(".chip").forEach((c) => c.classList.remove("selected"));
+            }
+
+            function batchApprove() {
+                alert("Batch approve: Would approve all 4 items at gates");
+            }
+
+            function batchReject() {
+                alert("Batch reject: Would reject all items at gates");
+            }
+
+            function showDataType(type) {
+                document
+                    .querySelectorAll('[id^="data-"]')
+                    .forEach((el) => el.classList.add("hidden"));
+                const target = document.getElementById("data-" + type);
+                if (target) target.classList.remove("hidden");
+                document
+                    .querySelectorAll(".type-card")
+                    .forEach((c) => c.classList.remove("active"));
+                event.currentTarget.classList.add("active");
+            }
+        </script>
+    </body>
+</html>

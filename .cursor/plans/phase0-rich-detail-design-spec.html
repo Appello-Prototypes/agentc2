@@ -1,0 +1,1467 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Phase 0: Rich Step Detail View — Design Spec (Unified)</title>
+        <link
+            href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap"
+            rel="stylesheet"
+        />
+        <style>
+            :root {
+                --bg-primary: #08090b;
+                --bg-surface: #0e1015;
+                --bg-elevated: #14161c;
+                --bg-muted: #1a1c24;
+                --bg-accent: #22242e;
+                --border-subtle: #252836;
+                --border-default: #2e3142;
+                --text-primary: #e4e5eb;
+                --text-secondary: #9295a5;
+                --text-muted: #626580;
+                --green-500: #10b981;
+                --green-bg: rgba(16, 185, 129, 0.1);
+                --green-border: rgba(16, 185, 129, 0.2);
+                --amber-500: #f59e0b;
+                --amber-bg: rgba(245, 158, 11, 0.1);
+                --amber-border: rgba(245, 158, 11, 0.2);
+                --blue-500: #3b82f6;
+                --blue-bg: rgba(59, 130, 246, 0.08);
+                --blue-border: rgba(59, 130, 246, 0.2);
+                --red-500: #ef4444;
+                --red-bg: rgba(239, 68, 68, 0.08);
+                --red-border: rgba(239, 68, 68, 0.2);
+                --purple-500: #8b5cf6;
+            }
+
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+            body {
+                font-family:
+                    "Space Grotesk",
+                    -apple-system,
+                    sans-serif;
+                background: var(--bg-primary);
+                color: var(--text-primary);
+                padding: 48px 40px;
+                line-height: 1.6;
+            }
+            code,
+            .mono {
+                font-family: "IBM Plex Mono", monospace;
+            }
+
+            .header {
+                max-width: 940px;
+                margin: 0 auto 64px;
+                text-align: center;
+            }
+            .phase-tag {
+                display: inline-block;
+                background: var(--green-bg);
+                border: 1px solid var(--green-border);
+                color: var(--green-500);
+                padding: 5px 16px;
+                border-radius: 20px;
+                font-size: 11px;
+                font-weight: 600;
+                letter-spacing: 2px;
+                text-transform: uppercase;
+                font-family: "IBM Plex Mono", monospace;
+                margin-bottom: 16px;
+            }
+            .header h1 {
+                font-size: 38px;
+                font-weight: 700;
+                letter-spacing: -0.8px;
+                margin-bottom: 14px;
+                background: linear-gradient(135deg, #e4e5eb 0%, #9295a5 100%);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+            }
+            .header p {
+                color: var(--text-secondary);
+                font-size: 16px;
+                max-width: 680px;
+                margin: 0 auto;
+            }
+
+            .section {
+                max-width: 940px;
+                margin: 0 auto 60px;
+            }
+            .section-eyebrow {
+                font-family: "IBM Plex Mono", monospace;
+                font-size: 10px;
+                font-weight: 600;
+                letter-spacing: 2.5px;
+                text-transform: uppercase;
+                color: var(--text-muted);
+                margin-bottom: 8px;
+            }
+            .section-title {
+                font-size: 24px;
+                font-weight: 700;
+                margin-bottom: 12px;
+                letter-spacing: -0.3px;
+            }
+            .section-desc {
+                color: var(--text-secondary);
+                font-size: 14px;
+                margin-bottom: 28px;
+                line-height: 1.7;
+            }
+            .divider {
+                height: 1px;
+                background: var(--border-subtle);
+                margin: 56px 0;
+            }
+            .hidden {
+                display: none;
+            }
+
+            .chrome {
+                background: var(--bg-surface);
+                border: 1px solid var(--border-subtle);
+                border-radius: 14px;
+                overflow: hidden;
+                box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+            }
+            .chrome-bar {
+                background: var(--bg-muted);
+                padding: 9px 16px;
+                font-family: "IBM Plex Mono", monospace;
+                font-size: 11px;
+                color: var(--text-muted);
+                border-bottom: 1px solid var(--border-subtle);
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            }
+            .chrome-dots {
+                display: flex;
+                gap: 5px;
+            }
+            .dot {
+                width: 8px;
+                height: 8px;
+                border-radius: 50%;
+            }
+            .dot-r {
+                background: #ff5f57;
+            }
+            .dot-y {
+                background: #febc2e;
+            }
+            .dot-g {
+                background: #28c840;
+            }
+            .chrome-body {
+                padding: 24px;
+            }
+
+            /* Stepper */
+            .stepper {
+                display: flex;
+                flex-direction: column;
+            }
+            .step-row {
+                display: flex;
+                gap: 12px;
+                position: relative;
+            }
+            .step-indicator-col {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                min-width: 32px;
+            }
+            .step-dot {
+                width: 32px;
+                height: 32px;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 12px;
+                font-weight: 700;
+                z-index: 1;
+                border: 1px solid transparent;
+                flex-shrink: 0;
+            }
+            .step-dot.completed {
+                background: var(--bg-elevated);
+                border-color: var(--green-border);
+                color: var(--green-500);
+            }
+            .step-dot.suspended {
+                background: var(--bg-elevated);
+                border-color: var(--amber-border);
+                color: var(--amber-500);
+                animation: pulse 2s infinite;
+            }
+            .step-dot.pending {
+                background: var(--bg-elevated);
+                border-color: var(--border-default);
+                color: var(--text-muted);
+            }
+            .step-dot.failed {
+                background: var(--bg-elevated);
+                border-color: var(--red-border);
+                color: var(--red-500);
+            }
+            .step-line {
+                width: 2px;
+                flex: 1;
+                min-height: 16px;
+            }
+            .step-line.green {
+                background: var(--green-border);
+            }
+            .step-line.default {
+                background: var(--border-subtle);
+            }
+            @keyframes pulse {
+                0%,
+                100% {
+                    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.3);
+                }
+                50% {
+                    box-shadow: 0 0 0 5px rgba(245, 158, 11, 0);
+                }
+            }
+
+            .step-content-col {
+                flex: 1;
+                padding-bottom: 20px;
+            }
+            .step-header {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                min-height: 32px;
+                cursor: pointer;
+                padding: 0 8px;
+                border-radius: 6px;
+                margin: 0 -8px;
+                transition: background 0.1s;
+            }
+            .step-header:hover {
+                background: var(--bg-muted);
+            }
+            .step-label {
+                font-size: 13px;
+                font-weight: 600;
+                flex: 1;
+            }
+            .step-label.completed {
+                color: var(--text-primary);
+            }
+            .step-label.suspended {
+                color: var(--amber-500);
+            }
+            .step-label.pending {
+                color: var(--text-muted);
+            }
+            .step-label.failed {
+                color: var(--red-500);
+            }
+            .step-desc {
+                font-size: 11px;
+                color: var(--text-muted);
+            }
+            .step-chevron {
+                width: 16px;
+                height: 16px;
+                color: var(--text-muted);
+                transition: transform 0.2s;
+                flex-shrink: 0;
+            }
+            .step-chevron.open {
+                transform: rotate(180deg);
+            }
+            .badge {
+                display: inline-flex;
+                align-items: center;
+                padding: 2px 8px;
+                border-radius: 5px;
+                font-size: 10px;
+                font-weight: 600;
+                letter-spacing: 0.3px;
+            }
+            .badge-green {
+                background: var(--green-bg);
+                color: var(--green-500);
+                border: 1px solid var(--green-border);
+            }
+            .badge-amber {
+                background: var(--amber-bg);
+                color: var(--amber-500);
+                border: 1px solid var(--amber-border);
+            }
+            .badge-red {
+                background: var(--red-bg);
+                color: var(--red-500);
+                border: 1px solid var(--red-border);
+            }
+            .badge-muted {
+                background: var(--bg-accent);
+                color: var(--text-muted);
+                border: 1px solid var(--border-default);
+            }
+
+            /* Inline detail panel (expanded inside step) */
+            .inline-detail {
+                margin-top: 10px;
+                background: var(--bg-elevated);
+                border: 1px solid var(--border-subtle);
+                border-radius: 10px;
+                overflow: hidden;
+                animation: slideDown 0.2s ease-out;
+            }
+            @keyframes slideDown {
+                from {
+                    opacity: 0;
+                    max-height: 0;
+                }
+                to {
+                    opacity: 1;
+                    max-height: 600px;
+                }
+            }
+            .inline-detail-meta {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 14px;
+                padding: 10px 14px;
+                border-bottom: 1px solid var(--border-subtle);
+                font-size: 11px;
+                color: var(--text-muted);
+            }
+            .meta-item {
+                display: flex;
+                align-items: center;
+                gap: 4px;
+            }
+            .meta-value {
+                color: var(--text-secondary);
+                font-family: "IBM Plex Mono", monospace;
+                font-size: 11px;
+            }
+            .inline-detail-body {
+                padding: 14px;
+            }
+            .detail-section {
+                margin-bottom: 14px;
+            }
+            .detail-section:last-child {
+                margin-bottom: 0;
+            }
+            .detail-section-label {
+                font-size: 10px;
+                font-weight: 600;
+                letter-spacing: 1.5px;
+                text-transform: uppercase;
+                color: var(--text-muted);
+                margin-bottom: 6px;
+                font-family: "IBM Plex Mono", monospace;
+            }
+            .links-grid {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 6px;
+            }
+            .link-chip {
+                display: inline-flex;
+                align-items: center;
+                gap: 5px;
+                padding: 5px 10px;
+                border-radius: 6px;
+                background: var(--bg-muted);
+                border: 1px solid var(--border-subtle);
+                font-size: 11px;
+                color: var(--blue-500);
+                text-decoration: none;
+                transition: all 0.15s;
+                cursor: pointer;
+            }
+            .link-chip:hover {
+                background: var(--blue-bg);
+                border-color: var(--blue-border);
+            }
+            .summary-text {
+                font-size: 12px;
+                line-height: 1.7;
+                color: var(--text-secondary);
+                background: var(--bg-muted);
+                border-radius: 6px;
+                padding: 10px 12px;
+                border: 1px solid var(--border-subtle);
+                white-space: pre-wrap;
+            }
+            .summary-text strong {
+                color: var(--text-primary);
+            }
+            .error-block {
+                background: var(--red-bg);
+                border: 1px solid var(--red-border);
+                border-radius: 6px;
+                padding: 10px 12px;
+            }
+            .error-title {
+                font-size: 11px;
+                font-weight: 600;
+                color: var(--red-500);
+                margin-bottom: 4px;
+                display: flex;
+                align-items: center;
+                gap: 5px;
+            }
+            .error-message {
+                font-size: 11px;
+                font-family: "IBM Plex Mono", monospace;
+                color: var(--text-secondary);
+            }
+            .error-field {
+                font-size: 10px;
+                color: var(--text-muted);
+                display: flex;
+                align-items: center;
+                gap: 5px;
+                margin-top: 6px;
+                padding-top: 6px;
+                border-top: 1px solid var(--red-border);
+            }
+            .error-field code {
+                color: var(--red-500);
+                background: rgba(239, 68, 68, 0.12);
+                padding: 1px 5px;
+                border-radius: 3px;
+                font-size: 10px;
+            }
+            .raw-toggle {
+                display: inline-flex;
+                align-items: center;
+                gap: 4px;
+                font-size: 10px;
+                color: var(--text-muted);
+                cursor: pointer;
+                border: none;
+                background: none;
+                font-family: "IBM Plex Mono", monospace;
+            }
+            .raw-toggle:hover {
+                color: var(--text-secondary);
+            }
+            .raw-block {
+                margin-top: 6px;
+                background: var(--bg-muted);
+                border: 1px solid var(--border-subtle);
+                border-radius: 6px;
+                padding: 10px;
+                font-family: "IBM Plex Mono", monospace;
+                font-size: 10px;
+                color: var(--text-secondary);
+                max-height: 160px;
+                overflow: auto;
+                white-space: pre-wrap;
+            }
+            .decision-chip {
+                display: inline-flex;
+                align-items: center;
+                gap: 5px;
+                padding: 5px 12px;
+                border-radius: 6px;
+                font-size: 11px;
+                font-weight: 600;
+            }
+            .decision-approved {
+                background: var(--green-bg);
+                border: 1px solid var(--green-border);
+                color: var(--green-500);
+            }
+            .kv-grid {
+                display: grid;
+                grid-template-columns: auto 1fr;
+                gap: 3px 12px;
+                font-size: 11px;
+            }
+            .kv-key {
+                color: var(--text-muted);
+                font-family: "IBM Plex Mono", monospace;
+                font-size: 10px;
+            }
+            .kv-value {
+                color: var(--text-secondary);
+            }
+
+            /* Spec tables */
+            .spec-table {
+                width: 100%;
+                border-collapse: collapse;
+                font-size: 13px;
+            }
+            .spec-table th {
+                text-align: left;
+                padding: 10px 14px;
+                border-bottom: 1px solid var(--border-subtle);
+                color: var(--text-muted);
+                font-size: 10px;
+                font-weight: 600;
+                text-transform: uppercase;
+                letter-spacing: 1.5px;
+                font-family: "IBM Plex Mono", monospace;
+            }
+            .spec-table td {
+                padding: 10px 14px;
+                border-bottom: 1px solid var(--border-subtle);
+                color: var(--text-secondary);
+                vertical-align: top;
+            }
+            .spec-table td:first-child {
+                color: var(--text-primary);
+                font-weight: 500;
+            }
+            .spec-table code {
+                font-family: "IBM Plex Mono", monospace;
+                background: var(--bg-muted);
+                padding: 2px 6px;
+                border-radius: 4px;
+                font-size: 11px;
+                color: var(--purple-500);
+            }
+
+            .callout {
+                background: var(--blue-bg);
+                border: 1px solid var(--blue-border);
+                border-left: 3px solid var(--blue-500);
+                border-radius: 8px;
+                padding: 12px 16px;
+                font-size: 12px;
+                color: var(--text-secondary);
+                line-height: 1.6;
+                margin-top: 16px;
+            }
+            .callout strong {
+                color: var(--blue-500);
+            }
+
+            .type-grid {
+                display: grid;
+                grid-template-columns: repeat(4, 1fr);
+                gap: 12px;
+                margin-bottom: 28px;
+            }
+            .type-card {
+                background: var(--bg-elevated);
+                border: 1px solid var(--border-subtle);
+                border-radius: 10px;
+                padding: 14px;
+                text-align: center;
+                cursor: pointer;
+                transition: all 0.15s;
+            }
+            .type-card:hover {
+                border-color: var(--border-default);
+            }
+            .type-card.active {
+                border-color: var(--green-500);
+                box-shadow: 0 0 0 1px var(--green-border);
+            }
+            .type-card-icon {
+                font-size: 22px;
+                margin-bottom: 6px;
+            }
+            .type-card-name {
+                font-size: 13px;
+                font-weight: 600;
+                margin-bottom: 3px;
+            }
+            .type-card-desc {
+                font-size: 10px;
+                color: var(--text-muted);
+            }
+
+            .chevron-svg {
+                display: inline-block;
+                vertical-align: middle;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <div class="phase-tag">Phase 0 -- Updated</div>
+            <h1>Rich Step Detail View</h1>
+            <p>
+                Each step in the workflow stepper is individually expandable. Click a step to reveal
+                its rich detail panel inline -- with auto-detected links, metadata, summaries, and
+                collapsible raw JSON. The stepper's vertical progression remains visible throughout.
+            </p>
+        </div>
+
+        <!-- ─── UNIFIED MOCKUP ─── -->
+        <div class="section">
+            <div class="section-eyebrow">Interaction Model</div>
+            <div class="section-title">Inline Expansion</div>
+            <div class="section-desc">
+                Click any step to expand it. The detail panel renders inside the step row, between
+                the label and the next step's connector line. The stepper's green checkmarks and
+                vertical line remain visible, preserving the step-by-step progression context. Click
+                the "Audit Fix Plan" step below to see the expansion in action.
+            </div>
+
+            <div class="chrome">
+                <div class="chrome-bar">
+                    <div class="chrome-dots">
+                        <span class="dot dot-r"></span><span class="dot dot-y"></span
+                        ><span class="dot dot-g"></span>
+                    </div>
+                    /command -- WorkflowStepsCard with inline expansion
+                </div>
+                <div class="chrome-body">
+                    <div
+                        style="
+                            font-size: 11px;
+                            color: var(--text-muted);
+                            font-weight: 500;
+                            margin-bottom: 14px;
+                        "
+                    >
+                        Workflow Steps (8)
+                    </div>
+                    <div class="stepper">
+                        <!-- Step 1: Collapsed -->
+                        <div class="step-row">
+                            <div class="step-indicator-col">
+                                <div class="step-dot completed">
+                                    <svg
+                                        width="14"
+                                        height="14"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        stroke-width="2.5"
+                                        stroke-linecap="round"
+                                    >
+                                        <polyline points="20 6 9 17 4 12" />
+                                    </svg>
+                                </div>
+                                <div class="step-line green"></div>
+                            </div>
+                            <div class="step-content-col">
+                                <div class="step-header" onclick="toggleStep('step1')">
+                                    <span class="step-label completed">Create GitHub Issue</span>
+                                    <span class="step-desc">tool &middot; 1ms</span>
+                                    <svg
+                                        class="step-chevron chevron-svg"
+                                        id="chev-step1"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        stroke-width="2"
+                                        stroke-linecap="round"
+                                    >
+                                        <polyline points="6 9 12 15 18 9" />
+                                    </svg>
+                                </div>
+                                <div id="detail-step1" class="inline-detail hidden">
+                                    <div class="inline-detail-meta">
+                                        <div class="meta-item">
+                                            <span>Duration</span>
+                                            <span class="meta-value">1ms</span>
+                                        </div>
+                                    </div>
+                                    <div class="inline-detail-body">
+                                        <div class="detail-section">
+                                            <div class="detail-section-label">Output</div>
+                                            <div class="summary-text">
+                                                GitHub Issue #202 created successfully in
+                                                Appello-Prototypes/agentc2
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Step 2: Collapsed -->
+                        <div class="step-row">
+                            <div class="step-indicator-col">
+                                <div class="step-dot completed">
+                                    <svg
+                                        width="14"
+                                        height="14"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        stroke-width="2.5"
+                                        stroke-linecap="round"
+                                    >
+                                        <polyline points="20 6 9 17 4 12" />
+                                    </svg>
+                                </div>
+                                <div class="step-line green"></div>
+                            </div>
+                            <div class="step-content-col">
+                                <div class="step-header" onclick="toggleStep('step2')">
+                                    <span class="step-label completed">Launch Code Analysis</span>
+                                    <span class="step-desc">tool &middot; 1ms</span>
+                                    <svg
+                                        class="step-chevron chevron-svg"
+                                        id="chev-step2"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        stroke-width="2"
+                                        stroke-linecap="round"
+                                    >
+                                        <polyline points="6 9 12 15 18 9" />
+                                    </svg>
+                                </div>
+                                <div id="detail-step2" class="inline-detail hidden">
+                                    <div class="inline-detail-meta">
+                                        <div class="meta-item">
+                                            <span>Duration</span>
+                                            <span class="meta-value">1ms</span>
+                                        </div>
+                                        <div class="meta-item">
+                                            <span>Agent</span>
+                                            <span class="meta-value">bc-b6b22da2</span>
+                                        </div>
+                                    </div>
+                                    <div class="inline-detail-body">
+                                        <div class="detail-section">
+                                            <div class="detail-section-label">Links</div>
+                                            <div class="links-grid">
+                                                <a class="link-chip" href="#"
+                                                    >🔧 Analysis Agent Session</a
+                                                >
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Step 3: EXPANDED (default demo) — agent type -->
+                        <div class="step-row">
+                            <div class="step-indicator-col">
+                                <div class="step-dot completed">
+                                    <svg
+                                        width="14"
+                                        height="14"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        stroke-width="2.5"
+                                        stroke-linecap="round"
+                                    >
+                                        <polyline points="20 6 9 17 4 12" />
+                                    </svg>
+                                </div>
+                                <div class="step-line green"></div>
+                            </div>
+                            <div class="step-content-col">
+                                <div
+                                    class="step-header"
+                                    onclick="toggleStep('step3')"
+                                    style="background: var(--bg-muted)"
+                                >
+                                    <span class="step-label completed">Audit Fix Plan</span>
+                                    <span class="badge badge-muted">agent</span>
+                                    <span class="step-desc">2.3s</span>
+                                    <span class="badge badge-green" style="margin-left: auto"
+                                        >completed</span
+                                    >
+                                    <svg
+                                        class="step-chevron chevron-svg open"
+                                        id="chev-step3"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        stroke-width="2"
+                                        stroke-linecap="round"
+                                    >
+                                        <polyline points="6 9 12 15 18 9" />
+                                    </svg>
+                                </div>
+                                <div id="detail-step3" class="inline-detail">
+                                    <div class="inline-detail-meta">
+                                        <div class="meta-item">
+                                            <span>Duration</span>
+                                            <span class="meta-value">2.3s</span>
+                                        </div>
+                                        <div class="meta-item">
+                                            <span>Iterations</span>
+                                            <span class="meta-value">3x</span>
+                                        </div>
+                                    </div>
+                                    <div class="inline-detail-body">
+                                        <div class="detail-section">
+                                            <div class="detail-section-label">Agent Response</div>
+                                            <div class="summary-text">
+                                                The proposed fix plan addresses the root cause
+                                                correctly. The schema change to add the
+                                                <code>model</code> property aligns with the existing
+                                                pattern used by other tools in the pipeline.
+
+                                                <strong>Verdict:</strong> Approved for
+                                                implementation. No architectural concerns.
+                                            </div>
+                                        </div>
+                                        <div class="detail-section">
+                                            <button
+                                                class="raw-toggle"
+                                                onclick="
+                                                    event.stopPropagation();
+                                                    this.nextElementSibling.classList.toggle(
+                                                        'hidden'
+                                                    );
+                                                "
+                                            >
+                                                &#9654; View raw output
+                                            </button>
+                                            <div class="raw-block hidden">
+                                                { "text": "The proposed fix plan...", "verdict":
+                                                "approved" }
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Step 4: Output Summary — EXPANDED as transform type -->
+                        <div class="step-row">
+                            <div class="step-indicator-col">
+                                <div class="step-dot completed">
+                                    <svg
+                                        width="14"
+                                        height="14"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        stroke-width="2.5"
+                                        stroke-linecap="round"
+                                    >
+                                        <polyline points="20 6 9 17 4 12" />
+                                    </svg>
+                                </div>
+                                <div class="step-line green"></div>
+                            </div>
+                            <div class="step-content-col">
+                                <div
+                                    class="step-header"
+                                    onclick="toggleStep('step4')"
+                                    style="background: var(--bg-muted)"
+                                >
+                                    <span class="step-label completed">Output Summary</span>
+                                    <span class="badge badge-muted">transform</span>
+                                    <span class="badge badge-green" style="margin-left: auto"
+                                        >completed</span
+                                    >
+                                    <svg
+                                        class="step-chevron chevron-svg open"
+                                        id="chev-step4"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        stroke-width="2"
+                                        stroke-linecap="round"
+                                    >
+                                        <polyline points="6 9 12 15 18 9" />
+                                    </svg>
+                                </div>
+                                <div id="detail-step4" class="inline-detail">
+                                    <div class="inline-detail-meta">
+                                        <div class="meta-item">
+                                            <span>Repo</span>
+                                            <span class="meta-value"
+                                                >Appello-Prototypes/agentc2</span
+                                            >
+                                        </div>
+                                        <div class="meta-item">
+                                            <span>Issue</span> <span class="meta-value">#202</span>
+                                        </div>
+                                        <div class="meta-item">
+                                            <span>Branch</span>
+                                            <span class="meta-value"
+                                                >cursor/mcp-schema-model-parameter-005c</span
+                                            >
+                                        </div>
+                                        <div class="meta-item">
+                                            <span>Analysis</span>
+                                            <span class="meta-value">4m 0s</span>
+                                        </div>
+                                        <div class="meta-item">
+                                            <span>Implementation</span>
+                                            <span class="meta-value">5m 45s</span>
+                                        </div>
+                                    </div>
+                                    <div class="inline-detail-body">
+                                        <div class="detail-section">
+                                            <div class="detail-section-label">Links</div>
+                                            <div class="links-grid">
+                                                <a class="link-chip" href="#"
+                                                    >&#x1f419; GitHub Issue #202</a
+                                                >
+                                                <a class="link-chip" href="#"
+                                                    >&#x1f527; Analysis Agent Session</a
+                                                >
+                                                <a class="link-chip" href="#"
+                                                    >&#x1f527; Implementation Agent Session</a
+                                                >
+                                            </div>
+                                        </div>
+                                        <div class="detail-section">
+                                            <div class="detail-section-label">Analysis Summary</div>
+                                            <div class="summary-text">
+                                                <strong>Root Cause Analysis Complete</strong>
+
+                                                Comprehensive root cause analysis for the
+                                                cursor-launch-agent model parameter bug (Issue
+                                                #202). Analysis committed and pushed to branch
+                                                <code>cursor/mcp-schema-model-parameter-684c</code>.
+
+                                                <strong>Key Findings:</strong> Schema mismatch
+                                                between MCP tool definition and agent parameters.
+                                            </div>
+                                        </div>
+                                        <div class="detail-section">
+                                            <div class="detail-section-label">
+                                                Implementation Summary
+                                            </div>
+                                            <div class="summary-text">
+                                                Successfully implemented the bugfix for the
+                                                cursor-launch-agent model parameter issue.
+
+                                                <strong>Changes:</strong> Fixed MCP Schema -- added
+                                                <code>model</code> property to the
+                                                cursor-launch-agent tool definition in
+                                                <code>coding-pipeline.ts</code>.
+                                            </div>
+                                        </div>
+                                        <div class="detail-section">
+                                            <button
+                                                class="raw-toggle"
+                                                onclick="
+                                                    event.stopPropagation();
+                                                    this.nextElementSibling.classList.toggle(
+                                                        'hidden'
+                                                    );
+                                                "
+                                            >
+                                                &#9654; View raw output (12 fields)
+                                            </button>
+                                            <div class="raw-block hidden">
+                                                { "prUrl": "https://cursor.com/agents/bc-7dac...",
+                                                "issueUrl": "https://github.com/...", "repository":
+                                                "Appello-Prototypes/agentc2", ... }
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Step 5: Human step — collapsed -->
+                        <div class="step-row">
+                            <div class="step-indicator-col">
+                                <div class="step-dot completed">
+                                    <svg
+                                        width="14"
+                                        height="14"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        stroke-width="2.5"
+                                        stroke-linecap="round"
+                                    >
+                                        <polyline points="20 6 9 17 4 12" />
+                                    </svg>
+                                </div>
+                                <div class="step-line green"></div>
+                            </div>
+                            <div class="step-content-col">
+                                <div class="step-header" onclick="toggleStep('step5')">
+                                    <span class="step-label completed">Review PR on GitHub</span>
+                                    <span class="step-desc">human &middot; --</span>
+                                    <svg
+                                        class="step-chevron chevron-svg"
+                                        id="chev-step5"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        stroke-width="2"
+                                        stroke-linecap="round"
+                                    >
+                                        <polyline points="6 9 12 15 18 9" />
+                                    </svg>
+                                </div>
+                                <div id="detail-step5" class="inline-detail hidden">
+                                    <div class="inline-detail-meta">
+                                        <div class="meta-item">
+                                            <span>Channel</span>
+                                            <span class="meta-value">platform</span>
+                                        </div>
+                                        <div class="meta-item">
+                                            <span>Decided by</span>
+                                            <span class="meta-value">cursor-agent</span>
+                                        </div>
+                                    </div>
+                                    <div class="inline-detail-body">
+                                        <div class="detail-section">
+                                            <div class="detail-section-label">Decision</div>
+                                            <div class="decision-chip decision-approved">
+                                                <svg
+                                                    width="12"
+                                                    height="12"
+                                                    viewBox="0 0 24 24"
+                                                    fill="none"
+                                                    stroke="currentColor"
+                                                    stroke-width="2.5"
+                                                    stroke-linecap="round"
+                                                >
+                                                    <polyline points="20 6 9 17 4 12" />
+                                                </svg>
+                                                Approved
+                                            </div>
+                                        </div>
+                                        <div class="detail-section">
+                                            <div class="detail-section-label">Audit Trail</div>
+                                            <div class="kv-grid">
+                                                <span class="kv-key">channel</span
+                                                ><span class="kv-value">platform</span>
+                                                <span class="kv-key">decision</span
+                                                ><span class="kv-value">approved</span>
+                                                <span class="kv-key">decidedBy</span
+                                                ><span class="kv-value">cursor-agent</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Step 6: Tool with error — collapsed -->
+                        <div class="step-row">
+                            <div class="step-indicator-col">
+                                <div class="step-dot failed">
+                                    <svg
+                                        width="14"
+                                        height="14"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        stroke-width="2"
+                                        stroke-linecap="round"
+                                    >
+                                        <circle cx="12" cy="12" r="10" />
+                                        <path d="M15 9l-6 6M9 9l6 6" />
+                                    </svg>
+                                </div>
+                                <div class="step-line default"></div>
+                            </div>
+                            <div class="step-content-col">
+                                <div class="step-header" onclick="toggleStep('step6')">
+                                    <span class="step-label failed">Merge PR</span>
+                                    <span class="step-desc">tool &middot; 1ms</span>
+                                    <svg
+                                        class="step-chevron chevron-svg"
+                                        id="chev-step6"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        stroke-width="2"
+                                        stroke-linecap="round"
+                                    >
+                                        <polyline points="6 9 12 15 18 9" />
+                                    </svg>
+                                </div>
+                                <div id="detail-step6" class="inline-detail hidden">
+                                    <div class="inline-detail-meta">
+                                        <div class="meta-item">
+                                            <span>Tool</span>
+                                            <span class="meta-value">merge-pull-request</span>
+                                        </div>
+                                        <div class="meta-item">
+                                            <span>Duration</span>
+                                            <span class="meta-value">1ms</span>
+                                        </div>
+                                    </div>
+                                    <div class="inline-detail-body">
+                                        <div class="detail-section">
+                                            <div class="detail-section-label">Error</div>
+                                            <div class="error-block">
+                                                <div class="error-title">
+                                                    <svg
+                                                        width="12"
+                                                        height="12"
+                                                        viewBox="0 0 24 24"
+                                                        fill="none"
+                                                        stroke="currentColor"
+                                                        stroke-width="2"
+                                                        stroke-linecap="round"
+                                                    >
+                                                        <circle cx="12" cy="12" r="10" />
+                                                        <path d="M15 9l-6 6M9 9l6 6" />
+                                                    </svg>
+                                                    Tool input validation failed
+                                                </div>
+                                                <div class="error-message">
+                                                    merge-pull-request: Expected number, received
+                                                    null
+                                                </div>
+                                                <div class="error-field">
+                                                    <code>prNumber</code>
+                                                    <span>Expected number, received null</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Step 7: Suspended -->
+                        <div class="step-row">
+                            <div class="step-indicator-col">
+                                <div class="step-dot suspended">7</div>
+                                <div class="step-line default"></div>
+                            </div>
+                            <div class="step-content-col">
+                                <div class="step-header">
+                                    <span class="step-label suspended">Merge Review</span>
+                                    <span class="step-desc">human &middot; suspended</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Step 8: Pending -->
+                        <div class="step-row">
+                            <div class="step-indicator-col">
+                                <div class="step-dot pending">8</div>
+                            </div>
+                            <div class="step-content-col" style="padding-bottom: 0">
+                                <div class="step-header" style="cursor: default">
+                                    <span class="step-label pending">Post Audit Summary</span>
+                                    <span class="step-desc">tool &middot; pending</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="callout" style="margin-top: 24px">
+                <strong>Key design decision:</strong> The detail panel renders as a child of the
+                step row, not below the stepper. This means the vertical connector line stretches to
+                accommodate expanded content, keeping the full workflow progression visible. The
+                <code>StepItem</code> UI component already supports <code>expandable</code> +
+                <code>children</code> props natively -- no component library changes needed.
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- ─── PER-TYPE RENDERING ─── -->
+        <div class="section">
+            <div class="section-eyebrow">Content Detection</div>
+            <div class="section-title">Per-Type Rendering Rules</div>
+            <div class="section-desc">
+                Click a step type above to see how the inline detail panel adapts. Each type has its
+                own layout optimized for the data it contains. Try expanding different steps in the
+                mockup above.
+            </div>
+
+            <div class="type-grid">
+                <div class="type-card active" onclick="scrollToAndExpand('step4', this)">
+                    <div class="type-card-icon">&#x1f504;</div>
+                    <div class="type-card-name">transform</div>
+                    <div class="type-card-desc">Links, summaries, metadata</div>
+                </div>
+                <div class="type-card" onclick="scrollToAndExpand('step5', this)">
+                    <div class="type-card-icon">&#x1f464;</div>
+                    <div class="type-card-name">human</div>
+                    <div class="type-card-desc">Decision chip, audit trail</div>
+                </div>
+                <div class="type-card" onclick="scrollToAndExpand('step6', this)">
+                    <div class="type-card-icon">&#x2699;&#xfe0f;</div>
+                    <div class="type-card-name">tool (error)</div>
+                    <div class="type-card-desc">Structured error display</div>
+                </div>
+                <div class="type-card" onclick="scrollToAndExpand('step3', this)">
+                    <div class="type-card-icon">&#x1f916;</div>
+                    <div class="type-card-name">agent</div>
+                    <div class="type-card-desc">Agent response text</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- ─── AUTO-DETECTION RULES ─── -->
+        <div class="section">
+            <div class="section-eyebrow">Logic</div>
+            <div class="section-title">Auto-Detection Rules</div>
+            <div class="section-desc">
+                The <code>StepDetailPanel</code> component inspects each field in
+                <code>outputJson</code> and renders it based on its type and name pattern. No
+                backend changes required.
+            </div>
+
+            <table class="spec-table">
+                <thead>
+                    <tr>
+                        <th>Detection</th>
+                        <th>Pattern</th>
+                        <th>Rendering</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>URLs</td>
+                        <td>Value matches <code>^https?://</code></td>
+                        <td>Clickable link chips with auto-detected icon (GitHub, Cursor, etc.)</td>
+                    </tr>
+                    <tr>
+                        <td>Issue / PR refs</td>
+                        <td>
+                            Key is <code>issueUrl</code>, <code>prUrl</code>,
+                            <code>issueNumber</code>, <code>prNumber</code>
+                        </td>
+                        <td>Link chip with issue/PR number (hidden if null)</td>
+                    </tr>
+                    <tr>
+                        <td>Summary text</td>
+                        <td>
+                            Key ends with <code>Summary</code> or is <code>text</code>,
+                            <code>response</code>, <code>result</code>
+                        </td>
+                        <td>Styled summary block, first line bolded</td>
+                    </tr>
+                    <tr>
+                        <td>Duration fields</td>
+                        <td>Key ends with <code>DurationMs</code></td>
+                        <td>Human-readable time in metadata row</td>
+                    </tr>
+                    <tr>
+                        <td>Agent IDs</td>
+                        <td>Key ends with <code>AgentId</code></td>
+                        <td>Cursor agent session link chip</td>
+                    </tr>
+                    <tr>
+                        <td>Branch names</td>
+                        <td>Key contains <code>Branch</code></td>
+                        <td>Monospace text in metadata row</td>
+                    </tr>
+                    <tr>
+                        <td>Decisions</td>
+                        <td>Key is <code>decision</code>, <code>approved</code></td>
+                        <td>Decision chip (approved/rejected)</td>
+                    </tr>
+                    <tr>
+                        <td>Errors</td>
+                        <td><code>error</code> truthy or <code>errorJson</code> present</td>
+                        <td>Red error block with parsed validation errors</td>
+                    </tr>
+                    <tr>
+                        <td>Null values</td>
+                        <td>Value is <code>null</code></td>
+                        <td>Hidden entirely</td>
+                    </tr>
+                    <tr>
+                        <td>Fallback</td>
+                        <td>Everything else</td>
+                        <td>Key-value audit grid + raw JSON toggle</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="callout">
+                <strong>Frontend-only change.</strong> No API or database modifications. The
+                <code>/api/reviews/[id]/steps</code> route already returns
+                <code>outputJson</code> -- the frontend renders it smarter using the
+                <code>StepItem</code> component's native <code>expandable</code> +
+                <code>children</code> pattern.
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- ─── COMPONENT ARCHITECTURE ─── -->
+        <div class="section">
+            <div class="section-eyebrow">Architecture</div>
+            <div class="section-title">Component Integration</div>
+
+            <table class="spec-table">
+                <thead>
+                    <tr>
+                        <th>Component / Function</th>
+                        <th>Purpose</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>StepItem</code> (existing)</td>
+                        <td>
+                            UI component in <code>@repo/ui</code>. Already supports
+                            <code>expandable</code> prop + <code>children</code>. Renders chevron
+                            icon, handles expand/collapse state internally. No changes needed.
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><code>StepDetailPanel</code> (new)</td>
+                        <td>
+                            New function component inside <code>WorkflowStepsCard.tsx</code>.
+                            Receives <code>StepData</code>, renders the structured detail view.
+                            Passed as <code>children</code> to each <code>StepItem</code>.
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><code>extractLinks(output)</code></td>
+                        <td>Scans for URL values, returns <code>{ label, url, icon }[]</code></td>
+                    </tr>
+                    <tr>
+                        <td><code>extractMetadata(output)</code></td>
+                        <td>Pulls repository, branch, durations, channels into metadata items</td>
+                    </tr>
+                    <tr>
+                        <td><code>extractSummaries(output)</code></td>
+                        <td>
+                            Finds <code>*Summary</code> / <code>text</code> /
+                            <code>response</code> fields, returns labeled text blocks
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><code>extractDecision(output)</code></td>
+                        <td>
+                            Detects <code>decision</code>/<code>approved</code> fields for human
+                            steps
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><code>extractError(output, errorJson)</code></td>
+                        <td>Parses error + validation fields into structured display</td>
+                    </tr>
+                    <tr>
+                        <td><code>classifyUrl(url)</code></td>
+                        <td>Maps domains to icons (github.com, cursor.com, etc.)</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- ─── TEST PLAN ─── -->
+        <div class="section">
+            <div class="section-eyebrow">Testing</div>
+            <div class="section-title">Playwright Test Plan</div>
+            <div class="section-desc">
+                Login: <code>sdlc-test@agentc2.ai</code> / <code>FlywheelDemo2026!</code> on
+                <code>http://localhost:3001</code>
+            </div>
+
+            <table class="spec-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Step</th>
+                        <th>Assertion</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td style="color: var(--text-muted)">1</td>
+                        <td>
+                            Navigate to <code>/command</code>, expand a card, click "View workflow
+                            steps"
+                        </td>
+                        <td>Steps stepper visible with green checkmarks and chevrons</td>
+                    </tr>
+                    <tr>
+                        <td style="color: var(--text-muted)">2</td>
+                        <td>Click "Output Summary" step row</td>
+                        <td>Chevron rotates, detail panel expands inline beneath the step label</td>
+                    </tr>
+                    <tr>
+                        <td style="color: var(--text-muted)">3</td>
+                        <td>Verify links section in expanded panel</td>
+                        <td>GitHub issue link chip clickable, agent session link present</td>
+                    </tr>
+                    <tr>
+                        <td style="color: var(--text-muted)">4</td>
+                        <td>Verify metadata row</td>
+                        <td>Repository, branch, durations displayed</td>
+                    </tr>
+                    <tr>
+                        <td style="color: var(--text-muted)">5</td>
+                        <td>Verify stepper context preserved</td>
+                        <td>
+                            Steps above and below the expanded step still show green checkmarks and
+                            connector lines
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="color: var(--text-muted)">6</td>
+                        <td>Click same step again</td>
+                        <td>Detail panel collapses, chevron rotates back</td>
+                    </tr>
+                    <tr>
+                        <td style="color: var(--text-muted)">7</td>
+                        <td>Click "Review PR on GitHub" step (human)</td>
+                        <td>Decision chip "Approved" in green, audit trail KV grid</td>
+                    </tr>
+                    <tr>
+                        <td style="color: var(--text-muted)">8</td>
+                        <td>Click "Merge PR" step (tool with error)</td>
+                        <td>Red error block with validation field errors</td>
+                    </tr>
+                    <tr>
+                        <td style="color: var(--text-muted)">9</td>
+                        <td>Expand multiple steps simultaneously</td>
+                        <td>Both detail panels visible, stepper lines stretch to accommodate</td>
+                    </tr>
+                    <tr>
+                        <td style="color: var(--text-muted)">10</td>
+                        <td>Screenshot for human review</td>
+                        <td>All step types render correctly inline</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <script>
+            function toggleStep(id) {
+                const detail = document.getElementById("detail-" + id);
+                const chevron = document.getElementById("chev-" + id);
+                const header = detail?.previousElementSibling;
+                if (!detail) return;
+                const isHidden = detail.classList.contains("hidden");
+                detail.classList.toggle("hidden");
+                if (chevron) chevron.classList.toggle("open", isHidden);
+                if (header) {
+                    if (isHidden) header.style.background = "var(--bg-muted)";
+                    else header.style.background = "";
+                }
+            }
+
+            function scrollToAndExpand(id, card) {
+                document
+                    .querySelectorAll(".type-card")
+                    .forEach((c) => c.classList.remove("active"));
+                card.classList.add("active");
+                const detail = document.getElementById("detail-" + id);
+                if (detail && detail.classList.contains("hidden")) {
+                    toggleStep(id);
+                }
+                detail?.scrollIntoView({ behavior: "smooth", block: "center" });
+            }
+        </script>
+    </body>
+</html>

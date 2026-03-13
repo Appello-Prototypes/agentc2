@@ -1,0 +1,1825 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Concept 4: Split Inbox — UIS</title>
+        <link
+            href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+            rel="stylesheet"
+        />
+        <style>
+            :root {
+                --bg-primary: #09090c;
+                --bg-surface: #0f1014;
+                --bg-elevated: #15161c;
+                --bg-muted: #1b1c24;
+                --bg-accent: #232430;
+                --border-subtle: #272938;
+                --border-default: #303244;
+                --text-primary: #e5e6ee;
+                --text-secondary: #9294aa;
+                --text-muted: #606280;
+                --green-500: #4ade80;
+                --green-bg: rgba(74, 222, 128, 0.1);
+                --green-border: rgba(74, 222, 128, 0.2);
+                --amber-500: #fbbf24;
+                --amber-bg: rgba(251, 191, 36, 0.1);
+                --amber-border: rgba(251, 191, 36, 0.2);
+                --blue-500: #60a5fa;
+                --blue-bg: rgba(96, 165, 250, 0.08);
+                --blue-border: rgba(96, 165, 250, 0.2);
+                --red-500: #fb7185;
+                --red-bg: rgba(251, 113, 133, 0.08);
+                --red-border: rgba(251, 113, 133, 0.2);
+                --cyan-500: #22d3ee;
+                --cyan-bg: rgba(34, 211, 238, 0.08);
+                --cyan-border: rgba(34, 211, 238, 0.2);
+                --purple-500: #c084fc;
+                --teal-500: #2dd4bf;
+                --teal-bg: rgba(45, 212, 191, 0.08);
+                --teal-border: rgba(45, 212, 191, 0.2);
+            }
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+            body {
+                font-family:
+                    "DM Sans",
+                    -apple-system,
+                    sans-serif;
+                background: var(--bg-primary);
+                color: var(--text-primary);
+                padding: 48px 40px;
+                line-height: 1.6;
+            }
+            code,
+            .mono {
+                font-family: "JetBrains Mono", monospace;
+            }
+            .hidden {
+                display: none;
+            }
+
+            .header {
+                max-width: 1100px;
+                margin: 0 auto 64px;
+                text-align: center;
+            }
+            .phase-tag {
+                display: inline-block;
+                padding: 5px 16px;
+                border-radius: 20px;
+                font-size: 11px;
+                font-weight: 600;
+                letter-spacing: 2px;
+                text-transform: uppercase;
+                font-family: "JetBrains Mono", monospace;
+                margin-bottom: 16px;
+                background: var(--teal-bg);
+                border: 1px solid var(--teal-border);
+                color: var(--teal-500);
+            }
+            .header h1 {
+                font-size: 38px;
+                font-weight: 700;
+                letter-spacing: -0.8px;
+                margin-bottom: 14px;
+                background: linear-gradient(135deg, #e5e6ee 0%, #9294aa 100%);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+            }
+            .header p {
+                color: var(--text-secondary);
+                font-size: 16px;
+                max-width: 750px;
+                margin: 0 auto;
+            }
+
+            .section {
+                max-width: 1100px;
+                margin: 0 auto 60px;
+            }
+            .section-eyebrow {
+                font-family: "JetBrains Mono", monospace;
+                font-size: 10px;
+                font-weight: 600;
+                letter-spacing: 2.5px;
+                text-transform: uppercase;
+                color: var(--text-muted);
+                margin-bottom: 8px;
+            }
+            .section-title {
+                font-size: 24px;
+                font-weight: 700;
+                margin-bottom: 12px;
+                letter-spacing: -0.3px;
+            }
+            .section-desc {
+                color: var(--text-secondary);
+                font-size: 14px;
+                margin-bottom: 28px;
+                line-height: 1.7;
+            }
+            .divider {
+                height: 1px;
+                background: var(--border-subtle);
+                margin: 56px auto;
+                max-width: 1100px;
+            }
+
+            .chrome {
+                background: var(--bg-surface);
+                border: 1px solid var(--border-subtle);
+                border-radius: 14px;
+                overflow: hidden;
+                box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+            }
+            .chrome-bar {
+                background: var(--bg-muted);
+                padding: 9px 16px;
+                font-family: "JetBrains Mono", monospace;
+                font-size: 11px;
+                color: var(--text-muted);
+                border-bottom: 1px solid var(--border-subtle);
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            }
+            .chrome-dots {
+                display: flex;
+                gap: 5px;
+            }
+            .dot {
+                width: 8px;
+                height: 8px;
+                border-radius: 50%;
+            }
+            .dot-r {
+                background: #ff5f57;
+            }
+            .dot-y {
+                background: #febc2e;
+            }
+            .dot-g {
+                background: #28c840;
+            }
+
+            .spec-table {
+                width: 100%;
+                border-collapse: collapse;
+                font-size: 13px;
+            }
+            .spec-table th {
+                text-align: left;
+                padding: 10px 14px;
+                border-bottom: 1px solid var(--border-subtle);
+                color: var(--text-muted);
+                font-size: 10px;
+                font-weight: 600;
+                text-transform: uppercase;
+                letter-spacing: 1.5px;
+                font-family: "JetBrains Mono", monospace;
+            }
+            .spec-table td {
+                padding: 10px 14px;
+                border-bottom: 1px solid var(--border-subtle);
+                color: var(--text-secondary);
+                vertical-align: top;
+            }
+            .spec-table td:first-child {
+                color: var(--text-primary);
+                font-weight: 500;
+            }
+            .spec-table code {
+                font-family: "JetBrains Mono", monospace;
+                background: var(--bg-muted);
+                padding: 2px 6px;
+                border-radius: 4px;
+                font-size: 11px;
+                color: var(--purple-500);
+            }
+
+            .badge {
+                display: inline-flex;
+                align-items: center;
+                padding: 2px 10px;
+                border-radius: 6px;
+                font-size: 10px;
+                font-weight: 600;
+            }
+            .badge-green {
+                background: var(--green-bg);
+                color: var(--green-500);
+                border: 1px solid var(--green-border);
+            }
+            .badge-amber {
+                background: var(--amber-bg);
+                color: var(--amber-500);
+                border: 1px solid var(--amber-border);
+            }
+            .badge-red {
+                background: var(--red-bg);
+                color: var(--red-500);
+                border: 1px solid var(--red-border);
+            }
+            .badge-blue {
+                background: var(--blue-bg);
+                color: var(--blue-500);
+                border: 1px solid var(--blue-border);
+            }
+            .badge-cyan {
+                background: var(--cyan-bg);
+                color: var(--cyan-500);
+                border: 1px solid var(--cyan-border);
+            }
+            .badge-muted {
+                background: var(--bg-accent);
+                color: var(--text-muted);
+                border: 1px solid var(--border-default);
+            }
+
+            .toggle-group {
+                display: flex;
+                gap: 4px;
+                margin-bottom: 24px;
+                background: var(--bg-muted);
+                border-radius: 10px;
+                padding: 4px;
+                width: fit-content;
+            }
+            .toggle-btn {
+                padding: 8px 20px;
+                border-radius: 8px;
+                font-size: 13px;
+                font-weight: 600;
+                cursor: pointer;
+                border: none;
+                background: transparent;
+                color: var(--text-muted);
+                transition: all 0.2s;
+                font-family: "DM Sans", sans-serif;
+            }
+            .toggle-btn.active {
+                background: var(--bg-accent);
+                color: var(--text-primary);
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            }
+            .toggle-btn:hover:not(.active) {
+                color: var(--text-secondary);
+            }
+
+            .raw-pre {
+                background: var(--bg-muted);
+                border: 1px solid var(--border-subtle);
+                border-radius: 8px;
+                padding: 14px;
+                font-family: "JetBrains Mono", monospace;
+                font-size: 11px;
+                color: var(--text-secondary);
+                line-height: 1.6;
+                max-height: 260px;
+                overflow: auto;
+                white-space: pre-wrap;
+            }
+
+            .impl-step {
+                background: var(--bg-surface);
+                border: 1px solid var(--border-subtle);
+                border-radius: 12px;
+                padding: 20px;
+                margin-bottom: 20px;
+            }
+            .impl-step h3 {
+                font-size: 16px;
+                margin-bottom: 12px;
+            }
+            .impl-meta {
+                display: flex;
+                gap: 24px;
+                font-size: 12px;
+                color: var(--text-secondary);
+                margin-bottom: 16px;
+                flex-wrap: wrap;
+            }
+            .detail-section {
+                margin-bottom: 14px;
+            }
+            .detail-section-label {
+                font-size: 10px;
+                font-weight: 600;
+                letter-spacing: 1.5px;
+                text-transform: uppercase;
+                color: var(--text-muted);
+                margin-bottom: 6px;
+                font-family: "JetBrains Mono", monospace;
+            }
+
+            .flow-container {
+                display: flex;
+                align-items: center;
+                padding: 20px;
+                overflow-x: auto;
+                gap: 6px;
+            }
+            .flow-node {
+                background: var(--bg-elevated);
+                border: 1px solid var(--border-subtle);
+                border-radius: 10px;
+                padding: 14px 18px;
+                min-width: 130px;
+                text-align: center;
+                flex-shrink: 0;
+            }
+            .flow-node-title {
+                font-size: 12px;
+                font-weight: 600;
+                margin-bottom: 4px;
+            }
+            .flow-node-desc {
+                font-size: 10px;
+                color: var(--text-muted);
+            }
+            .flow-node.active {
+                border-color: var(--teal-500);
+                box-shadow: 0 0 0 2px var(--teal-bg);
+            }
+            .flow-arrow {
+                color: var(--text-muted);
+                font-size: 18px;
+                padding: 0 4px;
+                flex-shrink: 0;
+            }
+
+            /* === SPLIT INBOX MOCKUP === */
+            .inbox-container {
+                display: flex;
+                height: 600px;
+            }
+
+            /* Left panel - item list */
+            .inbox-list {
+                width: 420px;
+                min-width: 420px;
+                border-right: 1px solid var(--border-subtle);
+                display: flex;
+                flex-direction: column;
+            }
+            .inbox-toolbar {
+                padding: 10px 14px;
+                border-bottom: 1px solid var(--border-subtle);
+                background: var(--bg-elevated);
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                flex-wrap: wrap;
+            }
+            .inbox-filter {
+                padding: 3px 10px;
+                border-radius: 5px;
+                font-size: 10px;
+                font-weight: 600;
+                cursor: pointer;
+                border: 1px solid var(--border-subtle);
+                background: var(--bg-muted);
+                color: var(--text-muted);
+                transition: all 0.12s;
+                font-family: "DM Sans", sans-serif;
+            }
+            .inbox-filter:hover {
+                border-color: var(--border-default);
+                color: var(--text-secondary);
+            }
+            .inbox-filter.active {
+                border-color: var(--teal-500);
+                color: var(--teal-500);
+                background: var(--teal-bg);
+            }
+            .inbox-search {
+                flex: 1;
+                background: var(--bg-muted);
+                border: 1px solid var(--border-subtle);
+                border-radius: 5px;
+                padding: 4px 10px;
+                font-size: 11px;
+                color: var(--text-primary);
+                font-family: "DM Sans", sans-serif;
+                outline: none;
+                min-width: 100px;
+            }
+            .inbox-search::placeholder {
+                color: var(--text-muted);
+            }
+            .inbox-search:focus {
+                border-color: var(--teal-500);
+            }
+
+            .inbox-items {
+                flex: 1;
+                overflow-y: auto;
+            }
+            .inbox-item {
+                padding: 12px 14px;
+                border-bottom: 1px solid var(--border-subtle);
+                cursor: pointer;
+                transition: background 0.1s;
+                display: flex;
+                gap: 10px;
+            }
+            .inbox-item:hover {
+                background: rgba(255, 255, 255, 0.02);
+            }
+            .inbox-item.selected {
+                background: rgba(45, 212, 191, 0.06);
+                border-left: 3px solid var(--teal-500);
+            }
+            .inbox-item.unread {
+                background: rgba(255, 255, 255, 0.015);
+            }
+            .inbox-item-check {
+                width: 16px;
+                height: 16px;
+                border: 1px solid var(--border-default);
+                border-radius: 3px;
+                margin-top: 2px;
+                flex-shrink: 0;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 10px;
+            }
+            .inbox-item-check.checked {
+                background: var(--teal-500);
+                border-color: var(--teal-500);
+                color: #000;
+            }
+            .inbox-item-body {
+                flex: 1;
+                min-width: 0;
+            }
+            .inbox-item-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-start;
+                margin-bottom: 4px;
+            }
+            .inbox-item-id {
+                font-size: 12px;
+                font-weight: 700;
+                font-family: "JetBrains Mono", monospace;
+                display: flex;
+                align-items: center;
+                gap: 5px;
+            }
+            .inbox-item-id .risk-dot {
+                width: 6px;
+                height: 6px;
+                border-radius: 50%;
+            }
+            .inbox-item-age {
+                font-size: 10px;
+                color: var(--text-muted);
+                font-family: "JetBrains Mono", monospace;
+                white-space: nowrap;
+            }
+            .inbox-item-title {
+                font-size: 12px;
+                color: var(--text-secondary);
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                margin-bottom: 4px;
+            }
+            .inbox-item-meta {
+                display: flex;
+                gap: 6px;
+                align-items: center;
+            }
+            .inbox-item-step {
+                font-size: 10px;
+                color: var(--text-muted);
+                font-family: "JetBrains Mono", monospace;
+            }
+
+            .inbox-status-bar {
+                padding: 8px 14px;
+                border-top: 1px solid var(--border-subtle);
+                background: var(--bg-elevated);
+                display: flex;
+                justify-content: space-between;
+                font-size: 10px;
+                color: var(--text-muted);
+                font-family: "JetBrains Mono", monospace;
+            }
+
+            /* Right panel - detail */
+            .inbox-detail {
+                flex: 1;
+                display: flex;
+                flex-direction: column;
+                overflow: hidden;
+            }
+            .inbox-detail-header {
+                padding: 16px 20px;
+                border-bottom: 1px solid var(--border-subtle);
+                background: var(--bg-elevated);
+            }
+            .inbox-detail-title {
+                font-size: 16px;
+                font-weight: 700;
+                margin-bottom: 6px;
+            }
+            .inbox-detail-meta {
+                display: flex;
+                gap: 12px;
+                font-size: 11px;
+                color: var(--text-secondary);
+                flex-wrap: wrap;
+            }
+            .inbox-detail-body {
+                flex: 1;
+                overflow-y: auto;
+                padding: 16px 20px;
+            }
+            .inbox-detail-section {
+                margin-bottom: 20px;
+            }
+            .inbox-detail-section-label {
+                font-size: 10px;
+                font-weight: 600;
+                letter-spacing: 1.5px;
+                text-transform: uppercase;
+                color: var(--text-muted);
+                margin-bottom: 8px;
+                font-family: "JetBrains Mono", monospace;
+            }
+
+            .inbox-detail-actions {
+                padding: 12px 20px;
+                border-top: 1px solid var(--border-subtle);
+                background: var(--bg-muted);
+                display: flex;
+                gap: 8px;
+                align-items: center;
+            }
+            .inbox-action-btn {
+                padding: 8px 18px;
+                border-radius: 7px;
+                font-size: 12px;
+                font-weight: 600;
+                cursor: pointer;
+                border: none;
+                transition: all 0.12s;
+                font-family: "DM Sans", sans-serif;
+            }
+            .inbox-action-btn.approve {
+                background: var(--green-500);
+                color: #000;
+            }
+            .inbox-action-btn.approve:hover {
+                background: #6ee7a0;
+            }
+            .inbox-action-btn.reject {
+                background: var(--red-bg);
+                color: var(--red-500);
+                border: 1px solid var(--red-border);
+            }
+            .inbox-action-btn.reject:hover {
+                background: rgba(251, 113, 133, 0.15);
+            }
+            .inbox-action-btn.feedback {
+                background: var(--bg-accent);
+                color: var(--text-secondary);
+                border: 1px solid var(--border-default);
+            }
+            .inbox-action-btn.skip {
+                background: var(--cyan-bg);
+                color: var(--cyan-500);
+                border: 1px solid var(--cyan-border);
+            }
+            .inbox-action-btn.cancel-btn {
+                background: var(--bg-accent);
+                color: var(--text-muted);
+                border: 1px solid var(--border-default);
+            }
+
+            /* Mini stepper in detail */
+            .mini-step {
+                display: flex;
+                gap: 8px;
+                align-items: flex-start;
+                padding: 6px 0;
+                border-bottom: 1px solid rgba(39, 41, 56, 0.5);
+            }
+            .mini-step:last-child {
+                border-bottom: none;
+            }
+            .mini-step-icon {
+                width: 18px;
+                height: 18px;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 8px;
+                flex-shrink: 0;
+                margin-top: 1px;
+            }
+            .mini-step-icon.s-complete {
+                background: var(--green-bg);
+                color: var(--green-500);
+                border: 1px solid var(--green-border);
+            }
+            .mini-step-icon.s-running {
+                background: var(--blue-bg);
+                color: var(--blue-500);
+                border: 1px solid var(--blue-border);
+            }
+            .mini-step-icon.s-suspended {
+                background: var(--amber-bg);
+                color: var(--amber-500);
+                border: 1px solid var(--amber-border);
+            }
+            .mini-step-icon.s-failed {
+                background: var(--red-bg);
+                color: var(--red-500);
+                border: 1px solid var(--red-border);
+            }
+            .mini-step-icon.s-queued {
+                background: var(--bg-accent);
+                color: var(--text-muted);
+                border: 1px solid var(--border-default);
+            }
+            .mini-step-info {
+                flex: 1;
+            }
+            .mini-step-name {
+                font-size: 11px;
+                font-weight: 600;
+            }
+            .mini-step-detail {
+                font-size: 9px;
+                color: var(--text-muted);
+                font-family: "JetBrains Mono", monospace;
+            }
+
+            /* Keyboard hint */
+            .kbd {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                min-width: 18px;
+                height: 18px;
+                padding: 0 4px;
+                background: var(--bg-accent);
+                border: 1px solid var(--border-default);
+                border-radius: 3px;
+                font-size: 10px;
+                font-weight: 600;
+                font-family: "JetBrains Mono", monospace;
+                color: var(--text-muted);
+            }
+        </style>
+    </head>
+    <body>
+        <!-- HEADER -->
+        <div class="header">
+            <div class="phase-tag">Concept 4 of 5</div>
+            <h1>Split Inbox</h1>
+            <p>
+                A master-detail layout inspired by Superhuman and Linear. The left panel is a
+                compact, keyboard-navigable list of all items. The right panel shows the selected
+                item's full workflow detail with step-by-step progress and action buttons. Designed
+                for maximum throughput: an operator processing 50+ items/day can triage without ever
+                touching the mouse.
+            </p>
+        </div>
+
+        <!-- ARCHITECTURE -->
+        <div class="section">
+            <div class="section-eyebrow">Architecture</div>
+            <div class="section-title">Data Flow</div>
+            <div class="chrome">
+                <div class="chrome-bar">
+                    <div class="chrome-dots">
+                        <span class="dot dot-r"></span><span class="dot dot-y"></span
+                        ><span class="dot dot-g"></span>
+                    </div>
+                    data-flow.tsx
+                </div>
+                <div class="chrome-body" style="padding: 20px">
+                    <div class="flow-container">
+                        <div class="flow-node">
+                            <div class="flow-node-title">useReviews()</div>
+                            <div class="flow-node-desc">All reviews</div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-node active">
+                            <div class="flow-node-title">SplitInboxView</div>
+                            <div class="flow-node-desc">Master-detail</div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-node">
+                            <div class="flow-node-title">InboxList</div>
+                            <div class="flow-node-desc">Left panel</div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-node">
+                            <div class="flow-node-title">InboxDetail</div>
+                            <div class="flow-node-desc">Right panel</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- INTERACTIVE MOCKUP -->
+        <div class="section">
+            <div class="section-eyebrow">UI Mockup</div>
+            <div class="section-title">The Triage Desk</div>
+            <div class="section-desc">
+                Left panel: compact sortable list with one-line items. Right panel: full workflow
+                context for the selected item. Keyboard shortcuts at bottom. After approve,
+                auto-advances to next item. Click items or use j/k to navigate.
+            </div>
+
+            <div class="toggle-group">
+                <button class="toggle-btn active" onclick="showInboxState('default', this)">
+                    Default
+                </button>
+                <button class="toggle-btn" onclick="showInboxState('batch', this)">
+                    Batch Select
+                </button>
+                <button class="toggle-btn" onclick="showInboxState('empty', this)">
+                    Empty State
+                </button>
+            </div>
+
+            <div id="inbox-state-default" class="chrome">
+                <div class="chrome-bar">
+                    <div class="chrome-dots">
+                        <span class="dot dot-r"></span><span class="dot dot-y"></span
+                        ><span class="dot dot-g"></span>
+                    </div>
+                    command / split-inbox
+                </div>
+                <div class="inbox-container">
+                    <!-- Left Panel -->
+                    <div class="inbox-list">
+                        <div class="inbox-toolbar">
+                            <button class="inbox-filter active">All (14)</button>
+                            <button class="inbox-filter">Pending (7)</button>
+                            <button class="inbox-filter">Running (4)</button>
+                            <button class="inbox-filter">Done (3)</button>
+                            <input
+                                class="inbox-search"
+                                type="text"
+                                placeholder="Search... (Cmd+K)"
+                            />
+                        </div>
+                        <div class="inbox-items">
+                            <!-- Item 1: Selected -->
+                            <div class="inbox-item selected" onclick="selectInboxItem(this, 0)">
+                                <div
+                                    class="inbox-item-check"
+                                    onclick="
+                                        event.stopPropagation();
+                                        toggleCheck(this);
+                                    "
+                                ></div>
+                                <div class="inbox-item-body">
+                                    <div class="inbox-item-header">
+                                        <div class="inbox-item-id">
+                                            <span
+                                                class="risk-dot"
+                                                style="background: var(--red-500)"
+                                            ></span
+                                            >#187
+                                        </div>
+                                        <div class="inbox-item-age" style="color: var(--red-500)">
+                                            4h 12m
+                                        </div>
+                                    </div>
+                                    <div class="inbox-item-title">
+                                        RAG chunk overlap causing duplicate search results
+                                    </div>
+                                    <div class="inbox-item-meta">
+                                        <span
+                                            class="badge badge-amber"
+                                            style="font-size: 8px; padding: 1px 6px"
+                                            >merge-review</span
+                                        >
+                                        <span class="inbox-item-step"
+                                            >SDLC Bugfix &middot; 15/20</span
+                                        >
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Item 2 -->
+                            <div class="inbox-item" onclick="selectInboxItem(this, 1)">
+                                <div
+                                    class="inbox-item-check"
+                                    onclick="
+                                        event.stopPropagation();
+                                        toggleCheck(this);
+                                    "
+                                ></div>
+                                <div class="inbox-item-body">
+                                    <div class="inbox-item-header">
+                                        <div class="inbox-item-id">
+                                            <span
+                                                class="risk-dot"
+                                                style="background: var(--amber-500)"
+                                            ></span
+                                            >#202
+                                        </div>
+                                        <div class="inbox-item-age">2h 45m</div>
+                                    </div>
+                                    <div class="inbox-item-title">
+                                        cursor-launch-agent model parameter missing from MCP schema
+                                    </div>
+                                    <div class="inbox-item-meta">
+                                        <span
+                                            class="badge badge-amber"
+                                            style="font-size: 8px; padding: 1px 6px"
+                                            >merge-review</span
+                                        >
+                                        <span class="inbox-item-step"
+                                            >SDLC Bugfix &middot; 16/20</span
+                                        >
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Item 3 -->
+                            <div class="inbox-item" onclick="selectInboxItem(this, 2)">
+                                <div
+                                    class="inbox-item-check"
+                                    onclick="
+                                        event.stopPropagation();
+                                        toggleCheck(this);
+                                    "
+                                ></div>
+                                <div class="inbox-item-body">
+                                    <div class="inbox-item-header">
+                                        <div class="inbox-item-id">
+                                            <span
+                                                class="risk-dot"
+                                                style="background: var(--red-500)"
+                                            ></span
+                                            >Acme
+                                        </div>
+                                        <div class="inbox-item-age" style="color: var(--red-500)">
+                                            3h 20m
+                                        </div>
+                                    </div>
+                                    <div class="inbox-item-title">
+                                        Acme Corp onboarding: API key validation failed
+                                    </div>
+                                    <div class="inbox-item-meta">
+                                        <span
+                                            class="badge badge-red"
+                                            style="font-size: 8px; padding: 1px 6px"
+                                            >FAILED</span
+                                        >
+                                        <span class="inbox-item-step">Onboarding &middot; 2/5</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Item 4 -->
+                            <div class="inbox-item" onclick="selectInboxItem(this, 3)">
+                                <div
+                                    class="inbox-item-check"
+                                    onclick="
+                                        event.stopPropagation();
+                                        toggleCheck(this);
+                                    "
+                                ></div>
+                                <div class="inbox-item-body">
+                                    <div class="inbox-item-header">
+                                        <div class="inbox-item-id">
+                                            <span
+                                                class="risk-dot"
+                                                style="background: var(--green-500)"
+                                            ></span
+                                            >#190
+                                        </div>
+                                        <div class="inbox-item-age">45m</div>
+                                    </div>
+                                    <div class="inbox-item-title">
+                                        Slack thread mapping breaks on multi-workspace deployments
+                                    </div>
+                                    <div class="inbox-item-meta">
+                                        <span
+                                            class="badge badge-amber"
+                                            style="font-size: 8px; padding: 1px 6px"
+                                            >merge-review</span
+                                        >
+                                        <span class="inbox-item-step"
+                                            >SDLC Bugfix &middot; 14/20</span
+                                        >
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Item 5 -->
+                            <div class="inbox-item" onclick="selectInboxItem(this, 4)">
+                                <div
+                                    class="inbox-item-check"
+                                    onclick="
+                                        event.stopPropagation();
+                                        toggleCheck(this);
+                                    "
+                                ></div>
+                                <div class="inbox-item-body">
+                                    <div class="inbox-item-header">
+                                        <div class="inbox-item-id">
+                                            <span
+                                                class="risk-dot"
+                                                style="background: var(--green-500)"
+                                            ></span
+                                            >#183
+                                        </div>
+                                        <div class="inbox-item-age">1h 10m</div>
+                                    </div>
+                                    <div class="inbox-item-title">
+                                        CI pipeline fix for Node 20 compatibility
+                                    </div>
+                                    <div class="inbox-item-meta">
+                                        <span
+                                            class="badge badge-cyan"
+                                            style="font-size: 8px; padding: 1px 6px"
+                                            >suspended</span
+                                        >
+                                        <span class="inbox-item-step"
+                                            >SDLC Bugfix &middot; 18/20</span
+                                        >
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Item 6: Running -->
+                            <div class="inbox-item" onclick="selectInboxItem(this, 5)">
+                                <div
+                                    class="inbox-item-check"
+                                    onclick="
+                                        event.stopPropagation();
+                                        toggleCheck(this);
+                                    "
+                                ></div>
+                                <div class="inbox-item-body">
+                                    <div class="inbox-item-header">
+                                        <div class="inbox-item-id">
+                                            <span
+                                                class="risk-dot"
+                                                style="background: var(--amber-500)"
+                                            ></span
+                                            >#204
+                                        </div>
+                                        <div class="inbox-item-age">8m</div>
+                                    </div>
+                                    <div class="inbox-item-title">
+                                        MCP schema model parameter missing from zod definition
+                                    </div>
+                                    <div class="inbox-item-meta">
+                                        <span
+                                            class="badge badge-blue"
+                                            style="font-size: 8px; padding: 1px 6px"
+                                            >running</span
+                                        >
+                                        <span class="inbox-item-step"
+                                            >SDLC Bugfix &middot; 3/20</span
+                                        >
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Item 7 -->
+                            <div class="inbox-item" onclick="selectInboxItem(this, 6)">
+                                <div
+                                    class="inbox-item-check"
+                                    onclick="
+                                        event.stopPropagation();
+                                        toggleCheck(this);
+                                    "
+                                ></div>
+                                <div class="inbox-item-body">
+                                    <div class="inbox-item-header">
+                                        <div class="inbox-item-id">
+                                            <span
+                                                class="risk-dot"
+                                                style="background: var(--amber-500)"
+                                            ></span
+                                            >#209
+                                        </div>
+                                        <div class="inbox-item-age">15m</div>
+                                    </div>
+                                    <div class="inbox-item-title">
+                                        Login redirect loop on Safari with strict cookie policy
+                                    </div>
+                                    <div class="inbox-item-meta">
+                                        <span
+                                            class="badge badge-amber"
+                                            style="font-size: 8px; padding: 1px 6px"
+                                            >classify</span
+                                        >
+                                        <span class="inbox-item-step"
+                                            >SDLC Triage &middot; 2/7</span
+                                        >
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="inbox-status-bar">
+                            <span>7 of 14 shown</span>
+                            <span
+                                ><span class="kbd">j</span><span class="kbd">k</span> navigate
+                                &nbsp; <span class="kbd">a</span> approve &nbsp;
+                                <span class="kbd">r</span> reject &nbsp;
+                                <span class="kbd">f</span> feedback &nbsp;
+                                <span class="kbd">x</span> cancel &nbsp;
+                                <span class="kbd">?</span> help</span
+                            >
+                        </div>
+                    </div>
+
+                    <!-- Right Panel - Detail for #187 -->
+                    <div class="inbox-detail">
+                        <div class="inbox-detail-header">
+                            <div
+                                style="
+                                    display: flex;
+                                    gap: 8px;
+                                    align-items: center;
+                                    margin-bottom: 6px;
+                                "
+                            >
+                                <span class="badge badge-red" style="font-size: 9px"
+                                    >high risk</span
+                                >
+                                <span class="badge badge-amber" style="font-size: 9px"
+                                    >merge-review</span
+                                >
+                                <span
+                                    class="badge badge-muted"
+                                    style="
+                                        font-size: 9px;
+                                        font-family: &quot;JetBrains Mono&quot;, monospace;
+                                    "
+                                    >#187</span
+                                >
+                            </div>
+                            <div class="inbox-detail-title">
+                                RAG chunk overlap causing duplicate search results in agent memory
+                            </div>
+                            <div class="inbox-detail-meta">
+                                <span>SDLC Bugfix</span>
+                                <span>&middot;</span>
+                                <span>4h 12m ago</span>
+                                <span>&middot;</span>
+                                <span>15/20 steps</span>
+                                <span>&middot;</span>
+                                <a href="#" style="color: var(--blue-500); text-decoration: none"
+                                    >Issue #187</a
+                                >
+                                <span>&middot;</span>
+                                <a href="#" style="color: var(--blue-500); text-decoration: none"
+                                    >PR #234</a
+                                >
+                            </div>
+                        </div>
+                        <div class="inbox-detail-body">
+                            <div class="inbox-detail-section">
+                                <div class="inbox-detail-section-label">Summary</div>
+                                <div
+                                    style="
+                                        font-size: 12px;
+                                        color: var(--text-secondary);
+                                        line-height: 1.6;
+                                    "
+                                >
+                                    RAG pipeline chunk overlap of 200 tokens causes identical
+                                    content to appear in multiple search results. Analysis
+                                    identified the overlap configuration in
+                                    <code>packages/agentc2/src/rag/chunker.ts</code>. Fix reduces
+                                    overlap from 200 to 50 tokens and adds deduplication to the
+                                    query pipeline. All tests pass.
+                                </div>
+                            </div>
+
+                            <div class="inbox-detail-section">
+                                <div class="inbox-detail-section-label">Workflow Progress</div>
+                                <div
+                                    style="
+                                        height: 4px;
+                                        background: var(--bg-accent);
+                                        border-radius: 2px;
+                                        margin-bottom: 10px;
+                                    "
+                                >
+                                    <div
+                                        style="
+                                            height: 100%;
+                                            width: 75%;
+                                            background: var(--green-500);
+                                            border-radius: 2px;
+                                        "
+                                    ></div>
+                                </div>
+
+                                <div class="mini-step">
+                                    <div class="mini-step-icon s-complete">&#10003;</div>
+                                    <div class="mini-step-info">
+                                        <div class="mini-step-name">Create GitHub Issue</div>
+                                        <div class="mini-step-detail">tool &middot; 1ms</div>
+                                    </div>
+                                </div>
+                                <div class="mini-step">
+                                    <div class="mini-step-icon s-complete">&#10003;</div>
+                                    <div class="mini-step-info">
+                                        <div class="mini-step-name">Launch Code Analysis</div>
+                                        <div class="mini-step-detail">tool &middot; 1ms</div>
+                                    </div>
+                                </div>
+                                <div class="mini-step">
+                                    <div class="mini-step-icon s-complete">&#10003;</div>
+                                    <div class="mini-step-info">
+                                        <div class="mini-step-name">Wait for Analysis</div>
+                                        <div class="mini-step-detail">tool &middot; 12ms</div>
+                                    </div>
+                                </div>
+                                <div class="mini-step">
+                                    <div class="mini-step-icon s-complete">&#10003;</div>
+                                    <div class="mini-step-info">
+                                        <div class="mini-step-name">Get Analysis Results</div>
+                                        <div class="mini-step-detail">tool &middot; 1ms</div>
+                                    </div>
+                                </div>
+                                <div class="mini-step">
+                                    <div class="mini-step-icon s-complete">&#10003;</div>
+                                    <div class="mini-step-info">
+                                        <div class="mini-step-name">Post Analysis to Issue</div>
+                                        <div class="mini-step-detail">tool &middot; 2ms</div>
+                                    </div>
+                                </div>
+                                <div class="mini-step">
+                                    <div class="mini-step-icon s-complete">&#10003;</div>
+                                    <div class="mini-step-info">
+                                        <div class="mini-step-name">Audit Fix Plan</div>
+                                        <div class="mini-step-detail">agent &middot; 3x</div>
+                                    </div>
+                                </div>
+                                <div class="mini-step">
+                                    <div class="mini-step-icon s-complete">&#10003;</div>
+                                    <div class="mini-step-info">
+                                        <div class="mini-step-name">Implement Fix</div>
+                                        <div class="mini-step-detail">tool &middot; 45s</div>
+                                    </div>
+                                </div>
+                                <div class="mini-step">
+                                    <div class="mini-step-icon s-complete">&#10003;</div>
+                                    <div class="mini-step-info">
+                                        <div class="mini-step-name">Create PR</div>
+                                        <div class="mini-step-detail">tool &middot; 2ms</div>
+                                    </div>
+                                </div>
+                                <div class="mini-step">
+                                    <div class="mini-step-icon s-suspended">&#9208;</div>
+                                    <div class="mini-step-info">
+                                        <div class="mini-step-name" style="color: var(--amber-500)">
+                                            Merge Review
+                                        </div>
+                                        <div class="mini-step-detail">
+                                            awaiting human &middot; 4h 12m
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="inbox-detail-section">
+                                <div class="inbox-detail-section-label">Files Changed</div>
+                                <div
+                                    style="
+                                        font-size: 11px;
+                                        color: var(--text-secondary);
+                                        font-family: &quot;JetBrains Mono&quot;, monospace;
+                                        line-height: 1.8;
+                                    "
+                                >
+                                    <span style="color: var(--green-500)">+</span>
+                                    packages/agentc2/src/rag/chunker.ts<br />
+                                    <span style="color: var(--green-500)">+</span>
+                                    packages/agentc2/src/rag/query-pipeline.ts<br />
+                                    <span style="color: var(--amber-500)">~</span>
+                                    packages/agentc2/src/rag/index.ts
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="inbox-detail-actions">
+                            <button class="inbox-action-btn approve" onclick="approveItem()">
+                                Approve (a)
+                            </button>
+                            <button class="inbox-action-btn reject">Reject (r)</button>
+                            <button class="inbox-action-btn feedback">Feedback (f)</button>
+                            <button class="inbox-action-btn skip">Skip Step</button>
+                            <span style="flex: 1"></span>
+                            <button class="inbox-action-btn cancel-btn">Cancel Run (x)</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Batch select state -->
+            <div id="inbox-state-batch" class="chrome hidden">
+                <div class="chrome-bar">
+                    <div class="chrome-dots">
+                        <span class="dot dot-r"></span><span class="dot dot-y"></span
+                        ><span class="dot dot-g"></span>
+                    </div>
+                    command / split-inbox (batch mode)
+                </div>
+                <div style="padding: 30px">
+                    <div
+                        style="
+                            display: flex;
+                            gap: 12px;
+                            align-items: center;
+                            padding: 12px 16px;
+                            background: var(--teal-bg);
+                            border: 1px solid var(--teal-border);
+                            border-radius: 8px;
+                            margin-bottom: 20px;
+                        "
+                    >
+                        <span style="font-size: 13px; font-weight: 600; color: var(--teal-500)"
+                            >3 items selected</span
+                        >
+                        <button
+                            class="inbox-action-btn approve"
+                            style="padding: 5px 12px; font-size: 11px"
+                        >
+                            Approve All
+                        </button>
+                        <button
+                            class="inbox-action-btn reject"
+                            style="padding: 5px 12px; font-size: 11px"
+                        >
+                            Reject All
+                        </button>
+                        <button
+                            class="inbox-action-btn feedback"
+                            style="padding: 5px 12px; font-size: 11px"
+                        >
+                            Clear
+                        </button>
+                    </div>
+                    <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.7">
+                        When checkboxes are toggled on multiple items, a batch action bar appears
+                        above the list. This enables approving or rejecting multiple items at once.
+                        Press <span class="kbd">Shift+A</span> to approve all selected,
+                        <span class="kbd">Esc</span> to clear selection.
+                    </div>
+                </div>
+            </div>
+
+            <!-- Empty state -->
+            <div id="inbox-state-empty" class="chrome hidden">
+                <div class="chrome-bar">
+                    <div class="chrome-dots">
+                        <span class="dot dot-r"></span><span class="dot dot-y"></span
+                        ><span class="dot dot-g"></span>
+                    </div>
+                    command / split-inbox
+                </div>
+                <div style="padding: 80px; text-align: center">
+                    <div style="font-size: 48px; margin-bottom: 16px; opacity: 0.3">&#128236;</div>
+                    <div
+                        style="
+                            font-size: 16px;
+                            font-weight: 600;
+                            margin-bottom: 8px;
+                            color: var(--text-secondary);
+                        "
+                    >
+                        Inbox zero
+                    </div>
+                    <div style="font-size: 13px; color: var(--text-muted)">
+                        All items have been reviewed. New items will appear here as workflows
+                        require attention.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- FILES CHANGED -->
+        <div class="section">
+            <div class="section-eyebrow">Manifest</div>
+            <div class="section-title">Files Changed</div>
+            <table class="spec-table">
+                <thead>
+                    <tr>
+                        <th>Action</th>
+                        <th>File</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>New</td>
+                        <td>
+                            <code>apps/agent/src/app/command/components/SplitInboxView.tsx</code>
+                        </td>
+                        <td>Master-detail container with resizable split pane</td>
+                    </tr>
+                    <tr>
+                        <td>New</td>
+                        <td><code>apps/agent/src/app/command/components/InboxList.tsx</code></td>
+                        <td>Left panel with sortable, filterable item list</td>
+                    </tr>
+                    <tr>
+                        <td>New</td>
+                        <td><code>apps/agent/src/app/command/components/InboxDetail.tsx</code></td>
+                        <td>Right panel with full workflow detail and actions</td>
+                    </tr>
+                    <tr>
+                        <td>New</td>
+                        <td><code>apps/agent/src/app/command/hooks/useKeyboardNav.ts</code></td>
+                        <td>Keyboard navigation handler (j/k/a/r/f/x shortcuts)</td>
+                    </tr>
+                    <tr>
+                        <td>Modify</td>
+                        <td><code>apps/agent/src/app/command/page.tsx</code></td>
+                        <td>Add "Inbox" view toggle</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- IMPLEMENTATION -->
+        <div class="section">
+            <div class="section-eyebrow">Implementation</div>
+            <div class="section-title">Step-by-Step</div>
+
+            <div class="impl-step">
+                <h3>Step 1: useKeyboardNav Hook</h3>
+                <div class="impl-meta">
+                    <span
+                        ><strong>File:</strong>
+                        <code>apps/agent/src/app/command/hooks/useKeyboardNav.ts</code></span
+                    >
+                </div>
+                <div class="detail-section">
+                    <div class="detail-section-label">Interface</div>
+                    <pre class="raw-pre">
+interface UseKeyboardNavOptions {
+  items: ReviewItem[]
+  selectedIndex: number
+  onSelect: (index: number) => void
+  onApprove: (reviewId: string) => void
+  onReject: (reviewId: string) => void
+  onFeedback: (reviewId: string) => void
+  onCancel: (review: ReviewItem) => void
+  enabled: boolean
+}
+
+function useKeyboardNav(options: UseKeyboardNavOptions): void</pre
+                    >
+                </div>
+                <div class="detail-section">
+                    <div class="detail-section-label">Logic</div>
+                    <ol
+                        style="
+                            font-size: 12px;
+                            color: var(--text-secondary);
+                            padding-left: 20px;
+                            line-height: 2;
+                        "
+                    >
+                        <li>Register keydown listener on window when enabled</li>
+                        <li>
+                            j = select next item (clamp to last), k = select previous (clamp to 0)
+                        </li>
+                        <li>
+                            a = approve current, r = reject current, f = feedback current, x =
+                            cancel current
+                        </li>
+                        <li>After action (approve/reject): auto-advance to next item in list</li>
+                        <li>Shift+A = batch approve all checked items</li>
+                        <li>Esc = clear selection/batch, ? = toggle help overlay</li>
+                        <li>Disable shortcuts when search input is focused</li>
+                    </ol>
+                </div>
+            </div>
+
+            <div class="impl-step">
+                <h3>Step 2: InboxList Component</h3>
+                <div class="impl-meta">
+                    <span
+                        ><strong>File:</strong>
+                        <code>apps/agent/src/app/command/components/InboxList.tsx</code></span
+                    >
+                </div>
+                <div class="detail-section">
+                    <div class="detail-section-label">Props</div>
+                    <pre class="raw-pre">
+interface InboxListProps {
+  items: ReviewItem[]
+  selectedIndex: number
+  checkedIds: Set&lt;string&gt;
+  onSelect: (index: number) => void
+  onToggleCheck: (reviewId: string) => void
+  filters: { status: string; search: string }
+  onFilterChange: (filters: Partial&lt;InboxListProps["filters"]&gt;) => void
+}</pre
+                    >
+                </div>
+                <div class="detail-section">
+                    <div class="detail-section-label">Logic</div>
+                    <ol
+                        style="
+                            font-size: 12px;
+                            color: var(--text-secondary);
+                            padding-left: 20px;
+                            line-height: 2;
+                        "
+                    >
+                        <li>Filter pills: All, Pending, Running, Done (replace tabs)</li>
+                        <li>Search input with Cmd+K focus shortcut</li>
+                        <li>
+                            Each row: checkbox, risk dot, ID, title (truncated), step badge, age
+                        </li>
+                        <li>Selected item highlighted with teal left border</li>
+                        <li>Age colored red if >2h for urgency visibility</li>
+                        <li>Status bar at bottom: item count + keyboard shortcut hints</li>
+                        <li>Scroll selected item into view when navigating with j/k</li>
+                    </ol>
+                </div>
+            </div>
+
+            <div class="impl-step">
+                <h3>Step 3: InboxDetail Component</h3>
+                <div class="impl-meta">
+                    <span
+                        ><strong>File:</strong>
+                        <code>apps/agent/src/app/command/components/InboxDetail.tsx</code></span
+                    >
+                </div>
+                <div class="detail-section">
+                    <div class="detail-section-label">Logic</div>
+                    <ol
+                        style="
+                            font-size: 12px;
+                            color: var(--text-secondary);
+                            padding-left: 20px;
+                            line-height: 2;
+                        "
+                    >
+                        <li>Header: badges (risk, status, ID), title, metadata row with links</li>
+                        <li>
+                            Body sections: Summary, Workflow Progress (mini stepper), Files Changed,
+                            Links
+                        </li>
+                        <li>Mini stepper reuses step data extraction from WorkflowStepsCard</li>
+                        <li>Sticky action bar at bottom: Approve/Reject/Feedback/Skip/Cancel</li>
+                        <li>Actions show keyboard shortcut labels next to button text</li>
+                        <li>After action, auto-advance: detail refreshes to next list item</li>
+                    </ol>
+                </div>
+            </div>
+
+            <div class="impl-step">
+                <h3>Step 4: SplitInboxView + Page Integration</h3>
+                <div class="impl-meta">
+                    <span
+                        ><strong>File:</strong>
+                        <code>apps/agent/src/app/command/components/SplitInboxView.tsx</code></span
+                    >
+                </div>
+                <div class="detail-section">
+                    <div class="detail-section-label">Logic</div>
+                    <ol
+                        style="
+                            font-size: 12px;
+                            color: var(--text-secondary);
+                            padding-left: 20px;
+                            line-height: 2;
+                        "
+                    >
+                        <li>Flexbox container: InboxList (420px) | InboxDetail (flex: 1)</li>
+                        <li>Manage selectedIndex, checkedIds, and filter state</li>
+                        <li>Pass all action handlers from useReviews</li>
+                        <li>Batch action bar appears when checkedIds.size > 0</li>
+                        <li>View toggle in page.tsx alongside existing views</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- EDGE CASES -->
+        <div class="section">
+            <div class="section-eyebrow">Edge Cases</div>
+            <div class="section-title">Boundary Conditions</div>
+            <table class="spec-table">
+                <thead>
+                    <tr>
+                        <th>Scenario</th>
+                        <th>Backend</th>
+                        <th>Frontend</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>0 items</td>
+                        <td>Empty array</td>
+                        <td>"Inbox zero" message with envelope icon</td>
+                    </tr>
+                    <tr>
+                        <td>Selected item approved</td>
+                        <td>Status changes</td>
+                        <td>Item removed from list; auto-select next; detail refreshes</td>
+                    </tr>
+                    <tr>
+                        <td>All items checked + batch approve</td>
+                        <td>Bulk mutations</td>
+                        <td>
+                            Items removed sequentially with animation; shows "Inbox zero" when done
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Search matches 0 items</td>
+                        <td>N/A (client filter)</td>
+                        <td>"No matches" message in list; detail stays on last selected</td>
+                    </tr>
+                    <tr>
+                        <td>Narrow viewport (&lt;768px)</td>
+                        <td>N/A</td>
+                        <td>
+                            Switch to stacked layout: list on top, detail below (or full-screen
+                            detail with back button)
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Step data loading</td>
+                        <td>Steps API pending</td>
+                        <td>Detail shows skeleton stepper while loading</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- COMPONENT ARCHITECTURE -->
+        <div class="section">
+            <div class="section-eyebrow">Components</div>
+            <div class="section-title">Component Architecture</div>
+            <table class="spec-table">
+                <thead>
+                    <tr>
+                        <th>Component / Hook</th>
+                        <th>Purpose</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>SplitInboxView</code></td>
+                        <td>Master-detail container managing selection, batch, and filter state</td>
+                    </tr>
+                    <tr>
+                        <td><code>InboxList</code></td>
+                        <td>Left panel: filterable, searchable, checkable item list</td>
+                    </tr>
+                    <tr>
+                        <td><code>InboxDetail</code></td>
+                        <td>
+                            Right panel: full workflow detail with step timeline and action buttons
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><code>useKeyboardNav</code></td>
+                        <td>j/k navigation, a/r/f/x action shortcuts, Shift+A batch approve</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- DATA FLOW -->
+        <div class="section">
+            <div class="section-eyebrow">Data Flow</div>
+            <div class="section-title">Call Chain</div>
+            <pre class="raw-pre" style="font-size: 12px; line-height: 1.8">
+User opens Command with "Inbox" view
+    &boxur;&HorizontalLine; page.tsx: viewMode === "inbox"
+        &boxur;&HorizontalLine; useReviews() &rarr; all reviews
+        &boxur;&HorizontalLine; &lt;SplitInboxView reviews={...} /&gt;
+            &boxur;&HorizontalLine; InboxList: renders filtered item list
+            &boxur;&HorizontalLine; InboxDetail: renders selected item detail + steps
+
+User presses "j" to move down
+    &boxur;&HorizontalLine; useKeyboardNav: selectedIndex++
+        &boxur;&HorizontalLine; InboxList: highlights new item, scrolls into view
+        &boxur;&HorizontalLine; InboxDetail: fetches steps for new selection, renders detail
+
+User presses "a" to approve
+    &boxur;&HorizontalLine; useKeyboardNav: onApprove(currentReviewId)
+        &boxur;&HorizontalLine; useReviews().handleApprove(id)
+            &boxur;&HorizontalLine; POST /api/reviews/[id]/approve
+            &boxur;&HorizontalLine; Item removed from list, selectedIndex auto-advances
+            &boxur;&HorizontalLine; InboxDetail refreshes to next item
+  </pre
+            >
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- PLAYWRIGHT -->
+        <div class="section">
+            <div class="section-eyebrow">Testing</div>
+            <div class="section-title">Playwright Test Plan</div>
+            <table class="spec-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Step</th>
+                        <th>Assertion</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>1</td>
+                        <td>Navigate to /command, switch to "Inbox" view</td>
+                        <td>Split layout renders with list on left, detail on right</td>
+                    </tr>
+                    <tr>
+                        <td>2</td>
+                        <td>First item is auto-selected</td>
+                        <td>Item has teal left border; detail panel shows its content</td>
+                    </tr>
+                    <tr>
+                        <td>3</td>
+                        <td>Click second item in list</td>
+                        <td>Selection moves; detail panel updates with new item's data</td>
+                    </tr>
+                    <tr>
+                        <td>4</td>
+                        <td>Press j key to navigate down</td>
+                        <td>Selection moves to next item; detail updates</td>
+                    </tr>
+                    <tr>
+                        <td>5</td>
+                        <td>Press a key to approve current item</td>
+                        <td>Toast shows; item removed from list; auto-advances to next</td>
+                    </tr>
+                    <tr>
+                        <td>6</td>
+                        <td>Toggle checkboxes on 2 items</td>
+                        <td>Batch action bar appears with "2 items selected" and bulk actions</td>
+                    </tr>
+                    <tr>
+                        <td>7</td>
+                        <td>Use filter pills to show only "Running"</td>
+                        <td>List filters to running items only</td>
+                    </tr>
+                    <tr>
+                        <td>8</td>
+                        <td>Type in search box</td>
+                        <td>List filters to matching items in real-time</td>
+                    </tr>
+                    <tr>
+                        <td>9</td>
+                        <td>Verify detail panel shows step timeline</td>
+                        <td>Mini stepper with status icons renders correctly</td>
+                    </tr>
+                    <tr>
+                        <td>10</td>
+                        <td>Approve all items until list is empty</td>
+                        <td>"Inbox zero" empty state appears</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- ACCEPTANCE -->
+        <div class="section">
+            <div class="section-eyebrow">Acceptance</div>
+            <div class="section-title">Criteria</div>
+            <div style="font-size: 13px; color: var(--text-secondary); line-height: 2.2">
+                &#9744; Split layout: 420px list panel + flexible detail panel<br />
+                &#9744; List items show: risk dot, ID, title, step badge, age, checkbox<br />
+                &#9744; Selected item highlighted with teal left border<br />
+                &#9744; Detail panel shows: header badges, summary, step timeline, files changed,
+                action buttons<br />
+                &#9744; Keyboard navigation: j/k move up/down, a=approve, r=reject, f=feedback,
+                x=cancel<br />
+                &#9744; After action, auto-advance to next item in list<br />
+                &#9744; Batch selection via checkboxes with bulk approve/reject<br />
+                &#9744; Filter pills replace tab navigation (All, Pending, Running, Done)<br />
+                &#9744; Search input filters list items in real-time<br />
+                &#9744; "Inbox zero" empty state when all items reviewed<br />
+                &#9744; Keyboard shortcut hints visible in status bar<br />
+                &#9744; All Phase 0-3 actions accessible from detail panel<br />
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- EFFORT -->
+        <div class="section">
+            <div class="section-eyebrow">Effort</div>
+            <div class="section-title">Estimate</div>
+            <table class="spec-table">
+                <thead>
+                    <tr>
+                        <th>Task</th>
+                        <th>Estimate</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>useKeyboardNav hook</td>
+                        <td>45 min</td>
+                    </tr>
+                    <tr>
+                        <td>InboxList component with filters and search</td>
+                        <td>60 min</td>
+                    </tr>
+                    <tr>
+                        <td>InboxDetail component with mini stepper</td>
+                        <td>60 min</td>
+                    </tr>
+                    <tr>
+                        <td>SplitInboxView container + batch logic</td>
+                        <td>45 min</td>
+                    </tr>
+                    <tr>
+                        <td>Auto-advance after action + animations</td>
+                        <td>30 min</td>
+                    </tr>
+                    <tr>
+                        <td>Page integration + view toggle</td>
+                        <td>20 min</td>
+                    </tr>
+                    <tr>
+                        <td>Playwright tests</td>
+                        <td>45 min</td>
+                    </tr>
+                    <tr>
+                        <td style="font-weight: 700; color: var(--text-primary)">Total</td>
+                        <td style="font-weight: 700; color: var(--text-primary)">5.1 hours</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <script>
+            function showInboxState(state, btn) {
+                document
+                    .querySelectorAll('[id^="inbox-state-"]')
+                    .forEach((el) => el.classList.add("hidden"));
+                document.getElementById("inbox-state-" + state)?.classList.remove("hidden");
+                btn.parentElement
+                    .querySelectorAll(".toggle-btn")
+                    .forEach((b) => b.classList.remove("active"));
+                btn.classList.add("active");
+            }
+
+            function selectInboxItem(el, idx) {
+                document
+                    .querySelectorAll(".inbox-item")
+                    .forEach((i) => i.classList.remove("selected"));
+                el.classList.add("selected");
+            }
+
+            function toggleCheck(el) {
+                el.classList.toggle("checked");
+                if (el.classList.contains("checked")) {
+                    el.innerHTML = "&#10003;";
+                } else {
+                    el.innerHTML = "";
+                }
+            }
+
+            function approveItem() {
+                alert("Approved! Auto-advancing to next item...");
+            }
+        </script>
+    </body>
+</html>

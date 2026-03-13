@@ -1,0 +1,1756 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Concept 5: Topology Flow — UIS</title>
+        <link
+            href="https://fonts.googleapis.com/css2?family=Urbanist:wght@400;500;600;700;800&family=Roboto+Mono:wght@400;500;600;700&display=swap"
+            rel="stylesheet"
+        />
+        <style>
+            :root {
+                --bg-primary: #060710;
+                --bg-surface: #0b0c14;
+                --bg-elevated: #11121c;
+                --bg-muted: #171824;
+                --bg-accent: #1e1f2d;
+                --border-subtle: #242638;
+                --border-default: #2d2f44;
+                --text-primary: #e2e3ef;
+                --text-secondary: #8c8ea8;
+                --text-muted: #5a5c78;
+                --green-500: #34d399;
+                --green-bg: rgba(52, 211, 153, 0.1);
+                --green-border: rgba(52, 211, 153, 0.2);
+                --amber-500: #fbbf24;
+                --amber-bg: rgba(251, 191, 36, 0.1);
+                --amber-border: rgba(251, 191, 36, 0.2);
+                --blue-500: #60a5fa;
+                --blue-bg: rgba(96, 165, 250, 0.08);
+                --blue-border: rgba(96, 165, 250, 0.2);
+                --red-500: #f87171;
+                --red-bg: rgba(248, 113, 113, 0.08);
+                --red-border: rgba(248, 113, 113, 0.2);
+                --cyan-500: #22d3ee;
+                --cyan-bg: rgba(34, 211, 238, 0.08);
+                --cyan-border: rgba(34, 211, 238, 0.2);
+                --purple-500: #c084fc;
+                --rose-500: #fb7185;
+                --rose-bg: rgba(251, 113, 133, 0.08);
+                --rose-border: rgba(251, 113, 133, 0.2);
+                --indigo-500: #818cf8;
+                --indigo-bg: rgba(129, 140, 248, 0.08);
+                --indigo-border: rgba(129, 140, 248, 0.2);
+            }
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+            body {
+                font-family:
+                    "Urbanist",
+                    -apple-system,
+                    sans-serif;
+                background: var(--bg-primary);
+                color: var(--text-primary);
+                padding: 48px 40px;
+                line-height: 1.6;
+            }
+            code,
+            .mono {
+                font-family: "Roboto Mono", monospace;
+            }
+            .hidden {
+                display: none;
+            }
+
+            .header {
+                max-width: 1100px;
+                margin: 0 auto 64px;
+                text-align: center;
+            }
+            .phase-tag {
+                display: inline-block;
+                padding: 5px 16px;
+                border-radius: 20px;
+                font-size: 11px;
+                font-weight: 600;
+                letter-spacing: 2px;
+                text-transform: uppercase;
+                font-family: "Roboto Mono", monospace;
+                margin-bottom: 16px;
+                background: var(--indigo-bg);
+                border: 1px solid var(--indigo-border);
+                color: var(--indigo-500);
+            }
+            .header h1 {
+                font-size: 38px;
+                font-weight: 800;
+                letter-spacing: -1px;
+                margin-bottom: 14px;
+                background: linear-gradient(135deg, #e2e3ef 0%, #8c8ea8 100%);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+            }
+            .header p {
+                color: var(--text-secondary);
+                font-size: 16px;
+                max-width: 750px;
+                margin: 0 auto;
+            }
+
+            .section {
+                max-width: 1100px;
+                margin: 0 auto 60px;
+            }
+            .section-eyebrow {
+                font-family: "Roboto Mono", monospace;
+                font-size: 10px;
+                font-weight: 600;
+                letter-spacing: 2.5px;
+                text-transform: uppercase;
+                color: var(--text-muted);
+                margin-bottom: 8px;
+            }
+            .section-title {
+                font-size: 24px;
+                font-weight: 700;
+                margin-bottom: 12px;
+                letter-spacing: -0.3px;
+            }
+            .section-desc {
+                color: var(--text-secondary);
+                font-size: 14px;
+                margin-bottom: 28px;
+                line-height: 1.7;
+            }
+            .divider {
+                height: 1px;
+                background: var(--border-subtle);
+                margin: 56px auto;
+                max-width: 1100px;
+            }
+
+            .chrome {
+                background: var(--bg-surface);
+                border: 1px solid var(--border-subtle);
+                border-radius: 14px;
+                overflow: hidden;
+                box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+            }
+            .chrome-bar {
+                background: var(--bg-muted);
+                padding: 9px 16px;
+                font-family: "Roboto Mono", monospace;
+                font-size: 11px;
+                color: var(--text-muted);
+                border-bottom: 1px solid var(--border-subtle);
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            }
+            .chrome-dots {
+                display: flex;
+                gap: 5px;
+            }
+            .dot {
+                width: 8px;
+                height: 8px;
+                border-radius: 50%;
+            }
+            .dot-r {
+                background: #ff5f57;
+            }
+            .dot-y {
+                background: #febc2e;
+            }
+            .dot-g {
+                background: #28c840;
+            }
+
+            .spec-table {
+                width: 100%;
+                border-collapse: collapse;
+                font-size: 13px;
+            }
+            .spec-table th {
+                text-align: left;
+                padding: 10px 14px;
+                border-bottom: 1px solid var(--border-subtle);
+                color: var(--text-muted);
+                font-size: 10px;
+                font-weight: 600;
+                text-transform: uppercase;
+                letter-spacing: 1.5px;
+                font-family: "Roboto Mono", monospace;
+            }
+            .spec-table td {
+                padding: 10px 14px;
+                border-bottom: 1px solid var(--border-subtle);
+                color: var(--text-secondary);
+                vertical-align: top;
+            }
+            .spec-table td:first-child {
+                color: var(--text-primary);
+                font-weight: 500;
+            }
+            .spec-table code {
+                font-family: "Roboto Mono", monospace;
+                background: var(--bg-muted);
+                padding: 2px 6px;
+                border-radius: 4px;
+                font-size: 11px;
+                color: var(--purple-500);
+            }
+
+            .badge {
+                display: inline-flex;
+                align-items: center;
+                padding: 2px 10px;
+                border-radius: 6px;
+                font-size: 10px;
+                font-weight: 600;
+            }
+            .badge-green {
+                background: var(--green-bg);
+                color: var(--green-500);
+                border: 1px solid var(--green-border);
+            }
+            .badge-amber {
+                background: var(--amber-bg);
+                color: var(--amber-500);
+                border: 1px solid var(--amber-border);
+            }
+            .badge-red {
+                background: var(--red-bg);
+                color: var(--red-500);
+                border: 1px solid var(--red-border);
+            }
+            .badge-blue {
+                background: var(--blue-bg);
+                color: var(--blue-500);
+                border: 1px solid var(--blue-border);
+            }
+            .badge-cyan {
+                background: var(--cyan-bg);
+                color: var(--cyan-500);
+                border: 1px solid var(--cyan-border);
+            }
+            .badge-muted {
+                background: var(--bg-accent);
+                color: var(--text-muted);
+                border: 1px solid var(--border-default);
+            }
+
+            .toggle-group {
+                display: flex;
+                gap: 4px;
+                margin-bottom: 24px;
+                background: var(--bg-muted);
+                border-radius: 10px;
+                padding: 4px;
+                width: fit-content;
+            }
+            .toggle-btn {
+                padding: 8px 20px;
+                border-radius: 8px;
+                font-size: 13px;
+                font-weight: 600;
+                cursor: pointer;
+                border: none;
+                background: transparent;
+                color: var(--text-muted);
+                transition: all 0.2s;
+                font-family: "Urbanist", sans-serif;
+            }
+            .toggle-btn.active {
+                background: var(--bg-accent);
+                color: var(--text-primary);
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            }
+            .toggle-btn:hover:not(.active) {
+                color: var(--text-secondary);
+            }
+
+            .raw-pre {
+                background: var(--bg-muted);
+                border: 1px solid var(--border-subtle);
+                border-radius: 8px;
+                padding: 14px;
+                font-family: "Roboto Mono", monospace;
+                font-size: 11px;
+                color: var(--text-secondary);
+                line-height: 1.6;
+                max-height: 260px;
+                overflow: auto;
+                white-space: pre-wrap;
+            }
+
+            .impl-step {
+                background: var(--bg-surface);
+                border: 1px solid var(--border-subtle);
+                border-radius: 12px;
+                padding: 20px;
+                margin-bottom: 20px;
+            }
+            .impl-step h3 {
+                font-size: 16px;
+                margin-bottom: 12px;
+            }
+            .impl-meta {
+                display: flex;
+                gap: 24px;
+                font-size: 12px;
+                color: var(--text-secondary);
+                margin-bottom: 16px;
+                flex-wrap: wrap;
+            }
+            .detail-section {
+                margin-bottom: 14px;
+            }
+            .detail-section-label {
+                font-size: 10px;
+                font-weight: 600;
+                letter-spacing: 1.5px;
+                text-transform: uppercase;
+                color: var(--text-muted);
+                margin-bottom: 6px;
+                font-family: "Roboto Mono", monospace;
+            }
+
+            .flow-container {
+                display: flex;
+                align-items: center;
+                padding: 20px;
+                overflow-x: auto;
+                gap: 6px;
+            }
+            .flow-node {
+                background: var(--bg-elevated);
+                border: 1px solid var(--border-subtle);
+                border-radius: 10px;
+                padding: 14px 18px;
+                min-width: 130px;
+                text-align: center;
+                flex-shrink: 0;
+            }
+            .flow-node-title {
+                font-size: 12px;
+                font-weight: 600;
+                margin-bottom: 4px;
+            }
+            .flow-node-desc {
+                font-size: 10px;
+                color: var(--text-muted);
+            }
+            .flow-node.active {
+                border-color: var(--indigo-500);
+                box-shadow: 0 0 0 2px var(--indigo-bg);
+            }
+            .flow-arrow {
+                color: var(--text-muted);
+                font-size: 18px;
+                padding: 0 4px;
+                flex-shrink: 0;
+            }
+
+            /* === TOPOLOGY FLOW MOCKUP === */
+            .topo-container {
+                position: relative;
+                min-height: 520px;
+                padding: 30px;
+            }
+
+            .topo-toolbar {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                margin-bottom: 24px;
+            }
+            .topo-workflow-pill {
+                padding: 5px 14px;
+                border-radius: 6px;
+                font-size: 11px;
+                font-weight: 600;
+                cursor: pointer;
+                border: 1px solid var(--border-subtle);
+                background: var(--bg-muted);
+                color: var(--text-secondary);
+                transition: all 0.12s;
+                font-family: "Urbanist", sans-serif;
+            }
+            .topo-workflow-pill:hover {
+                border-color: var(--border-default);
+            }
+            .topo-workflow-pill.active {
+                border-color: var(--indigo-500);
+                color: var(--indigo-500);
+                background: var(--indigo-bg);
+            }
+
+            /* DAG Nodes */
+            .topo-dag {
+                position: relative;
+                display: flex;
+                flex-direction: column;
+                gap: 0;
+                align-items: center;
+            }
+            .topo-row {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 40px;
+                margin-bottom: 8px;
+                position: relative;
+            }
+            .topo-node {
+                position: relative;
+                background: var(--bg-elevated);
+                border: 1px solid var(--border-subtle);
+                border-radius: 12px;
+                padding: 14px 20px;
+                min-width: 140px;
+                text-align: center;
+                cursor: pointer;
+                transition: all 0.15s;
+            }
+            .topo-node:hover {
+                border-color: var(--border-default);
+                transform: translateY(-1px);
+                box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+            }
+            .topo-node.gate {
+                border-color: var(--amber-border);
+                background: rgba(251, 191, 36, 0.04);
+            }
+            .topo-node.gate:hover {
+                border-color: var(--amber-500);
+            }
+            .topo-node.selected {
+                border-color: var(--indigo-500);
+                box-shadow: 0 0 0 2px var(--indigo-bg);
+            }
+            .topo-node-name {
+                font-size: 11px;
+                font-weight: 700;
+                margin-bottom: 4px;
+            }
+            .topo-node-type {
+                font-size: 9px;
+                color: var(--text-muted);
+                font-family: "Roboto Mono", monospace;
+                letter-spacing: 0.5px;
+            }
+            .topo-node-count {
+                position: absolute;
+                top: -8px;
+                right: -8px;
+                min-width: 20px;
+                height: 20px;
+                border-radius: 10px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 10px;
+                font-weight: 700;
+                font-family: "Roboto Mono", monospace;
+            }
+            .topo-node-count.has-items {
+                background: var(--blue-500);
+                color: #000;
+            }
+            .topo-node-count.has-waiting {
+                background: var(--amber-500);
+                color: #000;
+                animation: pulse-count 2s infinite;
+            }
+            .topo-node-count.has-failed {
+                background: var(--red-500);
+                color: #fff;
+            }
+            .topo-node-count.empty {
+                display: none;
+            }
+
+            @keyframes pulse-count {
+                0%,
+                100% {
+                    box-shadow: 0 0 0 0 rgba(251, 191, 36, 0);
+                }
+                50% {
+                    box-shadow: 0 0 0 6px rgba(251, 191, 36, 0.2);
+                }
+            }
+
+            /* Edges (SVG lines would be ideal but using CSS for mockup) */
+            .topo-edge {
+                width: 2px;
+                height: 30px;
+                background: var(--border-subtle);
+                margin: 0 auto;
+            }
+            .topo-edge-h {
+                height: 2px;
+                background: var(--border-subtle);
+                flex: 1;
+            }
+            .topo-branch {
+                display: flex;
+                align-items: center;
+                gap: 0;
+            }
+            .topo-branch-line {
+                width: 40px;
+                height: 2px;
+                background: var(--border-subtle);
+            }
+            .topo-branch-label {
+                font-size: 8px;
+                color: var(--text-muted);
+                font-family: "Roboto Mono", monospace;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+                padding: 0 6px;
+            }
+
+            /* Animated dots */
+            @keyframes flow-dot {
+                0% {
+                    top: 0;
+                    opacity: 0;
+                }
+                20% {
+                    opacity: 1;
+                }
+                80% {
+                    opacity: 1;
+                }
+                100% {
+                    top: 100%;
+                    opacity: 0;
+                }
+            }
+            .topo-dot {
+                position: absolute;
+                width: 6px;
+                height: 6px;
+                border-radius: 50%;
+                background: var(--blue-500);
+                animation: flow-dot 2s ease-in-out infinite;
+                pointer-events: none;
+            }
+
+            /* Node Drawer */
+            .topo-drawer-overlay {
+                position: fixed;
+                inset: 0;
+                background: rgba(0, 0, 0, 0.5);
+                z-index: 100;
+                opacity: 0;
+                pointer-events: none;
+                transition: opacity 0.2s;
+            }
+            .topo-drawer-overlay.open {
+                opacity: 1;
+                pointer-events: all;
+            }
+            .topo-drawer {
+                position: fixed;
+                bottom: -400px;
+                left: 50%;
+                transform: translateX(-50%);
+                width: 700px;
+                max-width: 90vw;
+                height: 380px;
+                background: var(--bg-surface);
+                border: 1px solid var(--border-subtle);
+                border-radius: 16px 16px 0 0;
+                z-index: 101;
+                transition: bottom 0.3s ease;
+                box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.5);
+                overflow: hidden;
+                display: flex;
+                flex-direction: column;
+            }
+            .topo-drawer.open {
+                bottom: 0;
+            }
+            .topo-drawer-header {
+                padding: 16px 24px;
+                border-bottom: 1px solid var(--border-subtle);
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
+            .topo-drawer-title {
+                font-size: 15px;
+                font-weight: 700;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+            .topo-drawer-close {
+                background: var(--bg-accent);
+                border: 1px solid var(--border-default);
+                color: var(--text-secondary);
+                width: 28px;
+                height: 28px;
+                border-radius: 6px;
+                cursor: pointer;
+                font-size: 14px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            .topo-drawer-body {
+                flex: 1;
+                overflow-y: auto;
+                padding: 16px 24px;
+            }
+            .topo-drawer-item {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 10px 0;
+                border-bottom: 1px solid var(--border-subtle);
+            }
+            .topo-drawer-item:last-child {
+                border-bottom: none;
+            }
+            .topo-drawer-item-info {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            }
+            .topo-drawer-item-id {
+                font-size: 12px;
+                font-weight: 700;
+                font-family: "Roboto Mono", monospace;
+            }
+            .topo-drawer-item-title {
+                font-size: 12px;
+                color: var(--text-secondary);
+                max-width: 300px;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+            .topo-drawer-item-actions {
+                display: flex;
+                gap: 6px;
+            }
+            .topo-btn {
+                padding: 4px 12px;
+                border-radius: 5px;
+                font-size: 10px;
+                font-weight: 600;
+                cursor: pointer;
+                border: none;
+                transition: all 0.12s;
+                font-family: "Urbanist", sans-serif;
+            }
+            .topo-btn.approve {
+                background: var(--green-bg);
+                color: var(--green-500);
+                border: 1px solid var(--green-border);
+            }
+            .topo-btn.approve:hover {
+                background: rgba(52, 211, 153, 0.2);
+            }
+            .topo-btn.reject {
+                background: var(--red-bg);
+                color: var(--red-500);
+                border: 1px solid var(--red-border);
+            }
+            .topo-btn.batch-approve {
+                background: var(--green-500);
+                color: #000;
+                padding: 6px 16px;
+            }
+            .topo-btn.batch-approve:hover {
+                background: #5eead4;
+            }
+
+            /* Legend */
+            .topo-legend {
+                display: flex;
+                gap: 16px;
+                font-size: 10px;
+                color: var(--text-muted);
+                margin-top: 20px;
+                justify-content: center;
+                flex-wrap: wrap;
+            }
+            .topo-legend-item {
+                display: flex;
+                align-items: center;
+                gap: 5px;
+            }
+            .topo-legend-dot {
+                width: 8px;
+                height: 8px;
+                border-radius: 2px;
+            }
+        </style>
+    </head>
+    <body>
+        <!-- HEADER -->
+        <div class="header">
+            <div class="phase-tag">Concept 5 of 5</div>
+            <h1>Topology Flow</h1>
+            <p>
+                A living system map showing the actual workflow topology as a directed graph. Nodes
+                represent workflow steps, edges represent transitions, and items are dots flowing
+                through the graph. Bottlenecks are visible as count badges accumulating at specific
+                nodes. The operator sees the entire system at once and can batch-act on all items at
+                any node.
+            </p>
+        </div>
+
+        <!-- ARCHITECTURE -->
+        <div class="section">
+            <div class="section-eyebrow">Architecture</div>
+            <div class="section-title">Data Flow</div>
+            <div class="section-desc">
+                Workflow topology is derived from the Workflow.definitionJson (step graph). Active
+                items are mapped to their current node position. The DAG renderer places nodes in a
+                left-to-right layered layout.
+            </div>
+            <div class="chrome">
+                <div class="chrome-bar">
+                    <div class="chrome-dots">
+                        <span class="dot dot-r"></span><span class="dot dot-y"></span
+                        ><span class="dot dot-g"></span>
+                    </div>
+                    data-flow.tsx
+                </div>
+                <div class="chrome-body" style="padding: 20px">
+                    <div class="flow-container">
+                        <div class="flow-node">
+                            <div class="flow-node-title">GET /workflows</div>
+                            <div class="flow-node-desc">Topology definitions</div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-node">
+                            <div class="flow-node-title">useReviews()</div>
+                            <div class="flow-node-desc">Active items</div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-node active">
+                            <div class="flow-node-title">useTopologyMap()</div>
+                            <div class="flow-node-desc">Item-to-node mapping</div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-node">
+                            <div class="flow-node-title">TopologyFlowView</div>
+                            <div class="flow-node-desc">DAG renderer</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- INTERACTIVE MOCKUP -->
+        <div class="section">
+            <div class="section-eyebrow">UI Mockup</div>
+            <div class="section-title">The War Room</div>
+            <div class="section-desc">
+                The topology graph shows the shape of the selected workflow. Nodes with items show
+                count badges. Human-gate nodes are amber and pulse when items are waiting. Click any
+                node to see all items at that step and batch-approve them from a bottom drawer.
+            </div>
+
+            <div class="toggle-group">
+                <button class="toggle-btn active" onclick="showTopoState('default', this)">
+                    SDLC Bugfix
+                </button>
+                <button class="toggle-btn" onclick="showTopoState('drawer', this)">
+                    Node Clicked
+                </button>
+                <button class="toggle-btn" onclick="showTopoState('empty', this)">
+                    Empty State
+                </button>
+            </div>
+
+            <div id="topo-state-default" class="chrome">
+                <div class="chrome-bar">
+                    <div class="chrome-dots">
+                        <span class="dot dot-r"></span><span class="dot dot-y"></span
+                        ><span class="dot dot-g"></span>
+                    </div>
+                    command / topology-flow
+                </div>
+                <div class="topo-container">
+                    <!-- Toolbar -->
+                    <div class="topo-toolbar">
+                        <span
+                            style="
+                                font-size: 10px;
+                                font-weight: 600;
+                                letter-spacing: 1.5px;
+                                text-transform: uppercase;
+                                color: var(--text-muted);
+                                font-family: &quot;Roboto Mono&quot;, monospace;
+                            "
+                            >Workflow:</span
+                        >
+                        <button class="topo-workflow-pill active">SDLC Bugfix (8)</button>
+                        <button class="topo-workflow-pill">SDLC Triage (3)</button>
+                        <button class="topo-workflow-pill">Content Pipeline (2)</button>
+                        <button class="topo-workflow-pill">Onboarding (1)</button>
+                    </div>
+
+                    <!-- DAG Layout -->
+                    <div class="topo-dag">
+                        <!-- Row 1: Start -->
+                        <div class="topo-row">
+                            <div class="topo-node" onclick="selectTopoNode(this, 'create-issue')">
+                                <div class="topo-node-count has-items">1</div>
+                                <div class="topo-node-name">Create Issue</div>
+                                <div class="topo-node-type">tool</div>
+                            </div>
+                        </div>
+                        <div class="topo-edge"></div>
+
+                        <!-- Row 2: Analysis -->
+                        <div class="topo-row">
+                            <div class="topo-node" onclick="selectTopoNode(this, 'analysis')">
+                                <div class="topo-node-count has-items">1</div>
+                                <div class="topo-node-name">Code Analysis</div>
+                                <div class="topo-node-type">tool &middot; 3 steps</div>
+                            </div>
+                        </div>
+                        <div class="topo-edge"></div>
+
+                        <!-- Row 3: Implementation -->
+                        <div class="topo-row">
+                            <div class="topo-node" onclick="selectTopoNode(this, 'implement')">
+                                <div class="topo-node-count has-items">2</div>
+                                <div class="topo-node-name">Implementation</div>
+                                <div class="topo-node-type">agent &middot; 4 steps</div>
+                            </div>
+                        </div>
+                        <div class="topo-edge"></div>
+
+                        <!-- Row 4: Audit & PR (parallel branch) -->
+                        <div class="topo-row">
+                            <div class="topo-node" onclick="selectTopoNode(this, 'audit')">
+                                <div class="topo-node-count empty"></div>
+                                <div class="topo-node-name">Audit Fix Plan</div>
+                                <div class="topo-node-type">agent &middot; loop</div>
+                            </div>
+                            <div style="width: 30px"></div>
+                            <div class="topo-node" onclick="selectTopoNode(this, 'create-pr')">
+                                <div class="topo-node-count empty"></div>
+                                <div class="topo-node-name">Create PR</div>
+                                <div class="topo-node-type">tool</div>
+                            </div>
+                        </div>
+                        <div class="topo-edge"></div>
+
+                        <!-- Row 5: HUMAN GATE - Merge Review -->
+                        <div class="topo-row">
+                            <div
+                                class="topo-node gate"
+                                onclick="selectTopoNode(this, 'merge-review')"
+                                id="merge-review-node"
+                            >
+                                <div class="topo-node-count has-waiting">3</div>
+                                <div class="topo-node-name" style="color: var(--amber-500)">
+                                    Merge Review
+                                </div>
+                                <div class="topo-node-type" style="color: var(--amber-500)">
+                                    human gate
+                                </div>
+                            </div>
+                        </div>
+                        <div class="topo-edge"></div>
+
+                        <!-- Row 6: QA Verify -->
+                        <div class="topo-row">
+                            <div class="topo-node" onclick="selectTopoNode(this, 'qa')">
+                                <div class="topo-node-count has-items">1</div>
+                                <div class="topo-node-name">QA / Verify</div>
+                                <div class="topo-node-type">tool &middot; 2 steps</div>
+                            </div>
+                        </div>
+                        <div class="topo-edge"></div>
+
+                        <!-- Row 7: HUMAN GATE - Final Merge -->
+                        <div class="topo-row">
+                            <div
+                                class="topo-node gate"
+                                onclick="selectTopoNode(this, 'final-merge')"
+                            >
+                                <div class="topo-node-count has-waiting">1</div>
+                                <div class="topo-node-name" style="color: var(--amber-500)">
+                                    Final Merge
+                                </div>
+                                <div class="topo-node-type" style="color: var(--amber-500)">
+                                    human gate
+                                </div>
+                            </div>
+                        </div>
+                        <div class="topo-edge"></div>
+
+                        <!-- Row 8: Done -->
+                        <div class="topo-row">
+                            <div
+                                class="topo-node"
+                                style="
+                                    border-color: var(--green-border);
+                                    background: rgba(52, 211, 153, 0.04);
+                                "
+                            >
+                                <div class="topo-node-count empty"></div>
+                                <div class="topo-node-name" style="color: var(--green-500)">
+                                    Done
+                                </div>
+                                <div class="topo-node-type">terminal</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Legend -->
+                    <div class="topo-legend">
+                        <div class="topo-legend-item">
+                            <div class="topo-legend-dot" style="background: var(--blue-500)"></div>
+                            Running
+                        </div>
+                        <div class="topo-legend-item">
+                            <div class="topo-legend-dot" style="background: var(--amber-500)"></div>
+                            Human Gate
+                        </div>
+                        <div class="topo-legend-item">
+                            <div class="topo-legend-dot" style="background: var(--green-500)"></div>
+                            Complete
+                        </div>
+                        <div class="topo-legend-item">
+                            <div class="topo-legend-dot" style="background: var(--red-500)"></div>
+                            Failed
+                        </div>
+                        <div class="topo-legend-item">
+                            <div
+                                class="topo-legend-dot"
+                                style="
+                                    border-radius: 50%;
+                                    border: 2px solid var(--text-muted);
+                                    background: transparent;
+                                    width: 6px;
+                                    height: 6px;
+                                "
+                            ></div>
+                            Queued
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Drawer open state -->
+            <div id="topo-state-drawer" class="chrome hidden">
+                <div class="chrome-bar">
+                    <div class="chrome-dots">
+                        <span class="dot dot-r"></span><span class="dot dot-y"></span
+                        ><span class="dot dot-g"></span>
+                    </div>
+                    command / topology-flow (node selected)
+                </div>
+                <div class="topo-container" style="min-height: 300px">
+                    <div class="topo-toolbar">
+                        <span
+                            style="
+                                font-size: 10px;
+                                font-weight: 600;
+                                letter-spacing: 1.5px;
+                                text-transform: uppercase;
+                                color: var(--text-muted);
+                                font-family: &quot;Roboto Mono&quot;, monospace;
+                            "
+                            >Workflow:</span
+                        >
+                        <button class="topo-workflow-pill active">SDLC Bugfix (8)</button>
+                    </div>
+                    <div
+                        style="
+                            text-align: center;
+                            padding: 20px;
+                            color: var(--text-muted);
+                            font-size: 12px;
+                        "
+                    >
+                        (DAG above, compressed when drawer is open)
+                    </div>
+
+                    <!-- Bottom Drawer -->
+                    <div
+                        style="
+                            background: var(--bg-elevated);
+                            border: 1px solid var(--border-subtle);
+                            border-radius: 12px;
+                            overflow: hidden;
+                            margin-top: 20px;
+                        "
+                    >
+                        <div
+                            style="
+                                padding: 14px 20px;
+                                border-bottom: 1px solid var(--border-subtle);
+                                display: flex;
+                                justify-content: space-between;
+                                align-items: center;
+                            "
+                        >
+                            <div
+                                style="
+                                    font-size: 14px;
+                                    font-weight: 700;
+                                    display: flex;
+                                    align-items: center;
+                                    gap: 8px;
+                                "
+                            >
+                                <span style="color: var(--amber-500)">&#9632;</span> Merge Review
+                                <span class="badge badge-amber" style="font-size: 9px"
+                                    >3 items waiting</span
+                                >
+                            </div>
+                            <div style="display: flex; gap: 8px">
+                                <button
+                                    class="topo-btn batch-approve"
+                                    onclick="batchAction('approve all')"
+                                >
+                                    Approve All (3)
+                                </button>
+                            </div>
+                        </div>
+                        <div style="padding: 0">
+                            <!-- Item 1 -->
+                            <div class="topo-drawer-item" style="padding: 10px 20px">
+                                <div class="topo-drawer-item-info">
+                                    <span
+                                        style="
+                                            width: 6px;
+                                            height: 6px;
+                                            border-radius: 50%;
+                                            background: var(--red-500);
+                                        "
+                                    ></span>
+                                    <div class="topo-drawer-item-id">#187</div>
+                                    <div class="topo-drawer-item-title">
+                                        RAG chunk overlap causing duplicate search results
+                                    </div>
+                                    <span
+                                        class="badge badge-red"
+                                        style="font-size: 8px; padding: 1px 6px"
+                                        >high</span
+                                    >
+                                    <span
+                                        style="
+                                            font-size: 10px;
+                                            color: var(--red-500);
+                                            font-family: &quot;Roboto Mono&quot;, monospace;
+                                        "
+                                        >4h 12m</span
+                                    >
+                                </div>
+                                <div class="topo-drawer-item-actions">
+                                    <button class="topo-btn approve">Approve</button>
+                                    <button class="topo-btn reject">Reject</button>
+                                </div>
+                            </div>
+                            <!-- Item 2 -->
+                            <div class="topo-drawer-item" style="padding: 10px 20px">
+                                <div class="topo-drawer-item-info">
+                                    <span
+                                        style="
+                                            width: 6px;
+                                            height: 6px;
+                                            border-radius: 50%;
+                                            background: var(--amber-500);
+                                        "
+                                    ></span>
+                                    <div class="topo-drawer-item-id">#202</div>
+                                    <div class="topo-drawer-item-title">
+                                        cursor-launch-agent model parameter missing from MCP schema
+                                    </div>
+                                    <span
+                                        class="badge badge-amber"
+                                        style="font-size: 8px; padding: 1px 6px"
+                                        >medium</span
+                                    >
+                                    <span
+                                        style="
+                                            font-size: 10px;
+                                            color: var(--text-muted);
+                                            font-family: &quot;Roboto Mono&quot;, monospace;
+                                        "
+                                        >2h 45m</span
+                                    >
+                                </div>
+                                <div class="topo-drawer-item-actions">
+                                    <button class="topo-btn approve">Approve</button>
+                                    <button class="topo-btn reject">Reject</button>
+                                </div>
+                            </div>
+                            <!-- Item 3 -->
+                            <div class="topo-drawer-item" style="padding: 10px 20px">
+                                <div class="topo-drawer-item-info">
+                                    <span
+                                        style="
+                                            width: 6px;
+                                            height: 6px;
+                                            border-radius: 50%;
+                                            background: var(--green-500);
+                                        "
+                                    ></span>
+                                    <div class="topo-drawer-item-id">#190</div>
+                                    <div class="topo-drawer-item-title">
+                                        Slack thread mapping breaks on multi-workspace
+                                    </div>
+                                    <span
+                                        class="badge badge-green"
+                                        style="font-size: 8px; padding: 1px 6px"
+                                        >low</span
+                                    >
+                                    <span
+                                        style="
+                                            font-size: 10px;
+                                            color: var(--text-muted);
+                                            font-family: &quot;Roboto Mono&quot;, monospace;
+                                        "
+                                        >45m</span
+                                    >
+                                </div>
+                                <div class="topo-drawer-item-actions">
+                                    <button class="topo-btn approve">Approve</button>
+                                    <button class="topo-btn reject">Reject</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Empty state -->
+            <div id="topo-state-empty" class="chrome hidden">
+                <div class="chrome-bar">
+                    <div class="chrome-dots">
+                        <span class="dot dot-r"></span><span class="dot dot-y"></span
+                        ><span class="dot dot-g"></span>
+                    </div>
+                    command / topology-flow
+                </div>
+                <div style="padding: 80px; text-align: center">
+                    <div style="font-size: 48px; margin-bottom: 16px; opacity: 0.3">&#128506;</div>
+                    <div
+                        style="
+                            font-size: 16px;
+                            font-weight: 600;
+                            margin-bottom: 8px;
+                            color: var(--text-secondary);
+                        "
+                    >
+                        No active flows
+                    </div>
+                    <div style="font-size: 13px; color: var(--text-muted)">
+                        The topology graph will populate as workflow runs start. Select a workflow
+                        type above to see its step structure.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- FILES CHANGED -->
+        <div class="section">
+            <div class="section-eyebrow">Manifest</div>
+            <div class="section-title">Files Changed</div>
+            <table class="spec-table">
+                <thead>
+                    <tr>
+                        <th>Action</th>
+                        <th>File</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>New</td>
+                        <td>
+                            <code>apps/agent/src/app/command/components/TopologyFlowView.tsx</code>
+                        </td>
+                        <td>Main DAG container with workflow selector and node layout</td>
+                    </tr>
+                    <tr>
+                        <td>New</td>
+                        <td><code>apps/agent/src/app/command/components/TopologyNode.tsx</code></td>
+                        <td>Individual DAG node with count badge, gate styling, click handler</td>
+                    </tr>
+                    <tr>
+                        <td>New</td>
+                        <td><code>apps/agent/src/app/command/components/NodeDrawer.tsx</code></td>
+                        <td>
+                            Bottom drawer showing all items at a selected node with batch actions
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>New</td>
+                        <td><code>apps/agent/src/app/command/hooks/useTopologyMap.ts</code></td>
+                        <td>Maps active items to DAG node positions from workflow definitions</td>
+                    </tr>
+                    <tr>
+                        <td>New</td>
+                        <td><code>apps/agent/src/app/api/workflows/topology/route.ts</code></td>
+                        <td>Returns workflow step graph (definitionJson) for DAG rendering</td>
+                    </tr>
+                    <tr>
+                        <td>Modify</td>
+                        <td><code>apps/agent/src/app/command/page.tsx</code></td>
+                        <td>Add "Topology" view toggle</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- IMPLEMENTATION -->
+        <div class="section">
+            <div class="section-eyebrow">Implementation</div>
+            <div class="section-title">Step-by-Step</div>
+
+            <div class="impl-step">
+                <h3>Step 1: Topology API Route</h3>
+                <div class="impl-meta">
+                    <span
+                        ><strong>File:</strong>
+                        <code>apps/agent/src/app/api/workflows/topology/route.ts</code></span
+                    >
+                </div>
+                <div class="detail-section">
+                    <div class="detail-section-label">Interface</div>
+                    <pre class="raw-pre">
+// GET /api/workflows/topology
+// Returns workflow step graphs for DAG rendering
+
+interface TopologyResponse {
+  workflows: WorkflowTopology[]
+}
+
+interface WorkflowTopology {
+  slug: string
+  name: string
+  activeCount: number
+  steps: TopologyStep[]
+  edges: TopologyEdge[]
+}
+
+interface TopologyStep {
+  id: string
+  name: string
+  type: string  // "tool" | "agent" | "branch" | "dowhile" | "human"
+  isGate: boolean
+}
+
+interface TopologyEdge {
+  from: string
+  to: string
+  label?: string  // branch condition
+}</pre
+                    >
+                </div>
+                <div class="detail-section">
+                    <div class="detail-section-label">Logic</div>
+                    <ol
+                        style="
+                            font-size: 12px;
+                            color: var(--text-secondary);
+                            padding-left: 20px;
+                            line-height: 2;
+                        "
+                    >
+                        <li>Query all active workflows for the workspace</li>
+                        <li>
+                            Parse definitionJson to extract step IDs, names, types, and transitions
+                        </li>
+                        <li>
+                            Identify gate steps by matching patterns (suspend, human, approval
+                            keywords)
+                        </li>
+                        <li>
+                            Count active runs per workflow from WorkflowRun where status !=
+                            COMPLETED/CANCELLED
+                        </li>
+                        <li>Return topology for each workflow with active count</li>
+                    </ol>
+                </div>
+                <table class="spec-table">
+                    <thead>
+                        <tr>
+                            <th>Code</th>
+                            <th>Condition</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>401</td>
+                            <td>Unauthenticated</td>
+                        </tr>
+                        <tr>
+                            <td>403</td>
+                            <td>Workspace mismatch</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="impl-step">
+                <h3>Step 2: useTopologyMap Hook</h3>
+                <div class="impl-meta">
+                    <span
+                        ><strong>File:</strong>
+                        <code>apps/agent/src/app/command/hooks/useTopologyMap.ts</code></span
+                    >
+                </div>
+                <div class="detail-section">
+                    <div class="detail-section-label">Interface</div>
+                    <pre class="raw-pre">
+interface TopologyMap {
+  selectedWorkflow: WorkflowTopology | null
+  nodeItems: Map&lt;string, ReviewItem[]&gt;  // stepId -> items at that node
+  nodeCounts: Map&lt;string, { total: number; waiting: number; failed: number }&gt;
+  totalGateItems: number
+}
+
+function useTopologyMap(
+  topologies: WorkflowTopology[],
+  reviews: ReviewItem[],
+  stepCache: Map&lt;string, StepData[]&gt;,
+  selectedSlug: string
+): TopologyMap</pre
+                    >
+                </div>
+                <div class="detail-section">
+                    <div class="detail-section-label">Logic</div>
+                    <ol
+                        style="
+                            font-size: 12px;
+                            color: var(--text-secondary);
+                            padding-left: 20px;
+                            line-height: 2;
+                        "
+                    >
+                        <li>Filter reviews by selectedSlug's workflowSlug</li>
+                        <li>
+                            For each review, find its current step from stepCache (last non-QUEUED
+                            step)
+                        </li>
+                        <li>Map review to the corresponding topology node by stepId matching</li>
+                        <li>Compute per-node counts (total, waiting, failed)</li>
+                        <li>totalGateItems = sum of waiting items at gate nodes</li>
+                    </ol>
+                </div>
+            </div>
+
+            <div class="impl-step">
+                <h3>Step 3: TopologyNode Component</h3>
+                <div class="impl-meta">
+                    <span
+                        ><strong>File:</strong>
+                        <code>apps/agent/src/app/command/components/TopologyNode.tsx</code></span
+                    >
+                </div>
+                <div class="detail-section">
+                    <div class="detail-section-label">Props</div>
+                    <pre class="raw-pre">
+interface TopologyNodeProps {
+  step: TopologyStep
+  counts: { total: number; waiting: number; failed: number }
+  isSelected: boolean
+  onClick: (stepId: string) => void
+}</pre
+                    >
+                </div>
+                <div class="detail-section">
+                    <div class="detail-section-label">Logic</div>
+                    <ol
+                        style="
+                            font-size: 12px;
+                            color: var(--text-secondary);
+                            padding-left: 20px;
+                            line-height: 2;
+                        "
+                    >
+                        <li>
+                            Gate nodes: amber border, amber text, pulse animation on badge when
+                            waiting > 0
+                        </li>
+                        <li>Regular nodes: default border, blue badge when items > 0</li>
+                        <li>Failed badge: red when any items are failed at this node</li>
+                        <li>Badge hidden when count is 0</li>
+                        <li>Click opens NodeDrawer with all items at this step</li>
+                    </ol>
+                </div>
+            </div>
+
+            <div class="impl-step">
+                <h3>Step 4: NodeDrawer Component</h3>
+                <div class="impl-meta">
+                    <span
+                        ><strong>File:</strong>
+                        <code>apps/agent/src/app/command/components/NodeDrawer.tsx</code></span
+                    >
+                </div>
+                <div class="detail-section">
+                    <div class="detail-section-label">Logic</div>
+                    <ol
+                        style="
+                            font-size: 12px;
+                            color: var(--text-secondary);
+                            padding-left: 20px;
+                            line-height: 2;
+                        "
+                    >
+                        <li>Slides up from bottom when a node is clicked</li>
+                        <li>Header: step name, waiting count, "Approve All" batch button</li>
+                        <li>
+                            List of items at this step with: risk dot, ID, title, age, individual
+                            approve/reject buttons
+                        </li>
+                        <li>Close on Escape or clicking overlay</li>
+                        <li>
+                            After batch approve: all items removed, node count decrements, drawer
+                            closes
+                        </li>
+                    </ol>
+                </div>
+            </div>
+
+            <div class="impl-step">
+                <h3>Step 5: TopologyFlowView + Page Integration</h3>
+                <div class="impl-meta">
+                    <span
+                        ><strong>File:</strong>
+                        <code
+                            >apps/agent/src/app/command/components/TopologyFlowView.tsx</code
+                        ></span
+                    >
+                </div>
+                <div class="detail-section">
+                    <div class="detail-section-label">Logic</div>
+                    <ol
+                        style="
+                            font-size: 12px;
+                            color: var(--text-secondary);
+                            padding-left: 20px;
+                            line-height: 2;
+                        "
+                    >
+                        <li>Workflow selector pills at top (one per workflow with active count)</li>
+                        <li>
+                            DAG layout: vertical columns for main path, horizontal branches for
+                            parallel steps
+                        </li>
+                        <li>Edges rendered as CSS lines (or SVG for complex branching)</li>
+                        <li>Legend at bottom explaining node colors and badge meanings</li>
+                        <li>Integrates into page.tsx as "Topology" view toggle</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- EDGE CASES -->
+        <div class="section">
+            <div class="section-eyebrow">Edge Cases</div>
+            <div class="section-title">Boundary Conditions</div>
+            <table class="spec-table">
+                <thead>
+                    <tr>
+                        <th>Scenario</th>
+                        <th>Backend</th>
+                        <th>Frontend</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>0 active workflows</td>
+                        <td>Empty topology array</td>
+                        <td>Map icon with "No active flows" message</td>
+                    </tr>
+                    <tr>
+                        <td>Workflow with 50+ steps</td>
+                        <td>Full definitionJson</td>
+                        <td>
+                            Group related steps into collapsed "zones"; scrollable DAG with mini-map
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Complex branching (5+ paths)</td>
+                        <td>Multiple edges from one node</td>
+                        <td>Horizontal layout for branches, labeled edges for conditions</td>
+                    </tr>
+                    <tr>
+                        <td>Node with 20+ items</td>
+                        <td>All items returned</td>
+                        <td>Scrollable drawer list; "Approve All" handles batch</td>
+                    </tr>
+                    <tr>
+                        <td>Step not in topology</td>
+                        <td>definitionJson may differ from run</td>
+                        <td>Unmapped items shown in "Other" floating node</td>
+                    </tr>
+                    <tr>
+                        <td>Workflow definition changes mid-run</td>
+                        <td>Old definitionJson in run</td>
+                        <td>Use run's compiled steps, not current workflow definition</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- COMPONENT ARCHITECTURE -->
+        <div class="section">
+            <div class="section-eyebrow">Components</div>
+            <div class="section-title">Component Architecture</div>
+            <table class="spec-table">
+                <thead>
+                    <tr>
+                        <th>Component / Hook</th>
+                        <th>Purpose</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>TopologyFlowView</code></td>
+                        <td>Main container with workflow selector, DAG layout, and legend</td>
+                    </tr>
+                    <tr>
+                        <td><code>TopologyNode</code></td>
+                        <td>Individual DAG node with count badge, gate styling, click to drill</td>
+                    </tr>
+                    <tr>
+                        <td><code>TopologyEdge</code></td>
+                        <td>CSS/SVG edge between nodes with optional branch labels</td>
+                    </tr>
+                    <tr>
+                        <td><code>NodeDrawer</code></td>
+                        <td>Bottom drawer listing all items at a node with batch actions</td>
+                    </tr>
+                    <tr>
+                        <td><code>useTopologyMap</code></td>
+                        <td>Maps reviews to DAG node positions; computes per-node counts</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- DATA FLOW -->
+        <div class="section">
+            <div class="section-eyebrow">Data Flow</div>
+            <div class="section-title">Call Chain</div>
+            <pre class="raw-pre" style="font-size: 12px; line-height: 1.8">
+User opens Command with "Topology" view
+    &boxur;&HorizontalLine; page.tsx: viewMode === "topology"
+        &boxur;&HorizontalLine; GET /api/workflows/topology &rarr; workflow step graphs
+        &boxur;&HorizontalLine; useReviews() &rarr; all reviews + step prefetch
+        &boxur;&HorizontalLine; useTopologyMap(topologies, reviews, stepCache, selectedSlug)
+            &boxur;&HorizontalLine; Maps items to nodes, computes counts per node
+        &boxur;&HorizontalLine; &lt;TopologyFlowView /&gt;
+            &boxur;&HorizontalLine; Workflow selector pills
+            &boxur;&HorizontalLine; DAG with TopologyNode components
+            &boxur;&HorizontalLine; Count badges on nodes, pulse on gates
+
+User clicks "Merge Review" gate node
+    &boxur;&HorizontalLine; TopologyFlowView: setSelectedNode("merge-review")
+        &boxur;&HorizontalLine; NodeDrawer opens from bottom
+            &boxur;&HorizontalLine; Shows 3 items: #187, #202, #190
+            &boxur;&HorizontalLine; Individual approve/reject per item
+            &boxur;&HorizontalLine; "Approve All (3)" batch button
+
+User clicks "Approve All"
+    &boxur;&HorizontalLine; NodeDrawer: batchApprove(itemIds)
+        &boxur;&HorizontalLine; useReviews().handleBatchApprove(ids)
+            &boxur;&HorizontalLine; POST /api/reviews/[id]/approve for each
+            &boxur;&HorizontalLine; Node badge count &rarr; 0, drawer closes
+  </pre
+            >
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- PLAYWRIGHT -->
+        <div class="section">
+            <div class="section-eyebrow">Testing</div>
+            <div class="section-title">Playwright Test Plan</div>
+            <table class="spec-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Step</th>
+                        <th>Assertion</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>1</td>
+                        <td>Navigate to /command, switch to "Topology" view</td>
+                        <td>DAG renders with workflow nodes and edges</td>
+                    </tr>
+                    <tr>
+                        <td>2</td>
+                        <td>Verify workflow selector pills show active counts</td>
+                        <td>"SDLC Bugfix (8)" pill is active</td>
+                    </tr>
+                    <tr>
+                        <td>3</td>
+                        <td>Verify gate nodes (Merge Review, Final Merge) are amber</td>
+                        <td>Amber border and text, pulsing badge</td>
+                    </tr>
+                    <tr>
+                        <td>4</td>
+                        <td>Verify node count badges match item distribution</td>
+                        <td>Merge Review shows "3", Final Merge shows "1"</td>
+                    </tr>
+                    <tr>
+                        <td>5</td>
+                        <td>Click "Merge Review" gate node</td>
+                        <td>Drawer slides up showing 3 items with details</td>
+                    </tr>
+                    <tr>
+                        <td>6</td>
+                        <td>Click "Approve" on individual item in drawer</td>
+                        <td>Item removed, badge count decrements to 2</td>
+                    </tr>
+                    <tr>
+                        <td>7</td>
+                        <td>Click "Approve All" in drawer header</td>
+                        <td>All remaining items approved, badge goes to 0, drawer closes</td>
+                    </tr>
+                    <tr>
+                        <td>8</td>
+                        <td>Switch to different workflow via selector pill</td>
+                        <td>DAG changes to that workflow's topology</td>
+                    </tr>
+                    <tr>
+                        <td>9</td>
+                        <td>Verify legend displays correctly</td>
+                        <td>Legend shows Running, Human Gate, Complete, Failed, Queued</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- ACCEPTANCE -->
+        <div class="section">
+            <div class="section-eyebrow">Acceptance</div>
+            <div class="section-title">Criteria</div>
+            <div style="font-size: 13px; color: var(--text-secondary); line-height: 2.2">
+                &#9744; DAG renders workflow step topology with nodes and edges<br />
+                &#9744; Workflow selector pills show active item counts and switch topologies<br />
+                &#9744; Human-gate nodes are visually distinct (amber, pulsing badge when
+                waiting)<br />
+                &#9744; Node badges show live item counts (blue=active, amber=waiting,
+                red=failed)<br />
+                &#9744; Clicking a node opens bottom drawer with all items at that step<br />
+                &#9744; Drawer supports both individual and batch approve/reject<br />
+                &#9744; Badge counts update in real-time after actions<br />
+                &#9744; Branching steps render as parallel nodes at the same level<br />
+                &#9744; Legend explains all visual encodings<br />
+                &#9744; Empty state shows when no active flows exist<br />
+                &#9744; Topology API route returns step graph from workflow definitionJson<br />
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- EFFORT -->
+        <div class="section">
+            <div class="section-eyebrow">Effort</div>
+            <div class="section-title">Estimate</div>
+            <table class="spec-table">
+                <thead>
+                    <tr>
+                        <th>Task</th>
+                        <th>Estimate</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Topology API route (parse definitionJson)</td>
+                        <td>60 min</td>
+                    </tr>
+                    <tr>
+                        <td>useTopologyMap hook (item-to-node mapping)</td>
+                        <td>60 min</td>
+                    </tr>
+                    <tr>
+                        <td>TopologyNode component with gate styling</td>
+                        <td>45 min</td>
+                    </tr>
+                    <tr>
+                        <td>TopologyFlowView DAG layout + edges</td>
+                        <td>90 min</td>
+                    </tr>
+                    <tr>
+                        <td>NodeDrawer with batch actions</td>
+                        <td>45 min</td>
+                    </tr>
+                    <tr>
+                        <td>Workflow selector + page integration</td>
+                        <td>30 min</td>
+                    </tr>
+                    <tr>
+                        <td>Animations (pulse badges, dot flow)</td>
+                        <td>30 min</td>
+                    </tr>
+                    <tr>
+                        <td>Playwright tests</td>
+                        <td>45 min</td>
+                    </tr>
+                    <tr>
+                        <td style="font-weight: 700; color: var(--text-primary)">Total</td>
+                        <td style="font-weight: 700; color: var(--text-primary)">6.8 hours</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <script>
+            function showTopoState(state, btn) {
+                document
+                    .querySelectorAll('[id^="topo-state-"]')
+                    .forEach((el) => el.classList.add("hidden"));
+                document.getElementById("topo-state-" + state)?.classList.remove("hidden");
+                btn.parentElement
+                    .querySelectorAll(".toggle-btn")
+                    .forEach((b) => b.classList.remove("active"));
+                btn.classList.add("active");
+            }
+
+            function selectTopoNode(el, nodeId) {
+                document
+                    .querySelectorAll(".topo-node")
+                    .forEach((n) => n.classList.remove("selected"));
+                el.classList.add("selected");
+            }
+
+            function batchAction(action) {
+                alert("Batch action: " + action);
+            }
+        </script>
+    </body>
+</html>
