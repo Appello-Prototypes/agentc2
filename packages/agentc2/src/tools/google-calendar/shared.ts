@@ -64,10 +64,33 @@ export const callCalendarApi = async (
                 }
             });
             const creds = decrypt(connection?.credentials);
-            if (creds?.refreshToken) {
+            if (creds?.refreshToken && connection) {
                 const refreshed = await refreshAccessToken(creds.refreshToken as string);
                 if (refreshed) {
-                    token = refreshed;
+                    token = refreshed.accessToken;
+
+                    const newExpiryDate = refreshed.expiresIn
+                        ? Date.now() + refreshed.expiresIn * 1000
+                        : Date.now() + 3600 * 1000;
+
+                    const updatedCreds = {
+                        ...creds,
+                        accessToken: refreshed.accessToken,
+                        expiryDate: newExpiryDate,
+                        ...(refreshed.scope && { scope: refreshed.scope })
+                    };
+
+                    const { encryptCredentials } = await import("../../mcp/client");
+                    const encrypted = encryptCredentials(
+                        updatedCreds,
+                        organizationId
+                    ) as Record<string, unknown>;
+
+                    await prisma.integrationConnection.update({
+                        where: { id: connection.id },
+                        data: { credentials: encrypted }
+                    });
+
                     response = await fetch(url.toString(), {
                         headers: { Authorization: `Bearer ${token}` }
                     });
@@ -135,10 +158,33 @@ export const callCalendarApiWithBody = async (
                 }
             });
             const creds = decrypt(connection?.credentials);
-            if (creds?.refreshToken) {
+            if (creds?.refreshToken && connection) {
                 const refreshed = await refreshAccessToken(creds.refreshToken as string);
                 if (refreshed) {
-                    token = refreshed;
+                    token = refreshed.accessToken;
+
+                    const newExpiryDate = refreshed.expiresIn
+                        ? Date.now() + refreshed.expiresIn * 1000
+                        : Date.now() + 3600 * 1000;
+
+                    const updatedCreds = {
+                        ...creds,
+                        accessToken: refreshed.accessToken,
+                        expiryDate: newExpiryDate,
+                        ...(refreshed.scope && { scope: refreshed.scope })
+                    };
+
+                    const { encryptCredentials } = await import("../../mcp/client");
+                    const encrypted = encryptCredentials(
+                        updatedCreds,
+                        organizationId
+                    ) as Record<string, unknown>;
+
+                    await prisma.integrationConnection.update({
+                        where: { id: connection.id },
+                        data: { credentials: encrypted }
+                    });
+
                     fetchOptions.headers = {
                         Authorization: `Bearer ${token}`,
                         "Content-Type": "application/json"

@@ -170,7 +170,10 @@ const decryptCredentials = (value: unknown, organizationId?: string) => {
     }
 };
 
-const encryptCredentials = (value: Record<string, unknown> | null, organizationId?: string) => {
+export const encryptCredentials = (
+    value: Record<string, unknown> | null,
+    organizationId?: string
+) => {
     if (!value || isEncryptedPayload(value)) return value;
     const masterKey = getEncryptionKey();
     if (!masterKey) return value;
