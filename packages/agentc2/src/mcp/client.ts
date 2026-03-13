@@ -43,7 +43,10 @@ if (!global.__mcpSchemaPatched) {
 const ORG_MCP_CACHE_TTL = 60000;
 /** Stale cache is used as fallback when fresh loading fails — 10 minutes */
 const ORG_MCP_STALE_TTL = 600000;
-const orgMcpClients = new Map<string, { client: MCPClient; loadedAt: number }>();
+const orgMcpClients = new Map<
+    string,
+    { client: MCPClient; loadedAt: number; isConnected: boolean }
+>();
 
 /** Cache for per-server tool-loading results (keyed by orgId or "__default__") */
 const perServerToolsCache = new Map<
@@ -3873,6 +3876,83 @@ function getMcpClient(): MCPClient {
 
 export const mcpClient = getMcpClient();
 
+/**
+ * Ensures an MCP client is connected and ready to use.
+ * Tests connection by attempting to list toolsets, which is a lightweight operation.
+ * If the client is disconnected or stale, creates a new one.
+ *
+ * @internal
+ */
+async function ensureClientConnected(
+    client: MCPClient,
+    cacheKey: string,
+    organizationId: string,
+    userId?: string | null
+): Promise<MCPClient> {
+    const cached = orgMcpClients.get(cacheKey);
+
+    // If client is marked as connected and not stale, try to use it
+    if (cached && cached.isConnected) {
+        try {
+            // Quick health check: try to list toolsets (should be fast if connected)
+            await Promise.race([
+                client.listToolsets(),
+                new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error("Connection health check timeout")), 3000)
+                )
+            ]);
+            console.log(`[MCP] Client for org ${organizationId} is healthy and connected`);
+            return client;
+        } catch (error) {
+            console.warn(
+                `[MCP] Client for org ${organizationId} failed health check, reconnecting:`,
+                error instanceof Error ? error.message : String(error)
+            );
+            // Mark as disconnected and recreate
+            cached.isConnected = false;
+        }
+    }
+
+    // Client is disconnected or failed health check - create new one
+    console.log(`[MCP] Creating new MCP client for org ${organizationId}`);
+
+    const connections = await getIntegrationConnections({
+        organizationId,
+        userId
+    });
+
+    const servers = buildServerConfigs({
+        connections,
+        allowEnvFallback: false
+    });
+
+    const newClient = new MCPClient({
+        id: `mastra-mcp-client-${organizationId}-${Date.now()}`,
+        servers,
+        timeout: 60000
+    });
+
+    // Verify the new client can connect by listing toolsets
+    try {
+        await newClient.listToolsets();
+        console.log(`[MCP] New client for org ${organizationId} connected successfully`);
+    } catch (error) {
+        console.error(
+            `[MCP] Failed to connect new client for org ${organizationId}:`,
+            error instanceof Error ? error.message : String(error)
+        );
+        throw error;
+    }
+
+    orgMcpClients.set(cacheKey, {
+        client: newClient,
+        loadedAt: Date.now(),
+        isConnected: true
+    });
+
+    return newClient;
+}
+
 async function getMcpClientForOrganization(options?: {
     organizationId?: string | null;
     userId?: string | null;
@@ -3885,9 +3965,15 @@ async function getMcpClientForOrganization(options?: {
     const cacheKey = `${organizationId}:${options?.userId || "org"}`;
     const cached = orgMcpClients.get(cacheKey);
     const now = Date.now();
+
+    // If we have a cached client that's not stale, ensure it's connected
     if (cached && now - cached.loadedAt < ORG_MCP_CACHE_TTL) {
-        return cached.client;
+        console.log(`[MCP] Using cached client for org ${organizationId} (age: ${Math.round((now - cached.loadedAt) / 1000)}s)`);
+        return ensureClientConnected(cached.client, cacheKey, organizationId, options?.userId);
     }
+
+    // Cache miss or stale - create new client
+    console.log(`[MCP] Cache miss or stale for org ${organizationId}, creating new client`);
 
     const connections = await getIntegrationConnections({
         organizationId,
@@ -3900,12 +3986,24 @@ async function getMcpClientForOrganization(options?: {
     });
 
     const client = new MCPClient({
-        id: `mastra-mcp-client-${organizationId}`,
+        id: `mastra-mcp-client-${organizationId}-${now}`,
         servers,
         timeout: 60000
     });
 
-    orgMcpClients.set(cacheKey, { client, loadedAt: now });
+    // Verify the client works before caching
+    try {
+        await client.listToolsets();
+        console.log(`[MCP] New client for org ${organizationId} connected successfully`);
+    } catch (error) {
+        console.error(
+            `[MCP] Failed to initialize client for org ${organizationId}:`,
+            error instanceof Error ? error.message : String(error)
+        );
+        throw error;
+    }
+
+    orgMcpClients.set(cacheKey, { client, loadedAt: now, isConnected: true });
     return client;
 }
 
@@ -3915,6 +4013,9 @@ async function getMcpClientForOrganization(options?: {
  * Connects to each MCP server independently so one failing server
  * (e.g. bad path, timeout) does not prevent tools from other servers
  * from loading. Returns merged tools + per-server errors.
+ *
+ * Now uses persistent clients when possible to maintain connection state
+ * between tool loading and tool execution.
  */
 export async function getMcpTools(
     organizationIdOrOptions?:
@@ -3937,11 +4038,39 @@ export async function getMcpTools(
     const now = Date.now();
     const cached = perServerToolsCache.get(cacheKey);
     if (cached && now - cached.loadedAt < ORG_MCP_CACHE_TTL) {
+        console.log(
+            `[MCP] Using cached tools (${Object.keys(cached.tools).length} tools, ${Object.keys(cached.serverErrors).length} errors)`
+        );
         return { tools: cached.tools, serverErrors: cached.serverErrors };
     }
 
     const servers = await buildServerConfigsForOptions(options);
-    const result = await loadToolsPerServer(servers, cacheKey);
+
+    // Try to use a persistent client if we have an organizationId
+    // This ensures tool loading and tool execution use the same connection
+    let persistentClient: MCPClient | undefined;
+    if (options.organizationId) {
+        try {
+            persistentClient = await getMcpClientForOrganization(options);
+            console.log(
+                `[MCP] Using persistent client for tool loading (org: ${options.organizationId})`
+            );
+        } catch (error) {
+            console.warn(
+                `[MCP] Failed to get persistent client, falling back to temporary clients:`,
+                error instanceof Error ? error.message : String(error)
+            );
+            // Fall back to temporary clients
+            persistentClient = undefined;
+        }
+    }
+
+    const result = await loadToolsPerServer(servers, cacheKey, persistentClient);
+
+    console.log(
+        `[MCP] Loaded ${Object.keys(result.tools).length} tools from ${Object.keys(servers).length} servers ` +
+            `(${Object.keys(result.serverErrors).length} errors)`
+    );
 
     // If some servers failed, backfill from last-known-good cache (stale fallback)
     const failedServerIds = Object.keys(result.serverErrors);
@@ -3990,14 +4119,51 @@ async function buildServerConfigsForOptions(options: {
 /**
  * Load tools from a single MCP server with 1 retry on failure.
  * Returns the tools on success, or throws on failure after retry.
+ *
+ * @param serverId - The server identifier
+ * @param serverDef - The server definition
+ * @param maxRetries - Maximum number of retries (default: 1)
+ * @param persistentClient - Optional persistent MCPClient to reuse instead of creating temporary one
  */
 async function loadToolsFromServer(
     serverId: string,
     serverDef: MastraMCPServerDefinition,
-    maxRetries = 1
+    maxRetries = 1,
+    persistentClient?: MCPClient
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<{ serverId: string; tools: Record<string, any> }> {
     let lastError: unknown;
+
+    // If a persistent client is provided, use it instead of creating a temporary one
+    if (persistentClient) {
+        console.log(`[MCP] Loading tools from server "${serverId}" using persistent client`);
+        try {
+            const toolsets = await persistentClient.listToolsets();
+            // Extract tools for this specific server
+            const tools: Record<string, unknown> = {};
+            for (const [toolName, tool] of Object.entries(toolsets)) {
+                // Tools in toolsets use dot notation: serverName.toolName
+                if (toolName.startsWith(`${serverId}.`)) {
+                    // Convert to underscore notation for consistency
+                    const underscoreName = toolName.replace(".", "_");
+                    tools[underscoreName] = tool;
+                }
+            }
+            console.log(
+                `[MCP] Loaded ${Object.keys(tools).length} tools from server "${serverId}" via persistent client`
+            );
+            return { serverId, tools: sanitizeMcpTools(tools) };
+        } catch (err) {
+            console.error(
+                `[MCP] Failed to load tools from server "${serverId}" via persistent client:`,
+                err instanceof Error ? err.message : String(err)
+            );
+            lastError = err;
+            throw lastError;
+        }
+    }
+
+    // Fallback to temporary client (old behavior)
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
         if (attempt > 0) {
             // Wait 2 seconds before retry
@@ -4006,16 +4172,24 @@ async function loadToolsFromServer(
                 `[MCP] Retrying server "${serverId}" (attempt ${attempt + 1}/${maxRetries + 1})`
             );
         }
+        console.log(`[MCP] Loading tools from server "${serverId}" using temporary client`);
         const client = new MCPClient({
-            id: `mastra-mcp-iso-${serverId}`,
+            id: `mastra-mcp-iso-${serverId}-${Date.now()}`,
             servers: { [serverId]: serverDef },
             timeout: 60000
         });
         try {
             const tools = await client.listTools();
+            console.log(
+                `[MCP] Loaded ${Object.keys(tools).length} tools from server "${serverId}" via temporary client`
+            );
             return { serverId, tools: sanitizeMcpTools(tools) };
         } catch (err) {
             lastError = err;
+            console.warn(
+                `[MCP] Attempt ${attempt + 1} failed for server "${serverId}":`,
+                err instanceof Error ? err.message : String(err)
+            );
         } finally {
             await client.disconnect().catch(() => {});
         }
@@ -4028,10 +4202,15 @@ async function loadToolsFromServer(
  * Each server gets 1 retry on failure before being marked as errored.
  * Successful loads are stored in a last-known-good cache for stale fallback.
  * Returns merged tools and a map of serverId -> error message for failures.
+ *
+ * @param servers - Server definitions to load tools from
+ * @param cacheKey - Cache key for last-known-good fallback
+ * @param persistentClient - Optional persistent MCPClient to reuse for all servers
  */
 async function loadToolsPerServer(
     servers: Record<string, MastraMCPServerDefinition>,
-    cacheKey = "__default__"
+    cacheKey = "__default__",
+    persistentClient?: MCPClient
 ): Promise<{
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     tools: Record<string, any>;
@@ -4047,7 +4226,9 @@ async function loadToolsPerServer(
     }
 
     const results = await Promise.allSettled(
-        serverEntries.map(([serverId, serverDef]) => loadToolsFromServer(serverId, serverDef))
+        serverEntries.map(([serverId, serverDef]) =>
+            loadToolsFromServer(serverId, serverDef, 1, persistentClient)
+        )
     );
 
     for (const result of results) {
@@ -4920,6 +5101,10 @@ export async function executeMcpTool(
     }
 ): Promise<McpToolExecutionResult> {
     let resolvedToolName = toolName;
+    console.log(
+        `[MCP] Executing tool "${toolName}" (org: ${options?.organizationId || "none"}, user: ${options?.userId || "none"})`
+    );
+
     try {
         if (options?.connectionId && !toolName.includes("_") && !toolName.includes(".")) {
             const connection = await prisma.integrationConnection.findUnique({
@@ -4933,14 +5118,19 @@ export async function executeMcpTool(
                     connection.isDefault
                 );
                 resolvedToolName = `${serverId}_${toolName}`;
+                console.log(`[MCP] Resolved tool name to "${resolvedToolName}" via connectionId`);
             }
         }
 
+        console.log(`[MCP] Getting MCP client for tool execution...`);
         const client = await getMcpClientForOrganization({
             organizationId: options?.organizationId,
             userId: options?.userId
         });
+
+        console.log(`[MCP] Listing toolsets from client...`);
         const toolsets = await client.listToolsets();
+        console.log(`[MCP] Retrieved ${Object.keys(toolsets).length} tools from client`);
 
         // Try multiple name formats to find the tool
         // listToolsets() uses dot notation: serverName.toolName
@@ -4962,16 +5152,21 @@ export async function executeMcpTool(
         let tool = null;
         let matchedName = toolName;
 
+        console.log(`[MCP] Trying to find tool with names: ${namesToTry.join(", ")}`);
         for (const name of namesToTry) {
             if (toolsets[name]) {
                 tool = toolsets[name];
                 matchedName = name;
+                console.log(`[MCP] Found tool with name: "${matchedName}"`);
                 break;
             }
         }
 
         if (!tool) {
             const availableTools = Object.keys(toolsets).slice(0, 10).join(", ");
+            console.error(
+                `[MCP] Tool "${resolvedToolName}" not found. Tried: ${namesToTry.join(", ")}. Available (first 10): ${availableTools}`
+            );
             return {
                 success: false,
                 toolName: resolvedToolName,
@@ -5020,6 +5215,7 @@ export async function executeMcpTool(
 
         // Execute with timeout
         const timeoutMs = options?.timeoutMs ?? 60_000;
+        console.log(`[MCP] Executing tool "${matchedName}" with timeout ${timeoutMs}ms...`);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const executePromise = (tool as any).execute({ context: parameters });
         const timeoutPromise = new Promise<never>((_, reject) =>
@@ -5029,6 +5225,7 @@ export async function executeMcpTool(
             )
         );
         const result = await Promise.race([executePromise, timeoutPromise]);
+        console.log(`[MCP] Tool "${matchedName}" execution completed successfully`);
 
         if (options?.organizationId) {
             const serverName = matchedName.includes("_")
@@ -5069,10 +5266,13 @@ export async function executeMcpTool(
             result: truncateMcpResult(result)
         };
     } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Unknown error executing tool";
+        console.error(`[MCP] Tool execution failed for "${resolvedToolName}":`, errorMessage);
+        console.error(`[MCP] Error details:`, error);
         return {
             success: false,
             toolName: resolvedToolName,
-            error: error instanceof Error ? error.message : "Unknown error executing tool"
+            error: errorMessage
         };
     }
 }
