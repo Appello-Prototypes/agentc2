@@ -271,6 +271,7 @@ async function upsertAgent(
             where: { id: existing.id },
             data: {
                 isActive: true,
+                visibility: "ORGANIZATION",
                 name: bp.name,
                 description: bp.description,
                 instructions: bp.instructions,
@@ -322,6 +323,7 @@ async function upsertAgent(
             ownerId: userId,
             createdBy: userId,
             isActive: true,
+            visibility: "ORGANIZATION",
             metadata: {
                 blueprintVersion: blueprint.version,
                 providerKey: blueprint.providerKey,

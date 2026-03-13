@@ -217,6 +217,56 @@ describe("AgentResolver Logic", () => {
                 orderBy: [{ type: "asc" }, { name: "asc" }]
             });
         });
+
+        it("should include auto-provisioned agents with ownerId null in organization", async () => {
+            const autoProvisionedAgent = {
+                ...mockAgent,
+                ownerId: null,
+                visibility: "ORGANIZATION",
+                metadata: { provisionedBy: "auto-provisioner" }
+            };
+            prismaMock.agent.findMany.mockResolvedValue([autoProvisionedAgent] as never);
+
+            await prismaMock.agent.findMany({
+                where: {
+                    isActive: true,
+                    OR: [
+                        { ownerId: "user-123", workspace: { organizationId: "org-456" } },
+                        {
+                            visibility: "ORGANIZATION",
+                            workspace: { organizationId: "org-456" }
+                        },
+                        {
+                            ownerId: null,
+                            workspace: { organizationId: "org-456" }
+                        },
+                        { visibility: "PUBLIC" }
+                    ]
+                },
+                include: { tools: true, workspace: { select: { organizationId: true } } },
+                orderBy: [{ type: "asc" }, { name: "asc" }]
+            });
+
+            expect(prismaMock.agent.findMany).toHaveBeenCalledWith({
+                where: {
+                    isActive: true,
+                    OR: [
+                        { ownerId: "user-123", workspace: { organizationId: "org-456" } },
+                        {
+                            visibility: "ORGANIZATION",
+                            workspace: { organizationId: "org-456" }
+                        },
+                        {
+                            ownerId: null,
+                            workspace: { organizationId: "org-456" }
+                        },
+                        { visibility: "PUBLIC" }
+                    ]
+                },
+                include: { tools: true, workspace: { select: { organizationId: true } } },
+                orderBy: [{ type: "asc" }, { name: "asc" }]
+            });
+        });
     });
 
     describe("exists() database queries", () => {
