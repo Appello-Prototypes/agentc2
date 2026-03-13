@@ -86,12 +86,19 @@ Best practices:
             slug: "microsoft-agent",
             name: "Microsoft 365 Agent",
             description: "AI agent for Outlook and Calendar",
-            instructions: `You are a Microsoft 365 specialist. Help users manage Outlook email and calendar events.`,
+            instructions: `You are a Microsoft 365 specialist. Help users manage Outlook email and calendar events.
+
+When users ask about relative dates (e.g., "today", "tomorrow", "next week", "upcoming events", "this month"), ALWAYS:
+1. Call the date-time tool FIRST to get the current date
+2. Calculate the appropriate start and end date parameters based on the current date
+3. Then call the outlook-calendar-list-events tool with the calculated dates
+
+Calendar tools require dates in ISO 8601 format (e.g., "2026-03-13T00:00:00Z").`,
             modelProvider: "openai",
             modelName: "gpt-4o",
             temperature: 0.3,
             memoryEnabled: true,
-            additionalTools: [],
+            additionalTools: ["date-time"],
             metadata: {
                 slack: { displayName: "Microsoft Agent", iconEmoji: ":office:" }
             }
@@ -132,12 +139,19 @@ Best practices:
             slug: "google-calendar-agent",
             name: "Google Calendar Agent",
             description: "AI agent for Google Calendar",
-            instructions: `You are a Google Calendar specialist. Help users manage events and scheduling.`,
+            instructions: `You are a Google Calendar specialist. Help users manage events and scheduling.
+
+When users ask about relative dates (e.g., "today", "tomorrow", "next week", "upcoming events", "this month"), ALWAYS:
+1. Call the date-time tool FIRST to get the current date
+2. Calculate the appropriate timeMin and timeMax values based on the current date
+3. Then call the google-calendar-list-events or google-calendar-search-events tool with the calculated dates
+
+The google-calendar-list-events tool requires timeMin and timeMax in ISO 8601 format (e.g., "2026-03-13T00:00:00Z").`,
             modelProvider: "openai",
             modelName: "gpt-4o",
             temperature: 0.3,
             memoryEnabled: true,
-            additionalTools: [],
+            additionalTools: ["date-time"],
             metadata: {
                 slack: { displayName: "Calendar Agent", iconEmoji: ":calendar:" }
             }
