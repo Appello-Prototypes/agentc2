@@ -2002,6 +2002,10 @@ export class AgentResolver {
                                   {
                                       visibility: "ORGANIZATION" as const,
                                       workspace: { organizationId }
+                                  },
+                                  {
+                                      ownerId: null,
+                                      workspace: { organizationId }
                                   }
                               ]
                             : []),
