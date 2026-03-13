@@ -70,7 +70,7 @@ export async function POST(
                 });
             }
 
-            // Credential-only providers (e.g. Cursor) use native tools, not MCP.
+            // Credential-only providers (e.g. Cursor, Claude Code) use native tools, not MCP.
             // Validate them with a direct API call instead of MCP handshake.
             const credentialOnlyResult = await testCredentialOnlyProvider(
                 connection.provider.key,
@@ -86,7 +86,9 @@ export async function POST(
                             : credentialOnlyResult.error || "Credential validation failed"
                     }
                 });
-                return NextResponse.json(credentialOnlyResult);
+                return NextResponse.json(
+                    normalizeTestResponse(credentialOnlyResult, connection.provider.providerType)
+                );
             }
 
             const isEffectiveDefault = await computeEffectiveDefault(
@@ -118,7 +120,12 @@ export async function POST(
                 }
             });
 
-            return NextResponse.json(testResult);
+            return NextResponse.json(
+                normalizeTestResponse(
+                    testResult as Record<string, unknown>,
+                    connection.provider.providerType
+                )
+            );
         }
 
         if (connection.provider.authType === "oauth") {
@@ -133,10 +140,15 @@ export async function POST(
                     errorMessage: connected ? null : "OAuth credentials missing"
                 }
             });
-            return NextResponse.json({
-                success: connected,
-                connected
-            });
+            return NextResponse.json(
+                normalizeTestResponse(
+                    {
+                        success: connected,
+                        connected
+                    },
+                    connection.provider.providerType
+                )
+            );
         }
 
         await prisma.integrationConnection.update({
@@ -147,7 +159,9 @@ export async function POST(
             }
         });
 
-        return NextResponse.json({ success: true });
+        return NextResponse.json(
+            normalizeTestResponse({ success: true }, connection.provider.providerType)
+        );
     } catch (error) {
         console.error("[Integrations Connection] Test error:", error);
         return NextResponse.json(
@@ -158,6 +172,48 @@ export async function POST(
             { status: 500 }
         );
     }
+}
+
+/**
+ * Standardized connection test response format.
+ * All provider types return this shape for consistent UI/monitoring.
+ */
+interface StandardizedTestResponse {
+    success: boolean;
+    error?: string;
+    providerType: string;
+    testedAt: string;
+    detail?: string;
+    connected?: boolean;
+    phases?: Array<{ name: string; status: string; detail?: string }>;
+    toolCount?: number;
+    sampleTools?: string[];
+    totalMs?: number;
+}
+
+/**
+ * Normalize connection test responses to a consistent format.
+ * Preserves original fields for backwards compatibility.
+ */
+function normalizeTestResponse(
+    response: Record<string, unknown>,
+    providerType: string
+): StandardizedTestResponse {
+    const base: StandardizedTestResponse = {
+        success: Boolean(response.success),
+        providerType,
+        testedAt: new Date().toISOString()
+    };
+
+    if (response.error) base.error = String(response.error);
+    if (response.detail) base.detail = String(response.detail);
+    if (response.connected !== undefined) base.connected = Boolean(response.connected);
+    if (response.phases) base.phases = response.phases as StandardizedTestResponse["phases"];
+    if (response.toolCount !== undefined) base.toolCount = Number(response.toolCount);
+    if (response.sampleTools) base.sampleTools = response.sampleTools as string[];
+    if (response.totalMs !== undefined) base.totalMs = Number(response.totalMs);
+
+    return base;
 }
 
 /**
