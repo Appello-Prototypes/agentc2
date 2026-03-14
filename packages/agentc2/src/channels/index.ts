@@ -28,4 +28,5 @@ export {
 // Channel implementations
 export { WhatsAppClient, type ConnectionCallback } from "./whatsapp/client";
 export { TelegramClient } from "./telegram/client";
+export { formatForTelegram } from "./telegram/format";
 export { TwilioVoiceClient } from "./voice/twilio";

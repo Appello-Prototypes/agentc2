@@ -7,6 +7,7 @@
  */
 
 import { agentResolver, resolveModelOverride } from "@repo/agentc2/agents";
+import { formatForTelegram } from "@repo/agentc2/channels";
 // managedGenerate removed — context management handled by Mastra processors
 import { recordActivity, inputPreview } from "@repo/agentc2/activity/service";
 import { prisma } from "@repo/database";
@@ -29,7 +30,8 @@ export async function sendTelegramMessage(
     chatId: string,
     text: string,
     replyToMessageId?: number,
-    botToken?: string
+    botToken?: string,
+    parseMode?: "HTML" | "Markdown" | "MarkdownV2"
 ): Promise<void> {
     if (!botToken) {
         throw new Error("TELEGRAM_BOT_TOKEN not configured");
@@ -55,16 +57,31 @@ export async function sendTelegramMessage(
     }
 
     for (let i = 0; i < chunks.length; i++) {
-        const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+        const body: Record<string, unknown> = {
+            chat_id: chatId,
+            text: chunks[i]
+        };
+        if (parseMode) body.parse_mode = parseMode;
+        if (i === 0 && replyToMessageId) body.reply_parameters = { message_id: replyToMessageId };
+
+        let response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                chat_id: chatId,
-                text: chunks[i],
-                reply_parameters:
-                    i === 0 && replyToMessageId ? { message_id: replyToMessageId } : undefined
-            })
+            body: JSON.stringify(body)
         });
+
+        if (!response.ok && parseMode) {
+            console.warn(
+                `[Telegram] parse_mode=${parseMode} rejected, retrying without formatting`
+            );
+            const plainBody = { ...body };
+            delete plainBody.parse_mode;
+            response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(plainBody)
+            });
+        }
 
         if (!response.ok) {
             const error = await response.json();
@@ -575,9 +592,10 @@ export async function handleTelegramMessage(
         });
 
         const agentName = record?.name || agentSlug;
-        const prefixedResponse = `*${agentName}*\n\n${responseText}`;
+        const formattedBody = formatForTelegram(responseText);
+        const prefixedResponse = `<b>${agentName}</b>\n\n${formattedBody}`;
 
-        await sendTelegramMessage(chatId, prefixedResponse, messageId, ctx.botToken);
+        await sendTelegramMessage(chatId, prefixedResponse, messageId, ctx.botToken, "HTML");
         console.log(`[Telegram] Sent response to ${chatId}`);
     } catch (error) {
         await run.fail(error instanceof Error ? error : new Error(String(error)));

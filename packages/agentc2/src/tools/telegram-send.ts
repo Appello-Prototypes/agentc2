@@ -1,6 +1,7 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { decryptCredentials } from "../crypto";
+import { formatForTelegram } from "../channels/telegram/format";
 
 const FETCH_TIMEOUT_MS = 10_000;
 
@@ -75,17 +76,31 @@ export const telegramSendMessageTool = createTool({
             };
         }
 
+        const formattedText = formatForTelegram(text);
+
         try {
-            const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+            let response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     chat_id: chatId,
-                    text,
-                    parse_mode: parseMode
+                    text: formattedText,
+                    parse_mode: "HTML"
                 }),
                 signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)
             });
+
+            if (!response.ok) {
+                response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        chat_id: chatId,
+                        text
+                    }),
+                    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)
+                });
+            }
 
             const result = await response.json();
 
