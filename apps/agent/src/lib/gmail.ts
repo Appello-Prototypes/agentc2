@@ -109,16 +109,37 @@ export const saveGmailCredentials = async (
         }
     });
 
-    const existingCredentials = decryptCredentials(existing?.credentials);
+    console.log(
+        `[saveGmailCredentials] orgId=${organizationId}, existing=${existing?.id || "NONE"}, newScope=${tokens.scope?.substring(0, 80) || "NONE"}, newExpiry=${tokens.expiry_date}`
+    );
+
+    let existingCredentials: Record<string, unknown> | unknown;
+    try {
+        existingCredentials = decryptCredentials(existing?.credentials);
+    } catch (err) {
+        console.error(
+            `[saveGmailCredentials] decryptCredentials FAILED (enc=${(existing?.credentials as Record<string, unknown>)?.__enc}):`,
+            err instanceof Error ? err.message : err
+        );
+        existingCredentials = null;
+    }
+
     const mergedCredentials =
         existingCredentials && typeof existingCredentials === "object"
             ? {
-                  ...existingCredentials,
+                  ...(existingCredentials as Record<string, unknown>),
                   ...credentialPayload,
                   gmailAddress
               }
             : credentialPayload;
-    const encryptedCredentials = encryptCredentials(mergedCredentials);
+
+    console.log(
+        `[saveGmailCredentials] mergedScope=${(mergedCredentials as Record<string, unknown>).scope?.toString().substring(0, 80) || "NONE"}, mergedExpiry=${(mergedCredentials as Record<string, unknown>).expiryDate}`
+    );
+
+    const encryptedCredentials = encryptCredentials(
+        mergedCredentials as Record<string, unknown>
+    );
 
     const isDefault = !existing;
     if (isDefault) {
