@@ -134,6 +134,10 @@ export const getAccessToken = async (gmailAddress: string) => {
     const expiryDate = typeof creds.expiryDate === "number" ? creds.expiryDate : 0;
     const isExpired = Date.now() > expiryDate - 5 * 60 * 1000;
 
+    console.log(
+        `[getAccessToken] ${gmailAddress} — stored scope: ${creds.scope || "NONE"}, expired: ${isExpired}, expiryDate: ${expiryDate}`
+    );
+
     if (!isExpired && creds.accessToken) {
         return creds.accessToken as string;
     }
@@ -147,6 +151,10 @@ export const getAccessToken = async (gmailAddress: string) => {
     if (!refreshed) {
         throw new Error("Failed to refresh Gmail access token");
     }
+
+    console.log(
+        `[getAccessToken] Refreshed token scope: ${refreshed.scope || "NONE"}`
+    );
 
     const newExpiryDate = refreshed.expiresIn
         ? Date.now() + refreshed.expiresIn * 1000
