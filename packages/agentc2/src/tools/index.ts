@@ -168,6 +168,9 @@ export {
     toolCategoryMap,
     toolCredentialChecks,
     toolCategoryOrder,
+    toolCategoryTier,
+    toolTierOrder,
+    toolTierLabels,
     toolBehaviorMap,
     detectLethalTrifecta,
     listAvailableTools,
@@ -178,7 +181,7 @@ export {
     getAllMcpTools,
     invalidateMcpToolsCacheForOrg
 } from "./registry";
-export type { ToolInfo, ToolBehaviorType, ToolBehaviorMeta, ToolCapabilities } from "./registry";
+export type { ToolInfo, ToolTier, ToolBehaviorType, ToolBehaviorMeta, ToolCapabilities } from "./registry";
 
 import { dateTimeTool, calculatorTool, generateIdTool } from "./example-tools";
 import { askQuestionsTool } from "./ask-questions";

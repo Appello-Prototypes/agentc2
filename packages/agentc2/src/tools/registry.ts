@@ -560,7 +560,6 @@ export const toolCategoryMap: Record<string, string> = {
     "agent-guardrails-events": "Agent Quality & Runs",
     "agent-test-cases-list": "Agent Quality & Runs",
     "agent-test-cases-create": "Agent Quality & Runs",
-    "agent-scorers-list": "Agent Quality & Runs",
     "agent-run-cancel": "Agent Quality & Runs",
     "agent-run-rerun": "Agent Quality & Runs",
     "agent-run-trace": "Agent Quality & Runs",
@@ -847,26 +846,8 @@ export const toolCategoryMap: Record<string, string> = {
     "moltbook-unfollow-agent": "MoltBook",
     "moltbook-search": "MoltBook",
 
-    // Pulse
-    "pulse-list": "Pulse",
-    "pulse-create": "Pulse",
-    "pulse-read": "Pulse",
-    "pulse-update": "Pulse",
-    "pulse-delete": "Pulse",
-    "pulse-add-member": "Pulse",
-    "pulse-remove-member": "Pulse",
-    "pulse-list-members": "Pulse",
-    "pulse-add-board": "Pulse",
-    "pulse-evaluate": "Pulse",
-    "pulse-evaluations": "Pulse",
-    "pulse-create-milestone": "Pulse",
-    "pulse-update-milestone": "Pulse",
-    "pulse-list-milestones": "Pulse",
-    "pulse-assign-task": "Pulse",
-    "pulse-update-task-status": "Pulse",
-    "pulse-update-score": "Pulse",
-    "pulse-log-experiment": "Pulse",
-    "community-update-board": "Community"
+    // Agent Skill (missing category entry)
+    "agent-skill-update": "Skills"
 };
 
 /**
@@ -875,32 +856,109 @@ export const toolCategoryMap: Record<string, string> = {
  */
 export const toolCategoryOrder: string[] = [
     "Utilities",
-    "Search",
-    "Commerce",
-    "Code Execution",
-    "Remote Compute",
-    "Backlog",
-    "Agent Sessions",
+    "Agent Control",
+    "Agent Instances",
     "Agent Management",
     "Agent Quality & Runs",
-    "Learning & Simulations",
-    "Workflows",
-    "Networks",
-    "Triggers",
-    "RAG & Knowledge",
+    "Agent Sessions",
+    "Backlog",
+    "Campaigns",
     "Documents",
-    "Skills",
-    "Monitoring & Metrics",
     "Integrations",
+    "Learning & Simulations",
+    "Monitoring & Metrics",
+    "Networks",
     "Organization",
+    "Platform Documentation",
+    "RAG & Knowledge",
+    "Sidekick",
+    "Skills",
+    "Triggers",
+    "Workflows",
+    "Communication",
     "Email & Calendar",
     "File Storage",
-    "MoltBook",
+    "Search",
+    "SEO Analytics",
     "BIM",
-    "Support",
+    "Code Execution",
+    "Coding Pipeline",
+    "Commerce",
+    "Community",
+    "Infrastructure",
     "Marketplace",
-    "Playbook Publishing"
+    "MoltBook",
+    "Playbook Publishing",
+    "Remote Compute",
+    "Support",
+    "YouTube"
 ];
+
+// ---------------------------------------------------------------------------
+// Tool Tier Classification
+// ---------------------------------------------------------------------------
+
+export type ToolTier = "platform" | "integrations" | "mcp" | "domain";
+
+/**
+ * Maps each tool category to a display tier.
+ * Used by the UI to group categories into hierarchical sections.
+ */
+export const toolCategoryTier: Record<string, ToolTier> = {
+    "Utilities": "platform",
+    "Agent Control": "platform",
+    "Agent Instances": "platform",
+    "Agent Management": "platform",
+    "Agent Quality & Runs": "platform",
+    "Agent Sessions": "platform",
+    "Backlog": "platform",
+    "Campaigns": "platform",
+    "Documents": "platform",
+    "Integrations": "platform",
+    "Learning & Simulations": "platform",
+    "Monitoring & Metrics": "platform",
+    "Networks": "platform",
+    "Organization": "platform",
+    "Platform Documentation": "platform",
+    "RAG & Knowledge": "platform",
+    "Sidekick": "platform",
+    "Skills": "platform",
+    "Triggers": "platform",
+    "Workflows": "platform",
+
+    "Communication": "integrations",
+    "Email & Calendar": "integrations",
+    "File Storage": "integrations",
+    "SEO Analytics": "integrations",
+    "Search": "integrations",
+
+    "BIM": "domain",
+    "Code Execution": "domain",
+    "Coding Pipeline": "domain",
+    "Commerce": "domain",
+    "Community": "domain",
+    "Infrastructure": "domain",
+    "Marketplace": "domain",
+    "MoltBook": "domain",
+    "Playbook Publishing": "domain",
+    "Remote Compute": "domain",
+    "Support": "domain",
+    "YouTube": "domain",
+};
+
+export const toolTierOrder: ToolTier[] = [
+    "platform",
+    "integrations",
+    "mcp",
+    "domain"
+];
+
+export const toolTierLabels: Record<ToolTier, string> = {
+    platform: "Platform",
+    integrations: "Integrations",
+    mcp: "MCP",
+    domain: "Domain",
+};
 
 // ---------------------------------------------------------------------------
 // Tool Behavior Classification
@@ -1155,21 +1213,6 @@ export const toolBehaviorMap: Record<string, ToolBehaviorMeta> = {
     "bim-takeoff": { behavior: "mutation" },
     "bim-handover": { behavior: "mutation" },
 
-    // Pulse
-    "pulse-create": { behavior: "mutation" },
-    "pulse-update": { behavior: "mutation" },
-    "pulse-delete": { behavior: "mutation" },
-    "pulse-add-member": { behavior: "mutation" },
-    "pulse-remove-member": { behavior: "mutation" },
-    "pulse-add-board": { behavior: "mutation" },
-    "pulse-evaluate": { behavior: "mutation" },
-    "pulse-create-milestone": { behavior: "mutation" },
-    "pulse-update-milestone": { behavior: "mutation" },
-    "pulse-assign-task": { behavior: "mutation" },
-    "pulse-update-task-status": { behavior: "mutation" },
-    "pulse-update-score": { behavior: "mutation" },
-    "pulse-log-experiment": { behavior: "mutation", outputContentPath: "post.content" },
-    "community-update-board": { behavior: "mutation" }
 };
 
 /**
@@ -1860,19 +1903,24 @@ export interface ToolInfo {
     name: string;
     description: string;
     category: string;
+    tier?: ToolTier;
 }
 
 /**
  * List all available tools with their metadata
  */
 export function listAvailableTools(): ToolInfo[] {
-    return Object.entries(toolRegistry).map(([id, tool]) => ({
-        id,
-        name: id,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        description: (tool as any).description || "",
-        category: toolCategoryMap[id] || "Other"
-    }));
+    return Object.entries(toolRegistry).map(([id, tool]) => {
+        const category = toolCategoryMap[id] || "Other";
+        return {
+            id,
+            name: id,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            description: (tool as any).description || "",
+            category,
+            tier: toolCategoryTier[category] || "domain",
+        };
+    });
 }
 
 /**

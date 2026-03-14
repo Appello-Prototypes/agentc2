@@ -30,6 +30,7 @@ import {
     SheetContent
 } from "@repo/ui";
 import { getApiBase } from "@/lib/utils";
+import { ToolSelector } from "@/components/tool-selector";
 import { SkillBuilderPanel } from "@/components/skills/SkillBuilderPanel";
 import { SkillDetailSheet } from "@/components/skills/SkillDetailSheet";
 import type { ProviderParamGroup, ProviderParam } from "@repo/agentc2/agents/model-params";
@@ -159,21 +160,7 @@ interface ModelInfo {
     pricing?: { inputPer1M: number; outputPer1M: number };
 }
 
-interface ToolInfo {
-    id: string;
-    name: string;
-    description: string;
-    source: string; // "registry" or "mcp:serverName"
-    category?: string;
-}
-
-interface ToolGroup {
-    key: string;
-    displayName: string;
-    tools: ToolInfo[];
-    isMcp: boolean;
-    isFederation?: boolean;
-}
+type ToolInfo = import("@/components/tool-selector").ToolItem;
 
 function formatPricing(pricing?: { inputPer1M: number; outputPer1M: number }): string | null {
     if (!pricing) return null;
@@ -198,8 +185,14 @@ export default function ConfigurePage() {
 
     const [toolsLoading, setToolsLoading] = useState(true);
     const [toolCategoryOrder, setToolCategoryOrder] = useState<string[]>([]);
+    const [toolCatTier, setToolCatTier] = useState<Record<string, string>>({});
+    const [toolTierOrd, setToolTierOrd] = useState<string[]>([]);
+    const [toolTierLbls, setToolTierLbls] = useState<Record<string, string>>({});
+    const [mcpServerStatus, setMcpServerStatus] = useState<
+        Record<string, { connected: boolean; toolCount: number }>
+    >({});
     const [serverErrors, setServerErrors] = useState<Record<string, string>>({});
-    const [collapsedToolGroups, setCollapsedToolGroups] = useState<Set<string>>(new Set());
+    const [mcpError, setMcpError] = useState<string | null>(null);
 
     // Provider-keyed model config state (replaces individual flat-field state)
     const [providerConfig, setProviderConfig] = useState<Record<string, unknown>>({});
@@ -465,7 +458,12 @@ export default function ConfigurePage() {
                 );
 
                 setToolCategoryOrder(data.toolCategoryOrder || []);
+                setToolCatTier(data.toolCategoryTier || {});
+                setToolTierOrd(data.toolTierOrder || []);
+                setToolTierLbls(data.toolTierLabels || {});
+                setMcpServerStatus(data.mcpServerStatus || {});
                 setServerErrors(data.serverErrors ?? {});
+                setMcpError(data.mcpError ?? null);
             }
         } catch (err) {
             console.error("Failed to fetch tools:", err);
@@ -845,128 +843,6 @@ export default function ConfigurePage() {
         setBudgetAwareRouting(rc?.budgetAware ?? false);
     }, [agent, modelsLoading]);
 
-    // Group tools: built-in by category, MCP by server, federation by org
-    const groupTools = (tools: ToolInfo[]): ToolGroup[] => {
-        const builtInByCategory: Record<string, ToolInfo[]> = {};
-        const mcpByServer: Record<string, ToolInfo[]> = {};
-        const federationByOrg: Record<string, ToolInfo[]> = {};
-
-        tools.forEach((tool) => {
-            if (tool.id.startsWith("federation:")) {
-                const parts = tool.id.split(":");
-                const orgSlug = parts[1] || "unknown";
-                if (!federationByOrg[orgSlug]) federationByOrg[orgSlug] = [];
-                federationByOrg[orgSlug]!.push(tool);
-            } else if (tool.source === "registry") {
-                const cat = tool.category || "Other";
-                if (!builtInByCategory[cat]) builtInByCategory[cat] = [];
-                builtInByCategory[cat]!.push(tool);
-            } else {
-                const server = tool.source;
-                if (!mcpByServer[server]) mcpByServer[server] = [];
-                mcpByServer[server]!.push(tool);
-            }
-        });
-
-        const orderedCategories = [
-            ...toolCategoryOrder.filter((cat) => builtInByCategory[cat]),
-            ...Object.keys(builtInByCategory)
-                .filter((cat) => !toolCategoryOrder.includes(cat))
-                .sort()
-        ];
-
-        const groups: ToolGroup[] = orderedCategories.map((cat) => ({
-            key: `builtin:${cat}`,
-            displayName: cat,
-            tools: builtInByCategory[cat]!,
-            isMcp: false
-        }));
-
-        const sortedServers = Object.keys(mcpByServer).sort();
-        for (const server of sortedServers) {
-            groups.push({
-                key: server,
-                displayName: server.replace("mcp:", ""),
-                tools: mcpByServer[server]!,
-                isMcp: true
-            });
-        }
-
-        const sortedFedOrgs = Object.keys(federationByOrg).sort();
-        for (const orgSlug of sortedFedOrgs) {
-            groups.push({
-                key: `federation:${orgSlug}`,
-                displayName: orgSlug,
-                tools: federationByOrg[orgSlug]!,
-                isMcp: false,
-                isFederation: true
-            });
-        }
-
-        return groups;
-    };
-
-    // Toggle collapse for a tool group
-    const toggleToolGroupCollapse = (key: string) => {
-        setCollapsedToolGroups((prev) => {
-            const next = new Set(prev);
-            if (next.has(key)) {
-                next.delete(key);
-            } else {
-                next.add(key);
-            }
-            return next;
-        });
-    };
-
-    // Select all tools in a group
-    const selectAllToolsForGroup = (group: ToolGroup) => {
-        const groupToolIds = group.tools.map((t) => t.id);
-        const currentTools = formData.tools || [];
-        handleChange("tools", [...new Set([...currentTools, ...groupToolIds])]);
-    };
-
-    // Deselect all tools in a group
-    const deselectAllToolsForGroup = (group: ToolGroup) => {
-        const groupToolIds = new Set(group.tools.map((t) => t.id));
-        const currentTools = formData.tools || [];
-        handleChange(
-            "tools",
-            currentTools.filter((t) => !groupToolIds.has(t))
-        );
-    };
-
-    // Check if all tools in a group are selected
-    const areAllToolsSelectedForGroup = (group: ToolGroup) => {
-        const currentTools = formData.tools || [];
-        return group.tools.length > 0 && group.tools.every((t) => currentTools.includes(t.id));
-    };
-
-    // Collapse / expand all tool groups
-    const toggleCollapseAllToolGroups = () => {
-        const groups = groupTools(availableTools);
-        const allKeys = groups.map((g) => g.key);
-        const allCollapsed = allKeys.length > 0 && allKeys.every((k) => collapsedToolGroups.has(k));
-        if (allCollapsed) {
-            setCollapsedToolGroups(new Set());
-        } else {
-            setCollapsedToolGroups(new Set(allKeys));
-        }
-    };
-
-    // Select all tools
-    const selectAllTools = () => {
-        handleChange(
-            "tools",
-            availableTools.map((t) => t.id)
-        );
-    };
-
-    // Deselect all tools
-    const deselectAllTools = () => {
-        handleChange("tools", []);
-    };
-
     const handleChange = <K extends keyof Agent>(key: K, value: Agent[K]) => {
         setFormData((prev) => ({ ...prev, [key]: value }));
         setHasChanges(true);
@@ -1071,14 +947,6 @@ export default function ConfigurePage() {
         } finally {
             setSaving(false);
         }
-    };
-
-    const toggleTool = (toolId: string) => {
-        const tools = formData.tools || [];
-        const newTools = tools.includes(toolId)
-            ? tools.filter((t) => t !== toolId)
-            : [...tools, toolId];
-        handleChange("tools", newTools);
     };
 
     const toggleSubAgent = (slug: string) => {
@@ -2745,261 +2613,26 @@ export default function ConfigurePage() {
                 <TabsContent value="tools">
                     <Card>
                         <CardHeader>
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <CardTitle>Tools</CardTitle>
-                                    <CardDescription>
-                                        {formData.tools?.length || 0} of {availableTools.length}{" "}
-                                        tools selected
-                                    </CardDescription>
-                                </div>
-                                <div className="flex gap-2">
-                                    {availableTools.length > 0 && (
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={toggleCollapseAllToolGroups}
-                                        >
-                                            {(() => {
-                                                const groups = groupTools(availableTools);
-                                                const allKeys = groups.map((g) => g.key);
-                                                const allCollapsed =
-                                                    allKeys.length > 0 &&
-                                                    allKeys.every((k) =>
-                                                        collapsedToolGroups.has(k)
-                                                    );
-                                                return allCollapsed ? "Expand All" : "Collapse All";
-                                            })()}
-                                        </Button>
-                                    )}
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={selectAllTools}
-                                        disabled={formData.tools?.length === availableTools.length}
-                                    >
-                                        Select All
-                                    </Button>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={deselectAllTools}
-                                        disabled={(formData.tools?.length || 0) === 0}
-                                    >
-                                        Deselect All
-                                    </Button>
-                                </div>
-                            </div>
+                            <CardTitle>Tools</CardTitle>
+                            <CardDescription>
+                                Configure which tools this agent can use
+                            </CardDescription>
                         </CardHeader>
                         <CardContent>
-                            {toolsLoading ? (
-                                <div className="space-y-4">
-                                    <Skeleton className="h-8 w-48" />
-                                    <Skeleton className="h-32 w-full" />
-                                    <Skeleton className="h-8 w-48" />
-                                    <Skeleton className="h-32 w-full" />
-                                </div>
-                            ) : (
-                                <div className="max-h-[500px] space-y-4 overflow-auto">
-                                    {(() => {
-                                        const groups = groupTools(availableTools);
-                                        const builtInCount = availableTools.filter(
-                                            (t) => t.source === "registry"
-                                        ).length;
-                                        const builtInSelected = availableTools.filter(
-                                            (t) =>
-                                                t.source === "registry" &&
-                                                formData.tools?.includes(t.id)
-                                        ).length;
-                                        return (
-                                            <>
-                                                {builtInCount > 0 && (
-                                                    <div className="flex items-center gap-2 border-b pb-2">
-                                                        <h3 className="text-sm font-semibold tracking-wide uppercase">
-                                                            Built-in Tools
-                                                        </h3>
-                                                        <Badge
-                                                            variant="outline"
-                                                            className="text-xs"
-                                                        >
-                                                            {builtInSelected}/{builtInCount}
-                                                        </Badge>
-                                                    </div>
-                                                )}
-                                                {groups.map((group) => {
-                                                    const selectedCount = group.tools.filter((t) =>
-                                                        formData.tools?.includes(t.id)
-                                                    ).length;
-                                                    const allSelected =
-                                                        areAllToolsSelectedForGroup(group);
-                                                    const isCollapsed = collapsedToolGroups.has(
-                                                        group.key
-                                                    );
-                                                    const isFirstMcp =
-                                                        group.isMcp &&
-                                                        groups.findIndex((g) => g.isMcp) ===
-                                                            groups.indexOf(group);
-                                                    const isFirstFederation =
-                                                        group.isFederation &&
-                                                        groups.findIndex((g) => g.isFederation) ===
-                                                            groups.indexOf(group);
-                                                    return (
-                                                        <div key={group.key}>
-                                                            {isFirstMcp && (
-                                                                <div className="mt-6 flex items-center gap-2 border-b pb-2">
-                                                                    <h3 className="text-sm font-semibold tracking-wide uppercase">
-                                                                        MCP Tools
-                                                                    </h3>
-                                                                </div>
-                                                            )}
-                                                            {isFirstFederation && (
-                                                                <div className="mt-6 flex items-center gap-2 border-b pb-2">
-                                                                    <h3 className="text-sm font-semibold tracking-wide uppercase">
-                                                                        Connected Organizations
-                                                                    </h3>
-                                                                </div>
-                                                            )}
-                                                            <div className="space-y-2">
-                                                                <div className="flex items-center justify-between">
-                                                                    <button
-                                                                        type="button"
-                                                                        className="flex items-center gap-2 text-left"
-                                                                        onClick={() =>
-                                                                            toggleToolGroupCollapse(
-                                                                                group.key
-                                                                            )
-                                                                        }
-                                                                    >
-                                                                        <svg
-                                                                            className={`h-3.5 w-3.5 shrink-0 transition-transform ${isCollapsed ? "" : "rotate-90"}`}
-                                                                            fill="none"
-                                                                            viewBox="0 0 24 24"
-                                                                            stroke="currentColor"
-                                                                            strokeWidth={2}
-                                                                        >
-                                                                            <path
-                                                                                strokeLinecap="round"
-                                                                                strokeLinejoin="round"
-                                                                                d="M9 5l7 7-7 7"
-                                                                            />
-                                                                        </svg>
-                                                                        <h4 className="text-sm font-medium">
-                                                                            {group.displayName}
-                                                                        </h4>
-                                                                        <Badge
-                                                                            variant="outline"
-                                                                            className="text-xs"
-                                                                        >
-                                                                            {selectedCount}/
-                                                                            {group.tools.length}
-                                                                        </Badge>
-                                                                    </button>
-                                                                    <Button
-                                                                        type="button"
-                                                                        variant="ghost"
-                                                                        size="sm"
-                                                                        onClick={() =>
-                                                                            allSelected
-                                                                                ? deselectAllToolsForGroup(
-                                                                                      group
-                                                                                  )
-                                                                                : selectAllToolsForGroup(
-                                                                                      group
-                                                                                  )
-                                                                        }
-                                                                    >
-                                                                        {allSelected
-                                                                            ? "Deselect All"
-                                                                            : "Select All"}
-                                                                    </Button>
-                                                                </div>
-                                                                {!isCollapsed && (
-                                                                    <div className="grid grid-cols-1 gap-2 pl-5 md:grid-cols-2">
-                                                                        {group.tools.map((tool) => (
-                                                                            <label
-                                                                                key={tool.id}
-                                                                                className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors ${
-                                                                                    formData.tools?.includes(
-                                                                                        tool.id
-                                                                                    )
-                                                                                        ? "border-primary bg-primary/5"
-                                                                                        : "hover:bg-muted/50"
-                                                                                }`}
-                                                                            >
-                                                                                <input
-                                                                                    type="checkbox"
-                                                                                    checked={
-                                                                                        formData.tools?.includes(
-                                                                                            tool.id
-                                                                                        ) || false
-                                                                                    }
-                                                                                    onChange={() =>
-                                                                                        toggleTool(
-                                                                                            tool.id
-                                                                                        )
-                                                                                    }
-                                                                                    className="mt-0.5"
-                                                                                />
-                                                                                <div className="min-w-0 flex-1">
-                                                                                    <p className="text-sm font-medium">
-                                                                                        {tool.name}
-                                                                                    </p>
-                                                                                    {tool.description && (
-                                                                                        <p className="text-muted-foreground mt-0.5 line-clamp-2 text-xs">
-                                                                                            {
-                                                                                                tool.description
-                                                                                            }
-                                                                                        </p>
-                                                                                    )}
-                                                                                </div>
-                                                                            </label>
-                                                                        ))}
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </>
-                                        );
-                                    })()}
-                                    {availableTools.length === 0 && !toolsLoading && (
-                                        <div className="text-muted-foreground py-8 text-center">
-                                            <p>No tools available</p>
-                                            <p className="mt-1 text-sm">
-                                                Check MCP server connections
-                                            </p>
-                                        </div>
-                                    )}
-                                    {Object.keys(serverErrors).length > 0 && (
-                                        <div className="rounded-md border border-amber-500/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
-                                            <p className="font-medium">
-                                                {Object.keys(serverErrors).length} MCP server(s)
-                                                failed to load
-                                            </p>
-                                            <ul className="mt-1 list-inside list-disc space-y-0.5 text-xs">
-                                                {Object.entries(serverErrors).map(
-                                                    ([server, err]) => (
-                                                        <li key={server}>
-                                                            <span className="font-medium">
-                                                                {server}
-                                                            </span>
-                                                            :{" "}
-                                                            {err.length > 120
-                                                                ? err.slice(0, 120) + "..."
-                                                                : err}
-                                                        </li>
-                                                    )
-                                                )}
-                                            </ul>
-                                            <p className="mt-1 text-xs opacity-90">
-                                                Other servers loaded successfully. Check
-                                                Integrations (MCP) for details.
-                                            </p>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
+                            <ToolSelector
+                                tools={availableTools}
+                                selectedToolIds={formData.tools || []}
+                                onSelectionChange={(ids) => handleChange("tools", ids)}
+                                categoryOrder={toolCategoryOrder}
+                                categoryTier={toolCatTier}
+                                tierOrder={toolTierOrd}
+                                tierLabels={toolTierLbls}
+                                mcpServerStatus={mcpServerStatus}
+                                mode="agent"
+                                loading={toolsLoading}
+                                mcpError={mcpError}
+                                serverErrors={serverErrors}
+                            />
                         </CardContent>
                     </Card>
                 </TabsContent>

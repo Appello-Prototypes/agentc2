@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAvailableModelsAsync } from "@repo/agentc2/agents";
 import { listMcpToolDefinitions } from "@repo/agentc2/mcp";
-import { listAvailableTools, toolCategoryOrder } from "@repo/agentc2/tools";
+import {
+    listAvailableTools,
+    toolCategoryOrder,
+    toolCategoryTier,
+    toolTierOrder,
+    toolTierLabels
+} from "@repo/agentc2/tools";
 
 import { authenticateRequest } from "@/lib/api-auth";
 
@@ -70,7 +76,11 @@ export async function GET(request: NextRequest) {
         }
 
         // Combine all tools, marking source for UI differentiation
-        const allTools = [...staticTools.map((t) => ({ ...t, source: "registry" })), ...mcpTools];
+        // MCP tools get tier "mcp"; static tools already have tier from listAvailableTools
+        const allTools = [
+            ...staticTools.map((t) => ({ ...t, source: "registry" })),
+            ...mcpTools.map((t) => ({ ...t, tier: "mcp" as const }))
+        ].sort((a, b) => a.id.localeCompare(b.id));
 
         const models = await getAvailableModelsAsync(authContext?.organizationId ?? null);
 
@@ -82,7 +92,10 @@ export async function GET(request: NextRequest) {
             mcpError,
             serverErrors,
             hasOrgContext: !!authContext,
-            toolCategoryOrder
+            toolCategoryOrder,
+            toolCategoryTier,
+            toolTierOrder,
+            toolTierLabels
         });
     } catch (error) {
         console.error("[Agents Tools] Error:", error);

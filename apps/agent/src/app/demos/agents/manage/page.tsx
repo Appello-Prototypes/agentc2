@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { getApiBase } from "@/lib/utils";
+import { ToolSelector } from "@/components/tool-selector";
 import {
     Card,
     CardContent,
@@ -80,20 +81,7 @@ interface StoredAgent {
     updatedAt: string;
 }
 
-interface ToolInfo {
-    id: string;
-    name: string;
-    description: string;
-    source: string; // "registry" or "mcp:serverName"
-    category?: string;
-}
-
-interface ToolGroup {
-    key: string;
-    displayName: string;
-    tools: ToolInfo[];
-    isMcp: boolean;
-}
+type ToolInfo = import("@/components/tool-selector").ToolItem;
 
 interface ModelInfo {
     provider: string;
@@ -139,7 +127,14 @@ function AgentManagePageContent() {
     const [availableTools, setAvailableTools] = useState<ToolInfo[]>([]);
     const [availableModels, setAvailableModels] = useState<ModelInfo[]>([]);
     const [toolCategoryOrder, setToolCategoryOrder] = useState<string[]>([]);
-    const [collapsedToolGroups, setCollapsedToolGroups] = useState<Set<string>>(new Set());
+    const [toolCatTier, setToolCatTier] = useState<Record<string, string>>({});
+    const [toolTierOrd, setToolTierOrd] = useState<string[]>([]);
+    const [toolTierLbls, setToolTierLbls] = useState<Record<string, string>>({});
+    const [demoMcpServerStatus, setDemoMcpServerStatus] = useState<
+        Record<string, { connected: boolean; toolCount: number }>
+    >({});
+    const [demoMcpError, setDemoMcpError] = useState<string | null>(null);
+    const [demoServerErrors, setDemoServerErrors] = useState<Record<string, string>>({});
 
     // UI state
     const [selectedAgent, setSelectedAgent] = useState<StoredAgent | null>(null);
@@ -201,6 +196,12 @@ function AgentManagePageContent() {
                 setAvailableTools(data.tools);
                 setAvailableModels(data.models);
                 setToolCategoryOrder(data.toolCategoryOrder || []);
+                setToolCatTier(data.toolCategoryTier || {});
+                setToolTierOrd(data.toolTierOrder || []);
+                setToolTierLbls(data.toolTierLabels || {});
+                setDemoMcpServerStatus(data.mcpServerStatus || {});
+                setDemoMcpError(data.mcpError ?? null);
+                setDemoServerErrors(data.serverErrors ?? {});
             }
         } catch (error) {
             console.error("Failed to fetch tools:", error);
@@ -413,112 +414,6 @@ function AgentManagePageContent() {
         }
     };
 
-    // Toggle tool selection
-    const toggleTool = (toolId: string) => {
-        setFormData((prev) => ({
-            ...prev,
-            tools: prev.tools.includes(toolId)
-                ? prev.tools.filter((t) => t !== toolId)
-                : [...prev.tools, toolId]
-        }));
-    };
-
-    // Group tools: built-in by category, MCP by server
-    const groupTools = (tools: ToolInfo[]): ToolGroup[] => {
-        const builtInByCategory: Record<string, ToolInfo[]> = {};
-        const mcpByServer: Record<string, ToolInfo[]> = {};
-
-        tools.forEach((tool) => {
-            if (tool.source === "registry") {
-                const cat = tool.category || "Other";
-                if (!builtInByCategory[cat]) builtInByCategory[cat] = [];
-                builtInByCategory[cat]!.push(tool);
-            } else {
-                const server = tool.source;
-                if (!mcpByServer[server]) mcpByServer[server] = [];
-                mcpByServer[server]!.push(tool);
-            }
-        });
-
-        const orderedCategories = [
-            ...toolCategoryOrder.filter((cat) => builtInByCategory[cat]),
-            ...Object.keys(builtInByCategory)
-                .filter((cat) => !toolCategoryOrder.includes(cat))
-                .sort()
-        ];
-
-        const groups: ToolGroup[] = orderedCategories.map((cat) => ({
-            key: `builtin:${cat}`,
-            displayName: cat,
-            tools: builtInByCategory[cat]!,
-            isMcp: false
-        }));
-
-        const sortedServers = Object.keys(mcpByServer).sort();
-        for (const server of sortedServers) {
-            groups.push({
-                key: server,
-                displayName: server.replace("mcp:", ""),
-                tools: mcpByServer[server]!,
-                isMcp: true
-            });
-        }
-
-        return groups;
-    };
-
-    // Toggle collapse for a tool group
-    const toggleToolGroupCollapse = (key: string) => {
-        setCollapsedToolGroups((prev) => {
-            const next = new Set(prev);
-            if (next.has(key)) {
-                next.delete(key);
-            } else {
-                next.add(key);
-            }
-            return next;
-        });
-    };
-
-    // Select all tools
-    const selectAllTools = () => {
-        setFormData((prev) => ({
-            ...prev,
-            tools: availableTools.map((t) => t.id)
-        }));
-    };
-
-    // Deselect all tools
-    const deselectAllTools = () => {
-        setFormData((prev) => ({
-            ...prev,
-            tools: []
-        }));
-    };
-
-    // Select all tools in a group
-    const selectAllToolsForGroup = (group: ToolGroup) => {
-        const groupToolIds = group.tools.map((t) => t.id);
-        setFormData((prev) => ({
-            ...prev,
-            tools: [...new Set([...prev.tools, ...groupToolIds])]
-        }));
-    };
-
-    // Deselect all tools in a group
-    const deselectAllToolsForGroup = (group: ToolGroup) => {
-        const groupToolIds = new Set(group.tools.map((t) => t.id));
-        setFormData((prev) => ({
-            ...prev,
-            tools: prev.tools.filter((t) => !groupToolIds.has(t))
-        }));
-    };
-
-    // Check if all tools in a group are selected
-    const areAllToolsSelectedForGroup = (group: ToolGroup) => {
-        return group.tools.length > 0 && group.tools.every((t) => formData.tools.includes(t.id));
-    };
-
     // Initial fetch
     useEffect(() => {
         fetchStoredAgents();
@@ -713,156 +608,21 @@ function AgentManagePageContent() {
 
             {/* Tools */}
             <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                    <Label>
-                        Tools ({formData.tools.length} of {availableTools.length} selected)
-                    </Label>
-                    <div className="flex gap-2">
-                        <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={selectAllTools}
-                            disabled={formData.tools.length === availableTools.length}
-                        >
-                            Select All
-                        </Button>
-                        <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={deselectAllTools}
-                            disabled={formData.tools.length === 0}
-                        >
-                            Deselect All
-                        </Button>
-                    </div>
-                </div>
-                <div className="max-h-96 space-y-4 overflow-auto rounded-lg border p-4">
-                    {(() => {
-                        const groups = groupTools(availableTools);
-                        const builtInCount = availableTools.filter(
-                            (t) => t.source === "registry"
-                        ).length;
-                        const builtInSelected = availableTools.filter(
-                            (t) => t.source === "registry" && formData.tools.includes(t.id)
-                        ).length;
-                        return (
-                            <>
-                                {builtInCount > 0 && (
-                                    <div className="flex items-center gap-2 border-b pb-2">
-                                        <h3 className="text-sm font-semibold tracking-wide uppercase">
-                                            Built-in Tools
-                                        </h3>
-                                        <Badge variant="outline" className="text-xs">
-                                            {builtInSelected}/{builtInCount}
-                                        </Badge>
-                                    </div>
-                                )}
-                                {groups.map((group) => {
-                                    const selectedCount = group.tools.filter((t) =>
-                                        formData.tools.includes(t.id)
-                                    ).length;
-                                    const allSelected = areAllToolsSelectedForGroup(group);
-                                    const isCollapsed = collapsedToolGroups.has(group.key);
-                                    const isFirstMcp =
-                                        group.isMcp &&
-                                        groups.findIndex((g) => g.isMcp) === groups.indexOf(group);
-                                    return (
-                                        <div key={group.key}>
-                                            {isFirstMcp && (
-                                                <div className="mt-6 flex items-center gap-2 border-b pb-2">
-                                                    <h3 className="text-sm font-semibold tracking-wide uppercase">
-                                                        MCP Tools
-                                                    </h3>
-                                                </div>
-                                            )}
-                                            <div className="space-y-2">
-                                                <div className="flex items-center justify-between">
-                                                    <button
-                                                        type="button"
-                                                        className="flex items-center gap-2 text-left"
-                                                        onClick={() =>
-                                                            toggleToolGroupCollapse(group.key)
-                                                        }
-                                                    >
-                                                        <svg
-                                                            className={`h-3.5 w-3.5 shrink-0 transition-transform ${isCollapsed ? "" : "rotate-90"}`}
-                                                            fill="none"
-                                                            viewBox="0 0 24 24"
-                                                            stroke="currentColor"
-                                                            strokeWidth={2}
-                                                        >
-                                                            <path
-                                                                strokeLinecap="round"
-                                                                strokeLinejoin="round"
-                                                                d="M9 5l7 7-7 7"
-                                                            />
-                                                        </svg>
-                                                        <h4 className="text-sm font-medium">
-                                                            {group.displayName}
-                                                        </h4>
-                                                        <Badge
-                                                            variant="outline"
-                                                            className="text-xs"
-                                                        >
-                                                            {selectedCount}/{group.tools.length}
-                                                        </Badge>
-                                                    </button>
-                                                    <Button
-                                                        type="button"
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        onClick={() =>
-                                                            allSelected
-                                                                ? deselectAllToolsForGroup(group)
-                                                                : selectAllToolsForGroup(group)
-                                                        }
-                                                    >
-                                                        {allSelected
-                                                            ? "Deselect All"
-                                                            : "Select All"}
-                                                    </Button>
-                                                </div>
-                                                {!isCollapsed && (
-                                                    <div className="grid grid-cols-1 gap-2 pl-5 md:grid-cols-2">
-                                                        {group.tools.map((tool) => (
-                                                            <label
-                                                                key={tool.id}
-                                                                className="hover:bg-muted/50 flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors"
-                                                            >
-                                                                <input
-                                                                    type="checkbox"
-                                                                    checked={formData.tools.includes(
-                                                                        tool.id
-                                                                    )}
-                                                                    onChange={() =>
-                                                                        toggleTool(tool.id)
-                                                                    }
-                                                                    className="mt-0.5"
-                                                                />
-                                                                <div className="min-w-0 flex-1">
-                                                                    <p className="text-sm font-medium">
-                                                                        {tool.name}
-                                                                    </p>
-                                                                    {tool.description && (
-                                                                        <p className="text-muted-foreground mt-0.5 line-clamp-2 text-xs">
-                                                                            {tool.description}
-                                                                        </p>
-                                                                    )}
-                                                                </div>
-                                                            </label>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </>
-                        );
-                    })()}
-                </div>
+                <Label>Tools</Label>
+                <ToolSelector
+                    tools={availableTools}
+                    selectedToolIds={formData.tools}
+                    onSelectionChange={(ids) => setFormData((prev) => ({ ...prev, tools: ids }))}
+                    categoryOrder={toolCategoryOrder}
+                    categoryTier={toolCatTier}
+                    tierOrder={toolTierOrd}
+                    tierLabels={toolTierLbls}
+                    mcpServerStatus={demoMcpServerStatus}
+                    mode="agent"
+                    loading={loading.tools}
+                    mcpError={demoMcpError}
+                    serverErrors={demoServerErrors}
+                />
             </div>
 
             {/* Memory Configuration */}
