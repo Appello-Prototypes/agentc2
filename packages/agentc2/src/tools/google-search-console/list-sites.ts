@@ -50,6 +50,11 @@ export const gscListSitesTool = createTool({
             const response = await callGscApi(address, "/webmasters/v3/sites");
 
             if (response.status === 401 || response.status === 403) {
+                const errorBody = await response.text();
+                console.error(
+                    `[GSC] list-sites ${response.status} response:`,
+                    errorBody.slice(0, 1000)
+                );
                 return {
                     success: false,
                     sites: [],
