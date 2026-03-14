@@ -3885,9 +3885,9 @@ async function ensureClientConnected(
     // If client is marked as connected and not stale, try to use it
     if (cached && cached.isConnected) {
         try {
-            // Quick health check: try to list toolsets (should be fast if connected)
+            // Quick health check: try to list tools (should be fast if connected)
             await Promise.race([
-                client.listToolsets(),
+                client.listTools(),
                 new Promise((_, reject) =>
                     setTimeout(() => reject(new Error("Connection health check timeout")), 3000)
                 )
@@ -3923,9 +3923,9 @@ async function ensureClientConnected(
         timeout: 60000
     });
 
-    // Verify the new client can connect by listing toolsets
+    // Verify the new client can connect by listing tools
     try {
-        await newClient.listToolsets();
+        await newClient.listTools();
         console.log(`[MCP] New client for org ${organizationId} connected successfully`);
     } catch (error) {
         console.error(
@@ -3986,7 +3986,7 @@ async function getMcpClientForOrganization(options?: {
 
     // Verify the client works before caching
     try {
-        await client.listToolsets();
+        await client.listTools();
         console.log(`[MCP] New client for org ${organizationId} connected successfully`);
     } catch (error) {
         console.error(
@@ -4131,15 +4131,14 @@ async function loadToolsFromServer(
     if (persistentClient) {
         console.log(`[MCP] Loading tools from server "${serverId}" using persistent client`);
         try {
-            const toolsets = await persistentClient.listToolsets();
-            // Extract tools for this specific server
+            const allTools = await persistentClient.listTools();
+            // listTools() returns flat { "serverName_toolName": tool } across all servers.
+            // Filter to only include tools belonging to this specific server.
+            const prefix = `${serverId}_`;
             const tools: Record<string, unknown> = {};
-            for (const [toolName, tool] of Object.entries(toolsets)) {
-                // Tools in toolsets use dot notation: serverName.toolName
-                if (toolName.startsWith(`${serverId}.`)) {
-                    // Convert to underscore notation for consistency
-                    const underscoreName = toolName.replace(".", "_");
-                    tools[underscoreName] = tool;
+            for (const [toolName, tool] of Object.entries(allTools)) {
+                if (toolName.startsWith(prefix)) {
+                    tools[toolName] = tool;
                 }
             }
             console.log(
@@ -5121,44 +5120,17 @@ export async function executeMcpTool(
             userId: options?.userId
         });
 
-        console.log(`[MCP] Listing toolsets from client...`);
-        const toolsets = await client.listToolsets();
-        console.log(`[MCP] Retrieved ${Object.keys(toolsets).length} tools from client`);
+        console.log(`[MCP] Listing tools from client...`);
+        const allTools = await client.listTools();
+        console.log(`[MCP] Retrieved ${Object.keys(allTools).length} tools from client`);
 
-        // Try multiple name formats to find the tool
-        // listToolsets() uses dot notation: serverName.toolName
-        // listTools() uses underscore: serverName_toolName
-        const namesToTry = [
-            resolvedToolName,
-            resolvedToolName.replace("_", "."), // Convert underscore to dot (first occurrence only for server name)
-            resolvedToolName.replace(".", "_") // Convert dot to underscore
-        ];
-
-        // For tools like "hubspot_hubspot-get-user-details", convert to "hubspot.hubspot-get-user-details"
-        const parts = resolvedToolName.split("_");
-        if (parts.length >= 2) {
-            const serverName = parts[0];
-            const restOfName = parts.slice(1).join("_");
-            namesToTry.push(`${serverName}.${restOfName}`);
-        }
-
-        let tool = null;
-        let matchedName = toolName;
-
-        console.log(`[MCP] Trying to find tool with names: ${namesToTry.join(", ")}`);
-        for (const name of namesToTry) {
-            if (toolsets[name]) {
-                tool = toolsets[name];
-                matchedName = name;
-                console.log(`[MCP] Found tool with name: "${matchedName}"`);
-                break;
-            }
-        }
+        let tool = allTools[resolvedToolName] ?? null;
+        let matchedName = resolvedToolName;
 
         if (!tool) {
-            const availableTools = Object.keys(toolsets).slice(0, 10).join(", ");
+            const availableTools = Object.keys(allTools).slice(0, 10).join(", ");
             console.error(
-                `[MCP] Tool "${resolvedToolName}" not found. Tried: ${namesToTry.join(", ")}. Available (first 10): ${availableTools}`
+                `[MCP] Tool "${resolvedToolName}" not found. Available (first 10): ${availableTools}`
             );
             return {
                 success: false,
