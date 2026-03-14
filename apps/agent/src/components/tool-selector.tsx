@@ -96,6 +96,13 @@ export function ToolSelector({
 
     const selectionLabel = mode === "skill" ? "attached" : "selected"
 
+    const toolIdSet = useMemo(() => new Set(tools.map((t) => t.id)), [tools])
+
+    const orphanedIds = useMemo(
+        () => Array.from(selectedSet).filter((id) => !toolIdSet.has(id)),
+        [selectedSet, toolIdSet]
+    )
+
     const isToolSelected = useCallback(
         (toolId: string) => selectedSet.has(toolId),
         [selectedSet]
@@ -208,6 +215,30 @@ export function ToolSelector({
             })
         }
 
+        // Inject orphaned tools (selected but not in available list) when relevant
+        if (orphanedIds.length > 0 && (activeFilter === "all" || activeFilter === "selected")) {
+            const orphanTools: ToolItem[] = orphanedIds
+                .filter((id) => !searchQuery.trim() || id.toLowerCase().includes(searchQuery.toLowerCase()))
+                .sort()
+                .map((id) => ({
+                    id,
+                    name: id,
+                    description: "This tool is selected but its source (MCP server) is not currently connected.",
+                    source: "orphaned",
+                    category: "Unavailable",
+                    tier: "mcp",
+                }))
+            if (orphanTools.length > 0) {
+                if (!tierGroupsMap["mcp"]) tierGroupsMap["mcp"] = []
+                tierGroupsMap["mcp"]!.push({
+                    key: "orphaned:unavailable",
+                    displayName: "Unavailable (source disconnected)",
+                    tools: orphanTools,
+                    isMcp: true,
+                })
+            }
+        }
+
         return tierOrder
             .filter((tier) => (tierGroupsMap[tier]?.length || 0) > 0)
             .map((tier) => {
@@ -225,14 +256,17 @@ export function ToolSelector({
                     selectedTools,
                 }
             })
-    }, [tools, searchQuery, activeFilter, selectedSet, categoryOrder, categoryTier, tierOrder, tierLabels])
+    }, [tools, searchQuery, activeFilter, selectedSet, categoryOrder, categoryTier, tierOrder, tierLabels, orphanedIds])
 
     const totalSelected = selectedSet.size
     const tierBreakdown = useMemo(() => {
         const counts: Record<string, number> = {}
         for (const id of Array.from(selectedSet)) {
             const tool = tools.find((t) => t.id === id)
-            if (!tool) continue
+            if (!tool) {
+                counts["mcp"] = (counts["mcp"] || 0) + 1
+                continue
+            }
             let tier = "domain"
             if (tool.source && tool.source.startsWith("mcp:")) {
                 tier = "mcp"
@@ -496,13 +530,16 @@ export function ToolSelector({
                                         <div className="grid grid-cols-1 gap-1 px-4 pb-3 md:grid-cols-2">
                                             {group.tools.map((tool) => {
                                                 const isChecked = isToolSelected(tool.id)
+                                                const isOrphaned = tool.source === "orphaned"
                                                 return (
                                                     <label
                                                         key={tool.id}
                                                         className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors ${
-                                                            isChecked
-                                                                ? "border-primary bg-primary/5"
-                                                                : "border-transparent hover:bg-muted/50"
+                                                            isOrphaned
+                                                                ? "border-amber-500/30 bg-amber-500/5"
+                                                                : isChecked
+                                                                  ? "border-primary bg-primary/5"
+                                                                  : "border-transparent hover:bg-muted/50"
                                                         }`}
                                                     >
                                                         <input
@@ -516,6 +553,11 @@ export function ToolSelector({
                                                                 <span className="text-xs font-medium">
                                                                     {tool.name}
                                                                 </span>
+                                                                {isOrphaned && (
+                                                                    <span className="rounded border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-amber-400">
+                                                                        Disconnected
+                                                                    </span>
+                                                                )}
                                                             </div>
                                                             {tool.description && (
                                                                 <p className="text-muted-foreground mt-0.5 line-clamp-2 text-[11px]">
