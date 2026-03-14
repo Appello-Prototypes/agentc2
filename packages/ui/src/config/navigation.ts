@@ -146,6 +146,20 @@ export const navigationItems: NavigationItem[] = [
                 label: "God Mode",
                 href: "/godmode",
                 keywords: ["god mode", "admin", "system", "debug"]
+            },
+            {
+                label: "System Health",
+                href: "/system",
+                keywords: [
+                    "system",
+                    "health",
+                    "status",
+                    "connectivity",
+                    "validation",
+                    "diagnostics",
+                    "test",
+                    "dependencies"
+                ]
             }
         ]
     },
