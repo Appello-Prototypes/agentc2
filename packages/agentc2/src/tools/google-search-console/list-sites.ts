@@ -8,6 +8,13 @@ import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { callGscApi, GSC_SCOPES, checkGoogleScopes, resolveGmailAddress } from "./shared";
 
+async function gscScopeError(address: string, status: number) {
+    const scopeCheck = await checkGoogleScopes(address, GSC_SCOPES);
+    return scopeCheck.ok
+        ? `GSC API error (${status}). Check API access or re-authorize.`
+        : `Google Search Console requires scope: ${scopeCheck.missing.join(", ")}. Re-authorize Google OAuth.`;
+}
+
 type GscSite = {
     siteUrl?: string;
     permissionLevel?: string;
@@ -40,16 +47,15 @@ export const gscListSitesTool = createTool({
     execute: async ({ gmailAddress }) => {
         const address = await resolveGmailAddress(gmailAddress);
         try {
-            const scopeCheck = await checkGoogleScopes(address, GSC_SCOPES);
-            if (!scopeCheck.ok) {
+            const response = await callGscApi(address, "/webmasters/v3/sites");
+
+            if (response.status === 401 || response.status === 403) {
                 return {
                     success: false,
                     sites: [],
-                    error: `Google Search Console requires scope: ${scopeCheck.missing.join(", ")}. Re-authorize Google OAuth.`
+                    error: await gscScopeError(address, response.status)
                 };
             }
-
-            const response = await callGscApi(address, "/webmasters/v3/sites");
 
             if (!response.ok) {
                 const errorText = await response.text();

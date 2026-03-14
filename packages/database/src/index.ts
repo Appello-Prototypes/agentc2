@@ -2,7 +2,12 @@ import { PrismaClient } from "@prisma/client";
 import { accountEncryptionExtension } from "./extensions/account-encryption";
 
 function createExtendedClient() {
-    const base = new PrismaClient();
+    const base = new PrismaClient({
+        transactionOptions: {
+            maxWait: 10000,
+            timeout: 15000
+        }
+    });
     return base.$extends(accountEncryptionExtension());
 }
 
