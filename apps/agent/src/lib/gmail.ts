@@ -132,20 +132,13 @@ export const saveGmailCredentials = async (
                 ]
             }
         });
-        if (existing) {
-            console.log(
-                `[saveGmailCredentials] Cross-org match: found connection ${existing.id} (connOrg=${existing.organizationId}, authOrg=${organizationId})`
-            );
-        }
     }
 
-    console.log(
-        `[saveGmailCredentials] orgId=${organizationId}, existing=${existing?.id || "NONE"}, newScope=${tokens.scope?.substring(0, 80) || "NONE"}, newExpiry=${tokens.expiry_date}`
-    );
+    const connOrgId = existing?.organizationId || organizationId;
 
     let existingCredentials: Record<string, unknown> | unknown;
     try {
-        existingCredentials = decryptCredentials(existing?.credentials);
+        existingCredentials = decryptCredentials(existing?.credentials, connOrgId);
     } catch (err) {
         console.error(
             `[saveGmailCredentials] decryptCredentials FAILED (enc=${(existing?.credentials as Record<string, unknown>)?.__enc}):`,
@@ -163,12 +156,9 @@ export const saveGmailCredentials = async (
               }
             : credentialPayload;
 
-    console.log(
-        `[saveGmailCredentials] mergedScope=${(mergedCredentials as Record<string, unknown>).scope?.toString().substring(0, 80) || "NONE"}, mergedExpiry=${(mergedCredentials as Record<string, unknown>).expiryDate}`
-    );
-
     const encryptedCredentials = encryptCredentials(
-        mergedCredentials as Record<string, unknown>
+        mergedCredentials as Record<string, unknown>,
+        connOrgId
     );
 
     const isDefault = !existing;
@@ -287,8 +277,6 @@ export const syncSiblingGoogleConnections = async (
             ...(tokens.token_type ? { tokenType: tokens.token_type } : {})
         };
 
-        const encryptedCreds = encryptCredentials(credentialPayload);
-
         let existing = await prisma.integrationConnection.findFirst({
             where: {
                 organizationId,
@@ -312,15 +300,17 @@ export const syncSiblingGoogleConnections = async (
             });
         }
 
+        const siblingOrgId = existing?.organizationId || organizationId;
+
         let connectionId: string;
 
         if (existing) {
-            const existingCreds = decryptCredentials(existing.credentials);
+            const existingCreds = decryptCredentials(existing.credentials, siblingOrgId);
             const merged =
                 existingCreds && typeof existingCreds === "object"
                     ? { ...existingCreds, ...credentialPayload, gmailAddress }
                     : credentialPayload;
-            const enc = encryptCredentials(merged);
+            const enc = encryptCredentials(merged, siblingOrgId);
 
             await prisma.integrationConnection.update({
                 where: { id: existing.id },
@@ -337,6 +327,7 @@ export const syncSiblingGoogleConnections = async (
             });
             connectionId = existing.id;
         } else {
+            const newCreds = encryptCredentials(credentialPayload, organizationId);
             await prisma.integrationConnection.updateMany({
                 where: { organizationId, providerId: provider.id, scope: "org" },
                 data: { isDefault: false }
@@ -349,7 +340,7 @@ export const syncSiblingGoogleConnections = async (
                     name: `${sibling.name} (${gmailAddress})`,
                     isDefault: true,
                     isActive: true,
-                    credentials: encryptedCreds ? JSON.parse(JSON.stringify(encryptedCreds)) : null,
+                    credentials: newCreds ? JSON.parse(JSON.stringify(newCreds)) : null,
                     metadata: { gmailAddress }
                 }
             });
@@ -415,7 +406,10 @@ export const getGmailClient = async (organizationId: string, gmailAddress: strin
         throw new Error("Gmail credentials not configured");
     }
 
-    const credentials = decryptCredentials(connection.credentials) as StoredGmailCredentials | null;
+    const credentials = decryptCredentials(
+        connection.credentials,
+        connection.organizationId
+    ) as StoredGmailCredentials | null;
     if (!credentials?.gmailAddress) {
         throw new Error("Gmail credentials missing account information");
     }

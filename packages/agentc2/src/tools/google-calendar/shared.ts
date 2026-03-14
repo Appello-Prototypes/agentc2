@@ -41,61 +41,13 @@ export const callCalendarApi = async (
         headers: { Authorization: `Bearer ${token}` }
     });
 
-    // Retry once with refreshed token on 401
     if (response.status === 401) {
-        const provider = await prisma.integrationProvider.findUnique({
-            where: { key: "gmail" }
-        });
-        const integration = await prisma.gmailIntegration.findFirst({
-            where: { gmailAddress, isActive: true },
-            include: { workspace: { select: { organizationId: true } } }
-        });
-        const organizationId = integration?.workspace?.organizationId;
-        if (provider && organizationId) {
-            const connection = await prisma.integrationConnection.findFirst({
-                where: {
-                    organizationId,
-                    providerId: provider.id,
-                    isActive: true,
-                    OR: [
-                        { metadata: { path: ["gmailAddress"], equals: gmailAddress } },
-                        { credentials: { path: ["gmailAddress"], equals: gmailAddress } }
-                    ]
-                }
+        const refreshResult = await refreshConnectionToken(gmailAddress);
+        if (refreshResult) {
+            token = refreshResult.token;
+            response = await fetch(url.toString(), {
+                headers: { Authorization: `Bearer ${token}` }
             });
-            const creds = decrypt(connection?.credentials, organizationId);
-            if (creds?.refreshToken && connection) {
-                const refreshed = await refreshAccessToken(creds.refreshToken as string);
-                if (refreshed) {
-                    token = refreshed.accessToken;
-
-                    const newExpiryDate = refreshed.expiresIn
-                        ? Date.now() + refreshed.expiresIn * 1000
-                        : Date.now() + 3600 * 1000;
-
-                    const updatedCreds = {
-                        ...creds,
-                        accessToken: refreshed.accessToken,
-                        expiryDate: newExpiryDate,
-                        ...(refreshed.scope && { scope: refreshed.scope })
-                    };
-
-                    const { encryptCredentials } = await import("../../mcp/client");
-                    const encrypted = encryptCredentials(updatedCreds, organizationId) as Record<
-                        string,
-                        unknown
-                    >;
-
-                    await prisma.integrationConnection.update({
-                        where: { id: connection.id },
-                        data: { credentials: encrypted }
-                    });
-
-                    response = await fetch(url.toString(), {
-                        headers: { Authorization: `Bearer ${token}` }
-                    });
-                }
-            }
         }
     }
 
@@ -135,67 +87,91 @@ export const callCalendarApiWithBody = async (
 
     let response = await fetch(url.toString(), fetchOptions);
 
-    // Retry once with refreshed token on 401
     if (response.status === 401) {
-        const provider = await prisma.integrationProvider.findUnique({
-            where: { key: "gmail" }
-        });
-        const integration = await prisma.gmailIntegration.findFirst({
-            where: { gmailAddress, isActive: true },
-            include: { workspace: { select: { organizationId: true } } }
-        });
-        const organizationId = integration?.workspace?.organizationId;
-        if (provider && organizationId) {
-            const connection = await prisma.integrationConnection.findFirst({
-                where: {
-                    organizationId,
-                    providerId: provider.id,
-                    isActive: true,
-                    OR: [
-                        { metadata: { path: ["gmailAddress"], equals: gmailAddress } },
-                        { credentials: { path: ["gmailAddress"], equals: gmailAddress } }
-                    ]
-                }
-            });
-            const creds = decrypt(connection?.credentials, organizationId);
-            if (creds?.refreshToken && connection) {
-                const refreshed = await refreshAccessToken(creds.refreshToken as string);
-                if (refreshed) {
-                    token = refreshed.accessToken;
-
-                    const newExpiryDate = refreshed.expiresIn
-                        ? Date.now() + refreshed.expiresIn * 1000
-                        : Date.now() + 3600 * 1000;
-
-                    const updatedCreds = {
-                        ...creds,
-                        accessToken: refreshed.accessToken,
-                        expiryDate: newExpiryDate,
-                        ...(refreshed.scope && { scope: refreshed.scope })
-                    };
-
-                    const { encryptCredentials } = await import("../../mcp/client");
-                    const encrypted = encryptCredentials(updatedCreds, organizationId) as Record<
-                        string,
-                        unknown
-                    >;
-
-                    await prisma.integrationConnection.update({
-                        where: { id: connection.id },
-                        data: { credentials: encrypted }
-                    });
-
-                    fetchOptions.headers = {
-                        Authorization: `Bearer ${token}`,
-                        "Content-Type": "application/json"
-                    };
-                    response = await fetch(url.toString(), fetchOptions);
-                }
-            }
+        const refreshResult = await refreshConnectionToken(gmailAddress);
+        if (refreshResult) {
+            token = refreshResult.token;
+            fetchOptions.headers = {
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json"
+            };
+            response = await fetch(url.toString(), fetchOptions);
         }
     }
 
     return response;
 };
+
+/**
+ * Find the Gmail connection (cross-org fallback) and refresh the token.
+ */
+async function refreshConnectionToken(
+    gmailAddress: string
+): Promise<{ token: string } | null> {
+    const provider = await prisma.integrationProvider.findUnique({
+        where: { key: "gmail" }
+    });
+    const integration = await prisma.gmailIntegration.findFirst({
+        where: { gmailAddress, isActive: true },
+        include: { workspace: { select: { organizationId: true } } }
+    });
+    const organizationId = integration?.workspace?.organizationId;
+    if (!provider || !organizationId) return null;
+
+    let connection = await prisma.integrationConnection.findFirst({
+        where: {
+            organizationId,
+            providerId: provider.id,
+            isActive: true,
+            OR: [
+                { metadata: { path: ["gmailAddress"], equals: gmailAddress } },
+                { credentials: { path: ["gmailAddress"], equals: gmailAddress } }
+            ]
+        }
+    });
+
+    if (!connection) {
+        connection = await prisma.integrationConnection.findFirst({
+            where: {
+                providerId: provider.id,
+                isActive: true,
+                OR: [
+                    { metadata: { path: ["gmailAddress"], equals: gmailAddress } },
+                    { credentials: { path: ["gmailAddress"], equals: gmailAddress } }
+                ]
+            }
+        });
+    }
+
+    if (!connection) return null;
+
+    const connOrgId = connection.organizationId;
+    const creds = decrypt(connection.credentials, connOrgId);
+    if (!creds?.refreshToken) return null;
+
+    const refreshed = await refreshAccessToken(creds.refreshToken as string);
+    if (!refreshed) return null;
+
+    const newExpiryDate = refreshed.expiresIn
+        ? Date.now() + refreshed.expiresIn * 1000
+        : Date.now() + 3600 * 1000;
+
+    const updatedCreds = {
+        ...creds,
+        accessToken: refreshed.accessToken,
+        expiryDate: newExpiryDate,
+        ...(refreshed.scope && { scope: refreshed.scope })
+    };
+
+    const { encryptCredentials } = await import("../../mcp/client");
+    const encrypted = encryptCredentials(updatedCreds, connOrgId) as Record<string, unknown>;
+
+    await prisma.integrationConnection.update({
+        where: { id: connection.id },
+        data: { credentials: encrypted }
+    });
+
+    return { token: refreshed.accessToken };
+}
 
 export { checkGoogleScopes, resolveGmailAddress };

@@ -39,7 +39,10 @@ export async function GET(
             );
         }
 
-        const decryptedCredentials = decryptCredentials(connection.credentials);
+        const decryptedCredentials = decryptCredentials(
+            connection.credentials,
+            connection.organizationId
+        );
 
         await auditLog.create({
             action: "DATA_ACCESS",

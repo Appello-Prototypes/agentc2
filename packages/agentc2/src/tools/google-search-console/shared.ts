@@ -74,9 +74,6 @@ const getGscAccessToken = async (
         const isExpired = Date.now() > expiryDate - 5 * 60 * 1000;
 
         if (!isExpired && creds.accessToken) {
-            console.log(
-                `[getGscAccessToken] Using ${key} connection, scope: ${creds.scope || "NONE"}, expired: false`
-            );
             return {
                 token: creds.accessToken as string,
                 connectionId: connection.id,
@@ -87,10 +84,6 @@ const getGscAccessToken = async (
         if (creds.refreshToken) {
             const refreshed = await refreshAccessToken(creds.refreshToken as string);
             if (refreshed) {
-                console.log(
-                    `[getGscAccessToken] Refreshed ${key} token, scope: ${refreshed.scope || "NONE"}`
-                );
-
                 const newExpiryDate = refreshed.expiresIn
                     ? Date.now() + refreshed.expiresIn * 1000
                     : Date.now() + 3600 * 1000;
