@@ -3,6 +3,7 @@ import { randomBytes } from "crypto";
 import { prisma } from "@repo/database";
 import { encryptString } from "@/lib/credential-crypto";
 import { authenticateRequest } from "@/lib/api-auth";
+import { getNextRunAt } from "@/lib/schedule-utils";
 import {
     UNIFIED_TRIGGER_TYPES,
     buildUnifiedTriggerId,
@@ -220,15 +221,66 @@ export async function POST(
             );
         }
 
-        const allowedTypes = UNIFIED_TRIGGER_TYPES.filter((t) => t !== "scheduled");
-        if (!(allowedTypes as readonly string[]).includes(type)) {
+        if (!UNIFIED_TRIGGER_TYPES.includes(type as (typeof UNIFIED_TRIGGER_TYPES)[number])) {
             return NextResponse.json(
                 {
                     success: false,
-                    error: `Invalid type. Must be one of: ${allowedTypes.join(", ")}`
+                    error: `Invalid type. Must be one of: ${UNIFIED_TRIGGER_TYPES.join(", ")}`
                 },
                 { status: 400 }
             );
+        }
+
+        if (type === "scheduled") {
+            const cronExpr = (config.cronExpr ?? config.cron ?? config.cronExpression) as
+                | string
+                | undefined;
+            if (!cronExpr) {
+                return NextResponse.json(
+                    {
+                        success: false,
+                        error: "Missing required field: config.cronExpr for scheduled type"
+                    },
+                    { status: 400 }
+                );
+            }
+            const timezone = (config.timezone as string | undefined) || "UTC";
+            const nextRunAt = getNextRunAt(cronExpr, timezone, new Date());
+
+            const schedule = await prisma.agentSchedule.create({
+                data: {
+                    entityType: "network",
+                    networkId: network.id,
+                    workspaceId: network.workspaceId,
+                    name,
+                    description,
+                    cronExpr,
+                    timezone,
+                    isActive: isActive !== false,
+                    nextRunAt
+                }
+            });
+
+            return NextResponse.json({
+                success: true,
+                trigger: {
+                    id: buildUnifiedTriggerId("schedule", schedule.id),
+                    sourceId: schedule.id,
+                    sourceType: "schedule",
+                    type: "scheduled",
+                    name: schedule.name,
+                    description: schedule.description,
+                    isActive: schedule.isActive,
+                    createdAt: schedule.createdAt,
+                    updatedAt: schedule.updatedAt,
+                    config: { cronExpr, timezone },
+                    stats: {
+                        lastRunAt: schedule.lastRunAt,
+                        nextRunAt: schedule.nextRunAt,
+                        runCount: schedule.runCount
+                    }
+                }
+            });
         }
 
         if (type === "event" && !config.eventName) {

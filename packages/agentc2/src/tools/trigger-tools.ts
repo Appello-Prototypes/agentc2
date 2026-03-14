@@ -161,8 +161,70 @@ async function resolveAgent(agentId: string, organizationId?: string) {
     });
 }
 
+async function resolveWorkflow(workflowSlug: string, organizationId?: string) {
+    return prisma.workflow.findFirst({
+        where: {
+            OR: [{ slug: workflowSlug }, { id: workflowSlug }],
+            ...(organizationId ? { workspace: { organizationId } } : {})
+        },
+        select: { id: true, slug: true, workspaceId: true }
+    });
+}
+
+async function resolveNetwork(networkSlug: string, organizationId?: string) {
+    return prisma.network.findFirst({
+        where: {
+            OR: [{ slug: networkSlug }, { id: networkSlug }],
+            ...(organizationId ? { workspace: { organizationId } } : {})
+        },
+        select: { id: true, slug: true, workspaceId: true }
+    });
+}
+
+async function resolveEntity(
+    entityType: string,
+    identifiers: { agentId?: string; workflowSlug?: string; networkSlug?: string },
+    organizationId?: string
+): Promise<{ id: string; slug: string; workspaceId: string; entityType: string }> {
+    if (entityType === "workflow") {
+        if (!identifiers.workflowSlug)
+            throw new Error("workflowSlug is required when entityType is 'workflow'");
+        const workflow = await resolveWorkflow(identifiers.workflowSlug, organizationId);
+        if (!workflow) throw new Error(`Workflow '${identifiers.workflowSlug}' not found`);
+        return { ...workflow, entityType: "workflow" };
+    }
+    if (entityType === "network") {
+        if (!identifiers.networkSlug)
+            throw new Error("networkSlug is required when entityType is 'network'");
+        const network = await resolveNetwork(identifiers.networkSlug, organizationId);
+        if (!network) throw new Error(`Network '${identifiers.networkSlug}' not found`);
+        return { ...network, entityType: "network" };
+    }
+    if (!identifiers.agentId) throw new Error("agentId is required when entityType is 'agent'");
+    const agent = await resolveAgent(identifiers.agentId, organizationId);
+    if (!agent) throw new Error(`Agent '${identifiers.agentId}' not found`);
+    return { ...agent, entityType: "agent" };
+}
+
 const triggerInputSchema = z.object({
-    agentId: z.string().describe("Agent slug or ID to attach the trigger to"),
+    entityType: z
+        .enum(["agent", "workflow", "network"])
+        .default("agent")
+        .describe(
+            "Target entity type. Use 'agent' (default) for agent triggers, 'workflow' for workflow triggers, 'network' for network triggers."
+        ),
+    agentId: z
+        .string()
+        .optional()
+        .describe("Agent slug or ID (required when entityType is 'agent')"),
+    workflowSlug: z
+        .string()
+        .optional()
+        .describe("Workflow slug or ID (required when entityType is 'workflow')"),
+    networkSlug: z
+        .string()
+        .optional()
+        .describe("Network slug or ID (required when entityType is 'network')"),
     triggerId: z.string().optional().describe("Trigger ID (for get/update/delete operations)"),
     type: z
         .enum(["scheduled", "webhook", "event", "mcp", "api", "manual", "test"])
@@ -196,30 +258,73 @@ const triggerInputSchema = z.object({
 
 export const triggerUnifiedListTool = createTool({
     id: "trigger-unified-list",
-    description: "List all execution triggers for an agent.",
-    inputSchema: z.object({ agentId: z.string() }),
+    description:
+        "List all execution triggers for an agent, workflow, or network. Defaults to agent if entityType is not specified.",
+    inputSchema: z.object({
+        entityType: z
+            .enum(["agent", "workflow", "network"])
+            .default("agent")
+            .describe("Target entity type"),
+        agentId: z
+            .string()
+            .optional()
+            .describe("Agent slug or ID (required for entityType 'agent')"),
+        workflowSlug: z
+            .string()
+            .optional()
+            .describe("Workflow slug or ID (required for entityType 'workflow')"),
+        networkSlug: z
+            .string()
+            .optional()
+            .describe("Network slug or ID (required for entityType 'network')")
+    }),
     outputSchema: z.object({
         success: z.boolean().optional(),
         triggers: z.array(z.any()),
         total: z.number()
     }),
     execute: async (input) => {
-        const agentId = (input as { agentId: string }).agentId;
+        const {
+            entityType = "agent",
+            agentId,
+            workflowSlug,
+            networkSlug
+        } = input as {
+            entityType?: string;
+            agentId?: string;
+            workflowSlug?: string;
+            networkSlug?: string;
+        };
         const organizationId = (input as Record<string, unknown>).organizationId as
             | string
             | undefined;
-        const agent = await resolveAgent(agentId, organizationId);
-        if (!agent) {
-            throw new Error(`Agent '${agentId}' not found`);
-        }
+        const entity = await resolveEntity(
+            entityType,
+            { agentId, workflowSlug, networkSlug },
+            organizationId
+        );
+
+        const scheduleWhere =
+            entityType === "workflow"
+                ? { workflowId: entity.id, entityType: "workflow" }
+                : entityType === "network"
+                  ? { networkId: entity.id, entityType: "network" }
+                  : { agentId: entity.id };
+
+        const triggerWhere =
+            entityType === "workflow"
+                ? { workflowId: entity.id, entityType: "workflow" }
+                : entityType === "network"
+                  ? { networkId: entity.id, entityType: "network" }
+                  : { agentId: entity.id };
 
         const [schedules, triggers] = await Promise.all([
             prisma.agentSchedule.findMany({
-                where: { agentId: agent.id },
+                where: scheduleWhere,
                 orderBy: { createdAt: "desc" }
             }),
             prisma.agentTrigger.findMany({
-                where: { agentId: agent.id },
+                where: triggerWhere,
                 orderBy: { createdAt: "desc" }
             })
         ]);
@@ -229,23 +334,25 @@ export const triggerUnifiedListTool = createTool({
             ...triggers.map((trigger) => trigger.id)
         ];
 
-        const recentRuns = await prisma.agentRun.findMany({
-            where: {
-                agentId: agent.id,
-                triggerId: { in: triggerIds }
-            },
-            orderBy: { startedAt: "desc" },
-            select: {
-                id: true,
-                status: true,
-                startedAt: true,
-                completedAt: true,
-                durationMs: true,
-                triggerId: true
-            }
-        });
-
-        const lastRunMap = buildLastRunMap(recentRuns as RunRow[]);
+        let lastRunMap = new Map<string, UnifiedTriggerRunSummary>();
+        if (entityType === "agent" && triggerIds.length > 0) {
+            const recentRuns = await prisma.agentRun.findMany({
+                where: {
+                    agentId: entity.id,
+                    triggerId: { in: triggerIds }
+                },
+                orderBy: { startedAt: "desc" },
+                select: {
+                    id: true,
+                    status: true,
+                    startedAt: true,
+                    completedAt: true,
+                    durationMs: true,
+                    triggerId: true
+                }
+            });
+            lastRunMap = buildLastRunMap(recentRuns as RunRow[]);
+        }
 
         const unifiedTriggers: UnifiedTrigger[] = [
             ...schedules.map((schedule) =>
@@ -254,7 +361,7 @@ export const triggerUnifiedListTool = createTool({
             ...triggers.map((trigger) =>
                 buildTriggerTrigger(
                     trigger as TriggerRow,
-                    agent.slug,
+                    entity.slug,
                     lastRunMap.get(trigger.id) ?? null
                 )
             )
@@ -344,7 +451,7 @@ export const triggerUnifiedGetTool = createTool({
 export const triggerUnifiedCreateTool = createTool({
     id: "trigger-unified-create",
     description:
-        'Create a unified execution trigger (schedule or event-based). Example for a scheduled trigger: { agentId: "my-agent", type: "scheduled", name: "Hourly check", config: { cronExpr: "0 * * * *", timezone: "UTC" }, input: "Run hourly check" }. For event triggers: { agentId: "my-agent", type: "event", name: "On signup", config: { eventName: "user.signed_up" } }.',
+        'Create a unified execution trigger (schedule or event-based) for an agent, workflow, or network. For agents: { agentId: "my-agent", type: "scheduled", name: "Hourly check", config: { cronExpr: "0 * * * *" } }. For workflows: { entityType: "workflow", workflowSlug: "my-workflow", type: "scheduled", name: "Every 4h", config: { cronExpr: "0 */4 * * *" } }. For networks: { entityType: "network", networkSlug: "my-network", type: "webhook", name: "On event" }.',
     inputSchema: triggerInputSchema.extend({
         type: z
             .enum(["scheduled", "webhook", "event", "mcp", "api", "manual", "test"])
@@ -364,7 +471,10 @@ export const triggerUnifiedCreateTool = createTool({
     }),
     execute: async (input) => {
         const {
+            entityType: rawEntityType,
             agentId,
+            workflowSlug,
+            networkSlug,
             type,
             name,
             description,
@@ -379,6 +489,8 @@ export const triggerUnifiedCreateTool = createTool({
             ...rest
         } = input;
 
+        const entityType = rawEntityType || "agent";
+
         if (!UNIFIED_TRIGGER_TYPES.includes(type as UnifiedTrigger["type"])) {
             throw new Error(`Invalid type. Must be one of: ${UNIFIED_TRIGGER_TYPES.join(", ")}`);
         }
@@ -386,13 +498,13 @@ export const triggerUnifiedCreateTool = createTool({
         const organizationId = (rest as Record<string, unknown>).organizationId as
             | string
             | undefined;
-        const agent = await resolveAgent(agentId, organizationId);
-        if (!agent) {
-            throw new Error(`Agent '${agentId}' not found`);
-        }
+        const entity = await resolveEntity(
+            entityType,
+            { agentId, workflowSlug, networkSlug },
+            organizationId
+        );
 
         if (type === "scheduled") {
-            // Normalize common cron expression aliases
             const cronExpr = (config.cronExpr ?? config.cron ?? config.cronExpression) as
                 | string
                 | undefined;
@@ -421,18 +533,28 @@ export const triggerUnifiedCreateTool = createTool({
                     ? defaults
                     : null;
 
+            const scheduleData: Record<string, unknown> = {
+                entityType,
+                workspaceId: entity.workspaceId,
+                name,
+                description,
+                cronExpr,
+                timezone,
+                inputJson: inputJson ? JSON.parse(JSON.stringify(inputJson)) : null,
+                isActive: isActive !== false,
+                nextRunAt
+            };
+
+            if (entityType === "workflow") {
+                scheduleData.workflowId = entity.id;
+            } else if (entityType === "network") {
+                scheduleData.networkId = entity.id;
+            } else {
+                scheduleData.agentId = entity.id;
+            }
+
             const schedule = await prisma.agentSchedule.create({
-                data: {
-                    agentId: agent.id,
-                    workspaceId: agent.workspaceId,
-                    name,
-                    description,
-                    cronExpr,
-                    timezone,
-                    inputJson: inputJson ? JSON.parse(JSON.stringify(inputJson)) : null,
-                    isActive: isActive !== false,
-                    nextRunAt
-                }
+                data: scheduleData as Parameters<typeof prisma.agentSchedule.create>[0]["data"]
             });
 
             return {
@@ -485,20 +607,30 @@ export const triggerUnifiedCreateTool = createTool({
             webhookSecret = randomBytes(32).toString("hex");
         }
 
+        const triggerData: Record<string, unknown> = {
+            entityType,
+            workspaceId: entity.workspaceId,
+            name,
+            description,
+            triggerType,
+            eventName: (config.eventName as string | undefined) ?? null,
+            webhookPath,
+            webhookSecret,
+            filterJson: filter ? JSON.parse(JSON.stringify(filter)) : null,
+            inputMapping: mergedMapping ? JSON.parse(JSON.stringify(mergedMapping)) : null,
+            isActive: isActive !== false
+        };
+
+        if (entityType === "workflow") {
+            triggerData.workflowId = entity.id;
+        } else if (entityType === "network") {
+            triggerData.networkId = entity.id;
+        } else {
+            triggerData.agentId = entity.id;
+        }
+
         const trigger = await prisma.agentTrigger.create({
-            data: {
-                agentId: agent.id,
-                workspaceId: agent.workspaceId,
-                name,
-                description,
-                triggerType,
-                eventName: (config.eventName as string | undefined) ?? null,
-                webhookPath,
-                webhookSecret,
-                filterJson: filter ? JSON.parse(JSON.stringify(filter)) : null,
-                inputMapping: mergedMapping ? JSON.parse(JSON.stringify(mergedMapping)) : null,
-                isActive: isActive !== false
-            }
+            data: triggerData as Parameters<typeof prisma.agentTrigger.create>[0]["data"]
         });
 
         const response: {
@@ -507,7 +639,7 @@ export const triggerUnifiedCreateTool = createTool({
             webhook?: { path: string; secret: string; note: string };
         } = {
             success: true,
-            trigger: buildTriggerTrigger(trigger as TriggerRow, agent.slug, null)
+            trigger: buildTriggerTrigger(trigger as TriggerRow, entity.slug, null)
         };
 
         if (triggerType === "webhook") {
@@ -561,6 +693,9 @@ export const triggerUnifiedUpdateTool = createTool({
         const organizationId = (rest as Record<string, unknown>).organizationId as
             | string
             | undefined;
+        if (!agentId) {
+            throw new Error("agentId is required for update operations");
+        }
         const agent = await resolveAgent(agentId, organizationId);
         if (!agent) {
             throw new Error(`Agent '${agentId}' not found`);

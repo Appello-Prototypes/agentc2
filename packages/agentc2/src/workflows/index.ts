@@ -28,6 +28,7 @@ export {
     resolveEngagement,
     getEngagementContext,
     findEngagementByGitHubIssue,
+    findMergeReviewEngagements,
     findEngagementBySlackMessage,
     findEngagementById,
     type EngagementDecision,

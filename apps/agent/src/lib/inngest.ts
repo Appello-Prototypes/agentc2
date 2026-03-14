@@ -380,6 +380,14 @@ export const inngest = new Inngest({
                 payload: Record<string, unknown>;
             };
         };
+        // Network Schedule Events
+        "network/schedule.trigger": {
+            data: {
+                scheduleId: string;
+                networkId: string;
+                networkSlug: string;
+            };
+        };
         // Workflow Trigger Events
         "workflow/trigger.fire": {
             data: {
@@ -388,6 +396,14 @@ export const inngest = new Inngest({
                 workflowSlug: string;
                 triggerEventId?: string;
                 payload: Record<string, unknown>;
+            };
+        };
+        // Workflow Schedule Events
+        "workflow/schedule.trigger": {
+            data: {
+                scheduleId: string;
+                workflowId: string;
+                workflowSlug: string;
             };
         };
         // Workflow Async Execution Events

@@ -6,8 +6,7 @@ const workflowTriggerInputSchema = {
         workflowSlug: { type: "string" as const, description: "Workflow slug or ID" },
         type: {
             type: "string" as const,
-            description:
-                "Trigger type: webhook, event, api, manual, test, mcp (no scheduled for workflows)"
+            description: "Trigger type: scheduled, webhook, event, api, manual, test, mcp"
         },
         name: { type: "string" as const },
         description: { type: "string" as const },
@@ -27,8 +26,7 @@ const networkTriggerInputSchema = {
         networkSlug: { type: "string" as const, description: "Network slug or ID" },
         type: {
             type: "string" as const,
-            description:
-                "Trigger type: webhook, event, api, manual, test, mcp (no scheduled for networks)"
+            description: "Trigger type: scheduled, webhook, event, api, manual, test, mcp"
         },
         name: { type: "string" as const },
         description: { type: "string" as const },

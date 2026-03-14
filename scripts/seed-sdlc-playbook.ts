@@ -1273,7 +1273,6 @@ async function main() {
                     parameters: {
                         prompt: "Implement the following approved bugfix.\n\n## Bug\nTitle: {{input.title}}\nGitHub Issue: {{steps.intake.issueUrl}}\n\n## Approved Fix Plan\n{{steps['analyze-wait'].summary}}\n\n## Instructions\n1. Implement the fix according to the approved plan on the current branch (do NOT create a new branch)\n2. Add or update tests as needed\n3. Run linting and type-checking to verify\n4. Commit with a conventional commit message: fix: <description>\n5. Push the branch. Do NOT merge or create a PR — the system handles PR creation automatically.",
                         repository: "https://github.com/{{input.repository}}",
-                        autoCreatePr: true,
                         model: "claude-4.6-opus-high-thinking"
                     }
                 }
@@ -1655,7 +1654,6 @@ async function main() {
                     parameters: {
                         prompt: "Implement the following approved feature plan.\n\n## Feature\nTitle: {{input.title}}\nGitHub Issue: {{steps.intake.issueUrl}}\n\n## Approved Implementation Plan\n{{steps['feature-plan'].text}}\n\n## Instructions\n1. Implement the feature according to the approved phased plan on the current branch (do NOT create a new branch)\n2. Add comprehensive tests\n3. Run linting and type-checking to verify\n4. Commit with conventional commit messages: feat: <description>\n5. Push the branch. Do NOT merge or create a PR — the system handles PR creation automatically.",
                         repository: "https://github.com/{{input.repository}}",
-                        autoCreatePr: true,
                         model: "claude-4.6-opus-high-thinking"
                     }
                 }

@@ -925,6 +925,58 @@ export async function findEngagementByGitHubIssue(
 }
 
 /**
+ * Find pending merge-review engagements for a set of issue numbers in a repo.
+ *
+ * Used by the PR-merge webhook handler. Scoped to:
+ *  - exact `githubRepo` match
+ *  - `sourceId = "merge-review"` (the PR merge gate, not the triage gate)
+ *  - `status = "pending"`
+ *
+ * Each returned record includes its `workflowRunId` and `workflowSlug`
+ * so the caller can verify it's resuming the correct workflow instance.
+ */
+export async function findMergeReviewEngagements(
+    repo: string,
+    issueNumbers: number[]
+): Promise<
+    Array<{
+        id: string;
+        issueNumber: number;
+        workflowRunId: string | null;
+        workflowSlug: string | null;
+    }>
+> {
+    if (issueNumbers.length === 0) return [];
+
+    const { prisma } = await import("@repo/database");
+
+    const approvals = await prisma.approvalRequest.findMany({
+        where: {
+            githubRepo: repo,
+            githubIssueNumber: { in: issueNumbers },
+            sourceId: "merge-review",
+            status: "pending"
+        },
+        select: {
+            id: true,
+            githubIssueNumber: true,
+            workflowRunId: true,
+            workflowRun: {
+                select: { workflow: { select: { slug: true } } }
+            }
+        },
+        orderBy: { createdAt: "desc" }
+    });
+
+    return approvals.map((a) => ({
+        id: a.id,
+        issueNumber: a.githubIssueNumber!,
+        workflowRunId: a.workflowRunId,
+        workflowSlug: a.workflowRun?.workflow?.slug ?? null
+    }));
+}
+
+/**
  * Find a pending engagement by Slack channel + message timestamp.
  * Used by the Slack interactions handler.
  */

@@ -1005,9 +1005,16 @@ model AgentVersion {
 
 // Agent Schedule - Cron-based recurring execution
 model AgentSchedule {
-    id          String    @id @default(cuid())
-    agentId     String
-    agent       Agent     @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    id         String @id @default(cuid())
+    entityType String @default("agent") // "agent", "workflow", "network"
+
+    agentId    String?
+    agent      Agent?    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    workflowId String?
+    workflow   Workflow? @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+    networkId  String?
+    network    Network?  @relation(fields: [networkId], references: [id], onDelete: Cascade)
+
     workspaceId String
     workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
     name        String
@@ -1035,6 +1042,9 @@ model AgentSchedule {
     healthTriggeredAt   DateTime? // When health policy last fired
 
     @@index([agentId])
+    @@index([workflowId])
+    @@index([networkId])
+    @@index([entityType])
     @@index([workspaceId])
     @@index([isActive, nextRunAt])
     @@index([isArchived])
@@ -2611,6 +2621,7 @@ model Workflow {
     metrics           WorkflowMetricDaily[]
     triggerEvents     TriggerEvent[]
     triggers          AgentTrigger[]
+    schedules         AgentSchedule[]
     budgetPolicy      BudgetPolicy?
     testCases         WorkflowTestCase[]
 
@@ -2809,6 +2820,7 @@ model Network {
     metrics       NetworkMetricDaily[]
     triggerEvents TriggerEvent[]
     triggers      AgentTrigger[]
+    schedules     AgentSchedule[]
     budgetPolicy  BudgetPolicy?
     testCases     NetworkTestCase[]
 

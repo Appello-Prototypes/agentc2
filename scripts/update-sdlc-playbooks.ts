@@ -93,7 +93,7 @@ A complete autonomous software development pipeline built on AgentC2, powered by
 
 This playbook uses two key tools to interact with Claude Code:
 
-- **\`claude-launch-agent\`** — Spawns the Claude CLI (\`@anthropic-ai/claude-code\`) as a subprocess with the target repository, implementation prompt, and \`autoCreatePr: true\`. The CLI clones the repo using a GitHub PAT, implements changes, commits, pushes a branch, and creates a PR using the GitHub API.
+- **\`claude-launch-agent\`** — Spawns the Claude CLI (\`@anthropic-ai/claude-code\`) as a subprocess with the target repository and implementation prompt. The CLI clones the repo using a GitHub PAT, implements changes, commits, and pushes a branch. The workflow's \`create-pr\` step then creates the PR with proper issue-closing references.
 - **\`claude-poll-until-done\`** — Polls every 30 seconds (up to 30 minutes) until the agent completes. Returns the agent's summary, branch name, and **PR URL**.
 
 Unlike the Cursor Cloud variant, Claude Code does **not** use a GitHub App for PR creation. Instead, it uses the organization's **GitHub Personal Access Token** directly for all git operations (clone, push) and PR creation via the GitHub API.
@@ -151,7 +151,7 @@ When a bugfix or feature plan is approved by a human, the workflow calls \`claud
 
 - **repository** — The target GitHub repo URL (e.g., \`https://github.com/org/repo\`)
 - **prompt** — A detailed implementation prompt containing the approved plan, bug/feature context, and coding instructions
-- **autoCreatePr: true** — Tells the tool to create a PR after the Claude agent finishes its work
+- The workflow's **create-pr** step handles PR creation with `Fixes #N` references to auto-close GitHub issues on merge
 
 The tool then:
 1. Resolves the organization's **Anthropic API key** from IntegrationConnection
@@ -183,7 +183,7 @@ The \`claude-launch-agent\` tool creates a feature branch from \`main\` (or the 
 - Implement changes on the **current branch**
 - Commit with conventional commit messages
 - Push the branch
-- NOT create a PR manually — the tool handles that via \`autoCreatePr\`
+- NOT create a PR manually — the workflow's \`create-pr\` step handles that with proper issue references
 
 ### 5. Permission Mode
 
@@ -227,8 +227,8 @@ Classifies incoming tickets and routes them:
 3. **analyze-wait** — Polls until analysis is complete
 4. **analyze-result** — Retrieves the full conversation for audit context
 5. **audit-cycle** — Auditor reviews the analysis; loops with revision if needed
-6. **implement-launch** — Launches Claude Code Agent with the approved fix plan (\`autoCreatePr: true\`)
-7. **implement-wait** — Polls until implementation is complete, retrieves \`prUrl\`
+6. **implement-launch** — Launches Claude Code Agent with the approved fix plan
+7. **implement-wait** — Polls until implementation is complete, retrieves branch name
 8. **merge-review** — Human approval: merge the PR, request changes, or reject
 9. **merge** — Merges the PR and closes the issue
 10. **output-summary** — Final summary with all links and metrics
@@ -241,8 +241,8 @@ Classifies incoming tickets and routes them:
 5. **design-result** — Retrieves the full conversation
 6. **design-review** — Human approval: approve, revise, or reject the design
 7. **plan-cycle** — Planner generates phased plan, Auditor reviews, loops if needed
-8. **implement-launch** — Launches Claude Code Agent with the approved plan (\`autoCreatePr: true\`)
-9. **implement-wait** — Polls until implementation is complete, retrieves \`prUrl\`
+8. **implement-launch** — Launches Claude Code Agent with the approved plan
+9. **implement-wait** — Polls until implementation is complete, retrieves branch name
 10. **merge-review** — Human approval: merge, request changes, or reject
 11. **merge** — Merges the PR
 12. **output-summary** — Final summary with all links and metrics

@@ -5969,7 +5969,7 @@ export const scheduleTriggerFunction = inngest.createFunction(
     async ({ step }) => {
         console.log("[Inngest] Checking for due schedules");
 
-        // Step 1: Find schedules that are due
+        // Step 1: Find schedules that are due (agents, workflows, networks)
         const dueSchedules = await step.run("find-due-schedules", async () => {
             const now = new Date();
             return prisma.agentSchedule.findMany({
@@ -5984,9 +5984,23 @@ export const scheduleTriggerFunction = inngest.createFunction(
                             slug: true,
                             isActive: true
                         }
+                    },
+                    workflow: {
+                        select: {
+                            id: true,
+                            slug: true,
+                            isActive: true
+                        }
+                    },
+                    network: {
+                        select: {
+                            id: true,
+                            slug: true,
+                            isActive: true
+                        }
                     }
                 },
-                take: 50 // Process up to 50 schedules per minute
+                take: 50
             });
         });
 
@@ -5996,10 +6010,18 @@ export const scheduleTriggerFunction = inngest.createFunction(
 
         console.log(`[Inngest] Found ${dueSchedules.length} due schedules`);
 
-        // Step 2: Process each schedule
+        // Step 2: Process each schedule (dispatch to appropriate entity handler)
         let processed = 0;
         for (const schedule of dueSchedules) {
-            if (!schedule.agent.isActive) {
+            const entityType = schedule.entityType || "agent";
+
+            if (entityType === "agent" && (!schedule.agent || !schedule.agent.isActive)) {
+                continue;
+            }
+            if (entityType === "workflow" && (!schedule.workflow || !schedule.workflow.isActive)) {
+                continue;
+            }
+            if (entityType === "network" && (!schedule.network || !schedule.network.isActive)) {
                 continue;
             }
 
@@ -6033,13 +6055,33 @@ export const scheduleTriggerFunction = inngest.createFunction(
                     return;
                 }
 
-                await inngest.send({
-                    name: "agent/schedule.trigger",
-                    data: {
-                        scheduleId: schedule.id,
-                        agentId: schedule.agent.id
-                    }
-                });
+                if (entityType === "workflow" && schedule.workflow) {
+                    await inngest.send({
+                        name: "workflow/schedule.trigger",
+                        data: {
+                            scheduleId: schedule.id,
+                            workflowId: schedule.workflow.id,
+                            workflowSlug: schedule.workflow.slug
+                        }
+                    });
+                } else if (entityType === "network" && schedule.network) {
+                    await inngest.send({
+                        name: "network/schedule.trigger",
+                        data: {
+                            scheduleId: schedule.id,
+                            networkId: schedule.network.id,
+                            networkSlug: schedule.network.slug
+                        }
+                    });
+                } else if (schedule.agent) {
+                    await inngest.send({
+                        name: "agent/schedule.trigger",
+                        data: {
+                            scheduleId: schedule.id,
+                            agentId: schedule.agent.id
+                        }
+                    });
+                }
 
                 processed++;
             });
@@ -6201,10 +6243,11 @@ export const agentScheduleTriggerFunction = inngest.createFunction(
             });
         });
 
-        if (!schedule || !schedule.isActive || !schedule.agent.isActive) {
+        if (!schedule || !schedule.isActive || !schedule.agent || !schedule.agent.isActive) {
             return { skipped: true };
         }
 
+        const scheduleAgent = schedule.agent;
         const inputJson = schedule.inputJson as Record<string, unknown> | null;
         const inputValue = schedule.task || inputJson?.input || `Scheduled run: ${schedule.name}`;
         const rawInput =
@@ -6214,12 +6257,11 @@ export const agentScheduleTriggerFunction = inngest.createFunction(
         const environment =
             typeof inputJson?.environment === "string" ? inputJson.environment : undefined;
 
-        // Derive organizationId from the schedule's workspace (or the agent's workspace as fallback)
         let scheduleOrgId: string | undefined = schedule.workspace?.organizationId;
-        if (!scheduleOrgId && schedule.agent.workspaceId) {
+        if (!scheduleOrgId && scheduleAgent.workspaceId) {
             const agentWorkspace = await step.run("lookup-agent-workspace", async () => {
                 return prisma.workspace.findUnique({
-                    where: { id: schedule.agent.workspaceId! },
+                    where: { id: scheduleAgent.workspaceId! },
                     select: { organizationId: true }
                 });
             });
@@ -6227,15 +6269,13 @@ export const agentScheduleTriggerFunction = inngest.createFunction(
         }
         const orgContext = scheduleOrgId ? { resource: { organizationId: scheduleOrgId } } : {};
 
-        // Ensure threadId and resourceId are set for memory-enabled agents on scheduled runs.
-        // Uses a deterministic ID based on schedule+agent so memory persists across runs.
         const baseContext =
             inputJson?.context && typeof inputJson.context === "object"
                 ? (inputJson.context as Record<string, unknown>)
                 : {};
         const stableThreadId =
-            baseContext.threadId || `schedule-${schedule.id}-${schedule.agent.id}`;
-        const stableResourceId = baseContext.resourceId || scheduleOrgId || schedule.agent.id;
+            baseContext.threadId || `schedule-${schedule.id}-${scheduleAgent.id}`;
+        const stableResourceId = baseContext.resourceId || scheduleOrgId || scheduleAgent.id;
 
         const context = {
             ...baseContext,
@@ -6255,14 +6295,14 @@ export const agentScheduleTriggerFunction = inngest.createFunction(
                 const { createTriggerEventRecord } = await import("./trigger-events");
 
                 const handle = await startRun({
-                    agentId: schedule.agent.id,
-                    agentSlug: schedule.agent.slug,
+                    agentId: scheduleAgent.id,
+                    agentSlug: scheduleAgent.slug,
                     input,
                     source: "api",
                     triggerType: RunTriggerType.SCHEDULED,
                     triggerId: schedule.id,
                     organizationId: scheduleOrgId,
-                    workspaceId: schedule.agent.workspaceId || undefined,
+                    workspaceId: scheduleAgent.workspaceId || undefined,
                     metadata: {
                         scheduleId: schedule.id,
                         scheduleName: schedule.name
@@ -6272,7 +6312,7 @@ export const agentScheduleTriggerFunction = inngest.createFunction(
 
                 try {
                     await createTriggerEventRecord({
-                        agentId: schedule.agent.id,
+                        agentId: scheduleAgent.id,
                         workspaceId: schedule.workspaceId || null,
                         runId: handle.runId,
                         sourceType: "schedule",
@@ -6342,14 +6382,14 @@ export const agentScheduleTriggerFunction = inngest.createFunction(
             const { createTriggerEventRecord } = await import("./trigger-events");
 
             const handle = await startRun({
-                agentId: schedule.agent.id,
-                agentSlug: schedule.agent.slug,
+                agentId: scheduleAgent.id,
+                agentSlug: scheduleAgent.slug,
                 input,
                 source: "api",
                 triggerType: RunTriggerType.SCHEDULED,
                 triggerId: schedule.id,
                 organizationId: scheduleOrgId,
-                workspaceId: schedule.agent.workspaceId || undefined,
+                workspaceId: scheduleAgent.workspaceId || undefined,
                 metadata: {
                     scheduleId: schedule.id,
                     scheduleName: schedule.name
@@ -6357,10 +6397,9 @@ export const agentScheduleTriggerFunction = inngest.createFunction(
                 initialStatus: RunStatus.QUEUED
             });
 
-            // Record trigger event for unified triggers dashboard
             try {
                 await createTriggerEventRecord({
-                    agentId: schedule.agent.id,
+                    agentId: scheduleAgent.id,
                     workspaceId: schedule.workspaceId || null,
                     runId: handle.runId,
                     sourceType: "schedule",
@@ -6385,8 +6424,8 @@ export const agentScheduleTriggerFunction = inngest.createFunction(
             name: "agent/invoke.async",
             data: {
                 runId: runResult.runId,
-                agentId: schedule.agent.id,
-                agentSlug: schedule.agent.slug,
+                agentId: scheduleAgent.id,
+                agentSlug: scheduleAgent.slug,
                 input,
                 context,
                 maxSteps
@@ -6394,6 +6433,266 @@ export const agentScheduleTriggerFunction = inngest.createFunction(
         });
 
         return { runId: runResult.runId };
+    }
+);
+
+/**
+ * Workflow Schedule Trigger Handler
+ *
+ * Handles `workflow/schedule.trigger` events dispatched by the cron poller.
+ * Creates a workflow run and dispatches async execution via `workflow/execute.async`.
+ */
+export const workflowScheduleTriggerFunction = inngest.createFunction(
+    {
+        id: "workflow-schedule-trigger",
+        retries: 2
+    },
+    { event: "workflow/schedule.trigger" },
+    async ({ event, step }) => {
+        const { scheduleId } = event.data;
+
+        const schedule = await step.run("load-schedule", async () => {
+            return prisma.agentSchedule.findUnique({
+                where: { id: scheduleId },
+                include: {
+                    workflow: {
+                        select: {
+                            id: true,
+                            slug: true,
+                            isActive: true,
+                            workspaceId: true
+                        }
+                    },
+                    workspace: {
+                        select: { organizationId: true }
+                    }
+                }
+            });
+        });
+
+        if (!schedule || !schedule.isActive || !schedule.workflow?.isActive) {
+            return { skipped: true };
+        }
+
+        const inputJson = schedule.inputJson as Record<string, unknown> | null;
+        const scheduleOrgId = schedule.workspace?.organizationId;
+
+        const runResult = await step.run("create-workflow-run", async () => {
+            const { createTriggerEventRecord } = await import("./trigger-events");
+
+            const workflowRun = await prisma.workflowRun.create({
+                data: {
+                    workflowId: schedule.workflow!.id,
+                    status: "QUEUED",
+                    inputJson: {
+                        ...(inputJson || {}),
+                        _schedule: {
+                            scheduleId: schedule.id,
+                            scheduleName: schedule.name,
+                            cronExpr: schedule.cronExpr
+                        }
+                    }
+                }
+            });
+
+            try {
+                await createTriggerEventRecord({
+                    workflowId: schedule.workflow!.id,
+                    workspaceId: schedule.workspaceId || null,
+                    runId: null,
+                    sourceType: "schedule",
+                    triggerType: "schedule",
+                    entityType: "workflow",
+                    eventName: `schedule.${schedule.name}`,
+                    payload: { cronExpr: schedule.cronExpr },
+                    metadata: {
+                        scheduleId: schedule.id,
+                        scheduleName: schedule.name,
+                        cronExpr: schedule.cronExpr,
+                        workflowRunId: workflowRun.id
+                    }
+                });
+            } catch (e) {
+                console.warn("[Workflow Schedule Trigger] Failed to record trigger event:", e);
+            }
+
+            return { workflowRunId: workflowRun.id };
+        });
+
+        await step.sendEvent("execute-workflow", {
+            name: "workflow/execute.async",
+            data: {
+                workflowRunId: runResult.workflowRunId,
+                workflowId: schedule.workflow!.id,
+                workflowSlug: schedule.workflow!.slug,
+                input: inputJson || {},
+                organizationId: scheduleOrgId ?? undefined
+            }
+        });
+
+        return { workflowRunId: runResult.workflowRunId, workflowSlug: schedule.workflow!.slug };
+    }
+);
+
+/**
+ * Network Schedule Trigger Handler
+ *
+ * Handles `network/schedule.trigger` events dispatched by the cron poller.
+ * Creates a network run and dispatches execution.
+ */
+export const networkScheduleTriggerFunction = inngest.createFunction(
+    {
+        id: "network-schedule-trigger",
+        retries: 2
+    },
+    { event: "network/schedule.trigger" },
+    async ({ event, step }) => {
+        const { scheduleId } = event.data;
+
+        const schedule = await step.run("load-schedule", async () => {
+            return prisma.agentSchedule.findUnique({
+                where: { id: scheduleId },
+                include: {
+                    network: {
+                        select: {
+                            id: true,
+                            slug: true,
+                            isActive: true,
+                            maxSteps: true,
+                            workspaceId: true
+                        }
+                    },
+                    workspace: {
+                        select: { organizationId: true }
+                    }
+                }
+            });
+        });
+
+        if (!schedule || !schedule.isActive || !schedule.network?.isActive) {
+            return { skipped: true };
+        }
+
+        const inputJson = schedule.inputJson as Record<string, unknown> | null;
+        const message =
+            typeof inputJson?.input === "string"
+                ? inputJson.input
+                : `Scheduled run: ${schedule.name}`;
+
+        const runResult = await step.run("execute-network", async () => {
+            const { createTriggerEventRecord } = await import("./trigger-events");
+            const network = schedule.network!;
+            const { agent } = await buildNetworkAgent(network.id);
+
+            const run = await prisma.networkRun.create({
+                data: {
+                    networkId: network.id,
+                    status: RunStatus.RUNNING,
+                    inputText: message,
+                    source: "schedule",
+                    triggerType: RunTriggerType.SCHEDULED
+                }
+            });
+
+            try {
+                await createTriggerEventRecord({
+                    networkId: network.id,
+                    workspaceId: schedule.workspaceId || null,
+                    runId: null,
+                    sourceType: "schedule",
+                    triggerType: "schedule",
+                    entityType: "network",
+                    eventName: `schedule.${schedule.name}`,
+                    payload: { cronExpr: schedule.cronExpr },
+                    metadata: {
+                        scheduleId: schedule.id,
+                        scheduleName: schedule.name,
+                        cronExpr: schedule.cronExpr,
+                        networkRunId: run.id
+                    }
+                });
+            } catch (e) {
+                console.warn("[Network Schedule Trigger] Failed to record trigger event:", e);
+            }
+
+            try {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const result = await (agent as any).network(message, {
+                    maxSteps: network.maxSteps
+                });
+
+                const { outputText, outputJson, steps, totalTokens, totalCostUsd } =
+                    await processNetworkStreamWithSubRuns(result, {
+                        networkRunId: run.id,
+                        networkSlug: network.slug,
+                        inputMessage: message
+                    });
+
+                if (steps.length > 0) {
+                    await prisma.networkRunStep.createMany({
+                        data: steps.map((s) => ({
+                            runId: run.id,
+                            stepNumber: s.stepNumber,
+                            stepType: s.stepType,
+                            primitiveType: s.primitiveType,
+                            primitiveId: s.primitiveId,
+                            routingDecision: s.routingDecision
+                                ? (s.routingDecision as Prisma.InputJsonValue)
+                                : Prisma.DbNull,
+                            inputJson: s.inputJson
+                                ? (s.inputJson as Prisma.InputJsonValue)
+                                : Prisma.DbNull,
+                            outputJson: s.outputJson
+                                ? (s.outputJson as Prisma.InputJsonValue)
+                                : Prisma.DbNull,
+                            status: s.status,
+                            agentRunId: s.agentRunId || undefined
+                        }))
+                    });
+                }
+
+                const completedAt = new Date();
+                const durationMs = completedAt.getTime() - run.createdAt.getTime();
+
+                await prisma.networkRun.update({
+                    where: { id: run.id },
+                    data: {
+                        status: RunStatus.COMPLETED,
+                        outputText,
+                        outputJson: outputJson
+                            ? (outputJson as Prisma.InputJsonValue)
+                            : Prisma.DbNull,
+                        completedAt,
+                        durationMs,
+                        stepsExecuted: steps.length,
+                        totalTokens: totalTokens > 0 ? totalTokens : undefined,
+                        totalCostUsd: totalCostUsd > 0 ? totalCostUsd : undefined
+                    }
+                });
+
+                return { networkRunId: run.id, success: true };
+            } catch (error) {
+                await prisma.networkRun.update({
+                    where: { id: run.id },
+                    data: {
+                        status: RunStatus.FAILED,
+                        completedAt: new Date(),
+                        durationMs: Date.now() - run.createdAt.getTime()
+                    }
+                });
+                console.error(
+                    `[Network Schedule Trigger] Network execution failed for schedule ${schedule.id}:`,
+                    error
+                );
+                return { networkRunId: run.id, success: false, error: String(error) };
+            }
+        });
+
+        return {
+            networkRunId: runResult.networkRunId,
+            networkSlug: schedule.network!.slug,
+            success: runResult.success
+        };
     }
 );
 
@@ -10572,6 +10871,8 @@ export const inngestFunctions = [
     // Scheduler
     scheduleTriggerFunction,
     agentScheduleTriggerFunction,
+    workflowScheduleTriggerFunction,
+    networkScheduleTriggerFunction,
     gmailMessageProcessFunction,
     gmailFollowUpFunction,
     agentTriggerFireFunction,

@@ -321,7 +321,7 @@ export function useReviews() {
     }
 
     async function handleFeedback(review: ReviewItem) {
-        if (!feedbackText.trim()) return;
+        const text = feedbackText.trim() || "Needs revision — please re-analyze.";
         setActingId(review.id);
         try {
             const res = await fetch(`${getApiBase()}/api/reviews`, {
@@ -330,7 +330,7 @@ export function useReviews() {
                 body: JSON.stringify({
                     approvalRequestId: review.id,
                     decision: "feedback",
-                    message: feedbackText
+                    message: text
                 })
             });
             const data = await res.json();

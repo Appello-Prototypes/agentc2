@@ -38,6 +38,8 @@ export async function evaluateHealthPolicy(scheduleId: string): Promise<HealthPo
     const window = schedule.healthWindow ?? 10;
     const action = schedule.healthAction ?? "pause_and_alert";
 
+    if (!schedule.agentId) return null;
+
     const recentRuns = await prisma.agentRun.findMany({
         where: {
             agentId: schedule.agentId,
@@ -90,7 +92,7 @@ export async function evaluateHealthPolicy(scheduleId: string): Promise<HealthPo
     if (shouldAlert) {
         await prisma.agentAlert.create({
             data: {
-                agentId: schedule.agentId,
+                agentId: schedule.agentId!,
                 severity: "CRITICAL",
                 message: `Health policy triggered: ${Math.round(failureRate * 100)}% failure rate over last ${recentRuns.length} scheduled runs (threshold: ${Math.round(threshold * 100)}%).${shouldPause ? " Schedule paused." : ""}`,
                 source: "HEALTH"
