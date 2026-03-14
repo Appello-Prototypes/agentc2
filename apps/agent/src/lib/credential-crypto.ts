@@ -34,7 +34,7 @@ const isEncryptedPayload = (value: unknown): value is EncryptedPayload => {
     if (!value || typeof value !== "object" || Array.isArray(value)) return false;
     const payload = value as Record<string, unknown>;
     return (
-        payload.__enc === "v1" &&
+        (payload.__enc === "v1" || payload.__enc === "v2") &&
         typeof payload.iv === "string" &&
         typeof payload.tag === "string" &&
         typeof payload.data === "string"

@@ -446,8 +446,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), timeout);
 
-            // Extract threadId and resourceId for memory persistence
-            const threadId = context?.threadId || context?.thread?.id;
+            // Extract threadId and resourceId for memory persistence.
+            // Auto-generate a threadId when none is provided so that
+            // memory-enabled agents always receive valid context and
+            // the updateWorkingMemory tool doesn't fail silently.
+            const threadId =
+                context?.threadId || context?.thread?.id || `invoke-${runHandle.runId}`;
             const resourceId = context?.userId || context?.resource?.userId || "default";
 
             // Context management (windowing, anchoring, tool guards, result compression)

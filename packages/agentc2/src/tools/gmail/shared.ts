@@ -6,29 +6,42 @@
  */
 
 import { prisma } from "@repo/database";
-import { createDecipheriv } from "crypto";
+import { createDecipheriv, hkdfSync } from "crypto";
 
 export const GMAIL_API = "https://gmail.googleapis.com/gmail/v1";
 const TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
 
-type EncryptedPayload = { __enc: "v1"; iv: string; tag: string; data: string };
+type EncryptedPayload = { __enc: "v1" | "v2"; iv: string; tag: string; data: string };
 
 const isEncrypted = (v: unknown): v is EncryptedPayload =>
     !!v &&
     typeof v === "object" &&
     !Array.isArray(v) &&
-    (v as Record<string, unknown>).__enc === "v1";
+    ((v as Record<string, unknown>).__enc === "v1" ||
+        (v as Record<string, unknown>).__enc === "v2");
 
-export const decrypt = (value: unknown) => {
+function deriveOrgKey(masterKey: Buffer, organizationId: string): Buffer {
+    return Buffer.from(
+        hkdfSync("sha256", masterKey, organizationId, "agentc2-credential-encryption", 32)
+    );
+}
+
+export const decrypt = (value: unknown, organizationId?: string) => {
     if (!isEncrypted(value)) return value as Record<string, unknown> | null;
     const key = process.env.CREDENTIAL_ENCRYPTION_KEY;
     if (!key) return null;
-    const buf = Buffer.from(key, "hex");
-    if (buf.length !== 32) return null;
+    const masterBuf = Buffer.from(key, "hex");
+    if (masterBuf.length !== 32) return null;
+
+    const decryptionKey =
+        value.__enc === "v2" && organizationId
+            ? deriveOrgKey(masterBuf, organizationId)
+            : masterBuf;
+
     const iv = Buffer.from(value.iv, "base64");
     const tag = Buffer.from(value.tag, "base64");
     const encrypted = Buffer.from(value.data, "base64");
-    const decipher = createDecipheriv("aes-256-gcm", buf, iv);
+    const decipher = createDecipheriv("aes-256-gcm", decryptionKey, iv);
     decipher.setAuthTag(tag);
     const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]).toString(
         "utf8"
@@ -114,7 +127,7 @@ export const getAccessToken = async (gmailAddress: string) => {
     });
     if (!connection) throw new Error("Gmail credentials not found");
 
-    const creds = decrypt(connection.credentials);
+    const creds = decrypt(connection.credentials, organizationId);
     if (!creds) throw new Error("Failed to decrypt Gmail credentials");
 
     // Check if token is likely expired (1-hour tokens with 5-min buffer)
@@ -217,7 +230,7 @@ export const callGmailApi = async (
                     ]
                 }
             });
-            const creds = decrypt(connection?.credentials);
+            const creds = decrypt(connection?.credentials, organizationId);
             if (creds?.refreshToken && connection) {
                 const refreshed = await refreshAccessToken(creds.refreshToken as string);
                 if (refreshed) {
@@ -319,7 +332,7 @@ export const checkGoogleScopes = async (
         }
     });
 
-    const creds = decrypt(connection?.credentials) as { scope?: string } | null;
+    const creds = decrypt(connection?.credentials, organizationId) as { scope?: string } | null;
     const grantedScopes = new Set((creds?.scope || "").split(/[,\s]+/).filter(Boolean));
     const missing = requiredScopes.filter((s) => !grantedScopes.has(s));
     return { ok: missing.length === 0, missing };

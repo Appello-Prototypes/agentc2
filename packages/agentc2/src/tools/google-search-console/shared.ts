@@ -72,7 +72,7 @@ export const callGscApi = async (
                     ]
                 }
             });
-            const creds = decrypt(connection?.credentials);
+            const creds = decrypt(connection?.credentials, organizationId);
             if (creds?.refreshToken && connection) {
                 const refreshed = await refreshAccessToken(creds.refreshToken as string);
                 if (refreshed) {

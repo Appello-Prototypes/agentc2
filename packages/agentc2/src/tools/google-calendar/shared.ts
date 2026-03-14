@@ -63,7 +63,7 @@ export const callCalendarApi = async (
                     ]
                 }
             });
-            const creds = decrypt(connection?.credentials);
+            const creds = decrypt(connection?.credentials, organizationId);
             if (creds?.refreshToken && connection) {
                 const refreshed = await refreshAccessToken(creds.refreshToken as string);
                 if (refreshed) {
@@ -157,7 +157,7 @@ export const callCalendarApiWithBody = async (
                     ]
                 }
             });
-            const creds = decrypt(connection?.credentials);
+            const creds = decrypt(connection?.credentials, organizationId);
             if (creds?.refreshToken && connection) {
                 const refreshed = await refreshAccessToken(creds.refreshToken as string);
                 if (refreshed) {
