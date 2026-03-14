@@ -125,9 +125,7 @@ export default function SkillToolsPage() {
         <Card>
             <CardHeader>
                 <CardTitle>Tools</CardTitle>
-                <CardDescription>
-                    Configure which tools this skill provides
-                </CardDescription>
+                <CardDescription>Configure which tools this skill provides</CardDescription>
             </CardHeader>
             <CardContent>
                 <ToolSelector

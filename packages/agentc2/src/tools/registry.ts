@@ -905,59 +905,54 @@ export type ToolTier = "platform" | "integrations" | "mcp" | "domain";
  * Used by the UI to group categories into hierarchical sections.
  */
 export const toolCategoryTier: Record<string, ToolTier> = {
-    "Utilities": "platform",
+    Utilities: "platform",
     "Agent Control": "platform",
     "Agent Instances": "platform",
     "Agent Management": "platform",
     "Agent Quality & Runs": "platform",
     "Agent Sessions": "platform",
-    "Backlog": "platform",
-    "Campaigns": "platform",
-    "Documents": "platform",
-    "Integrations": "platform",
+    Backlog: "platform",
+    Campaigns: "platform",
+    Documents: "platform",
+    Integrations: "platform",
     "Learning & Simulations": "platform",
     "Monitoring & Metrics": "platform",
-    "Networks": "platform",
-    "Organization": "platform",
+    Networks: "platform",
+    Organization: "platform",
     "Platform Documentation": "platform",
     "RAG & Knowledge": "platform",
-    "Sidekick": "platform",
-    "Skills": "platform",
-    "Triggers": "platform",
-    "Workflows": "platform",
+    Sidekick: "platform",
+    Skills: "platform",
+    Triggers: "platform",
+    Workflows: "platform",
 
-    "Communication": "integrations",
+    Communication: "integrations",
     "Email & Calendar": "integrations",
     "File Storage": "integrations",
     "SEO Analytics": "integrations",
-    "Search": "integrations",
+    Search: "integrations",
 
-    "BIM": "domain",
+    BIM: "domain",
     "Code Execution": "domain",
     "Coding Pipeline": "domain",
-    "Commerce": "domain",
-    "Community": "domain",
-    "Infrastructure": "domain",
-    "Marketplace": "domain",
-    "MoltBook": "domain",
+    Commerce: "domain",
+    Community: "domain",
+    Infrastructure: "domain",
+    Marketplace: "domain",
+    MoltBook: "domain",
     "Playbook Publishing": "domain",
     "Remote Compute": "domain",
-    "Support": "domain",
-    "YouTube": "domain",
+    Support: "domain",
+    YouTube: "domain"
 };
 
-export const toolTierOrder: ToolTier[] = [
-    "platform",
-    "integrations",
-    "mcp",
-    "domain"
-];
+export const toolTierOrder: ToolTier[] = ["platform", "integrations", "mcp", "domain"];
 
 export const toolTierLabels: Record<ToolTier, string> = {
     platform: "Platform",
     integrations: "Integrations",
     mcp: "MCP",
-    domain: "Domain",
+    domain: "Domain"
 };
 
 // ---------------------------------------------------------------------------
@@ -1211,8 +1206,7 @@ export const toolBehaviorMap: Record<string, ToolBehaviorMeta> = {
 
     // BIM
     "bim-takeoff": { behavior: "mutation" },
-    "bim-handover": { behavior: "mutation" },
-
+    "bim-handover": { behavior: "mutation" }
 };
 
 /**
@@ -1850,6 +1844,17 @@ export function invalidateMcpToolsCacheForOrg(organizationId?: string | null) {
     cachedMcpToolsByOrg.delete(cacheKey);
 }
 
+function isTransientMcpError(error: unknown): boolean {
+    const msg = error instanceof Error ? error.message : String(error);
+    return (
+        msg.includes("<!DOCTYPE") ||
+        msg.includes("<html") ||
+        (msg.includes("is not valid JSON") && msg.includes("<"))
+    );
+}
+
+const MCP_RETRY_DELAY_MS = 2000;
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function wrapMcpToolsWithTruncation(tools: Record<string, any>): Record<string, any> {
     const wrapped: Record<string, (typeof tools)[string]> = {};
@@ -1860,8 +1865,20 @@ function wrapMcpToolsWithTruncation(tools: Record<string, any>): Record<string, 
                 ...tool,
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 execute: async (...args: any[]) => {
-                    const result = await originalExecute(...args);
-                    // Playwright tools: compress snapshots before truncation
+                    let result: unknown;
+                    try {
+                        result = await originalExecute(...args);
+                    } catch (error) {
+                        if (isTransientMcpError(error)) {
+                            console.warn(
+                                `[MCP Retry] Transient HTML error from "${name}", retrying in ${MCP_RETRY_DELAY_MS}ms...`
+                            );
+                            await new Promise((r) => setTimeout(r, MCP_RETRY_DELAY_MS));
+                            result = await originalExecute(...args);
+                        } else {
+                            throw error;
+                        }
+                    }
                     if (isPlaywrightTool(name) && isSnapshotProducingTool(name)) {
                         return compressPlaywrightResult(result);
                     }
@@ -1918,7 +1935,7 @@ export function listAvailableTools(): ToolInfo[] {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             description: (tool as any).description || "",
             category,
-            tier: toolCategoryTier[category] || "domain",
+            tier: toolCategoryTier[category] || "domain"
         };
     });
 }
