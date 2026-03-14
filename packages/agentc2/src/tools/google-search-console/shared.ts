@@ -41,7 +41,7 @@ const getGscAccessToken = async (
         });
         if (!provider) continue;
 
-        const connection = await prisma.integrationConnection.findFirst({
+        let connection = await prisma.integrationConnection.findFirst({
             where: {
                 organizationId,
                 providerId: provider.id,
@@ -52,9 +52,22 @@ const getGscAccessToken = async (
                 ]
             }
         });
+
+        if (!connection) {
+            connection = await prisma.integrationConnection.findFirst({
+                where: {
+                    providerId: provider.id,
+                    isActive: true,
+                    OR: [
+                        { metadata: { path: ["gmailAddress"], equals: gmailAddress } },
+                        { credentials: { path: ["gmailAddress"], equals: gmailAddress } }
+                    ]
+                }
+            });
+        }
         if (!connection) continue;
 
-        const creds = decrypt(connection.credentials, organizationId);
+        const creds = decrypt(connection.credentials, connection.organizationId);
         if (!creds) continue;
 
         const expiryDate = typeof creds.expiryDate === "number" ? creds.expiryDate : 0;
@@ -90,10 +103,10 @@ const getGscAccessToken = async (
                 };
 
                 const { encryptCredentials } = await import("../../mcp/client");
-                const encrypted = encryptCredentials(updatedCreds, organizationId) as Record<
-                    string,
-                    unknown
-                >;
+                const encrypted = encryptCredentials(
+                    updatedCreds,
+                    connection.organizationId
+                ) as Record<string, unknown>;
 
                 await prisma.integrationConnection.update({
                     where: { id: connection.id },
@@ -103,7 +116,7 @@ const getGscAccessToken = async (
                 return {
                     token: refreshed.accessToken,
                     connectionId: connection.id,
-                    organizationId
+                    organizationId: connection.organizationId
                 };
             }
         }
@@ -151,7 +164,8 @@ export const callGscApi = async (
         const connection = await prisma.integrationConnection.findUnique({
             where: { id: connectionId }
         });
-        const creds = decrypt(connection?.credentials, organizationId);
+        const connOrgId = connection?.organizationId || organizationId;
+        const creds = decrypt(connection?.credentials, connOrgId);
         if (creds?.refreshToken && connection) {
             const refreshed = await refreshAccessToken(creds.refreshToken as string);
             if (refreshed) {
@@ -169,7 +183,7 @@ export const callGscApi = async (
                 };
 
                 const { encryptCredentials } = await import("../../mcp/client");
-                const encrypted = encryptCredentials(updatedCreds, organizationId) as Record<
+                const encrypted = encryptCredentials(updatedCreds, connOrgId) as Record<
                     string,
                     unknown
                 >;

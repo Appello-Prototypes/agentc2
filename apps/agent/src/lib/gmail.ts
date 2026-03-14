@@ -88,7 +88,10 @@ export const saveGmailCredentials = async (
         throw new Error("Gmail provider not configured");
     }
 
-    const existing = await prisma.integrationConnection.findFirst({
+    // First try org-scoped lookup, then fall back to cross-org lookup by email.
+    // This handles the case where the user re-auths from a different org context
+    // than where the connection was originally created.
+    let existing = await prisma.integrationConnection.findFirst({
         where: {
             organizationId,
             providerId: provider.id,
@@ -108,6 +111,33 @@ export const saveGmailCredentials = async (
             ]
         }
     });
+
+    if (!existing) {
+        existing = await prisma.integrationConnection.findFirst({
+            where: {
+                providerId: provider.id,
+                OR: [
+                    {
+                        metadata: {
+                            path: ["gmailAddress"],
+                            equals: gmailAddress
+                        }
+                    },
+                    {
+                        credentials: {
+                            path: ["gmailAddress"],
+                            equals: gmailAddress
+                        }
+                    }
+                ]
+            }
+        });
+        if (existing) {
+            console.log(
+                `[saveGmailCredentials] Cross-org match: found connection ${existing.id} (connOrg=${existing.organizationId}, authOrg=${organizationId})`
+            );
+        }
+    }
 
     console.log(
         `[saveGmailCredentials] orgId=${organizationId}, existing=${existing?.id || "NONE"}, newScope=${tokens.scope?.substring(0, 80) || "NONE"}, newExpiry=${tokens.expiry_date}`
@@ -259,7 +289,7 @@ export const syncSiblingGoogleConnections = async (
 
         const encryptedCreds = encryptCredentials(credentialPayload);
 
-        const existing = await prisma.integrationConnection.findFirst({
+        let existing = await prisma.integrationConnection.findFirst({
             where: {
                 organizationId,
                 providerId: provider.id,
@@ -269,6 +299,18 @@ export const syncSiblingGoogleConnections = async (
                 ]
             }
         });
+
+        if (!existing) {
+            existing = await prisma.integrationConnection.findFirst({
+                where: {
+                    providerId: provider.id,
+                    OR: [
+                        { metadata: { path: ["gmailAddress"], equals: gmailAddress } },
+                        { credentials: { path: ["gmailAddress"], equals: gmailAddress } }
+                    ]
+                }
+            });
+        }
 
         let connectionId: string;
 

@@ -114,7 +114,7 @@ export const getAccessToken = async (gmailAddress: string) => {
     const organizationId = integration.workspace?.organizationId;
     if (!organizationId) throw new Error("Organization not found");
 
-    const connection = await prisma.integrationConnection.findFirst({
+    let connection = await prisma.integrationConnection.findFirst({
         where: {
             organizationId,
             providerId: provider.id,
@@ -125,9 +125,22 @@ export const getAccessToken = async (gmailAddress: string) => {
             ]
         }
     });
+
+    if (!connection) {
+        connection = await prisma.integrationConnection.findFirst({
+            where: {
+                providerId: provider.id,
+                isActive: true,
+                OR: [
+                    { metadata: { path: ["gmailAddress"], equals: gmailAddress } },
+                    { credentials: { path: ["gmailAddress"], equals: gmailAddress } }
+                ]
+            }
+        });
+    }
     if (!connection) throw new Error("Gmail credentials not found");
 
-    const creds = decrypt(connection.credentials, organizationId);
+    const creds = decrypt(connection.credentials, connection.organizationId);
     if (!creds) throw new Error("Failed to decrypt Gmail credentials");
 
     // Check if token is likely expired (1-hour tokens with 5-min buffer)
@@ -168,7 +181,10 @@ export const getAccessToken = async (gmailAddress: string) => {
     };
 
     const { encryptCredentials } = await import("../../mcp/client");
-    const encrypted = encryptCredentials(updatedCreds, organizationId) as Record<string, unknown>;
+    const encrypted = encryptCredentials(updatedCreds, connection.organizationId) as Record<
+        string,
+        unknown
+    >;
 
     await prisma.integrationConnection.update({
         where: { id: connection.id },
@@ -227,7 +243,7 @@ export const callGmailApi = async (
         });
         const organizationId = integration?.workspace?.organizationId;
         if (provider && organizationId) {
-            const connection = await prisma.integrationConnection.findFirst({
+            let connection = await prisma.integrationConnection.findFirst({
                 where: {
                     organizationId,
                     providerId: provider.id,
@@ -238,7 +254,22 @@ export const callGmailApi = async (
                     ]
                 }
             });
-            const creds = decrypt(connection?.credentials, organizationId);
+
+            if (!connection) {
+                connection = await prisma.integrationConnection.findFirst({
+                    where: {
+                        providerId: provider.id,
+                        isActive: true,
+                        OR: [
+                            { metadata: { path: ["gmailAddress"], equals: gmailAddress } },
+                            { credentials: { path: ["gmailAddress"], equals: gmailAddress } }
+                        ]
+                    }
+                });
+            }
+
+            const connOrgId = connection?.organizationId || organizationId;
+            const creds = decrypt(connection?.credentials, connOrgId);
             if (creds?.refreshToken && connection) {
                 const refreshed = await refreshAccessToken(creds.refreshToken as string);
                 if (refreshed) {
@@ -256,7 +287,7 @@ export const callGmailApi = async (
                     };
 
                     const { encryptCredentials } = await import("../../mcp/client");
-                    const encrypted = encryptCredentials(updatedCreds, organizationId) as Record<
+                    const encrypted = encryptCredentials(updatedCreds, connOrgId) as Record<
                         string,
                         unknown
                     >;
