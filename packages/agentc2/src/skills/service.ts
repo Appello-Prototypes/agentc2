@@ -162,38 +162,41 @@ export async function deleteSkill(idOrSlug: string, organizationId?: string) {
 
 /**
  * Get a single skill by ID or slug with its documents and tools.
- * When organizationId is provided, only returns skills owned by that org or SYSTEM skills.
+ *
+ * ID lookups are unscoped (IDs are globally unique CUIDs).
+ * Slug lookups are scoped to organizationId (slugs are only unique per org).
  */
 export async function getSkill(idOrSlug: string, organizationId?: string) {
-    const where: Record<string, unknown> = {
-        OR: [{ id: idOrSlug }, { slug: idOrSlug }]
-    };
-    if (organizationId) {
-        where.organizationId = organizationId;
-    }
-
-    const skill = await prisma.skill.findFirst({
-        where,
-        include: {
-            documents: {
-                include: {
-                    document: {
-                        select: { id: true, slug: true, name: true, category: true }
-                    }
+    const include = {
+        documents: {
+            include: {
+                document: {
+                    select: { id: true, slug: true, name: true, category: true }
                 }
-            },
-            tools: true,
-            agents: {
-                include: {
-                    agent: {
-                        select: { id: true, slug: true, name: true }
-                    }
+            }
+        },
+        tools: true,
+        agents: {
+            include: {
+                agent: {
+                    select: { id: true, slug: true, name: true }
                 }
             }
         }
-    });
+    };
 
-    return skill;
+    const byId = await prisma.skill.findUnique({
+        where: { id: idOrSlug },
+        include
+    });
+    if (byId) return byId;
+
+    const slugWhere: Record<string, unknown> = { slug: idOrSlug };
+    if (organizationId) {
+        slugWhere.organizationId = organizationId;
+    }
+
+    return prisma.skill.findFirst({ where: slugWhere, include });
 }
 
 /**

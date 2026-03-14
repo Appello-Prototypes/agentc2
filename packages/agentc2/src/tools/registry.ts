@@ -314,6 +314,7 @@ import {
     readWorkspaceFileTool,
     listWorkspaceFilesTool
 } from "./sandbox-tools";
+import { telegramSendMessageTool } from "./telegram-send";
 import { trackResourceTool, listResourcesTool, destroyResourceTool } from "./infra-tools";
 import {
     backlogGetTool,
@@ -458,6 +459,7 @@ export const toolCategoryMap: Record<string, string> = {
     "golfnorth-search": "Integrations",
     "golf-course-discover": "Integrations",
     "teeon-scan-courses": "Integrations",
+    "telegram-send-message": "Communication",
     "memory-recall": "Utilities",
 
     // Search
@@ -1193,6 +1195,12 @@ export const toolBehaviorMap: Record<string, ToolBehaviorMeta> = {
     "playbook-set-auto-boot": { behavior: "mutation" },
     "playbook-set-setup-config": { behavior: "mutation" },
 
+    // Communication (Telegram)
+    "telegram-send-message": {
+        behavior: "mutation",
+        capabilities: { external_communication: true }
+    },
+
     // Golf Booking
     "chronogolf-book": { behavior: "mutation" },
     "golfnow-book": { behavior: "mutation" },
@@ -1400,6 +1408,7 @@ export const toolRegistry: Record<string, any> = {
     "golfnorth-search": golfnorthSearchTool,
     "golf-course-discover": golfCourseDiscoverTool,
     "teeon-scan-courses": teeonScanCoursesTool,
+    "telegram-send-message": telegramSendMessageTool,
     "memory-recall": memoryRecallTool,
 
     // Search tools
