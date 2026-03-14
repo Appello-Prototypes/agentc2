@@ -489,10 +489,8 @@ const INTEGRATION_PROVIDER_SEEDS: IntegrationProviderSeed[] = [
             },
             importHints: {
                 matchNames: ["ATLAS", "atlas"],
-                matchArgs: ["supergateway", "--sse"],
-                argValueMap: {
-                    "--sse": "ATLAS_N8N_SSE_URL"
-                },
+                matchArgs: ["mcp-remote"],
+                positionalArgs: ["ATLAS_N8N_SSE_URL"],
                 envAliases: {
                     ATLAS_N8N_SSE_URL: "ATLAS_N8N_SSE_URL"
                 }
@@ -3165,21 +3163,11 @@ function buildServerDefinitionForProvider(options: {
                 getCredentialValue(credentials, ["ATLAS_N8N_SSE_URL"]) ||
                 (allowEnvFallback ? process.env.ATLAS_N8N_SSE_URL : undefined);
             if (!atlasUrl) return null;
+            // n8n only supports SSE transport; mcp-remote handles SSE correctly
+            // (supergateway --sse fails to maintain the connection with n8n)
             return {
                 command: "npx",
-                args: [
-                    "-y",
-                    "supergateway",
-                    "--sse",
-                    atlasUrl,
-                    "--timeout",
-                    "600000",
-                    "--keep-alive-timeout",
-                    "600000",
-                    "--retry-after-disconnect",
-                    "--reconnect-interval",
-                    "1000"
-                ]
+                args: ["-y", "mcp-remote", atlasUrl]
             };
         }
         case "fathom": {
