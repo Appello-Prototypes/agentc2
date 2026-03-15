@@ -210,6 +210,7 @@ export const inngest = new Inngest({
                 context?: Record<string, unknown>;
                 maxSteps?: number;
                 idempotencyKey?: string;
+                modelOverride?: { provider?: string; name?: string };
             };
         };
         // Agent Schedule Events

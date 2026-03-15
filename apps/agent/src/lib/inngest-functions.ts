@@ -5578,10 +5578,10 @@ export const asyncInvokeFunction = inngest.createFunction(
                 const startTime = Date.now();
 
                 const resolvedModelOverride =
-                    modelOverride && typeof modelOverride === "object"
+                    modelOverride?.provider && modelOverride?.name
                         ? {
-                              provider: modelOverride.provider as string | undefined,
-                              name: modelOverride.name as string | undefined
+                              provider: modelOverride.provider,
+                              name: modelOverride.name
                           }
                         : undefined;
 
