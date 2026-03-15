@@ -278,7 +278,8 @@ export async function PATCH(
             filter,
             inputMapping,
             isActive,
-            isArchived
+            isArchived,
+            modelOverride
         } = body as {
             name?: string;
             description?: string;
@@ -291,6 +292,7 @@ export async function PATCH(
             inputMapping?: Record<string, unknown> | null;
             isActive?: boolean;
             isArchived?: boolean;
+            modelOverride?: { provider?: string; name?: string } | null;
         };
 
         const agent = await prisma.agent.findUnique({
@@ -367,6 +369,12 @@ export async function PATCH(
                         { status: 400 }
                     );
                 }
+            }
+
+            if (modelOverride !== undefined) {
+                updateData.modelOverride = modelOverride
+                    ? JSON.parse(JSON.stringify(modelOverride))
+                    : null;
             }
 
             if (isActive === false && typeof isArchived !== "boolean") {

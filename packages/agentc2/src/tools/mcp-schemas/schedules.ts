@@ -15,7 +15,16 @@ export const scheduleToolDefinitions: McpToolDefinition[] = [
                 input: { type: "string" },
                 context: { type: "object" },
                 maxSteps: { type: "number" },
-                isActive: { type: "boolean" }
+                isActive: { type: "boolean" },
+                modelOverride: {
+                    type: "object",
+                    description:
+                        "Override the agent model for scheduled runs. E.g. { provider: 'openai', name: 'gpt-4.1-nano' }",
+                    properties: {
+                        provider: { type: "string" },
+                        name: { type: "string" }
+                    }
+                }
             },
             required: ["agentId", "name", "cronExpr"]
         },
@@ -50,7 +59,16 @@ export const scheduleToolDefinitions: McpToolDefinition[] = [
                 input: { type: "string" },
                 context: { type: "object" },
                 maxSteps: { type: "number" },
-                isActive: { type: "boolean" }
+                isActive: { type: "boolean" },
+                modelOverride: {
+                    type: "object",
+                    description:
+                        "Override the agent model for scheduled runs. E.g. { provider: 'openai', name: 'gpt-4.1-nano' }. Set to null to clear.",
+                    properties: {
+                        provider: { type: "string" },
+                        name: { type: "string" }
+                    }
+                }
             },
             required: ["agentId", "scheduleId"]
         },
@@ -88,7 +106,8 @@ export const scheduleToolRoutes: McpToolRoute[] = [
             "input",
             "context",
             "maxSteps",
-            "isActive"
+            "isActive",
+            "modelOverride"
         ]
     },
     {
@@ -112,7 +131,8 @@ export const scheduleToolRoutes: McpToolRoute[] = [
             "input",
             "context",
             "maxSteps",
-            "isActive"
+            "isActive",
+            "modelOverride"
         ]
     },
     {

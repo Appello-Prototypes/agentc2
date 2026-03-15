@@ -5524,7 +5524,8 @@ export const asyncInvokeFunction = inngest.createFunction(
     },
     { event: "agent/invoke.async" },
     async ({ event, step }) => {
-        const { runId, agentId, agentSlug, input, context, maxSteps } = event.data;
+        const { runId, agentId, agentSlug, input, context, maxSteps, modelOverride } =
+            event.data;
 
         console.log(`[Inngest] Executing async invoke for run: ${runId}`);
 
@@ -5576,12 +5577,21 @@ export const asyncInvokeFunction = inngest.createFunction(
 
                 const startTime = Date.now();
 
+                const resolvedModelOverride =
+                    modelOverride && typeof modelOverride === "object"
+                        ? {
+                              provider: modelOverride.provider as string | undefined,
+                              name: modelOverride.name as string | undefined
+                          }
+                        : undefined;
+
                 let agent;
                 let record;
                 try {
                     const resolved = await agentResolver.resolve({
                         slug: agentSlug,
-                        requestContext: context
+                        requestContext: context,
+                        ...(resolvedModelOverride ? { modelOverride: resolvedModelOverride } : {})
                     });
                     agent = resolved.agent;
                     record = resolved.record;
@@ -6288,6 +6298,14 @@ export const agentScheduleTriggerFunction = inngest.createFunction(
         };
         const maxSteps = typeof inputJson?.maxSteps === "number" ? inputJson.maxSteps : undefined;
 
+        // Model override from schedule (e.g., pin scheduled runs to a cheaper model)
+        const scheduleModelOverride =
+            schedule.modelOverride &&
+            typeof schedule.modelOverride === "object" &&
+            !Array.isArray(schedule.modelOverride)
+                ? (schedule.modelOverride as { provider?: string; name?: string })
+                : null;
+
         // Gmail watch refresh is a special short-circuit path that doesn't need async invoke
         if (inputJson?.task === "gmail_watch_refresh" && inputJson?.integrationId) {
             const gmailResult = await step.run("gmail-watch-refresh", async () => {
@@ -6428,7 +6446,10 @@ export const agentScheduleTriggerFunction = inngest.createFunction(
                 agentSlug: scheduleAgent.slug,
                 input,
                 context,
-                maxSteps
+                maxSteps,
+                ...(scheduleModelOverride
+                    ? { modelOverride: scheduleModelOverride }
+                    : {})
             }
         });
 

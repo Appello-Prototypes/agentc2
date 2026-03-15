@@ -1034,6 +1034,9 @@ model AgentSchedule {
     createdBy   String?
     color       String?
 
+    // Model override: use a different model for scheduled runs
+    modelOverride Json? // { provider: "openai", name: "gpt-4.1-nano" }
+
     // Health policy: auto-disable schedule when failure rate exceeds threshold
     healthPolicyEnabled Boolean   @default(false)
     healthThreshold     Float? // Failure rate 0.0–1.0 that triggers the action

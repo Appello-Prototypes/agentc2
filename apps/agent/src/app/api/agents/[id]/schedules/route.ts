@@ -89,7 +89,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             maxSteps,
             environment,
             isActive,
-            color
+            color,
+            modelOverride
         } = body;
 
         if (!name || !cronExpr) {
@@ -140,7 +141,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 inputJson: inputJson ? JSON.parse(JSON.stringify(inputJson)) : null,
                 isActive: isActive !== false,
                 nextRunAt,
-                color: color || null
+                color: color || null,
+                ...(modelOverride ? { modelOverride: JSON.parse(JSON.stringify(modelOverride)) } : {})
             }
         });
 
